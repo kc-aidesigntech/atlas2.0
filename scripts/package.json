@@ -1,0 +1,17 @@
+{
+  "name": "atlas-scripts",
+  "version": "1.0.0",
+  "description": "ATLAS data seeding scripts",
+  "type": "module",
+  "main": "seed-client.js",
+  "scripts": {
+    "seed": "node seed-client.js",
+    "seed-admin": "node seed-data.js",
+    "cleanup": "node cleanup-data.js"
+  },
+  "dependencies": {
+    "firebase": "^10.13.0",
+    "dotenv": "^16.4.5"
+  }
+}
+

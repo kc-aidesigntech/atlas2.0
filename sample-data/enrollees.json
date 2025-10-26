@@ -1,0 +1,104 @@
+{
+  "enrollees": [
+    {
+      "demographics": {
+        "firstName": "Sandra",
+        "lastName": "Morrison",
+        "dob": "1989-03-15",
+        "photoUrl": "https://placehold.co/100x100/E2E8F0/64748B?text=SM"
+      },
+      "careTeam": [
+        {
+          "userId": "demo-user",
+          "name": "Demo User",
+          "role": "CPC"
+        }
+      ],
+      "riskProfile": {
+        "tier": 3,
+        "wellnessScores": {
+          "physical": 35,
+          "emotional": 25,
+          "intellectual": 40,
+          "spiritual": 30,
+          "social": 20,
+          "occupational": 15,
+          "environmental": 25,
+          "financial": 20
+        },
+        "zCodes": ["Z59.0", "Z63.4", "Z56.9", "Z65.1"],
+        "lscmiScores": {
+          "antisocial": 7,
+          "family": 6,
+          "education": 4,
+          "employment": 8,
+          "leisure": 5,
+          "companions": 7,
+          "alcohol": 3,
+          "attitudes": 6
+        }
+      }
+    },
+    {
+      "demographics": {
+        "firstName": "Marcus",
+        "lastName": "Thompson",
+        "dob": "1995-07-22",
+        "photoUrl": "https://placehold.co/100x100/E2E8F0/64748B?text=MT"
+      },
+      "careTeam": [
+        {
+          "userId": "demo-user",
+          "name": "Demo User",
+          "role": "CPC"
+        }
+      ],
+      "riskProfile": {
+        "tier": 2,
+        "wellnessScores": {
+          "physical": 55,
+          "emotional": 45,
+          "intellectual": 60,
+          "spiritual": 50,
+          "social": 40,
+          "occupational": 35,
+          "environmental": 50,
+          "financial": 30
+        },
+        "zCodes": ["Z59.4", "Z59.6", "Z56.9"],
+        "lscmiScores": {}
+      }
+    },
+    {
+      "demographics": {
+        "firstName": "Elena",
+        "lastName": "Rodriguez",
+        "dob": "2001-11-08",
+        "photoUrl": "https://placehold.co/100x100/E2E8F0/64748B?text=ER"
+      },
+      "careTeam": [
+        {
+          "userId": "demo-user",
+          "name": "Demo User",
+          "role": "CPC"
+        }
+      ],
+      "riskProfile": {
+        "tier": 1,
+        "wellnessScores": {
+          "physical": 70,
+          "emotional": 65,
+          "intellectual": 75,
+          "spiritual": 60,
+          "social": 70,
+          "occupational": 60,
+          "environmental": 65,
+          "financial": 55
+        },
+        "zCodes": [],
+        "lscmiScores": {}
+      }
+    }
+  ]
+}
+

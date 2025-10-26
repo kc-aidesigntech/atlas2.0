@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATLAS - Setup Sample Data</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f8fafc;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h1 { color: #0ea5e9; margin-top: 0; }
+    h2 { color: #334155; font-size: 18px; }
+    button {
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    button:hover { background: #0284c7; }
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+    .status {
+      padding: 12px;
+      border-radius: 6px;
+      margin: 10px 0;
+    }
+    .success { background: #dcfce7; color: #166534; }
+    .error { background: #fee2e2; color: #991b1b; }
+    .info { background: #dbeafe; color: #1e40af; }
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 14px;
+    }
+    .step { margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔥 ATLAS Sample Data Setup</h1>
+    <p>This tool will populate your Firestore database with sample data for testing the ATLAS CIE Portal.</p>
+  </div>
+
+  <div class="card">
+    <h2>Step 1: Initialize Firebase</h2>
+    <div id="firebaseStatus" class="status info">Checking Firebase connection...</div>
+    <div id="userInfo"></div>
+  </div>
+
+  <div class="card">
+    <h2>Step 2: Add Sample Data</h2>
+    <p>Click the buttons below to populate your database:</p>
+    <div class="step">
+      <button id="addResourcesBtn" disabled>Add 7 Sample Resources</button>
+      <span id="resourcesStatus"></span>
+    </div>
+    <div class="step">
+      <button id="addEnrolleesBtn" disabled>Add 3 Sample Enrollees</button>
+      <span id="enrolleesStatus"></span>
+    </div>
+    <div class="step">
+      <button id="addCarePlanBtn" disabled>Add Care Plan Entries</button>
+      <span id="carePlanStatus"></span>
+    </div>
+    <div class="step">
+      <button id="addReferralsBtn" disabled>Add Sample Referrals</button>
+      <span id="referralsStatus"></span>
+    </div>
+    <div class="step">
+      <button id="addAllBtn" disabled style="background: #059669;">Add All Sample Data</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Step 3: View Your Data</h2>
+    <p>Once data is added, visit <a href="http://localhost:5173" target="_blank">http://localhost:5173</a> to see the app in action!</p>
+    <div id="completionStatus"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js';
+    import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js';
+    import { getFirestore, collection, addDoc, doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js';
+
+    // Try to fetch the config from the main app's window object or localStorage
+    let firebaseConfig = null;
+    
+    // First, try to get it from the main app
+    try {
+      const response = await fetch('/');
+      // We'll ask the user to enter config manually since .env isn't accessible here
+    } catch (e) {}
+
+    // Check if config is loaded, otherwise prompt user
+    if (!firebaseConfig) {
+      document.getElementById('firebaseStatus').innerHTML = 
+        '<div class="info">📋 Please paste your Firebase config from your .env file:</div>' +
+        '<div style="margin: 15px 0;"><label style="display:block; margin:5px 0;">API Key:</label><input type="text" id="apiKey" placeholder="Your API Key" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;"></div>' +
+        '<div style="margin: 15px 0;"><label style="display:block; margin:5px 0;">Auth Domain:</label><input type="text" id="authDomain" placeholder="your-project.firebaseapp.com" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;"></div>' +
+        '<div style="margin: 15px 0;"><label style="display:block; margin:5px 0;">Project ID:</label><input type="text" id="projectId" placeholder="your-project-id" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;"></div>' +
+        '<div style="margin: 15px 0;"><label style="display:block; margin:5px 0;">Storage Bucket:</label><input type="text" id="storageBucket" placeholder="your-project.appspot.com" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;"></div>' +
+        '<div style="margin: 15px 0;"><label style="display:block; margin:5px 0;">Messaging Sender ID:</label><input type="text" id="messagingSenderId" placeholder="123456789" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;"></div>' +
+        '<div style="margin: 15px 0;"><label style="display:block; margin:5px 0;">App ID:</label><input type="text" id="appId" placeholder="1:123456789:web:abc123" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:4px;"></div>' +
+        '<button onclick="window.loadCustomConfig()" style="background:#0ea5e9; color:white; border:none; padding:12px 24px; border-radius:6px; cursor:pointer; margin-top:10px;">Connect to Firebase</button>';
+      
+      window.loadCustomConfig = () => {
+        try {
+          firebaseConfig = {
+            apiKey: document.getElementById('apiKey').value,
+            authDomain: document.getElementById('authDomain').value,
+            projectId: document.getElementById('projectId').value,
+            storageBucket: document.getElementById('storageBucket').value,
+            messagingSenderId: document.getElementById('messagingSenderId').value,
+            appId: document.getElementById('appId').value
+          };
+          if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+            alert('Please fill in at least API Key and Project ID');
+            return;
+          }
+          initializeFirebase();
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      };
+    } else {
+      initializeFirebase();
+    }
+
+    let db, auth, user;
+    const appId = 'atlas-demo';
+
+    async function initializeFirebase() {
+      try {
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        document.getElementById('firebaseStatus').innerHTML = 
+          '<div class="success">✅ Firebase initialized successfully!</div>';
+
+        // Sign in anonymously
+        await signInAnonymously(auth);
+
+        onAuthStateChanged(auth, (firebaseUser) => {
+          if (firebaseUser) {
+            user = firebaseUser;
+            document.getElementById('userInfo').innerHTML = 
+              `<div class="success">✅ Authenticated as: ${user.uid}</div>`;
+            
+            // Enable buttons
+            document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+            
+            // Setup user profile
+            setupUserProfile();
+          }
+        });
+      } catch (error) {
+        document.getElementById('firebaseStatus').innerHTML = 
+          `<div class="error">❌ Error: ${error.message}</div>`;
+      }
+    }
+
+    async function setupUserProfile() {
+      const profileRef = doc(db, `artifacts/${appId}/users/${user.uid}/profile/main`);
+      await setDoc(profileRef, {
+        name: user.email || 'Demo User',
+        role: 'Certified Peer Counselor',
+        email: user.email || 'demo@atlas.org',
+        assignedEnrollees: []
+      }, { merge: true });
+    }
+
+    // Sample Resources Data
+    const resources = [
+      {
+        name: "Community Food Bank",
+        category: "Food",
+        description: "Provides weekly food parcels to families in need. No appointment necessary, walk-ins welcome Monday-Friday 9am-5pm.",
+        eligibilityCriteria: { zCodes: ["Z59.4", "Z59.5", "Z59.6"], income: "low" }
+      },
+      {
+        name: "Safe Haven Housing Services",
+        category: "Housing",
+        description: "Emergency housing assistance and transitional housing programs for individuals experiencing homelessness.",
+        eligibilityCriteria: { zCodes: ["Z59.0", "Z59.1"], income: "low" }
+      },
+      {
+        name: "Wellness Center Mental Health Clinic",
+        category: "Mental Health",
+        description: "Sliding scale mental health services including therapy, psychiatry, and group counseling.",
+        eligibilityCriteria: { zCodes: ["Z63.4", "Z60.2"], income: "low-to-moderate" }
+      },
+      {
+        name: "Skills Forward Employment Center",
+        category: "Employment",
+        description: "Free job training, resume assistance, and job placement services.",
+        eligibilityCriteria: { zCodes: ["Z56.9"], income: "any" }
+      },
+      {
+        name: "Community Legal Services",
+        category: "Legal",
+        description: "Pro bono legal assistance for family law, housing disputes, and criminal record expungement.",
+        eligibilityCriteria: { zCodes: ["Z65.0", "Z65.1"], income: "low" }
+      },
+      {
+        name: "Metro Community Health Center",
+        category: "Healthcare",
+        description: "Primary care, dental, and pharmacy services on a sliding fee scale.",
+        eligibilityCriteria: { zCodes: [], income: "any" }
+      },
+      {
+        name: "Ride Share Program",
+        category: "Transportation",
+        description: "Free transportation vouchers for medical appointments, job interviews, and essential services.",
+        eligibilityCriteria: { zCodes: [], income: "low" }
+      }
+    ];
+
+    // Sample Enrollees Data
+    const enrollees = [
+      {
+        demographics: {
+          firstName: "Sandra",
+          lastName: "Morrison",
+          dob: "1989-03-15",
+          photoUrl: "https://placehold.co/100x100/E2E8F0/64748B?text=SM"
+        },
+        careTeam: [{ userId: user?.uid || 'demo', name: 'Demo User', role: 'CPC' }],
+        riskProfile: {
+          tier: 3,
+          wellnessScores: { physical: 35, emotional: 25, intellectual: 40, spiritual: 30, social: 20, occupational: 15, environmental: 25, financial: 20 },
+          zCodes: ["Z59.0", "Z63.4", "Z56.9", "Z65.1"],
+          lscmiScores: { antisocial: 7, family: 6, education: 4, employment: 8 }
+        }
+      },
+      {
+        demographics: {
+          firstName: "Marcus",
+          lastName: "Thompson",
+          dob: "1995-07-22",
+          photoUrl: "https://placehold.co/100x100/E2E8F0/64748B?text=MT"
+        },
+        careTeam: [{ userId: user?.uid || 'demo', name: 'Demo User', role: 'CPC' }],
+        riskProfile: {
+          tier: 2,
+          wellnessScores: { physical: 55, emotional: 45, intellectual: 60, spiritual: 50, social: 40, occupational: 35, environmental: 50, financial: 30 },
+          zCodes: ["Z59.4", "Z59.6", "Z56.9"],
+          lscmiScores: {}
+        }
+      },
+      {
+        demographics: {
+          firstName: "Elena",
+          lastName: "Rodriguez",
+          dob: "2001-11-08",
+          photoUrl: "https://placehold.co/100x100/E2E8F0/64748B?text=ER"
+        },
+        careTeam: [{ userId: user?.uid || 'demo', name: 'Demo User', role: 'CPC' }],
+        riskProfile: {
+          tier: 1,
+          wellnessScores: { physical: 70, emotional: 65, intellectual: 75, spiritual: 60, social: 70, occupational: 60, environmental: 65, financial: 55 },
+          zCodes: [],
+          lscmiScores: {}
+        }
+      }
+    ];
+
+    // Add Resources
+    document.getElementById('addResourcesBtn').onclick = async () => {
+      try {
+        const btn = document.getElementById('addResourcesBtn');
+        btn.disabled = true;
+        document.getElementById('resourcesStatus').textContent = 'Adding...';
+        
+        for (const resource of resources) {
+          await addDoc(collection(db, `artifacts/${appId}/public/data/resources`), resource);
+        }
+        
+        document.getElementById('resourcesStatus').innerHTML = '<span style="color: green;">✅ Added 7 resources</span>';
+      } catch (error) {
+        document.getElementById('resourcesStatus').innerHTML = `<span style="color: red;">❌ ${error.message}</span>`;
+        document.getElementById('addResourcesBtn').disabled = false;
+      }
+    };
+
+    // Add Enrollees
+    document.getElementById('addEnrolleesBtn').onclick = async () => {
+      try {
+        const btn = document.getElementById('addEnrolleesBtn');
+        btn.disabled = true;
+        document.getElementById('enrolleesStatus').textContent = 'Adding...';
+        
+        const enrolleeIds = [];
+        for (const enrollee of enrollees) {
+          const docRef = await addDoc(collection(db, `artifacts/${appId}/public/data/enrollees`), enrollee);
+          enrolleeIds.push(docRef.id);
+        }
+        
+        // Update user profile with enrollee IDs
+        const profileRef = doc(db, `artifacts/${appId}/users/${user.uid}/profile/main`);
+        await setDoc(profileRef, { assignedEnrollees: enrolleeIds }, { merge: true });
+        
+        window.enrolleeIds = enrolleeIds;
+        document.getElementById('enrolleesStatus').innerHTML = '<span style="color: green;">✅ Added 3 enrollees</span>';
+      } catch (error) {
+        document.getElementById('enrolleesStatus').innerHTML = `<span style="color: red;">❌ ${error.message}</span>`;
+        document.getElementById('addEnrolleesBtn').disabled = false;
+      }
+    };
+
+    // Add Care Plan Entries
+    document.getElementById('addCarePlanBtn').onclick = async () => {
+      try {
+        const btn = document.getElementById('addCarePlanBtn');
+        btn.disabled = true;
+        document.getElementById('carePlanStatus').textContent = 'Adding...';
+        
+        if (!window.enrolleeIds || window.enrolleeIds.length === 0) {
+          throw new Error('Please add enrollees first');
+        }
+        
+        const enrolleeId = window.enrolleeIds[0];
+        
+        // Add a note
+        await addDoc(collection(db, `artifacts/${appId}/public/data/enrollees/${enrolleeId}/carePlan`), {
+          type: 'Note',
+          timestamp: serverTimestamp(),
+          authorUserId: user.uid,
+          authorName: user.email || 'Demo User',
+          content: 'Initial assessment completed. Client is motivated and eager to engage with services. Discussed housing goals and employment barriers.'
+        });
+        
+        // Add PRAXIS insight
+        await addDoc(collection(db, `artifacts/${appId}/public/data/enrollees/${enrolleeId}/carePlan`), {
+          type: 'PRAXISInsight',
+          timestamp: serverTimestamp(),
+          authorUserId: 'system',
+          authorName: 'PRAXIS AI',
+          content: 'Based on risk profile, recommend referral to mental health services and housing assistance. Client shows elevated stress indicators.',
+          status: 'Pending'
+        });
+        
+        document.getElementById('carePlanStatus').innerHTML = '<span style="color: green;">✅ Added care plan entries</span>';
+      } catch (error) {
+        document.getElementById('carePlanStatus').innerHTML = `<span style="color: red;">❌ ${error.message}</span>`;
+        document.getElementById('addCarePlanBtn').disabled = false;
+      }
+    };
+
+    // Add Referrals
+    document.getElementById('addReferralsBtn').onclick = async () => {
+      try {
+        const btn = document.getElementById('addReferralsBtn');
+        btn.disabled = true;
+        document.getElementById('referralsStatus').textContent = 'Adding...';
+        
+        if (!window.enrolleeIds || window.enrolleeIds.length === 0) {
+          throw new Error('Please add enrollees first');
+        }
+        
+        await addDoc(collection(db, `artifacts/${appId}/public/data/referrals`), {
+          enrolleeId: window.enrolleeIds[0],
+          enrolleeName: 'Sandra Morrison',
+          resourceId: 'resource_housing',
+          resourceName: 'Safe Haven Housing Services',
+          referringUserId: user.uid,
+          referringUserName: user.email || 'Demo User',
+          status: 'Pending',
+          notes: 'Urgent housing needed',
+          createdTimestamp: serverTimestamp()
+        });
+        
+        document.getElementById('referralsStatus').innerHTML = '<span style="color: green;">✅ Added referrals</span>';
+        
+        document.getElementById('completionStatus').innerHTML = 
+          '<div class="success"><strong>🎉 Setup Complete!</strong><br>Visit <a href="http://localhost:5173" target="_blank">http://localhost:5173</a> to see your data!</div>';
+      } catch (error) {
+        document.getElementById('referralsStatus').innerHTML = `<span style="color: red;">❌ ${error.message}</span>`;
+        document.getElementById('addReferralsBtn').disabled = false;
+      }
+    };
+
+    // Add All
+    document.getElementById('addAllBtn').onclick = async () => {
+      document.getElementById('addResourcesBtn').click();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      document.getElementById('addEnrolleesBtn').click();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      document.getElementById('addCarePlanBtn').click();
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      document.getElementById('addReferralsBtn').click();
+    };
+  </script>
+</body>
+</html>
+

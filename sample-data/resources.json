@@ -1,0 +1,68 @@
+{
+  "resources": [
+    {
+      "name": "Community Food Bank",
+      "category": "Food",
+      "description": "Provides weekly food parcels to families in need. No appointment necessary, walk-ins welcome Monday-Friday 9am-5pm.",
+      "eligibilityCriteria": {
+        "zCodes": ["Z59.4", "Z59.5", "Z59.6"],
+        "income": "low"
+      }
+    },
+    {
+      "name": "Safe Haven Housing Services",
+      "category": "Housing",
+      "description": "Emergency housing assistance and transitional housing programs for individuals experiencing homelessness.",
+      "eligibilityCriteria": {
+        "zCodes": ["Z59.0", "Z59.1"],
+        "income": "low"
+      }
+    },
+    {
+      "name": "Wellness Center Mental Health Clinic",
+      "category": "Mental Health",
+      "description": "Sliding scale mental health services including therapy, psychiatry, and group counseling. Accepting new patients.",
+      "eligibilityCriteria": {
+        "zCodes": ["Z63.4", "Z60.2"],
+        "income": "low-to-moderate"
+      }
+    },
+    {
+      "name": "Skills Forward Employment Center",
+      "category": "Employment",
+      "description": "Free job training, resume assistance, and job placement services for unemployed and underemployed individuals.",
+      "eligibilityCriteria": {
+        "zCodes": ["Z56.9"],
+        "income": "any"
+      }
+    },
+    {
+      "name": "Community Legal Services",
+      "category": "Legal",
+      "description": "Pro bono legal assistance for family law, housing disputes, and criminal record expungement.",
+      "eligibilityCriteria": {
+        "zCodes": ["Z65.0", "Z65.1"],
+        "income": "low"
+      }
+    },
+    {
+      "name": "Metro Community Health Center",
+      "category": "Healthcare",
+      "description": "Primary care, dental, and pharmacy services on a sliding fee scale. No insurance required.",
+      "eligibilityCriteria": {
+        "zCodes": [],
+        "income": "any"
+      }
+    },
+    {
+      "name": "Ride Share Program",
+      "category": "Transportation",
+      "description": "Free transportation vouchers for medical appointments, job interviews, and essential services.",
+      "eligibilityCriteria": {
+        "zCodes": [],
+        "income": "low"
+      }
+    }
+  ]
+}
+
