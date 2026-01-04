@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /** Utility helpers **/
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isCurrentUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * User profiles
+     * Each authenticated user can read and update their own profile document.
+     */
+    match /artifacts/{appId}/users/{userId}/profile/main {
+      allow read, write: if isCurrentUser(userId);
+    }
+
+    /**
+     * Shared application data (enrollees, resources, referrals, etc.)
+     * Permit any signed-in user to read and write during development.
+     * Tighten this later with role checks once server-side enforcement is added.
+     */
+    match /artifacts/{appId}/public/data/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    /**
+     * Participant journey artifacts (strip map stages, milestones, etc.)
+     * Allow authenticated users to read/write during development.
+     */
+    match /artifacts/{appId}/participants/{participantId}/journey/{docId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}
+

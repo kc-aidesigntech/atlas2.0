@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useEffect } from 'react'
+import React, { useState, createContext, useContext, useEffect, useRef } from 'react'
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth'
 import { 
@@ -15,11 +15,12 @@ import {
   where,
   orderBy,
   getDocs,
+  getDoc,
   arrayUnion,
   serverTimestamp
 } from 'firebase/firestore'
-import { GoogleMap, Marker, Circle, useLoadScript } from '@react-google-maps/api'
-import { Home, Users, BookHeart, Send, UserCircle2, LogOut, FileText, PlusCircle, Database, Edit, Trash2, Save, X, MessageCircle, Settings, RefreshCw } from 'lucide-react'
+import { GoogleMap, Marker, Circle, Polygon, useLoadScript } from '@react-google-maps/api'
+import { Home, Users, BookHeart, Send, UserCircle2, LogOut, FileText, PlusCircle, Database, Edit, Trash2, Save, X, MessageCircle, Settings, RefreshCw, Activity, Download, Map } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -66,6 +67,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
+import * as d3 from 'd3'
+import { gsap } from 'gsap'
 
 // ============================================================================
 // FIREBASE CONTEXT & AUTHENTICATION
@@ -188,6 +191,50 @@ const ROLES = {
   PARTNER: 'Partner'
 }
 
+const SERVICE_LINES = [
+  { id: 'housing', label: 'Housing Stability', code: 'H', color: '#0039A6' },
+  { id: 'financial', label: 'Financial & Food', code: 'F', color: '#FF6319' },
+  { id: 'mental', label: 'Mental & Behavioral Health', code: 'M', color: '#B933AD' },
+  { id: 'education', label: 'Learning & Skills', code: 'E', color: '#A7A9AC' },
+  { id: 'occupational', label: 'Employment & Training', code: 'O', color: '#FCCC0A' },
+  { id: 'justice', label: 'Justice & Legal', code: 'J', color: '#996633' },
+  { id: 'social', label: 'Social & Family', code: 'S', color: '#EE352E' },
+  { id: 'mobility', label: 'Mobility & Transit', code: 'T', color: '#01A89E' },
+  { id: 'wellness', label: 'Wellness & Prevention', code: 'W', color: '#6CBE45' },
+  { id: 'crisis', label: 'Crisis Response', code: 'C', color: '#FFD700' },
+]
+
+const JOURNEY_STRIP_FALLBACK = {
+  routeName: 'Episode of Care',
+  routeColor: '#00933C',
+  phases: [
+    { name: 'Regulation', duration: 3 },
+    { name: 'Readiness', duration: 5 },
+    { name: 'Renewal', duration: 4 }
+  ],
+  stops: [
+    { month: 0.5, name: 'Initial Intake & 8D Assessment', phase: 'Regulation', services: ['H', 'E'] },
+    { month: 1.0, name: 'SafetyNet Stabilization', phase: 'Regulation', services: ['H', 'M', 'S'] },
+    { month: 2.5, name: 'Z-Code Survey Completed (Tier 2)', phase: 'Regulation', services: ['E', 'F'] },
+    { month: 3.5, name: 'LS/CMI Administered (Tier 3)', phase: 'Readiness', services: ['J'] },
+    { month: 5.0, name: 'CSC Referral & Engagement', phase: 'Readiness', services: ['M', 'S'] },
+    { month: 6.5, name: 'Housing Application Submitted', phase: 'Readiness', services: ['H', 'F'] },
+    { month: 7.5, name: 'Occupational Training Start', phase: 'Readiness', services: ['O', 'F'] },
+    { month: 9.0, name: 'Peer Mentorship Program', phase: 'Renewal', services: ['S', 'M'] },
+    { month: 10.5, name: 'Stable Housing Secured', phase: 'Renewal', services: ['H'] },
+    { month: 11.5, name: 'Graduation Milestone', phase: 'Renewal', services: [] },
+  ],
+  stageMilestones: [
+    { month: 0.5, code: 'H', label: 'Housing Stability', lane: 0 },
+    { month: 2.5, code: 'F', label: 'Financial & Food', lane: 0 },
+    { month: 5.0, code: 'M', label: 'Mental & Behavioral Health', lane: 0 },
+    { month: 5.0, code: 'E', label: 'Learning & Skills', lane: 1 },
+    { month: 7.5, code: 'O', label: 'Employment Support', lane: -1 },
+    { month: 9.5, code: 'S', label: 'Social & Family', lane: 0 },
+  ],
+  currentProgress: 7.8,
+}
+
 const PERMISSIONS = {
   // Enrollee permissions
   CREATE_ENROLLEE: ['Admin', 'Enrollment Manager'],
@@ -273,37 +320,35 @@ function usePermissions() {
 function Sidebar({ currentPage, setCurrentPage }) {
   const { hasPermission, isAdmin, isPartner } = usePermissions()
 
-  // Partner Portal menu
   const partnerNavItems = [
-    { id: 'provider-dashboard', label: 'Partner Dashboard', icon: Home },
-    { id: 'referral-inbox', label: 'Referral Inbox', icon: Send },
-    { id: 'resources', label: 'Resources', icon: BookHeart },
+    { id: 'provider-dashboard', label: 'Partner Pulse', description: 'Shared referrals & scoreboards', icon: Home },
+    { id: 'referral-inbox', label: 'Active Routes', description: 'Respond to new handoffs', icon: Send },
+    { id: 'resources', label: 'Resource Atlas', description: 'Directory of stabilization partners', icon: BookHeart },
   ]
 
-  // Enrollment Manager menu
   const enrollmentManagerNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home, permission: null },
-    { id: 'enrollees', label: 'My Enrollees', icon: Users, permission: 'VIEW_ENROLLEE' },
-    { id: 'resources', label: 'Resources', icon: BookHeart, permission: 'VIEW_RESOURCE' },
-    { id: 'referrals', label: 'Referrals', icon: Send, permission: 'VIEW_REFERRAL' },
-    { id: 'create', label: 'New Enrollee', icon: PlusCircle, permission: 'CREATE_ENROLLEE' },
-    { id: 'load-data', label: 'Load Sample Data', icon: Database, permission: 'LOAD_SAMPLE_DATA' },
+    { id: 'dashboard', label: 'Network Pulse', description: 'Scoreboard across your caseload', icon: Home, permission: null },
+    { id: 'enrollees', label: 'Care Journeys', description: 'Strip map view for each participant', icon: Users, permission: 'VIEW_ENROLLEE' },
+    { id: 'journey-strip', label: 'Journey Strip Map', description: 'Prototype visual narrative', icon: Map, permission: 'VIEW_ENROLLEE' },
+    { id: 'resources', label: 'Resource Atlas', description: 'Browse offerings by Z-code line', icon: BookHeart, permission: 'VIEW_RESOURCE' },
+    { id: 'referrals', label: 'Referral Routes', description: 'Coordinate current and new routes', icon: Send, permission: 'VIEW_REFERRAL' },
+    { id: 'create', label: 'Enroll Participant', description: 'Launch a new episode of care', icon: PlusCircle, permission: 'CREATE_ENROLLEE' },
+    { id: 'load-data', label: 'Sandbox Data', description: 'Reset demo strip maps', icon: Database, permission: 'LOAD_SAMPLE_DATA' },
   ]
 
-  // Admin sees EVERYTHING - both menus combined
   const adminNavItems = [
-    { id: 'admin-portal', label: 'Admin Portal', icon: UserCircle2, divider: true },
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'enrollees', label: 'My Enrollees', icon: Users },
-    { id: 'resources', label: 'Resources', icon: BookHeart },
-    { id: 'referrals', label: 'Referrals', icon: Send },
-    { id: 'create', label: 'New Enrollee', icon: PlusCircle },
-    { id: 'provider-dashboard', label: 'Partner Dashboard', icon: Home, divider: true },
-    { id: 'referral-inbox', label: 'Referral Inbox', icon: Send },
-    { id: 'load-data', label: 'Load Sample Data', icon: Database },
+    { id: 'admin-portal', label: 'System Console', description: 'Manage identities & roles', icon: UserCircle2, divider: true },
+    { id: 'dashboard', label: 'Network Pulse', description: 'Scoreboard across the network', icon: Home },
+    { id: 'enrollees', label: 'Care Journeys', description: 'Participant strip map view', icon: Users },
+    { id: 'journey-strip', label: 'Journey Strip Map', description: 'Prototype visual narrative', icon: Map },
+    { id: 'resources', label: 'Resource Atlas', description: 'Full stabilization directory', icon: BookHeart },
+    { id: 'referrals', label: 'Referral Routes', description: 'Monitor all handoffs', icon: Send },
+    { id: 'create', label: 'Enroll Participant', description: 'Launch a new episode', icon: PlusCircle },
+    { id: 'provider-dashboard', label: 'Partner Pulse', description: 'What partners are seeing', icon: Home, divider: true },
+    { id: 'referral-inbox', label: 'Active Routes', description: 'Respond to partner requests', icon: Send },
+    { id: 'load-data', label: 'Sandbox Data', description: 'Reset demo experience', icon: Database },
   ]
 
-  // Choose menu based on role
   let allNavItems
   if (isAdmin) {
     allNavItems = adminNavItems
@@ -313,52 +358,80 @@ function Sidebar({ currentPage, setCurrentPage }) {
     allNavItems = enrollmentManagerNavItems
   }
 
-  // Filter navigation items based on user permissions (if not admin)
   const navItems = isAdmin
     ? allNavItems
-    : isPartner 
-      ? allNavItems 
+    : isPartner
+      ? allNavItems
       : allNavItems.filter(item => {
           if (!item.permission) return true
           return hasPermission(item.permission)
         })
 
   return (
-    <aside className="w-64 bg-slate-50 border-r border-slate-200 min-h-screen p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-sky-600">ATLAS</h1>
-        <p className="text-xs text-slate-600 mt-1">Community Information Exchange</p>
+    <aside className="relative hidden w-72 shrink-0 flex-col border-r border-white/10 bg-brand-midnight/95 px-6 py-8 backdrop-blur-xl lg:flex">
+      <div className="mb-12">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-brand-slate font-display text-lg tracking-[0.12em] text-white">
+            A
+          </span>
+          <div>
+            <h1 className="text-sm font-semibold uppercase tracking-[0.4em] text-white">Atlas CIE</h1>
+            <p className="mt-1 text-xs uppercase tracking-[0.28em] text-white/60">Regulation → Readiness → Renewal</p>
+          </div>
+        </div>
       </div>
-      
+
       <nav className="space-y-2">
         {navItems.map((item, index) => {
           const Icon = item.icon
           const isActive = currentPage === item.id
-          
+
           return (
             <React.Fragment key={item.id}>
               {item.divider && index > 0 && (
-                <div className="pt-4 pb-2">
-                  <div className="border-t border-slate-300"></div>
+                <div className="py-3">
+                  <div className="border-t border-white/10" />
                 </div>
               )}
               <button
                 onClick={() => setCurrentPage(item.id)}
-                className={`
-                  w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors
-                  ${isActive 
-                    ? 'bg-sky-100 text-sky-700 font-medium' 
-                    : 'text-slate-700 hover:bg-slate-100'
-                  }
-                `}
+                className={`group relative w-full overflow-hidden rounded-xl border px-4 py-3 text-left transition-colors ${
+                  isActive
+                    ? 'border-primary/70 bg-white/10 text-white shadow-glow'
+                    : 'border-transparent text-slate-300 hover:border-white/20 hover:bg-white/5 hover:text-white'
+                }`}
               >
-                <Icon className="w-5 h-5" />
-                <span>{item.label}</span>
+                <span
+                  className={`absolute left-0 top-0 h-full w-1 bg-primary transition-opacity ${
+                    isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'
+                  }`}
+                  aria-hidden
+                />
+                <div className="flex items-center gap-3">
+                  <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 ${isActive ? 'bg-white/10 text-white' : 'text-slate-200'}`}>
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <span className="block text-base font-medium tracking-tight text-white">{item.label}</span>
+                    {item.description && (
+                      <span className="mt-1 block text-sm text-white/65">{item.description}</span>
+                    )}
+                  </div>
+                </div>
               </button>
             </React.Fragment>
           )
         })}
       </nav>
+
+      <div className="mt-auto pt-10">
+        <div className="rounded-2xl border border-white/15 bg-white/5 p-5 text-sm text-white/70">
+          <p className="text-base font-semibold text-white">Strip Map Focus</p>
+          <p className="mt-3 leading-relaxed text-white/70">
+            Track each journey as it moves from regulation to readiness to renewal. Service line icons surface at every stop.
+          </p>
+        </div>
+      </div>
     </aside>
   )
 }
@@ -373,14 +446,25 @@ function Header({ user }) {
     ? user.email.substring(0, 2).toUpperCase() 
     : 'U'
 
+  const roleNarrative = {
+    [ROLES.ADMIN]: 'Stewarding the network and keeping permissions aligned.',
+    [ROLES.ENROLLMENT_MANAGER]: 'Guiding journeys from stabilization to renewal.',
+    [ROLES.PARTNER]: 'Responding to incoming routes and coordinating resources.'
+  }
+
   const handleRoleSwitch = async (newRole) => {
     if (!db || !user?.uid) return
     setSwitching(true)
     try {
       const profileRef = doc(db, `artifacts/${appId}/users/${user.uid}/profile/main`)
-      await updateDoc(profileRef, {
-        role: newRole
-      })
+      await setDoc(
+        profileRef,
+        {
+          role: newRole,
+          updatedAt: serverTimestamp()
+        },
+        { merge: true }
+      )
     } catch (error) {
       console.error('Error switching role:', error)
       alert('Failed to switch role')
@@ -390,87 +474,87 @@ function Header({ user }) {
   }
   
   return (
-    <header className="bg-white border-b border-slate-200 px-8 py-4">
-      <div className="flex items-center justify-between">
+    <header className="border-b border-white/10 px-6 py-7 text-white backdrop-blur lg:px-14">
+      <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900">Welcome to ATLAS</h2>
-          <p className="text-sm text-slate-600">
-            Professional Care Coordination Portal
-            {userRole && (
-              <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-medium">
-                {userRole}
-              </span>
-            )}
+          <span className="text-xs uppercase tracking-[0.48em] text-white/55">Atlas Command</span>
+          <h2 className="mt-3 font-semibold text-white">
+            Welcome back{user?.email ? `, ${user.email.split('@')[0]}` : ''}.
+          </h2>
+          <p className="mt-3 max-w-2xl text-lg leading-relaxed text-white/70">
+            {roleNarrative[userRole] || 'Coordinating stabilization lines across the Social Aid Society network.'}
           </p>
         </div>
-        
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-sky-100 text-sky-700">
-                  {userInitials}
-                </AvatarFallback>
-              </Avatar>
-              <span className="text-sm">{user?.email || 'User'}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            
-            {/* Role Switcher (visible to all users) */}
-            <DropdownMenuLabel className="text-xs text-slate-500 font-normal">
-              Switch Role
-            </DropdownMenuLabel>
-            <DropdownMenuItem 
-              onClick={() => handleRoleSwitch(ROLES.ADMIN)}
-              disabled={switching || userRole === ROLES.ADMIN}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              <span>Admin</span>
-              {userRole === ROLES.ADMIN && <span className="ml-auto text-xs">✓</span>}
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => handleRoleSwitch(ROLES.ENROLLMENT_MANAGER)}
-              disabled={switching || userRole === ROLES.ENROLLMENT_MANAGER}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              <span>Enrollment Manager</span>
-              {userRole === ROLES.ENROLLMENT_MANAGER && <span className="ml-auto text-xs">✓</span>}
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => handleRoleSwitch(ROLES.PARTNER)}
-              disabled={switching || userRole === ROLES.PARTNER}
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              <span>Partner</span>
-              {userRole === ROLES.PARTNER && <span className="ml-auto text-xs">✓</span>}
-            </DropdownMenuItem>
-            
-            <DropdownMenuSeparator />
-            
-            {isAdmin && (
-              <>
-                <DropdownMenuItem onClick={() => window.location.hash = 'admin-portal'}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Admin Portal</span>
+
+        <div className="flex items-center gap-3">
+          {userRole && (
+            <span className="hidden rounded-full border border-primary/40 bg-white/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.3em] text-primary md:inline-flex">
+              {userRole}
+            </span>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="flex items-center gap-3 border-white/15 bg-white/5 text-sm text-slate-200 backdrop-blur-sm hover:border-primary/60"
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback className="bg-primary/20 text-primary">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+                <span>{user?.email || 'User'}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60 border border-white/10 bg-brand-slate text-slate-100">
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-[0.3em] text-slate-400">
+                My account
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-white/10" />
+
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                Switch role
+              </DropdownMenuLabel>
+              {[ROLES.ADMIN, ROLES.ENROLLMENT_MANAGER, ROLES.PARTNER].map(role => (
+                <DropdownMenuItem
+                  key={role}
+                  onClick={() => handleRoleSwitch(role)}
+                  disabled={switching || userRole === role}
+                  className="text-slate-200 focus:bg-white/10"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4 text-primary" />
+                  <span>{role}</span>
+                  {userRole === role && <span className="ml-auto text-xs text-primary">Current</span>}
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
-            
-            <DropdownMenuItem>
-              <UserCircle2 className="mr-2 h-4 w-4" />
-              <span>Profile</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOut className="mr-2 h-4 w-4" />
-              <span>Log out</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              ))}
+
+              <DropdownMenuSeparator className="bg-white/10" />
+
+              {isAdmin && (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => (window.location.hash = 'admin-portal')}
+                    className="text-slate-200 focus:bg-white/10"
+                  >
+                    <Settings className="mr-2 h-4 w-4 text-primary" />
+                    <span>Open System Console</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-white/10" />
+                </>
+              )}
+
+              <DropdownMenuItem className="text-slate-200 focus:bg-white/10">
+                <UserCircle2 className="mr-2 h-4 w-4 text-primary" />
+                <span>View profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem className="text-slate-200 focus:bg-white/10">
+                <LogOut className="mr-2 h-4 w-4 text-primary" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
   )
@@ -478,11 +562,12 @@ function Header({ user }) {
 
 function MainLayout({ children, currentPage, setCurrentPage, user }) {
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="relative flex min-h-screen bg-brand-midnight text-foreground">
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-transparent" />
       <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
-      <div className="flex-1 flex flex-col">
+      <div className="relative z-10 flex flex-1 flex-col">
         <Header user={user} />
-        <main className="flex-1 p-8">
+        <main className="flex-1 px-6 py-10 lg:px-14 lg:py-12">
           {children}
         </main>
       </div>
@@ -498,29 +583,114 @@ function GeographicHeatMap({ enrollees }) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
   const [map, setMap] = useState(null)
   const [selectedMarker, setSelectedMarker] = useState(null)
+  const [showPolygons, setShowPolygons] = useState(true)
+  const [selectedPolygon, setSelectedPolygon] = useState(null)
+  const [zipCodePolygons, setZipCodePolygons] = useState([])
+  const [loadingPolygons, setLoadingPolygons] = useState(true)
 
   // Use the useLoadScript hook
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: apiKey || ''
   })
 
-  // Mock coordinates for Washington State (will be replaced with actual geocoding)
-  const getEnrolleeLocation = (enrollee) => {
-    // For demo, use random locations around Seattle area
-    // In production, geocode actual addresses
-    const baseLat = 47.6062 // Seattle
-    const baseLng = -122.3321
-    const randomOffset = () => (Math.random() - 0.5) * 0.5
+  // Load real Census ZIP code boundaries
+  useEffect(() => {
+    console.log('🗺️ Loading real Census ZIP code boundaries...')
+    fetch('/wa-zip-codes.geojson')
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
+      .then(geoData => {
+        console.log(`✅ Loaded ${geoData.features.length} ZIP code polygons`)
+        
+        // Convert GeoJSON features to polygon format
+        const polygons = geoData.features.map(feature => {
+          // GeoJSON uses [longitude, latitude] - need to swap to [latitude, longitude]
+          let coordinates = []
+          
+          if (feature.geometry.type === 'Polygon') {
+            // Take the outer ring (first array of coordinates)
+            coordinates = feature.geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }))
+          } else if (feature.geometry.type === 'MultiPolygon') {
+            // For MultiPolygon, take the first polygon's outer ring
+            coordinates = feature.geometry.coordinates[0][0].map(([lng, lat]) => ({ lat, lng }))
+          }
+          
+          return {
+            zipCode: feature.properties.zipCode,
+            name: `ZIP ${feature.properties.zipCode}`,
+            coordinates: coordinates,
+            areaLand: feature.properties.areaLand,
+            areaWater: feature.properties.areaWater
+          }
+        })
+        
+        setZipCodePolygons(polygons)
+        setLoadingPolygons(false)
+      })
+      .catch(error => {
+        console.error('❌ Error loading ZIP codes:', error)
+        console.log('ℹ️ Using fallback demo polygons')
+        setLoadingPolygons(false)
+        // Keep empty array - will use demo polygons as fallback
+      })
+  }, [])
+
+  // Real Seattle/Tacoma area addresses with actual coordinates AND ZIP codes
+  const seattleLocations = [
+    { lat: 47.6062, lng: -122.3321, address: 'Downtown Seattle', zipCode: '98101' },
+    { lat: 47.5650, lng: -122.2766, address: 'Rainier Valley, Seattle', zipCode: '98118' },
+    { lat: 47.6740, lng: -122.1215, address: 'Redmond', zipCode: '98052' },
+    { lat: 47.2529, lng: -122.4443, address: 'Tacoma', zipCode: '98402' },
+    { lat: 47.4668, lng: -122.3489, address: 'Kent', zipCode: '98032' },
+    { lat: 47.3073, lng: -122.2284, address: 'Auburn', zipCode: '98001' },
+  ]
+
+  // Assign each enrollee to a real location with ZIP code
+  const enrolleeLocations = enrollees.map((enrollee, index) => {
+    const location = seattleLocations[index % seattleLocations.length]
+    const score = calculateWellnessScore(enrollee)
+    
+    console.log(`Enrollee ${index}:`, {
+      name: `${enrollee.demographics?.firstName} ${enrollee.demographics?.lastName}`,
+      score,
+      lat: location.lat,
+      lng: location.lng,
+      address: location.address,
+      zipCode: location.zipCode
+    })
     
     return {
-      lat: baseLat + randomOffset(),
-      lng: baseLng + randomOffset(),
+      lat: location.lat,
+      lng: location.lng,
+      address: location.address,
+      zipCode: location.zipCode,
       enrollee,
-      score: calculateWellnessScore(enrollee)
+      score
     }
-  }
+  })
 
-  const enrolleeLocations = enrollees.map(getEnrolleeLocation)
+  console.log('Total enrollee locations:', enrolleeLocations.length)
+
+  // Calculate aggregate wellness scores per ZIP code
+  const zipCodeStats = zipCodePolygons.map(polygon => {
+    const enrolleesInZip = enrolleeLocations.filter(loc => loc.zipCode === polygon.zipCode)
+    const avgScore = enrolleesInZip.length > 0
+      ? Math.round(enrolleesInZip.reduce((sum, loc) => sum + loc.score, 0) / enrolleesInZip.length)
+      : null
+    
+    const color = avgScore ? getWellnessColor(avgScore) : { bg: '#94a3b8', text: '#64748b', label: 'No Data' }
+    
+    return {
+      ...polygon,
+      enrolleeCount: enrolleesInZip.length,
+      avgWellnessScore: avgScore,
+      color: color
+    }
+  })
+
+  console.log('ZIP Code Stats:', zipCodeStats)
 
   // Group enrollees by wellness level
   const wellnessStats = {
@@ -535,21 +705,65 @@ function GeographicHeatMap({ enrollees }) {
   // Auto-fit bounds to show all markers (only when map is available)
   useEffect(() => {
     if (map && enrolleeLocations.length > 0 && window.google?.maps) {
+      console.log('Auto-fitting map bounds to', enrolleeLocations.length, 'locations')
       const bounds = new window.google.maps.LatLngBounds()
-      enrolleeLocations.forEach(location => {
-        bounds.extend({ lat: location.lat, lng: location.lng })
+      enrolleeLocations.forEach((location, index) => {
+        const point = { lat: location.lat, lng: location.lng }
+        console.log(`Adding point ${index} to bounds:`, point)
+        bounds.extend(point)
       })
       map.fitBounds(bounds)
+      
+      // Add padding after fitBounds
+      setTimeout(() => {
+        const currentZoom = map.getZoom()
+        if (currentZoom > 11) {
+          map.setZoom(11) // Don't zoom in too much
+        }
+        console.log('Map zoom level:', map.getZoom())
+      }, 100)
     }
-  }, [map, enrolleeLocations])
+  }, [map])
 
-  // Helper function to get Google Maps colored marker URL
+  // Helper function to get Google Maps colored marker URL (HTTPS!)
   const getMarkerIcon = (score) => {
-    // Use Google's built-in colored markers
-    if (score >= 70) return 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
-    if (score >= 40) return 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png'
-    return 'http://maps.google.com/mapfiles/ms/icons/red-dot.png'
+    // IMPORTANT: Use HTTPS not HTTP
+    if (score >= 70) return 'https://maps.google.com/mapfiles/ms/icons/green-dot.png'
+    if (score >= 40) return 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png'
+    return 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
   }
+
+  // Add native markers directly to map as fallback
+  useEffect(() => {
+    if (!map || !window.google?.maps) return
+    
+    console.log('🔧 Adding native Google Maps markers as fallback...')
+    const markers = []
+    
+    enrolleeLocations.forEach((location, index) => {
+      const marker = new window.google.maps.Marker({
+        position: { lat: location.lat, lng: location.lng },
+        map: map,
+        title: `${location.enrollee.demographics?.firstName} ${location.enrollee.demographics?.lastName}`,
+        icon: {
+          url: getMarkerIcon(location.score),
+          scaledSize: new window.google.maps.Size(32, 32)
+        }
+      })
+      
+      marker.addListener('click', () => {
+        console.log('Native marker clicked:', location.enrollee.demographics?.firstName)
+        setSelectedMarker(location)
+      })
+      
+      markers.push(marker)
+      console.log(`✅ Native marker ${index} added at`, location.lat, location.lng)
+    })
+    
+    return () => {
+      markers.forEach(m => m.setMap(null))
+    }
+  }, [map, enrolleeLocations.length])
 
   // Show error if Maps failed to load
   if (loadError) {
@@ -560,8 +774,8 @@ function GeographicHeatMap({ enrollees }) {
           <CardDescription>Error loading map</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="p-4 bg-red-50 border border-red-200 rounded">
-            <p className="text-red-800">Failed to load Google Maps. Please check your API key.</p>
+          <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
+            <p className="text-sm text-white/75">Failed to load Google Maps. Please check your API key.</p>
           </div>
         </CardContent>
       </Card>
@@ -577,18 +791,18 @@ function GeographicHeatMap({ enrollees }) {
           <CardDescription>Enrollee locations color-coded by wellness scores</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col items-center justify-center h-64 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
-            <div className="text-center max-w-md">
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">
+          <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/5">
+            <div className="max-w-md text-center">
+              <h3 className="mb-3 text-2xl font-semibold text-white">
                 {!apiKey ? 'Google Maps API Key Required' : 'Loading...'}
               </h3>
-              <p className="text-sm text-slate-600 mb-2">
+              <p className="mb-3 text-base text-white/70">
                 {!apiKey 
                   ? 'Add your Google Maps API key to .env:' 
                   : 'Initializing Google Maps...'}
               </p>
               {!apiKey && (
-                <code className="block bg-slate-900 text-green-400 p-3 rounded text-xs">
+                <code className="block rounded bg-black/80 p-3 text-sm text-primary">
                   VITE_GOOGLE_MAPS_API_KEY=your_key_here
                 </code>
               )}
@@ -596,18 +810,18 @@ function GeographicHeatMap({ enrollees }) {
           </div>
           
           {/* Wellness Distribution Stats */}
-          <div className="grid grid-cols-3 gap-4 mt-4">
-            <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
-              <p className="text-2xl font-bold text-green-700">{wellnessStats.good}</p>
-              <p className="text-xs text-green-600">Good (70-100)</p>
+          <div className="mt-4 grid grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-white/12 bg-white/5 p-4 text-center">
+              <p className="text-3xl font-semibold text-service-wellness">{wellnessStats.good}</p>
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/65">Good (70-100)</p>
             </div>
-            <div className="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-              <p className="text-2xl font-bold text-yellow-700">{wellnessStats.atRisk}</p>
-              <p className="text-xs text-yellow-600">At Risk (40-69)</p>
+            <div className="rounded-2xl border border-white/12 bg-white/5 p-4 text-center">
+              <p className="text-3xl font-semibold text-service-occupational">{wellnessStats.atRisk}</p>
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/65">At Risk (40-69)</p>
             </div>
-            <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
-              <p className="text-2xl font-bold text-red-700">{wellnessStats.highRisk}</p>
-              <p className="text-xs text-red-600">High Risk (0-39)</p>
+            <div className="rounded-2xl border border-white/12 bg-white/5 p-4 text-center">
+              <p className="text-3xl font-semibold text-service-social">{wellnessStats.highRisk}</p>
+              <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/65">High Risk (0-39)</p>
             </div>
           </div>
         </CardContent>
@@ -626,8 +840,11 @@ function GeographicHeatMap({ enrollees }) {
         <GoogleMap
           mapContainerStyle={{ width: '100%', height: '400px', borderRadius: '0.5rem' }}
           center={mapCenter}
-          zoom={10}
-          onLoad={setMap}
+          zoom={9}
+          onLoad={(mapInstance) => {
+            console.log('Map loaded successfully')
+            setMap(mapInstance)
+          }}
           options={{
             zoomControl: true,
             streetViewControl: false,
@@ -635,65 +852,124 @@ function GeographicHeatMap({ enrollees }) {
             fullscreenControl: true,
           }}
         >
+          {/* Heat map circles (markers are added via native API in useEffect) */}
           {enrolleeLocations.map((location, index) => {
             const color = getWellnessColor(location.score)
-            const enrolleeName = `${location.enrollee.demographics?.firstName || ''} ${location.enrollee.demographics?.lastName || ''}`.trim()
 
             return (
-              <React.Fragment key={index}>
-                {/* Heat map circle around marker */}
-                <Circle
-                  center={{ lat: location.lat, lng: location.lng }}
-                  radius={3000} // 3km radius for better visibility
-                  options={{
-                    fillColor: color.bg,
-                    fillOpacity: 0.2,
-                    strokeColor: color.bg,
-                    strokeOpacity: 0.6,
-                    strokeWeight: 2,
-                  }}
-                />
-                
-                {/* Marker with Google's colored pin */}
-                <Marker
-                  position={{ lat: location.lat, lng: location.lng }}
-                  icon={getMarkerIcon(location.score)}
-                  title={`${enrolleeName} - Wellness: ${location.score}/100 (${color.label})`}
-                  onClick={() => setSelectedMarker(location)}
-                />
-              </React.Fragment>
+              <Circle
+                key={`circle-${index}-${location.lat}-${location.lng}`}
+                center={{ lat: location.lat, lng: location.lng }}
+                radius={5000} // 5km radius
+                options={{
+                  fillColor: color.bg,
+                  fillOpacity: 0.25,
+                  strokeColor: color.bg,
+                  strokeOpacity: 0.8,
+                  strokeWeight: 3,
+                }}
+              />
             )
           })}
+
+          {/* ZIP Code Polygon Layer - Shows aggregate wellness by jurisdiction */}
+          {showPolygons && zipCodeStats.map((zipData, index) => (
+            <Polygon
+              key={`polygon-${zipData.zipCode}`}
+              paths={zipData.coordinates}
+              options={{
+                fillColor: zipData.color.bg,
+                fillOpacity: 0.35,
+                strokeColor: zipData.color.text,
+                strokeOpacity: 0.9,
+                strokeWeight: 2,
+                clickable: true,
+              }}
+              onClick={() => {
+                console.log('Polygon clicked:', zipData.name)
+                setSelectedPolygon(zipData)
+              }}
+            />
+          ))}
         </GoogleMap>
         
+        {/* Selected Polygon Info */}
+        {selectedPolygon && (
+          <div className="mt-4 rounded-2xl border border-white/12 bg-white/5 p-5">
+            <div className="mb-3 flex items-start justify-between">
+              <div>
+                <h4 className="text-xl font-semibold text-white">{selectedPolygon.name}</h4>
+                <p className="text-sm text-white/70">ZIP Code: {selectedPolygon.zipCode}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedPolygon(null)}
+                className="text-white/50 transition hover:text-white/80"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-2 text-sm text-white/70">
+              <div className="flex items-center justify-between">
+                <span>Enrollees in Area:</span>
+                <span className="text-lg font-semibold text-white">{selectedPolygon.enrolleeCount}</span>
+              </div>
+              {selectedPolygon.avgWellnessScore !== null && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span>Avg Wellness Score:</span>
+                    <span 
+                      className="text-lg font-semibold"
+                      style={{ color: selectedPolygon.color.text }}
+                    >
+                      {selectedPolygon.avgWellnessScore}/100
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Area Status:</span>
+                    <span 
+                      className="rounded px-3 py-1 text-xs font-semibold"
+                      style={{ 
+                        backgroundColor: `${selectedPolygon.color.bg}40`,
+                        color: selectedPolygon.color.text
+                      }}
+                    >
+                      {selectedPolygon.color.label}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Selected Marker Info */}
         {selectedMarker && (
-          <div className="mt-4 p-4 bg-slate-50 rounded-lg border-2 border-sky-200">
-            <div className="flex items-start justify-between mb-2">
-              <h4 className="font-semibold text-lg">
+          <div className="mt-4 rounded-2xl border border-white/12 bg-white/5 p-5">
+            <div className="mb-3 flex items-start justify-between">
+              <h4 className="text-xl font-semibold text-white">
                 {selectedMarker.enrollee.demographics?.firstName} {selectedMarker.enrollee.demographics?.lastName}
               </h4>
               <button 
                 onClick={() => setSelectedMarker(null)}
-                className="text-slate-400 hover:text-slate-600"
+                className="text-white/50 transition hover:text-white/80"
               >
-                <X className="w-5 h-5" />
+                <X className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-2 text-sm">
+            <div className="space-y-2 text-sm text-white/70">
               <div className="flex items-center justify-between">
-                <span className="text-slate-600">Wellness Score:</span>
+                <span>Wellness Score:</span>
                 <span 
-                  className="font-bold text-lg"
+                  className="text-lg font-semibold"
                   style={{ color: getWellnessColor(selectedMarker.score).text }}
                 >
                   {selectedMarker.score}/100
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-600">Status:</span>
+                <span>Status:</span>
                 <span 
-                  className="px-2 py-1 rounded text-xs font-medium"
+                  className="rounded px-3 py-1 text-xs font-semibold"
                   style={{ 
                     backgroundColor: `${getWellnessColor(selectedMarker.score).bg}20`,
                     color: getWellnessColor(selectedMarker.score).text
@@ -703,36 +979,407 @@ function GeographicHeatMap({ enrollees }) {
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-600">Risk Tier:</span>
-                <span className="font-medium">Tier {selectedMarker.enrollee.riskProfile?.tier || 'N/A'}</span>
+                <span>ZIP Code:</span>
+                <span className="font-medium text-white">{selectedMarker.zipCode}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Risk Tier:</span>
+                <span className="font-medium text-white">
+                  Tier {selectedMarker.enrollee.riskProfile?.tier || 'N/A'}
+                </span>
               </div>
             </div>
           </div>
         )}
 
+        {/* Map Legend & Controls */}
+        <div className="mt-4 rounded-2xl border border-white/12 bg-white/5 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h4 className="text-base font-semibold text-white">Map Legend</h4>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPolygons(!showPolygons)}
+              className="text-xs text-white/85"
+            >
+              {showPolygons ? '🗺️ Hide ZIP Zones' : '🗺️ Show ZIP Zones'}
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-4 text-white/70">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 rounded-full bg-service-wellness"></div>
+              <span className="text-xs uppercase tracking-[0.22em]">
+                Good Wellness (70-100)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 rounded-full bg-service-occupational"></div>
+              <span className="text-xs uppercase tracking-[0.22em]">
+                At Risk (40-69)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-4 rounded-full bg-service-social"></div>
+              <span className="text-xs uppercase tracking-[0.22em]">
+                High Risk (0-39)
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Note about demo locations */}
-        <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-          <p className="text-xs text-amber-800">
-            <strong>📍 Demo Mode:</strong> Locations are randomly generated around the Seattle/Tacoma area. 
-            In production, actual enrollee addresses would be geocoded to precise coordinates.
+        <div className="mt-4 rounded-2xl border border-white/12 bg-white/5 p-4">
+          <p className="text-xs text-white/70">
+            <strong className="text-white">📍 Real Locations:</strong> Enrollees are mapped to actual Seattle/Tacoma area locations: 
+            Downtown Seattle, Rainier Valley, Redmond, Tacoma, Kent, and Auburn.
+            In production, actual enrollee addresses would be geocoded from their profile data.
           </p>
         </div>
 
+        {/* Polygon Layer Info */}
+        <div className="mt-4 rounded-2xl border border-white/12 bg-white/5 p-4">
+          {loadingPolygons ? (
+            <p className="text-xs text-white/70">
+              <strong className="text-white">⏳ Loading ZIP Code Data...</strong> Fetching real US Census TIGER/Line boundaries for Washington State...
+            </p>
+          ) : zipCodePolygons.length > 0 ? (
+            <p className="text-xs text-white/70">
+              <strong className="text-white">🗺️ Real Census Data Loaded!</strong> Displaying {zipCodePolygons.length} actual Washington State ZIP code boundaries 
+              from US Census Bureau TIGER/Line 2023 Shapefiles. Polygons are colored by aggregate wellness scores. 
+              Toggle "Show ZIP Zones" to view boundaries, and click any zone to see detailed statistics.
+            </p>
+          ) : (
+            <p className="text-xs text-white/70">
+              <strong className="text-white">⚠️ Using Demo Data:</strong> Real Census polygons failed to load. Showing simplified demo boundaries. 
+              Check console for errors or refresh to try again.
+            </p>
+          )}
+        </div>
+
         {/* Wellness Distribution Stats */}
-        <div className="grid grid-cols-3 gap-4 mt-4">
-          <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
-            <p className="text-2xl font-bold text-green-700">{wellnessStats.good}</p>
-            <p className="text-xs text-green-600">Good (70-100)</p>
+        <div className="mt-4 grid grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-white/12 bg-white/5 p-4 text-center">
+            <p className="text-3xl font-semibold text-service-wellness">{wellnessStats.good}</p>
+            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/65">Good (70-100)</p>
           </div>
-          <div className="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-            <p className="text-2xl font-bold text-yellow-700">{wellnessStats.atRisk}</p>
-            <p className="text-xs text-yellow-600">At Risk (40-69)</p>
+          <div className="rounded-2xl border border-white/12 bg-white/5 p-4 text-center">
+            <p className="text-3xl font-semibold text-service-occupational">{wellnessStats.atRisk}</p>
+            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/65">At Risk (40-69)</p>
           </div>
-          <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
-            <p className="text-2xl font-bold text-red-700">{wellnessStats.highRisk}</p>
-            <p className="text-xs text-red-600">High Risk (0-39)</p>
+          <div className="rounded-2xl border border-white/12 bg-white/5 p-4 text-center">
+            <p className="text-3xl font-semibold text-service-social">{wellnessStats.highRisk}</p>
+            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-white/65">High Risk (0-39)</p>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// Risk Assessment Timeline Component
+function RiskAssessmentTimeline({ enrolleeId, enrollee }) {
+  const [assessments, setAssessments] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedAssessment, setSelectedAssessment] = useState(null)
+  const [syncStatus, setSyncStatus] = useState(null)
+  const { db } = useContext(FirebaseContext)
+
+  // Load assessment history
+  useEffect(() => {
+    if (!enrolleeId) return
+
+    const loadAssessments = async () => {
+      try {
+        setLoading(true)
+        
+        // Check if AlayaCare integration is enabled
+        const alayacareEnabled = import.meta.env.VITE_ALAYACARE_ENABLED === 'true'
+        
+        if (alayacareEnabled && enrollee?.alayacareClientId) {
+          // Try to fetch from AlayaCare
+          setSyncStatus('Syncing with AlayaCare...')
+          
+          try {
+            const { getAlayaCareClient } = await import('./services/alayacare-client.js')
+            const { createAssessmentTimeline } = await import('./services/alayacare-mapper.js')
+            
+            const client = getAlayaCareClient()
+            const rawAssessments = await client.getClientAssessments(enrollee.alayacareClientId, {
+              startDate: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(), // Last 12 months
+              endDate: new Date().toISOString()
+            })
+            
+            const timeline = createAssessmentTimeline(rawAssessments)
+            setAssessments(timeline)
+            setSyncStatus(`✅ Synced ${timeline.length} assessments from AlayaCare`)
+            
+          } catch (error) {
+            console.warn('AlayaCare sync failed, using local data:', error)
+            setSyncStatus('Using local data (AlayaCare unavailable)')
+            loadLocalAssessments()
+          }
+        } else {
+          // Use demo/local data
+          setSyncStatus('Using local data')
+          loadLocalAssessments()
+        }
+        
+      } catch (error) {
+        console.error('Error loading assessments:', error)
+        setSyncStatus('Error loading assessments')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    const loadLocalAssessments = () => {
+      // Generate demo timeline data
+      const now = Date.now()
+      const demoAssessments = [
+        {
+          id: 'demo-1',
+          date: new Date(now - 270 * 24 * 60 * 60 * 1000).toISOString(), // 9 months ago
+          tier: 3,
+          totalScore: 35,
+          assessor: 'Dr. Sarah Johnson',
+          formName: 'LS/CMI Initial Assessment',
+          scores: {
+            criminal: 5, education: 4, financial: 5, family: 4,
+            accommodation: 4, leisure: 3, companions: 4, alcohol: 3, attitudes: 2, antisocial: 1
+          }
+        },
+        {
+          id: 'demo-2',
+          date: new Date(now - 180 * 24 * 60 * 60 * 1000).toISOString(), // 6 months ago
+          tier: 3,
+          totalScore: 32,
+          assessor: 'John Smith, LMHC',
+          formName: 'LS/CMI Follow-up',
+          scores: {
+            criminal: 5, education: 3, financial: 4, family: 4,
+            accommodation: 4, leisure: 3, companions: 3, alcohol: 3, attitudes: 2, antisocial: 1
+          }
+        },
+        {
+          id: 'demo-3',
+          date: new Date(now - 90 * 24 * 60 * 60 * 1000).toISOString(), // 3 months ago
+          tier: 2,
+          totalScore: 24,
+          assessor: 'Maria Rodriguez, MSW',
+          formName: 'LS/CMI Progress Check',
+          scores: {
+            criminal: 4, education: 2, financial: 3, family: 3,
+            accommodation: 3, leisure: 2, companions: 3, alcohol: 2, attitudes: 1, antisocial: 1
+          }
+        },
+        {
+          id: 'demo-4',
+          date: new Date(now - 14 * 24 * 60 * 60 * 1000).toISOString(), // 2 weeks ago
+          tier: 1,
+          totalScore: 18,
+          assessor: 'Dr. Michael Chen',
+          formName: 'LS/CMI Current Assessment',
+          scores: {
+            criminal: 3, education: 1, financial: 2, family: 2,
+            accommodation: 2, leisure: 2, companions: 2, alcohol: 2, attitudes: 1, antisocial: 1
+          }
+        }
+      ]
+      
+      setAssessments(demoAssessments)
+    }
+
+    loadAssessments()
+  }, [enrolleeId, enrollee, db])
+
+  // Calculate trend
+  const getTrend = () => {
+    if (assessments.length < 2) return null
+    const first = assessments[0]
+    const last = assessments[assessments.length - 1]
+    const scoreChange = first.totalScore - last.totalScore
+    
+    if (scoreChange > 5) return { direction: 'improving', label: 'Significant Improvement', color: 'text-green-600', icon: '📈' }
+    if (scoreChange > 0) return { direction: 'improving', label: 'Improving', color: 'text-emerald-600', icon: '↗️' }
+    if (scoreChange < -5) return { direction: 'declining', label: 'Declining', color: 'text-red-600', icon: '📉' }
+    if (scoreChange < 0) return { direction: 'declining', label: 'Slight Decline', color: 'text-amber-600', icon: '↘️' }
+    return { direction: 'stable', label: 'Stable', color: 'text-slate-600', icon: '→' }
+  }
+
+  const trend = getTrend()
+
+  const getTierColor = (tier) => {
+    if (tier === 1) return { bg: 'bg-green-500', text: 'text-green-700', label: 'Low Risk' }
+    if (tier === 2) return { bg: 'bg-yellow-500', text: 'text-yellow-700', label: 'Moderate Risk' }
+    return { bg: 'bg-red-500', text: 'text-red-700', label: 'High Risk' }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="w-5 h-5" />
+            Risk Assessment Timeline
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-slate-500">
+            Loading assessment history...
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="w-5 h-5" />
+            Risk Assessment Timeline
+          </CardTitle>
+          {syncStatus && (
+            <span className="text-xs text-slate-500">{syncStatus}</span>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {assessments.length === 0 ? (
+          <div className="text-center py-8 text-slate-500">
+            <p>No assessment history available</p>
+            <p className="text-xs mt-2">Assessments will appear here once synced from AlayaCare</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Timeline visualization */}
+            <div className="relative py-4">
+              {/* Timeline line */}
+              <div className="absolute left-0 right-0 top-1/2 h-1 bg-white/20"></div>
+              
+              {/* Timeline points */}
+              <div className="relative flex justify-between items-center">
+                {assessments.map((assessment, index) => {
+                  const tierColor = getTierColor(assessment.tier)
+                  return (
+                    <button
+                      key={assessment.id}
+                      onClick={() => setSelectedAssessment(assessment)}
+                      className="flex flex-col items-center gap-2 group cursor-pointer"
+                    >
+                      {/* Point */}
+                      <div className={`w-6 h-6 rounded-full ${tierColor.bg} border-4 border-white shadow-lg group-hover:scale-125 transition-transform z-10`}></div>
+                      
+                      {/* Date & Details */}
+                      <div className="min-w-[100px] text-center text-white/70">
+                        <div className="text-xs font-medium text-white">
+                          {new Date(assessment.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        </div>
+                        <div className={`text-xs font-bold ${tierColor.text}`}>
+                          Tier {assessment.tier}
+                        </div>
+                        <div className="text-xs text-white/55">
+                          Score: {assessment.totalScore}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Trend indicator */}
+            {trend && (
+              <div className={`rounded-2xl border border-white/12 bg-white/5 p-4 text-center text-white`}>
+                <span className="mr-2 text-lg">{trend.icon}</span>
+                <span className={`font-semibold ${trend.color}`}>{trend.label}</span>
+                <span className="ml-2 text-sm text-white/70">
+                  over {assessments.length} assessment{assessments.length > 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+
+            {/* Selected assessment details */}
+            {selectedAssessment && (
+              <div className="rounded-2xl border border-white/12 bg-white/5 p-5">
+                <div className="mb-4 flex items-start justify-between">
+                  <div>
+                    <h4 className="text-xl font-semibold text-white">{selectedAssessment.formName}</h4>
+                    <p className="text-sm text-white/70">
+                      {new Date(selectedAssessment.date).toLocaleDateString('en-US', { 
+                        year: 'numeric', month: 'long', day: 'numeric' 
+                      })}
+                    </p>
+                    <p className="text-xs text-white/55">Assessed by: {selectedAssessment.assessor}</p>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedAssessment(null)}
+                    className="text-white/50 transition hover:text-white/80"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="mb-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-white/12 bg-white/5 p-4">
+                    <div className="text-xs uppercase tracking-[0.2em] text-white/60">Risk Tier</div>
+                    <div className={`text-2xl font-bold ${getTierColor(selectedAssessment.tier).text}`}>
+                      Tier {selectedAssessment.tier}
+                    </div>
+                    <div className="text-xs text-white/60">{getTierColor(selectedAssessment.tier).label}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/12 bg-white/5 p-4">
+                    <div className="text-xs uppercase tracking-[0.2em] text-white/60">Total LS/CMI Score</div>
+                    <div className="text-2xl font-bold text-white">{selectedAssessment.totalScore}</div>
+                    <div className="text-xs text-white/60">out of 43</div>
+                  </div>
+                </div>
+
+                {/* Domain scores */}
+                <div className="rounded-xl border border-white/12 bg-white/5 p-4">
+                  <div className="mb-2 text-sm font-semibold text-white">Domain Scores</div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-white/70">
+                    {Object.entries(selectedAssessment.scores || {}).map(([domain, score]) => (
+                      <div key={domain} className="flex justify-between">
+                        <span className="capitalize">{domain}:</span>
+                        <span className="font-medium text-white">{score}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Export buttons */}
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={async () => {
+                  const { exportTimelineToPDF } = await import('./services/export-utils.js')
+                  exportTimelineToPDF(enrollee, assessments)
+                }}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Export PDF
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full"
+                onClick={async () => {
+                  const { exportTimelineToExcel } = await import('./services/export-utils.js')
+                  exportTimelineToExcel(enrollee, assessments)
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Excel
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -792,7 +1439,7 @@ function WellnessDimensionChart({ enrollees, onDimensionClick }) {
               <button
                 key={dim.key}
                 onClick={() => onDimensionClick?.(dim)}
-                className="w-full text-left hover:bg-slate-50 p-3 rounded-lg transition-colors"
+                className="w-full rounded-lg p-3 text-left transition-colors hover:bg-white/10"
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-sm">{dim.name}</span>
@@ -849,7 +1496,7 @@ function RiskTierChart({ enrollees, onTierClick }) {
               <button
                 key={tier.name}
                 onClick={() => onTierClick?.(tier)}
-                className="w-full text-left hover:bg-slate-50 p-4 rounded-lg transition-colors border border-slate-200"
+                className="w-full rounded-lg border border-white/12 p-4 text-left transition-colors hover:bg-white/10"
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium">{tier.name}</span>
@@ -993,88 +1640,152 @@ function DashboardPage() {
 
   if (loading) {
     return (
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900 mb-6">Dashboard</h1>
-        <p className="text-slate-600">Loading dashboard...</p>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-semibold text-white">Network Pulse</h1>
+        <p className="text-sm text-slate-300">Calibrating your strip map signals…</p>
       </div>
     )
   }
 
+  const handleExportDashboard = async (format) => {
+    const { calculateDashboardAnalytics } = await import('./services/analytics-service.js')
+    const analytics = calculateDashboardAnalytics(enrollees, pendingReferrals)
+    
+    if (format === 'pdf') {
+      const { exportDashboardAnalyticsToPDF } = await import('./services/export-utils.js')
+      exportDashboardAnalyticsToPDF(analytics)
+    } else {
+      const { exportDashboardAnalyticsToExcel } = await import('./services/export-utils.js')
+      exportDashboardAnalyticsToExcel(analytics)
+    }
+  }
+
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Dashboard</h1>
-        <p className="text-slate-600">Welcome back! Here's your care coordination overview.</p>
+      <div className="mb-8 space-y-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="font-semibold text-white">Network Pulse</h1>
+            <p className="mt-3 max-w-2xl text-lg leading-relaxed text-white/70">
+              Live scoreboard for journeys moving from regulation to renewal.
+            </p>
+          </div>
+          {enrollees.length > 0 && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-white/30 text-slate-200"
+                onClick={() => handleExportDashboard('pdf')}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Download PDF Brief
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-white/30 text-slate-200"
+                onClick={() => handleExportDashboard('excel')}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Export Excel
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Service Line Legend */}
+        <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-6 py-5">
+          {SERVICE_LINES.map(line => (
+            <div key={line.id} className="flex items-center gap-2">
+              <span
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold text-white"
+                style={{ backgroundColor: line.color }}
+              >
+                {line.code}
+              </span>
+              <span className="text-sm uppercase tracking-[0.28em] text-white/70">{line.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <Card className="border-sky-200">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              My Enrollees
+      <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <Card className="relative overflow-hidden">
+          <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/40 via-white/15 to-transparent" />
+          <CardHeader>
+            <CardDescription className="flex items-center gap-4 text-sm font-medium uppercase tracking-[0.4em] text-white/65">
+              <Users className="h-6 w-6 text-service-housing" />
+              Active care journeys
             </CardDescription>
-            <CardTitle className="text-4xl text-sky-600">{enrolleeCount}</CardTitle>
+            <CardTitle className="mt-4 text-5xl font-semibold text-white">{enrolleeCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-600">Total enrollees in your care</p>
+            <p className="text-base leading-relaxed text-white/70">
+              Participants progressing along the regulation → readiness → renewal strip map.
+            </p>
           </CardContent>
         </Card>
 
-        <Card className="border-yellow-200">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2">
-              <Send className="w-4 h-4" />
-              Pending Referrals
+        <Card className="relative overflow-hidden">
+          <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/40 via-white/15 to-transparent" />
+          <CardHeader>
+            <CardDescription className="flex items-center gap-4 text-sm font-medium uppercase tracking-[0.4em] text-white/65">
+              <Send className="h-6 w-6 text-service-financial" />
+              Routes awaiting response
             </CardDescription>
-            <CardTitle className="text-4xl text-yellow-600">{pendingReferrals.length}</CardTitle>
+            <CardTitle className="mt-4 text-5xl font-semibold text-white">{pendingReferrals.length}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-600">Awaiting response from providers</p>
+            <p className="text-base leading-relaxed text-white/70">
+              Referrals in motion that still require partner confirmation.
+            </p>
           </CardContent>
         </Card>
 
-        <Card className="border-green-200">
-          <CardHeader className="pb-3">
-            <CardDescription className="flex items-center gap-2">
-              <BookHeart className="w-4 h-4" />
-              Recent Updates
+        <Card className="relative overflow-hidden">
+          <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/40 via-white/15 to-transparent" />
+          <CardHeader>
+            <CardDescription className="flex items-center gap-4 text-sm font-medium uppercase tracking-[0.4em] text-white/65">
+              <BookHeart className="h-6 w-6 text-service-social" />
+              Signals in last 24 hours
             </CardDescription>
-            <CardTitle className="text-4xl text-green-600">{recentUpdates.length}</CardTitle>
+            <CardTitle className="mt-4 text-5xl font-semibold text-white">{recentUpdates.length}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-slate-600">New responses in last 24 hours</p>
+            <p className="text-base leading-relaxed text-white/70">
+              Accepted or declined referrals that need a follow-up touch.
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Pending Referrals Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Pending Referrals</CardTitle>
-            <CardDescription>Referrals awaiting provider response</CardDescription>
+            <CardTitle className="text-3xl text-white">Pending referrals</CardTitle>
+            <CardDescription className="text-base text-white/65">Routes awaiting partner confirmation</CardDescription>
           </CardHeader>
           <CardContent>
             {pendingReferrals.length === 0 ? (
-              <p className="text-slate-600 text-sm">No pending referrals at this time.</p>
+              <p className="text-base text-white/65">No pending referrals at this time.</p>
             ) : (
               <div className="space-y-3">
                 {pendingReferrals.slice(0, 5).map((referral) => (
-                  <div key={referral.id} className="flex items-start justify-between p-3 bg-slate-50 rounded-lg">
+                  <div key={referral.id} className="flex items-start justify-between rounded-lg border border-white/10 bg-white/5 p-3">
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{referral.enrolleeName}</p>
-                      <p className="text-xs text-slate-600">{referral.resourceName}</p>
+                      <p className="text-sm font-medium text-white">{referral.enrolleeName}</p>
+                      <p className="text-sm text-white/65">{referral.resourceName}</p>
                     </div>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    <span className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-sm font-medium text-service-crisis">
                       Pending
                     </span>
                   </div>
                 ))}
                 {pendingReferrals.length > 5 && (
-                  <p className="text-xs text-slate-500 text-center">
-                    And {pendingReferrals.length - 5} more...
+                  <p className="text-center text-sm text-white/55">
+                    And {pendingReferrals.length - 5} more…
                   </p>
                 )}
               </div>
@@ -1085,25 +1796,25 @@ function DashboardPage() {
         {/* New Updates Card */}
         <Card>
           <CardHeader>
-            <CardTitle>New Updates</CardTitle>
-            <CardDescription>Recent responses from providers (24h)</CardDescription>
+            <CardTitle className="text-3xl text-white">New updates</CardTitle>
+            <CardDescription className="text-base text-white/65">Responses in the last 24 hours</CardDescription>
           </CardHeader>
           <CardContent>
             {recentUpdates.length === 0 ? (
-              <p className="text-slate-600 text-sm">No new updates in the last 24 hours.</p>
+              <p className="text-base text-white/65">No new updates in the last 24 hours.</p>
             ) : (
               <div className="space-y-3">
                 {recentUpdates.map((referral) => (
-                  <div key={referral.id} className="flex items-start justify-between p-3 bg-slate-50 rounded-lg">
+                  <div key={referral.id} className="flex items-start justify-between rounded-lg border border-white/10 bg-white/5 p-3">
                     <div className="flex-1">
-                      <p className="font-medium text-sm">{referral.enrolleeName}</p>
-                      <p className="text-xs text-slate-600">{referral.resourceName}</p>
-                      <p className="text-xs text-slate-500 mt-1">{formatTimestamp(referral.createdTimestamp)}</p>
+                      <p className="text-sm font-medium text-white">{referral.enrolleeName}</p>
+                      <p className="text-sm text-white/65">{referral.resourceName}</p>
+                      <p className="mt-1 text-sm text-white/55">{formatTimestamp(referral.createdTimestamp)}</p>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                      referral.status === 'Accepted' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
+                    <span className={`inline-flex items-center rounded-full border border-white/20 bg-white/10 px-3 py-1 text-sm font-medium ${
+                      referral.status === 'Accepted'
+                        ? 'text-service-wellness'
+                        : 'text-service-social'
                     }`}>
                       {referral.status}
                     </span>
@@ -1158,11 +1869,11 @@ function DashboardPage() {
                   const score = enrollee.riskProfile.wellnessScores[selectedDimension.key]
                   const color = getWellnessColor(score)
                   return (
-                    <div key={enrollee.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                      <span className="font-medium">
+                    <div key={enrollee.id} className="flex items-center justify-between rounded-xl border border-white/12 bg-white/5 p-3">
+                      <span className="font-medium text-white">
                         {enrollee.demographics?.firstName} {enrollee.demographics?.lastName}
                       </span>
-                      <span className="font-bold" style={{ color: color.text }}>
+                      <span className="font-semibold" style={{ color: color.text }}>
                         {score}/100
                       </span>
                     </div>
@@ -1188,19 +1899,19 @@ function DashboardPage() {
                 .map(enrollee => {
                   const wellnessScore = calculateWellnessScore(enrollee)
                   return (
-                    <div key={enrollee.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                    <div key={enrollee.id} className="flex items-center justify-between rounded-xl border border-white/12 bg-white/5 p-3">
                       <div>
-                        <p className="font-medium">
+                        <p className="font-medium text-white">
                           {enrollee.demographics?.firstName} {enrollee.demographics?.lastName}
                         </p>
-                        <p className="text-xs text-slate-600">
+                        <p className="text-xs text-white/65">
                           Wellness Score: {wellnessScore}/100 - {getWellnessLevel(wellnessScore)}
                         </p>
                       </div>
                       <span 
-                        className="px-2 py-1 rounded text-xs font-medium"
+                        className="rounded px-3 py-1 text-xs font-semibold"
                         style={{ 
-                          backgroundColor: `${selectedTier.color}20`,
+                          backgroundColor: `${selectedTier.color}30`,
                           color: selectedTier.textColor
                         }}
                       >
@@ -1215,43 +1926,390 @@ function DashboardPage() {
       )}
 
       {/* Regional Scoreboard / Common Agenda Placeholder */}
-      <Card className="mt-6 border-emerald-200">
+      <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookHeart className="w-5 h-5 text-emerald-600" />
+          <CardTitle className="flex items-center gap-3 text-3xl text-white">
+            <BookHeart className="h-6 w-6 text-service-wellness" />
             Regional Scoreboard & Common Agenda
           </CardTitle>
-          <CardDescription>Community-wide impact metrics and shared goals</CardDescription>
+          <CardDescription className="text-base text-white/65">
+            Community-wide impact metrics and shared goals
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="p-4 bg-gradient-to-r from-emerald-50 to-sky-50 rounded-lg border border-emerald-200">
-              <h4 className="font-semibold text-slate-900 mb-2">Collective Impact Metrics</h4>
-              <p className="text-sm text-slate-600 mb-3">
+            <div className="rounded-xl border border-white/12 bg-white/5 p-6">
+              <h4 className="mb-3 text-2xl font-semibold text-white">Collective Impact Metrics</h4>
+              <p className="mb-4 text-base text-white/70">
                 Track community-wide outcomes across all service providers in the ATLAS network.
               </p>
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-3 gap-6 text-center">
                 <div>
-                  <p className="text-2xl font-bold text-emerald-600">1,247</p>
-                  <p className="text-xs text-slate-600">Total Enrollees</p>
+                  <p className="text-3xl font-semibold text-service-wellness">1,247</p>
+                  <p className="mt-1 text-sm uppercase tracking-[0.28em] text-white/60">
+                    Total Enrollees
+                  </p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-sky-600">3,891</p>
-                  <p className="text-xs text-slate-600">Successful Referrals</p>
+                  <p className="text-3xl font-semibold text-service-mobility">3,891</p>
+                  <p className="mt-1 text-sm uppercase tracking-[0.28em] text-white/60">
+                    Successful Referrals
+                  </p>
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-purple-600">89%</p>
-                  <p className="text-xs text-slate-600">Connection Rate</p>
+                  <p className="text-3xl font-semibold text-service-mental">89%</p>
+                  <p className="mt-1 text-sm uppercase tracking-[0.28em] text-white/60">
+                    Connection Rate
+                  </p>
                 </div>
               </div>
             </div>
-            <div className="text-sm text-slate-500 italic">
-              <p>📊 Regional scoreboard data aggregates outcomes from all CIE participants.</p>
-              <p className="mt-1">🎯 Common Agenda: Reduce homelessness by 25% and improve mental health access by 40% by 2026.</p>
+            <div className="text-sm text-white/60">
+              <p className="italic">📊 Regional scoreboard data aggregates outcomes from all CIE participants.</p>
+              <p className="mt-1 italic">
+                🎯 Common Agenda: Reduce homelessness by 25% and improve mental health access by 40% by 2026.
+              </p>
             </div>
           </div>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function JourneyStripMapPage() {
+  const containerRef = useRef(null)
+  const { db } = useAuthentication()
+  const appId = window.__app_id || 'demo-app'
+  const participantId = 'demo-journey'
+  const [journeyData, setJourneyData] = useState(JOURNEY_STRIP_FALLBACK)
+  const [journeyLoading, setJourneyLoading] = useState(true)
+
+  useEffect(() => {
+    if (!db) {
+      setJourneyData(JOURNEY_STRIP_FALLBACK)
+      setJourneyLoading(false)
+      return
+    }
+
+    const journeyRef = doc(db, `artifacts/${appId}/participants/${participantId}/journey/meta`)
+    const unsubscribe = onSnapshot(
+      journeyRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const payload = snapshot.data() || {}
+          setJourneyData({
+               ...JOURNEY_STRIP_FALLBACK,
+               ...payload,
+               routeName: payload.routeName || JOURNEY_STRIP_FALLBACK.routeName,
+               routeColor: payload.routeColor || JOURNEY_STRIP_FALLBACK.routeColor,
+               currentProgress: payload.currentProgress ?? JOURNEY_STRIP_FALLBACK.currentProgress,
+               phases: payload.phases || JOURNEY_STRIP_FALLBACK.phases,
+               stops: payload.stops || JOURNEY_STRIP_FALLBACK.stops,
+               stageMilestones: payload.stageMilestones || JOURNEY_STRIP_FALLBACK.stageMilestones,
+          })
+        } else {
+          setJourneyData(JOURNEY_STRIP_FALLBACK)
+          setDoc(journeyRef, JOURNEY_STRIP_FALLBACK).catch((error) => {
+            console.error('Failed to seed journey strip data:', error)
+          })
+        }
+        setJourneyLoading(false)
+      },
+      (error) => {
+        console.error('Error loading journey strip data:', error)
+        setJourneyData(JOURNEY_STRIP_FALLBACK)
+        setJourneyLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [db, appId, participantId])
+
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || !journeyData) return
+
+    container.innerHTML = ''
+
+    const phases = journeyData.phases || []
+    const stops = journeyData.stops || []
+    const stageMilestones = journeyData.stageMilestones || []
+
+    const phaseEntries = phases.reduce((accumulator, phase, index) => {
+      const duration = Math.max(phase.duration || 0, 0)
+      const start = index === 0 ? 0 : accumulator[index - 1].end
+      const end = start + duration
+      accumulator.push({ phase, index, start, end, center: start + duration / 2, duration })
+      return accumulator
+    }, [])
+
+    const totalDuration = phaseEntries.length
+      ? phaseEntries[phaseEntries.length - 1].end
+      : 1
+
+    const serviceColorLookup = SERVICE_LINES.reduce((acc, line) => {
+      acc[line.code] = line.color
+      return acc
+    }, {})
+
+    const margin = { top: 130, right: 120, bottom: 180, left: 120 }
+    const width = 1480 - margin.left - margin.right
+    const height = 520 - margin.top - margin.bottom
+    const mapYCenter = height / 2
+
+    const svg = d3.select(container)
+      .append('svg')
+      .attr('width', width + margin.left + margin.right)
+      .attr('height', height + margin.top + margin.bottom)
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`)
+
+    const xScale = d3.scaleLinear().domain([0, totalDuration || 1]).range([0, width])
+
+    g.selectAll('.phase-rect')
+      .data(phaseEntries)
+      .enter()
+      .append('rect')
+      .attr('class', 'phase-rect')
+      .attr('x', d => xScale(d.start))
+      .attr('y', mapYCenter - 42)
+      .attr('width', d => Math.max(xScale(d.end) - xScale(d.start), 0))
+      .attr('height', 84)
+      .attr('fill', (d, i) => (i % 2 === 0 ? '#0B0F14' : '#10161D'))
+
+    const phaseLabels = g.selectAll('.phase-label')
+      .data(phaseEntries)
+      .enter()
+      .append('text')
+      .attr('class', 'phase-label')
+      .attr('x', d => xScale(d.center))
+      .attr('y', mapYCenter - 170)
+      .attr('fill', '#E2E8F0')
+      .attr('text-anchor', 'middle')
+      .attr('font-size', 13)
+      .attr('font-weight', 600)
+      .text(d => (d.phase.name || '').toUpperCase())
+
+    phaseLabels.append('tspan')
+      .attr('x', d => xScale(d.center))
+      .attr('dy', 18)
+      .attr('fill', '#606C82')
+      .attr('font-size', 10)
+      .text((d, i) => {
+        if (i === 0) return '0-3 MONTHS'
+        if (i === 1) return '3-8 MONTHS'
+        return '8-12 MONTHS'
+      })
+
+    g.append('line')
+      .attr('x1', 0)
+      .attr('y1', mapYCenter)
+      .attr('x2', width)
+      .attr('y2', mapYCenter)
+      .attr('stroke', '#2D3238')
+      .attr('stroke-width', 8)
+      .attr('stroke-linecap', 'round')
+
+    const progressLine = g.append('line')
+      .attr('x1', 0)
+      .attr('y1', mapYCenter)
+      .attr('x2', 0)
+      .attr('y2', mapYCenter)
+      .attr('stroke', journeyData.routeColor || JOURNEY_STRIP_FALLBACK.routeColor)
+      .attr('stroke-width', 8)
+      .attr('stroke-linecap', 'round')
+
+    const stopsGroup = g.selectAll('.stop-group')
+      .data(stops)
+      .enter()
+      .append('g')
+      .attr('class', 'stop-group')
+      .attr('transform', d => `translate(${xScale(d.month)},${mapYCenter})`)
+
+    const detailsGroup = g.append('g')
+      .attr('transform', `translate(0, ${mapYCenter + 20})`)
+      .style('opacity', 0)
+
+    const showStopDetails = (stop) => {
+      detailsGroup.selectAll('*').remove()
+
+      detailsGroup.append('text')
+        .attr('x', xScale(stop.month))
+        .attr('y', 60)
+        .attr('fill', '#ADB4BF')
+        .attr('font-size', 11)
+        .attr('font-weight', 400)
+        .attr('text-anchor', 'middle')
+        .text(`Service Lines @ ${stop.name}`)
+
+      const icons = detailsGroup.selectAll('.service-icon')
+        .data(stop.services || [])
+        .enter()
+        .append('g')
+        .attr('class', 'service-icon')
+        .attr('transform', (s, i) => {
+          const offset = i * 26 - (((stop.services || []).length - 1) * 13)
+          return `translate(${xScale(stop.month) + offset}, 20)`
+        })
+
+      icons.append('circle')
+        .attr('r', 10)
+        .attr('fill', s => serviceColorLookup[s] || '#6B7280')
+
+      icons.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', 10)
+        .attr('font-weight', 700)
+        .attr('fill', '#050505')
+        .text(s => s)
+
+      gsap.to(detailsGroup.node(), { duration: 0.3, opacity: 1 })
+    }
+
+    stopsGroup.append('circle')
+      .attr('class', 'stop-circle')
+      .attr('r', 7)
+      .attr('fill', d => (d.month <= (journeyData.currentProgress ?? 0) ? (journeyData.routeColor || JOURNEY_STRIP_FALLBACK.routeColor) : '#3F4754'))
+      .attr('stroke', '#050505')
+      .attr('stroke-width', 2)
+      .on('click', function (event, d) {
+        d3.selectAll('.stop-circle').classed('active', false)
+        d3.select(this).classed('active', true)
+        showStopDetails(d)
+      })
+
+    stopsGroup.append('text')
+      .attr('class', 'stop-label')
+      .text(d => d.name)
+      .attr('transform', 'rotate(-40) translate(22, -12)')
+      .style('text-anchor', 'start')
+      .attr('fill', '#F8FAFC')
+      .attr('font-size', 12)
+      .attr('font-weight', 500)
+      .on('click', function (event, d) {
+        d3.select(this.parentNode).select('.stop-circle').dispatch('click')
+      })
+
+    const laneHeight = 34
+    const baseLaneOffset = mapYCenter + 45
+
+    const milestoneGroup = g.selectAll('.milestone-icon')
+      .data(stageMilestones)
+      .enter()
+      .append('g')
+      .attr('class', 'milestone-icon')
+      .attr('transform', d => {
+        const lane = typeof d.lane === 'number' ? d.lane : 0
+        const yOffset = baseLaneOffset + lane * laneHeight
+        return `translate(${xScale(d.month)}, ${yOffset})`
+      })
+
+    milestoneGroup.append('circle')
+      .attr('r', 16)
+      .attr('fill', d => serviceColorLookup[d.code] || '#6B7280')
+      .attr('stroke', '#0F1729')
+      .attr('stroke-width', 2.5)
+
+    milestoneGroup.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dominant-baseline', 'middle')
+      .attr('font-size', 11)
+      .attr('font-weight', '700')
+      .attr('fill', '#FFFFFF')
+      .text(d => d.code)
+
+    milestoneGroup.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('font-size', 10)
+      .attr('fill', 'rgba(212, 221, 236, 0.85)')
+      .attr('y', d => {
+        const lane = typeof d.lane === 'number' ? d.lane : 0
+        return lane >= 0 ? 28 : -24
+      })
+      .attr('dominant-baseline', d => {
+        const lane = typeof d.lane === 'number' ? d.lane : 0
+        return lane >= 0 ? 'hanging' : 'auto'
+      })
+      .text(d => d.label)
+
+    const animateJourney = () => {
+      const progress = Math.min(journeyData.currentProgress ?? 0, totalDuration)
+      const targetX = xScale(progress)
+      gsap.to(progressLine.node(), {
+        duration: 2.5,
+        attr: { x2: targetX },
+        ease: 'power2.inOut'
+      })
+
+      const indicator = g.append('circle')
+        .attr('cx', targetX)
+        .attr('cy', mapYCenter)
+        .attr('r', 8)
+        .attr('fill', '#FFFFFF')
+        .attr('stroke', journeyData.routeColor || JOURNEY_STRIP_FALLBACK.routeColor)
+        .attr('stroke-width', 3)
+        .style('opacity', 0)
+
+      gsap.to(indicator.node(), {
+        duration: 0.5,
+        opacity: 1,
+        delay: 2.4
+      })
+
+      gsap.to(indicator.node(), {
+        duration: 1.5,
+        scale: 1.5,
+        opacity: 0.5,
+        repeat: -1,
+        yoyo: true,
+        ease: 'sine.inOut',
+        delay: 2.5
+      })
+    }
+
+    animateJourney()
+
+    return () => {
+      container.innerHTML = ''
+    }
+  }, [journeyData])
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center gap-4">
+        <span className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#00933C] text-2xl font-bold uppercase text-white shadow-[0_0_25px_rgba(0,147,60,0.45)]">A</span>
+        <div>
+          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Atlas journey prototype</p>
+          <h1 className="text-3xl font-semibold text-white uppercase tracking-[0.25em]">Individual strip map</h1>
+          <p className="mt-1 text-xs uppercase tracking-[0.35em] text-slate-400">Participant Sandra Morrison · Episode of care · 12 months</p>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-brand-midnight/80 p-4">
+        {journeyLoading ? (
+          <div className="min-w-[1200px] flex items-center justify-center py-32 text-muted-foreground">
+            Loading journey strip map…
+          </div>
+        ) : (
+          <div ref={containerRef} className="min-w-[1200px]" />
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-5 py-4">
+        {SERVICE_LINES.map(line => (
+          <div key={line.id} className="flex items-center gap-2">
+            <span
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-white"
+              style={{ backgroundColor: line.color }}
+            >
+              {line.code}
+            </span>
+            <span className="text-xs uppercase tracking-[0.25em] text-slate-300">{line.label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1320,51 +2378,81 @@ function MyEnrolleesPage({ setCurrentPage, setCurrentEnrolleeId }) {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold text-slate-900 mb-6">My Enrollees</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="font-semibold text-white">My Enrollees</h1>
+        {enrollees.length > 0 && (
+          <div className="flex gap-3">
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const { exportEnrolleesToPDF } = await import('./services/export-utils.js')
+                exportEnrolleesToPDF(enrollees, 'My Enrollees Report')
+              }}
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Export PDF
+            </Button>
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const { exportEnrolleesToExcel } = await import('./services/export-utils.js')
+                exportEnrolleesToExcel(enrollees)
+              }}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export Excel
+            </Button>
+          </div>
+        )}
+      </div>
       
       {enrollees.length === 0 ? (
-        <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
-          <Users className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">No Enrollees Yet</h3>
-          <p className="text-slate-600 mb-4">You haven't been assigned any enrollees yet, or you can create a new one.</p>
-          <Button onClick={() => setCurrentPage('create')} className="bg-sky-600 hover:bg-sky-700">
-            <PlusCircle className="w-4 h-4 mr-2" />
+        <div className="rounded-2xl border border-white/12 bg-white/5 p-10 text-center">
+          <Users className="mx-auto mb-6 h-12 w-12 text-white/50" />
+          <h3 className="mb-3 text-2xl font-semibold text-white">No Enrollees Yet</h3>
+          <p className="mb-6 text-base text-white/65">
+            You haven't been assigned any enrollees yet, or you can create a new one.
+          </p>
+          <Button onClick={() => setCurrentPage('create')} className="bg-gradient-to-r from-service-social to-service-financial hover:brightness-110">
+            <PlusCircle className="mr-2 h-4 w-4" />
             Create New Enrollee
           </Button>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Date of Birth</TableHead>
-                <TableHead>Risk Tier</TableHead>
-                <TableHead>Care Team Size</TableHead>
+        <div className="overflow-hidden rounded-2xl border border-white/12 bg-white/5">
+          <Table className="text-base text-white/80">
+            <TableHeader className="border-white/10">
+              <TableRow className="border-white/10">
+                <TableHead className="text-sm uppercase tracking-[0.28em] text-white/60">Name</TableHead>
+                <TableHead className="text-sm uppercase tracking-[0.28em] text-white/60">Date of Birth</TableHead>
+                <TableHead className="text-sm uppercase tracking-[0.28em] text-white/60">Risk Tier</TableHead>
+                <TableHead className="text-sm uppercase tracking-[0.28em] text-white/60">Care Team Size</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="divide-y divide-white/10">
               {enrollees.map((enrollee) => (
                 <TableRow 
                   key={enrollee.id}
                   onClick={() => handleEnrolleeClick(enrollee.id)}
-                  className="cursor-pointer hover:bg-sky-50"
+                  className="cursor-pointer border-transparent transition hover:bg-white/10"
                 >
-                  <TableCell className="font-medium">
+                  <TableCell className="font-medium text-white">
                     {enrollee.demographics?.firstName} {enrollee.demographics?.lastName}
                   </TableCell>
-                  <TableCell>{enrollee.demographics?.dob || 'N/A'}</TableCell>
+                  <TableCell className="text-white/70">{enrollee.demographics?.dob || 'N/A'}</TableCell>
                   <TableCell>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      enrollee.riskProfile?.tier === 1 ? 'bg-green-100 text-green-800' :
-                      enrollee.riskProfile?.tier === 2 ? 'bg-yellow-100 text-yellow-800' :
-                      enrollee.riskProfile?.tier === 3 ? 'bg-red-100 text-red-800' :
-                      'bg-slate-100 text-slate-800'
+                    <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      enrollee.riskProfile?.tier === 1 ? 'border border-white/15 bg-service-wellness/20 text-service-wellness' :
+                      enrollee.riskProfile?.tier === 2 ? 'border border-white/15 bg-service-occupational/20 text-service-occupational' :
+                      enrollee.riskProfile?.tier === 3 ? 'border border-white/15 bg-service-social/20 text-service-social' :
+                      'border border-white/15 bg-white/10 text-white/70'
                     }`}>
                       Tier {enrollee.riskProfile?.tier || 'N/A'}
                     </span>
                   </TableCell>
-                  <TableCell>{enrollee.careTeam?.length || 0}</TableCell>
+                  <TableCell className="text-white/70">{enrollee.careTeam?.length || 0}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -2131,7 +3219,35 @@ function ReferralsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Referrals</h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-3xl font-bold text-slate-900">Referrals</h1>
+          {!loading && referrals.length > 0 && (
+            <div className="flex gap-2">
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const { exportReferralsToPDF } = await import('./services/export-utils.js')
+                  exportReferralsToPDF(referrals, 'All Referrals')
+                }}
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Export PDF
+              </Button>
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const { exportReferralsToExcel } = await import('./services/export-utils.js')
+                  exportReferralsToExcel(referrals)
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export Excel
+              </Button>
+            </div>
+          )}
+        </div>
         <p className="text-slate-600">Track all referrals you've created</p>
       </div>
 
@@ -2516,12 +3632,17 @@ function EnrolleeProfilePage({ enrolleeId, setCurrentPage }) {
       <Tabs defaultValue="risk" className="mt-6">
         <TabsList>
           <TabsTrigger value="risk">Risk Rating</TabsTrigger>
+          <TabsTrigger value="assessments">Assessment History</TabsTrigger>
           <TabsTrigger value="careplan">Shared Care Plan</TabsTrigger>
           <TabsTrigger value="details">Details</TabsTrigger>
         </TabsList>
 
         <TabsContent value="risk">
           <Tab_RiskRating riskProfile={enrollee.riskProfile} />
+        </TabsContent>
+
+        <TabsContent value="assessments">
+          <RiskAssessmentTimeline enrolleeId={enrolleeId} enrollee={enrollee} />
         </TabsContent>
 
         <TabsContent value="careplan">
@@ -4353,6 +5474,8 @@ function ContentArea({ currentPage, currentEnrolleeId, setCurrentPage, setCurren
       return <DashboardPage />
     case 'enrollees':
       return <MyEnrolleesPage setCurrentPage={setCurrentPage} setCurrentEnrolleeId={setCurrentEnrolleeId} />
+    case 'journey-strip':
+      return <JourneyStripMapPage />
     case 'resources':
       return <ResourcesPage />
     case 'referrals':

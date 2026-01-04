@@ -3,12 +3,198 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-border;
+  :root {
+    color-scheme: dark;
+    --header-height: 96px;
+    --spacing-unit: 4px;
+
+    --font-body: "Helvetica Neue", Helvetica;
+    --font-heading: "Helvetica Neue", Helvetica;
+    --text-base: 17px;
+    --line-height-base: 1.65;
+
+    --surface-base: #000000;
+    --surface-ink: #05060a;
+    --surface-muted: #090d13;
+    --surface-panel: #0f1319;
+    --surface-accent: rgba(255, 255, 255, 0.04);
+    --surface-overlay: rgba(12, 18, 26, 0.9);
+
+    --card-background: rgba(12, 16, 24, 0.95);
+    --card-background-hover: rgba(12, 16, 24, 0.88);
+    --card-foreground: #f5f7fa;
+    --card-border: rgba(255, 255, 255, 0.08);
+
+    --foreground-primary: #f5f7fa;
+    --foreground-secondary: rgba(226, 232, 240, 0.7);
+    --foreground-tertiary: rgba(226, 232, 240, 0.55);
+
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.22);
+    --input-border: rgba(148, 163, 184, 0.2);
+
+    --accent-color: #ffd700;
+    --accent-muted: rgba(255, 214, 0, 0.28);
   }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  html {
+    box-sizing: border-box;
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    line-height: var(--line-height-base);
+    scroll-padding-top: calc(var(--header-height) + (var(--spacing-unit) * 4));
+  }
+
+  *,
+  *::before,
+  *::after {
+    @apply border-border;
+    box-sizing: inherit;
+    margin: 0;
+    padding: 0;
+    outline-color: transparent;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-body);
     font-feature-settings: "rlig" 1, "calt" 1;
+    background-color: var(--surface-base);
+    background-image: none;
+    color: var(--foreground-primary);
+    font-size: var(--text-base);
+    line-height: var(--line-height-base);
+    min-height: 100vh;
+    pointer-events: auto;
+  }
+
+  .antialiased {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1 {
+    font-size: clamp(2.75rem, 2.4vw + 1.5rem, 3.75rem);
+    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--foreground-primary);
+    font-family: var(--font-heading);
+  }
+
+  h2 {
+    font-size: clamp(2.1rem, 1.6vw + 1.1rem, 3rem);
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.006em;
+    color: var(--foreground-primary);
+    font-family: var(--font-heading);
+  }
+
+  h3 {
+    font-size: clamp(1.6rem, 1.2vw + 0.9rem, 2.25rem);
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: -0.002em;
+    color: var(--foreground-primary);
+    font-family: var(--font-heading);
+  }
+
+  h4 {
+    font-size: 1.4rem;
+    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: 0em;
+    color: var(--foreground-primary);
+    font-family: var(--font-heading);
+  }
+
+  p {
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    color: var(--foreground-secondary);
+    letter-spacing: 0.01em;
+  }
+
+  small {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: var(--foreground-tertiary);
+    letter-spacing: 0.008em;
+  }
+
+  ::selection {
+    background-color: var(--accent-muted);
+    color: var(--surface-base);
+  }
+}
+
+@layer utilities {
+  .text-slate-900 {
+    color: rgba(248, 250, 252, 0.98) !important;
+  }
+  .text-slate-800 {
+    color: rgba(226, 232, 240, 0.92) !important;
+  }
+  .text-slate-700 {
+    color: rgba(210, 219, 232, 0.88) !important;
+  }
+  .text-slate-600 {
+    color: rgba(195, 205, 220, 0.82) !important;
+  }
+  .text-slate-500 {
+    color: rgba(176, 189, 206, 0.78) !important;
+  }
+  .text-slate-400 {
+    color: rgba(148, 163, 184, 0.72) !important;
+  }
+  .text-slate-300 {
+    color: rgba(148, 163, 184, 0.64) !important;
+  }
+
+  .bg-slate-50 {
+    background-color: rgba(16, 22, 32, 0.9) !important;
+  }
+  .bg-slate-100 {
+    background-color: rgba(26, 32, 44, 0.9) !important;
+  }
+  .bg-slate-200 {
+    background-color: rgba(39, 47, 61, 0.9) !important;
+  }
+  .bg-white {
+    background-color: rgba(9, 13, 19, 0.95) !important;
+  }
+  .bg-red-50 {
+    background-color: rgba(41, 8, 8, 0.75) !important;
+  }
+  .bg-yellow-50 {
+    background-color: rgba(40, 32, 6, 0.75) !important;
+  }
+  .bg-green-50 {
+    background-color: rgba(10, 32, 18, 0.75) !important;
+  }
+  .bg-purple-50 {
+    background-color: rgba(28, 16, 43, 0.75) !important;
+  }
+  .bg-sky-50 {
+    background-color: rgba(12, 26, 38, 0.75) !important;
+  }
+  .bg-emerald-50 {
+    background-color: rgba(8, 32, 24, 0.75) !important;
+  }
+  .bg-slate-900 {
+    background-color: rgba(7, 11, 17, 0.95) !important;
+  }
+
+  .border-slate-200 {
+    border-color: rgba(148, 163, 184, 0.28) !important;
+  }
+  .border-slate-300 {
+    border-color: rgba(148, 163, 184, 0.38) !important;
   }
 }
 
