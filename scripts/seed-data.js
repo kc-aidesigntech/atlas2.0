@@ -1,14 +1,14 @@
-const admin = require('firebase-admin');
-const path = require('path');
+import admin from 'firebase-admin';
 
-// Initialize Firebase Admin with your project
-// This will use your default credentials from Firebase CLI
+// Initialize Firebase Admin with application default credentials.
+// Requires GOOGLE_APPLICATION_CREDENTIALS or gcloud auth application-default login.
 admin.initializeApp({
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'atlas-information-exchange'
+  credential: admin.credential.applicationDefault(),
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID || 'atlas-information-exchange',
 });
 
 const db = admin.firestore();
-const appId = 'atlas-demo';
+const appId = process.env.APP_ID || 'atlas-demo';
 
 // Sample data
 const resources = [
