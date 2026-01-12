@@ -1,0 +1,38 @@
+{
+  "partners": [
+    {
+      "name": "County Public Defender Station",
+      "type": "Public Defender",
+      "zBurdenSurvey": {
+        "zCodes": ["Z65.0", "Z65.1", "Z60.4", "Z63.0", "Z59.7"],
+        "weights": { "justice": 0.35, "housing": 0.25, "social": 0.2, "work": 0.2 }
+      },
+      "watershedWeights": { "housing": 0.3, "justice": 0.3, "social": 0.2, "work": 0.2 },
+      "stripMap": {
+        "phases": ["Regulation", "Readiness", "Renewal"],
+        "currentProgress": 4.2,
+        "stops": [
+          { "order": 1, "name": "Z-code partner survey completed", "phase": "Regulation" },
+          { "order": 2, "name": "Impact report generated", "phase": "Regulation" },
+          { "order": 3, "name": "Eligibility demographics captured", "phase": "Regulation" },
+          { "order": 4, "name": "MOU + pilot scope agreed", "phase": "Readiness" },
+          { "order": 5, "name": "Gatekeeper workshop delivered", "phase": "Readiness" },
+          { "order": 6, "name": "Pilot tools/policies released", "phase": "Readiness" },
+          { "order": 7, "name": "Pilot evaluation launched", "phase": "Readiness" },
+          { "order": 8, "name": "Intervention adjustments applied", "phase": "Renewal" }
+        ]
+      },
+      "pilotStatus": {
+        "state": "planning",
+        "workshopsCompleted": 1,
+        "pilotsLaunched": 0
+      },
+      "referralsManaged": 18,
+      "civicYield": {
+        "policyInfluence": "Contributed to pretrial stabilization protocol draft.",
+        "crimeReduction": "Early signal: fewer breach-of-contact incidents among referred cohort.",
+        "economic": "Stabilized participants sustaining employment through supervision."
+      }
+    }
+  ]
+}

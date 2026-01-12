@@ -35,6 +35,19 @@ service cloud.firestore {
     match /artifacts/{appId}/participants/{participantId}/journey/{docId} {
       allow read, write: if isSignedIn();
     }
+
+    /**
+     * Partner stations (e.g., Public Defenders) and County Commons
+     * Development posture: allow authenticated reads/writes.
+     * TODO: tighten with role-aware checks when server-side enforcement lands.
+     */
+    match /artifacts/{appId}/partners/{partnerId}/{document=**} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /artifacts/{appId}/countyCommons/{countyId}/{document=**} {
+      allow read, write: if isSignedIn();
+    }
   }
 }
 

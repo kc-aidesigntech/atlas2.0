@@ -235,6 +235,77 @@ const JOURNEY_STRIP_FALLBACK = {
   currentProgress: 7.8,
 }
 
+const PARTNER_STATION_FALLBACK = {
+  name: 'County Public Defender Station',
+  type: 'Public Defender',
+  zBurdenSurvey: {
+    zCodes: ['Z65.0', 'Z65.1', 'Z60.4', 'Z63.0', 'Z59.7'],
+    weights: { justice: 0.35, housing: 0.25, social: 0.2, work: 0.2 }
+  },
+  watershedWeights: { housing: 0.3, justice: 0.3, social: 0.2, work: 0.2 },
+  stripMap: {
+    phases: ['Regulation', 'Readiness', 'Renewal'],
+    currentProgress: 4.2,
+    stops: [
+      { order: 1, name: 'Z-code partner survey completed', phase: 'Regulation' },
+      { order: 2, name: 'Impact report generated', phase: 'Regulation' },
+      { order: 3, name: 'Eligibility demographics captured', phase: 'Regulation' },
+      { order: 4, name: 'MOU + pilot scope agreed', phase: 'Readiness' },
+      { order: 5, name: 'Gatekeeper workshop delivered', phase: 'Readiness' },
+      { order: 6, name: 'Pilot tools/policies released', phase: 'Readiness' },
+      { order: 7, name: 'Pilot evaluation launched', phase: 'Readiness' },
+      { order: 8, name: 'Intervention adjustments applied', phase: 'Renewal' }
+    ]
+  },
+  pilotStatus: { state: 'planning', workshopsCompleted: 1, pilotsLaunched: 0 },
+  referralsManaged: 18,
+  civicYield: {
+    policyInfluence: 'Contributed to pretrial stabilization protocol draft.',
+    crimeReduction: 'Early signal: fewer breach-of-contact incidents among referred cohort.',
+    economic: 'Stabilized participants sustaining employment through supervision.'
+  }
+}
+
+const COUNTY_COMMONS_FALLBACK = {
+  name: 'County Commons (Pilot Region)',
+  watershedWeightsAggregate: { housing: 0.32, justice: 0.24, social: 0.18, work: 0.16, health: 0.10 },
+  zBurdenAggregate: ['Z59.0', 'Z59.1', 'Z65.0', 'Z65.1', 'Z60.4', 'Z56.0'],
+  leadersEngaged: 72,
+  agendaIterations: 2,
+  incubators: 3,
+  actionTeams: 4,
+  quickWins: [
+    '3rd Gen CPTED park cleanup pilots',
+    'Pray phone deployment',
+    'Inter-agency food + housing referral sprints'
+  ],
+  campaigns: [
+    { name: 'Stabilization Awareness', status: 'active' },
+    { name: 'Prosocial Prescribing', status: 'planned' }
+  ],
+  impactReports: 2,
+  civicYield: {
+    economic: 'Workforce retention improvement among referred cohort.',
+    policy: 'Common agenda papers iterated; draft community plan in progress.',
+    crimeReduction: 'Early reduction signals in target zones correlated to CPTED pilots.'
+  },
+  stripMap: {
+    phases: ['Regulation', 'Readiness', 'Renewal'],
+    currentProgress: 3.8,
+    stops: [
+      { order: 1, name: 'Impact reports generated', phase: 'Regulation' },
+      { order: 2, name: 'Agenda process map published', phase: 'Regulation' },
+      { order: 3, name: '100 leaders gathered/invested', phase: 'Regulation' },
+      { order: 4, name: 'Common agenda papers v1', phase: 'Regulation' },
+      { order: 5, name: 'Incubators convened & pilots identified', phase: 'Readiness' },
+      { order: 6, name: 'Action teams launched', phase: 'Readiness' },
+      { order: 7, name: 'Quick wins deployed (CPTED, pray phones)', phase: 'Readiness' },
+      { order: 8, name: 'Community care plan benchmarks set', phase: 'Readiness' },
+      { order: 9, name: 'Regional civic yield tracked', phase: 'Renewal' }
+    ]
+  }
+}
+
 const PERMISSIONS = {
   // Enrollee permissions
   CREATE_ENROLLEE: ['Admin', 'Enrollment Manager'],
@@ -323,6 +394,7 @@ function Sidebar({ currentPage, setCurrentPage }) {
   const partnerNavItems = [
     { id: 'provider-dashboard', label: 'Partner Pulse', description: 'Shared referrals & scoreboards', icon: Home },
     { id: 'referral-inbox', label: 'Active Routes', description: 'Respond to new handoffs', icon: Send },
+    { id: 'partner-station', label: 'Partner Station', description: 'Z-burden & pilots', icon: Activity },
     { id: 'resources', label: 'Resource Atlas', description: 'Directory of stabilization partners', icon: BookHeart },
   ]
 
@@ -341,11 +413,13 @@ function Sidebar({ currentPage, setCurrentPage }) {
     { id: 'dashboard', label: 'Network Pulse', description: 'Scoreboard across the network', icon: Home },
     { id: 'enrollees', label: 'Care Journeys', description: 'Participant strip map view', icon: Users },
     { id: 'journey-strip', label: 'Journey Strip Map', description: 'Prototype visual narrative', icon: Map },
+    { id: 'county-commons', label: 'County Commons', description: 'Regional scoreboard & agenda', icon: BookHeart },
     { id: 'resources', label: 'Resource Atlas', description: 'Full stabilization directory', icon: BookHeart },
     { id: 'referrals', label: 'Referral Routes', description: 'Monitor all handoffs', icon: Send },
     { id: 'create', label: 'Enroll Participant', description: 'Launch a new episode', icon: PlusCircle },
     { id: 'provider-dashboard', label: 'Partner Pulse', description: 'What partners are seeing', icon: Home, divider: true },
     { id: 'referral-inbox', label: 'Active Routes', description: 'Respond to partner requests', icon: Send },
+    { id: 'partner-station', label: 'Partner Station', description: 'Org strip map & z-burden', icon: Activity },
     { id: 'load-data', label: 'Sandbox Data', description: 'Reset demo experience', icon: Database },
   ]
 
@@ -5214,6 +5288,310 @@ function ReferralInboxPage() {
 }
 
 // ============================================================================
+// PARTNER STATION PAGE
+// ============================================================================
+
+function PartnerStationPage() {
+  const { db } = useAuthentication()
+  const { isAdmin, isPartner } = usePermissions()
+  const appId = window.__app_id || 'demo-app'
+  const [stations, setStations] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!db) {
+      setStations([PARTNER_STATION_FALLBACK])
+      setLoading(false)
+      return
+    }
+
+    const partnersRef = collection(db, `artifacts/${appId}/partners`)
+    const unsubscribe = onSnapshot(
+      partnersRef,
+      (snapshot) => {
+        const data = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        setStations(data.length ? data : [PARTNER_STATION_FALLBACK])
+        setLoading(false)
+      },
+      (error) => {
+        console.error('Error loading partner stations:', error)
+        setStations([PARTNER_STATION_FALLBACK])
+        setLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [db, appId])
+
+  if (!isAdmin && !isPartner) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Limited</h2>
+          <p className="text-slate-600">Partner or Admin access is required to view this station.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Partner Station</h1>
+          <p className="text-slate-600">Z-burden, pilots, and readiness gates</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <Card>
+          <CardContent className="py-10 text-center text-slate-500">Loading station...</CardContent>
+        </Card>
+      ) : (
+        stations.map((station) => {
+          const strip = station.stripMap || {}
+          const stops = strip.stops || []
+          const progressIndex = Math.floor(strip.currentProgress || 0)
+
+          return (
+            <Card key={station.id || station.name}>
+              <CardHeader>
+                <CardTitle className="text-2xl flex items-center gap-3">
+                  <Activity className="h-5 w-5 text-emerald-600" />
+                  {station.name}
+                </CardTitle>
+                <CardDescription>{station.type || 'Partner Station'}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700">Radial Load / Z-burden</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {(station.zBurdenSurvey?.zCodes || []).map((code) => (
+                      <span key={code} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                        {code}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    <h5 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Watershed weights</h5>
+                    <div className="flex flex-wrap gap-2">
+                      {station.watershedWeights &&
+                        Object.entries(station.watershedWeights).map(([k, v]) => (
+                          <span key={k} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                            {k}: {(v * 100).toFixed(0)}%
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <h5 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Pilot status</h5>
+                    <p className="text-sm text-slate-700">
+                      {station.pilotStatus?.state || 'planning'} · workshops: {station.pilotStatus?.workshopsCompleted || 0} · pilots:{' '}
+                      {station.pilotStatus?.pilotsLaunched || 0}
+                    </p>
+                    <p className="text-sm text-slate-700">Referrals managed: {station.referralsManaged ?? 0}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700">Strip Map (gates & unlocks)</h4>
+                  <div className="space-y-2">
+                    {stops.map((stop, idx) => {
+                      const isReached = stop.order ? stop.order <= progressIndex : idx <= progressIndex
+                      return (
+                        <div
+                          key={`${stop.name}-${stop.order || idx}`}
+                          className={`rounded-lg border px-3 py-2 ${isReached ? 'border-emerald-500/40 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}
+                        >
+                          <p className="text-sm font-semibold text-slate-800">{stop.name}</p>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">{stop.phase}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700">Civic Yield</h4>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2 text-sm text-slate-700">
+                    <p><span className="font-semibold">Policy:</span> {station.civicYield?.policyInfluence || 'TBD'}</p>
+                    <p><span className="font-semibold">Crime reduction:</span> {station.civicYield?.crimeReduction || 'TBD'}</p>
+                    <p><span className="font-semibold">Economic:</span> {station.civicYield?.economic || 'TBD'}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// COUNTY COMMONS PAGE
+// ============================================================================
+
+function CountyCommonsPage() {
+  const { db } = useAuthentication()
+  const { isAdmin } = usePermissions()
+  const appId = window.__app_id || 'demo-app'
+  const [counties, setCounties] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!db) {
+      setCounties([COUNTY_COMMONS_FALLBACK])
+      setLoading(false)
+      return
+    }
+
+    const countyRef = collection(db, `artifacts/${appId}/countyCommons`)
+    const unsubscribe = onSnapshot(
+      countyRef,
+      (snapshot) => {
+        const data = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+        setCounties(data.length ? data : [COUNTY_COMMONS_FALLBACK])
+        setLoading(false)
+      },
+      (error) => {
+        console.error('Error loading county commons:', error)
+        setCounties([COUNTY_COMMONS_FALLBACK])
+        setLoading(false)
+      }
+    )
+
+    return () => unsubscribe()
+  }, [db, appId])
+
+  if (!isAdmin) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Admin Only</h2>
+          <p className="text-slate-600">County Commons is visible to admins.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">County Commons</h1>
+          <p className="text-slate-600">Regional strip map, watershed weights, and civic yield</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <Card>
+          <CardContent className="py-10 text-center text-slate-500">Loading county commons...</CardContent>
+        </Card>
+      ) : (
+        counties.map((county) => {
+          const strip = county.stripMap || {}
+          const stops = strip.stops || []
+          const progressIndex = Math.floor(strip.currentProgress || 0)
+
+          return (
+            <Card key={county.id || county.name}>
+              <CardHeader>
+                <CardTitle className="text-2xl flex items-center gap-3">
+                  <Map className="h-5 w-5 text-sky-600" />
+                  {county.name}
+                </CardTitle>
+                <CardDescription>Regional maturation and civic yield</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700">Watershed Weights (aggregate)</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {county.watershedWeightsAggregate &&
+                      Object.entries(county.watershedWeightsAggregate).map(([k, v]) => (
+                        <span key={k} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                          {k}: {(v * 100).toFixed(0)}%
+                        </span>
+                      ))}
+                  </div>
+                  <h4 className="text-sm font-semibold text-slate-700">Regional Z-burden</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {(county.zBurdenAggregate || []).map((code) => (
+                      <span key={code} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                        {code}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-slate-700">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Leaders engaged</p>
+                      <p className="text-xl font-semibold text-slate-900">{county.leadersEngaged ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Agenda iterations</p>
+                      <p className="text-xl font-semibold text-slate-900">{county.agendaIterations ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Incubators</p>
+                      <p className="text-xl font-semibold text-slate-900">{county.incubators ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Action teams</p>
+                      <p className="text-xl font-semibold text-slate-900">{county.actionTeams ?? 0}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700">Regional Strip Map</h4>
+                  <div className="space-y-2">
+                    {stops.map((stop, idx) => {
+                      const isReached = stop.order ? stop.order <= progressIndex : idx <= progressIndex
+                      return (
+                        <div
+                          key={`${stop.name}-${stop.order || idx}`}
+                          className={`rounded-lg border px-3 py-2 ${isReached ? 'border-sky-500/40 bg-sky-50' : 'border-slate-200 bg-slate-50'}`}
+                        >
+                          <p className="text-sm font-semibold text-slate-800">{stop.name}</p>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">{stop.phase}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-700">Quick Wins & Campaigns</h4>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2 text-sm text-slate-700">
+                    <p className="font-semibold text-slate-800">Quick wins</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      {(county.quickWins || []).map((win) => (
+                        <li key={win}>{win}</li>
+                      ))}
+                    </ul>
+                    <p className="font-semibold text-slate-800 pt-2">Campaigns</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      {(county.campaigns || []).map((c) => (
+                        <li key={c.name}>{c.name} — {c.status}</li>
+                      ))}
+                    </ul>
+                    <div className="pt-2 space-y-1">
+                      <p><span className="font-semibold">Civic Yield (economic):</span> {county.civicYield?.economic || 'TBD'}</p>
+                      <p><span className="font-semibold">Policy:</span> {county.civicYield?.policy || 'TBD'}</p>
+                      <p><span className="font-semibold">Crime reduction:</span> {county.civicYield?.crimeReduction || 'TBD'}</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
 // ADMIN PORTAL
 // ============================================================================
 
@@ -5480,6 +5858,10 @@ function ContentArea({ currentPage, currentEnrolleeId, setCurrentPage, setCurren
       return <ResourcesPage />
     case 'referrals':
       return <ReferralsPage />
+    case 'partner-station':
+      return <PartnerStationPage />
+    case 'county-commons':
+      return <CountyCommonsPage />
     case 'create':
       return <RecordCreationPage setCurrentPage={setCurrentPage} setCurrentEnrolleeId={setCurrentEnrolleeId} />
     case 'profile':

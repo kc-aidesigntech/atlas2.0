@@ -1,0 +1,43 @@
+{
+  "countyCommons": [
+    {
+      "name": "County Commons (Pilot Region)",
+      "watershedWeightsAggregate": { "housing": 0.32, "justice": 0.24, "social": 0.18, "work": 0.16, "health": 0.10 },
+      "zBurdenAggregate": ["Z59.0", "Z59.1", "Z65.0", "Z65.1", "Z60.4", "Z56.0"],
+      "leadersEngaged": 72,
+      "agendaIterations": 2,
+      "incubators": 3,
+      "actionTeams": 4,
+      "quickWins": [
+        "3rd Gen CPTED park cleanup pilots",
+        "Pray phone deployment",
+        "Inter-agency food + housing referral sprints"
+      ],
+      "campaigns": [
+        { "name": "Stabilization Awareness", "status": "active" },
+        { "name": "Prosocial Prescribing", "status": "planned" }
+      ],
+      "impactReports": 2,
+      "civicYield": {
+        "economic": "Workforce retention improvement among referred cohort.",
+        "policy": "Common agenda papers iterated; draft community plan in progress.",
+        "crimeReduction": "Early reduction signals in target zones correlated to CPTED pilots."
+      },
+      "stripMap": {
+        "phases": ["Regulation", "Readiness", "Renewal"],
+        "currentProgress": 3.8,
+        "stops": [
+          { "order": 1, "name": "Impact reports generated", "phase": "Regulation" },
+          { "order": 2, "name": "Agenda process map published", "phase": "Regulation" },
+          { "order": 3, "name": "100 leaders gathered/invested", "phase": "Regulation" },
+          { "order": 4, "name": "Common agenda papers v1", "phase": "Regulation" },
+          { "order": 5, "name": "Incubators convened & pilots identified", "phase": "Readiness" },
+          { "order": 6, "name": "Action teams launched", "phase": "Readiness" },
+          { "order": 7, "name": "Quick wins deployed (CPTED, pray phones)", "phase": "Readiness" },
+          { "order": 8, "name": "Community care plan benchmarks set", "phase": "Readiness" },
+          { "order": 9, "name": "Regional civic yield tracked", "phase": "Renewal" }
+        ]
+      }
+    }
+  ]
+}
