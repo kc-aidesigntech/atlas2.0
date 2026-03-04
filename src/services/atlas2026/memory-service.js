@@ -24,9 +24,23 @@ export function buildMemoryView({ events, participant, selectedRole }) {
     { verified: 0, unverified: 0, byScope: {} }
   )
 
+  const byType = scopedEvents.reduce((acc, event) => {
+    const key = event.eventType || 'unknown'
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  }, {})
+
+  const recentWindow = scopedEvents.filter((event) => {
+    const seconds = event?.createdAt?.seconds
+    if (!seconds) return false
+    return Date.now() - seconds * 1000 <= 1000 * 60 * 60 * 24 * 7
+  })
+
   return {
     events: scopedEvents,
-    totals
+    totals,
+    byType,
+    recentWindowCount: recentWindow.length
   }
 }
 

@@ -106,11 +106,14 @@ export default function AtlasShell() {
     selectedMemoryView,
     situationalOverlay,
     ontologyWeights,
+    ontologyAudit,
     activateRecommendedRoute,
+    transitionRouteStatus,
     appendMemoryEvent,
     saveOntologyWeights,
     actionError,
     savingRoute,
+    updatingRoute,
     savingMemoryEvent,
     isLiveData,
     loadingLiveData,
@@ -159,7 +162,9 @@ export default function AtlasShell() {
             routePlan={routePlan}
             selectedRoutes={selectedRoutes}
             activateRecommendedRoute={activateRecommendedRoute}
+            transitionRouteStatus={transitionRouteStatus}
             savingRoute={savingRoute}
+            updatingRoute={updatingRoute}
             actionError={actionError}
           />
         )}
@@ -176,6 +181,7 @@ export default function AtlasShell() {
           <GovernancePage
             selectedRole={selectedRole}
             ontologyWeights={ontologyWeights}
+            ontologyAudit={ontologyAudit}
             saveOntologyWeights={saveOntologyWeights}
             actionError={actionError}
           />

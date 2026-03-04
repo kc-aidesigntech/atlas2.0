@@ -68,6 +68,12 @@ service cloud.firestore {
       allow write: if isGovernanceAdmin();
     }
 
+    match /artifacts/{appId}/atlas2026/ontologyAudit/{auditId} {
+      allow read: if hasAnyRole();
+      allow create: if isGovernanceAdmin();
+      allow update, delete: if false;
+    }
+
     /**
      * Legacy collections are no longer writable in the 2026 clean-break posture.
      * Reads are kept temporarily for audit and migration validation only.

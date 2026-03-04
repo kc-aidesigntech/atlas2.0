@@ -2,6 +2,7 @@ import React from 'react'
 import { Route } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
 import { canRolePerform } from '@/core/atlas2026/policy'
 
 function formatFirestoreTimestamp(value) {
@@ -16,10 +17,13 @@ export default function PrecisionNavigationPage({
   routePlan,
   selectedRoutes,
   activateRecommendedRoute,
+  transitionRouteStatus,
   savingRoute,
+  updatingRoute,
   actionError
 }) {
   const canActivate = canRolePerform(selectedRole, 'activateRoute')
+  const canTransition = canRolePerform(selectedRole, 'transitionRoute')
 
   return (
     <div className="space-y-4">
@@ -78,6 +82,38 @@ export default function PrecisionNavigationPage({
                   Activated by: {route.activatedByRole || 'unknown'} / {route.activatedByUserId || 'unknown'}
                 </small>
                 <small className="block text-slate-400">When: {formatFirestoreTimestamp(route.activatedAt || route.createdAt)}</small>
+                {canTransition && route.status === ROUTE_LIFECYCLE.active && (
+                  <div className="mt-2 flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updatingRoute}
+                      onClick={() =>
+                        transitionRouteStatus({
+                          routeDocId: route.id,
+                          nextStatus: ROUTE_LIFECYCLE.completed,
+                          reason: 'Completion confirmed by operator'
+                        })
+                      }
+                    >
+                      Complete
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updatingRoute}
+                      onClick={() =>
+                        transitionRouteStatus({
+                          routeDocId: route.id,
+                          nextStatus: ROUTE_LIFECYCLE.blocked,
+                          reason: 'Blocked by dependency or capacity'
+                        })
+                      }
+                    >
+                      Block
+                    </Button>
+                  </div>
+                )}
               </div>
             ))
           )}

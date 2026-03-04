@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getApps, initializeApp } from 'firebase/app'
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth'
-import { addDoc, collection, doc, getFirestore, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
+import { collection, getFirestore, onSnapshot } from 'firebase/firestore'
 import { evaluateParticipantForRoutes } from '@/core/atlas2026/intel-contract'
 import { createParticipantState, MEMORY_EVENT_TYPES, ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
 import { canRolePerform } from '@/core/atlas2026/policy'
@@ -9,6 +9,13 @@ import { DEMO_CAPACITY_TOPOLOGY, DEMO_PARTICIPANTS } from './sample-data'
 import { generateRoutePlan } from '@/services/atlas2026/route-engine'
 import { buildMemoryView } from '@/services/atlas2026/memory-service'
 import { buildSituationalOverlay } from '@/services/atlas2026/situational-service'
+import {
+  createMemoryEvent,
+  createOntologyAuditRecord,
+  createRouteRecord,
+  saveOntologyWeightsRecord,
+  updateRouteRecord
+} from '@/services/atlas2026/contract-gateway'
 
 function normalizeParticipant(docId, raw) {
   return createParticipantState({
@@ -60,6 +67,7 @@ export function useAtlasDecisioning() {
   const [capacityTopology, setCapacityTopology] = useState(DEMO_CAPACITY_TOPOLOGY)
   const [routeRecords, setRouteRecords] = useState([])
   const [memoryEvents, setMemoryEvents] = useState([])
+  const [ontologyAudit, setOntologyAudit] = useState([])
   const [ontologyWeights, setOntologyWeights] = useState({
     coverageWeight: 0.3,
     phaseAlignmentWeight: 0.2,
@@ -75,6 +83,7 @@ export function useAtlasDecisioning() {
   const [loadError, setLoadError] = useState(null)
   const [actionError, setActionError] = useState(null)
   const [savingRoute, setSavingRoute] = useState(false)
+  const [updatingRoute, setUpdatingRoute] = useState(false)
   const [savingMemoryEvent, setSavingMemoryEvent] = useState(false)
   const [dbContext, setDbContext] = useState(null)
 
@@ -103,6 +112,7 @@ export function useAtlasDecisioning() {
     let unsubscribeRoutes = null
     let unsubscribeMemoryEvents = null
     let unsubscribeOntology = null
+    let unsubscribeOntologyAudit = null
 
     const cleanupSnapshots = () => {
       if (unsubscribeParticipants) unsubscribeParticipants()
@@ -110,6 +120,7 @@ export function useAtlasDecisioning() {
       if (unsubscribeRoutes) unsubscribeRoutes()
       if (unsubscribeMemoryEvents) unsubscribeMemoryEvents()
       if (unsubscribeOntology) unsubscribeOntology()
+      if (unsubscribeOntologyAudit) unsubscribeOntologyAudit()
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -136,11 +147,13 @@ export function useAtlasDecisioning() {
       const routesPath = collection(db, `artifacts/${appId}/atlas2026/routes`)
       const memoryEventsPath = collection(db, `artifacts/${appId}/atlas2026/memoryEvents`)
       const ontologyPath = collection(db, `artifacts/${appId}/atlas2026/ontology`)
+      const ontologyAuditPath = collection(db, `artifacts/${appId}/atlas2026/ontologyAudit`)
       let participantsReady = false
       let capacityReady = false
       let routesReady = false
       let memoryReady = false
       let ontologyReady = false
+      let ontologyAuditReady = false
       setDbContext({ db, appId, userId: user.uid })
 
       unsubscribeParticipants = onSnapshot(
@@ -154,7 +167,7 @@ export function useAtlasDecisioning() {
             )
           }
           participantsReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -175,7 +188,7 @@ export function useAtlasDecisioning() {
             setCapacityTopology(nextCapacity)
           }
           capacityReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -198,7 +211,7 @@ export function useAtlasDecisioning() {
             }))
           )
           routesReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -221,7 +234,7 @@ export function useAtlasDecisioning() {
             }))
           )
           memoryReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -245,7 +258,7 @@ export function useAtlasDecisioning() {
             }))
           }
           ontologyReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -253,6 +266,28 @@ export function useAtlasDecisioning() {
         },
         (error) => {
           setLoadError(`Ontology subscription failed: ${error.message}`)
+          setIsLiveData(false)
+          setLoadingLiveData(false)
+        }
+      )
+
+      unsubscribeOntologyAudit = onSnapshot(
+        ontologyAuditPath,
+        (snapshot) => {
+          setOntologyAudit(
+            snapshot.docs
+              .map((item) => ({ id: item.id, ...item.data() }))
+              .sort((a, b) => (b?.updatedAt?.seconds ?? 0) - (a?.updatedAt?.seconds ?? 0))
+          )
+          ontologyAuditReady = true
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
+            setIsLiveData(snapshot.size > 0)
+            setLoadError(null)
+            setLoadingLiveData(false)
+          }
+        },
+        (error) => {
+          setLoadError(`Ontology audit subscription failed: ${error.message}`)
           setIsLiveData(false)
           setLoadingLiveData(false)
         }
@@ -296,7 +331,9 @@ export function useAtlasDecisioning() {
         participant: selectedParticipant,
         capacityTopology,
         activeRoutes: selectedRoutes,
-        completedStepIds: []
+        completedStepIds: selectedRoutes
+          .filter((route) => route.status === ROUTE_LIFECYCLE.completed)
+          .map((route) => route.routeId)
       }),
     [capacityTopology, selectedParticipant, selectedRoutes]
   )
@@ -360,7 +397,10 @@ export function useAtlasDecisioning() {
       setRouteRecords((current) => [optimisticRoute, ...current])
       setMemoryEvents((current) => [optimisticMemory, ...current])
 
-      await addDoc(collection(dbContext.db, `artifacts/${dbContext.appId}/atlas2026/routes`), {
+      await createRouteRecord({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        payload: {
         participantId: selectedParticipant.participantId,
         routeId: chosenRoute.routeId,
         partnerId: chosenRoute.partnerId,
@@ -369,20 +409,22 @@ export function useAtlasDecisioning() {
         interferenceRisk: chosenRoute.interferenceRisk,
         transferCost: chosenRoute.transferCost,
         activatedByRole: selectedRole,
-        activatedByUserId: dbContext.userId,
-        activatedAt: serverTimestamp(),
-        createdAt: serverTimestamp()
+        activatedByUserId: dbContext.userId
+        }
       })
 
-      await addDoc(collection(dbContext.db, `artifacts/${dbContext.appId}/atlas2026/memoryEvents`), {
+      await createMemoryEvent({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        payload: {
         participantId: selectedParticipant.participantId,
         eventType: MEMORY_EVENT_TYPES.routeActivated,
         phase: selectedParticipant.currentPhase,
         label: `Route ${chosenRoute.routeId} activated via ${chosenRoute.partnerId}`,
         verified: true,
         createdByRole: selectedRole,
-        createdByUserId: dbContext.userId,
-        createdAt: serverTimestamp()
+          createdByUserId: dbContext.userId
+        }
       })
       return true
     } catch (error) {
@@ -427,15 +469,18 @@ export function useAtlasDecisioning() {
       }
       setMemoryEvents((current) => [optimisticMemory, ...current])
 
-      await addDoc(collection(dbContext.db, `artifacts/${dbContext.appId}/atlas2026/memoryEvents`), {
+      await createMemoryEvent({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        payload: {
         participantId: selectedParticipant.participantId,
         eventType,
         phase: selectedParticipant.currentPhase,
         label: label || 'Milestone verified by station operator.',
         verified,
         createdByRole: selectedRole,
-        createdByUserId: dbContext.userId,
-        createdAt: serverTimestamp()
+          createdByUserId: dbContext.userId
+        }
       })
       return true
     } catch (error) {
@@ -444,6 +489,75 @@ export function useAtlasDecisioning() {
       return false
     } finally {
       setSavingMemoryEvent(false)
+    }
+  }
+
+  async function transitionRouteStatus({ routeDocId, nextStatus, reason }) {
+    setActionError(null)
+    if (!routeDocId || !nextStatus) {
+      setActionError('Route transition payload is incomplete.')
+      return false
+    }
+    if (!canRolePerform(selectedRole, 'transitionRoute')) {
+      setActionError(`Role "${selectedRole}" cannot transition route status.`)
+      return false
+    }
+    if (!dbContext?.db || !dbContext?.appId) {
+      setActionError('Live datastore is not connected; route transition skipped.')
+      return false
+    }
+
+    const validStatuses = [ROUTE_LIFECYCLE.active, ROUTE_LIFECYCLE.blocked, ROUTE_LIFECYCLE.completed]
+    if (!validStatuses.includes(nextStatus)) {
+      setActionError(`Unsupported route status: ${nextStatus}`)
+      return false
+    }
+
+    try {
+      setUpdatingRoute(true)
+      setRouteRecords((current) =>
+        current.map((route) => (route.id === routeDocId ? { ...route, status: nextStatus, optimistic: true } : route))
+      )
+
+      await updateRouteRecord({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        routeDocId,
+        payload: {
+        status: nextStatus,
+        updatedByRole: selectedRole,
+        updatedByUserId: dbContext.userId,
+        transitionReason: reason || null
+        }
+      })
+
+      const eventType =
+        nextStatus === ROUTE_LIFECYCLE.completed
+          ? MEMORY_EVENT_TYPES.milestoneVerified
+          : nextStatus === ROUTE_LIFECYCLE.blocked
+            ? MEMORY_EVENT_TYPES.blockerDetected
+            : MEMORY_EVENT_TYPES.routeActivated
+
+      await createMemoryEvent({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        payload: {
+        participantId: selectedParticipant.participantId,
+        eventType,
+        phase: selectedParticipant.currentPhase,
+        label: `Route ${routeDocId} transitioned to ${nextStatus}${reason ? `: ${reason}` : ''}`,
+        verified: nextStatus !== ROUTE_LIFECYCLE.blocked,
+        createdByRole: selectedRole,
+          createdByUserId: dbContext.userId
+        }
+      })
+
+      return true
+    } catch (error) {
+      setActionError(`Route transition failed: ${error.message}`)
+      return false
+    } finally {
+      setUpdatingRoute(false)
     }
   }
 
@@ -460,13 +574,26 @@ export function useAtlasDecisioning() {
 
     try {
       setOntologyWeights((current) => ({ ...current, ...nextWeights }))
-      await setDoc(doc(dbContext.db, `artifacts/${dbContext.appId}/atlas2026/ontology/weights`), {
-        ...nextWeights,
-        kind: 'weights',
-        updatedByRole: selectedRole,
-        updatedByUserId: dbContext.userId,
-        updatedAt: serverTimestamp()
-      }, { merge: true })
+      await saveOntologyWeightsRecord({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        payload: {
+          ...nextWeights,
+          updatedByRole: selectedRole,
+          updatedByUserId: dbContext.userId
+        }
+      })
+
+      await createOntologyAuditRecord({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        payload: {
+          kind: 'weightsUpdate',
+          weights: nextWeights,
+          updatedByRole: selectedRole,
+          updatedByUserId: dbContext.userId
+        }
+      })
       return true
     } catch (error) {
       setActionError(`Ontology update failed: ${error.message}`)
@@ -488,11 +615,14 @@ export function useAtlasDecisioning() {
     selectedMemoryView,
     situationalOverlay,
     ontologyWeights,
+    ontologyAudit,
     activateRecommendedRoute,
+    transitionRouteStatus,
     appendMemoryEvent,
     saveOntologyWeights,
     actionError,
     savingRoute,
+    updatingRoute,
     savingMemoryEvent,
     isLiveData,
     loadingLiveData,

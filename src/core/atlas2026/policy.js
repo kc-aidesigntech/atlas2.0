@@ -9,6 +9,7 @@ export const ATLAS_ROLES = {
 export const POLICY_BOUNDARIES = {
   evaluateParticipant: [ATLAS_ROLES.peerNavigator, ATLAS_ROLES.stationOperator, ATLAS_ROLES.regionalDirector],
   activateRoute: [ATLAS_ROLES.peerNavigator, ATLAS_ROLES.stationOperator],
+  transitionRoute: [ATLAS_ROLES.peerNavigator, ATLAS_ROLES.stationOperator],
   appendMemoryEvent: [ATLAS_ROLES.peerNavigator, ATLAS_ROLES.stationOperator, ATLAS_ROLES.regionalDirector],
   viewSystemHeatmap: [ATLAS_ROLES.peerNavigator, ATLAS_ROLES.stationOperator, ATLAS_ROLES.regionalDirector, ATLAS_ROLES.readOnlyFunder],
   manageOntology: [ATLAS_ROLES.governanceAdmin]

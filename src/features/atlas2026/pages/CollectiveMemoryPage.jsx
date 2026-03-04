@@ -66,6 +66,14 @@ export default function CollectiveMemoryPage({
           <small className="mt-3 block text-slate-400">
             Verified: {selectedMemoryView.totals.verified} | Unverified: {selectedMemoryView.totals.unverified}
           </small>
+          <small className="block text-slate-400">Events (7-day window): {selectedMemoryView.recentWindowCount}</small>
+          <small className="block text-slate-400">
+            Scope totals - participant: {selectedMemoryView.totals.byScope.participant || 0}, station:{' '}
+            {selectedMemoryView.totals.byScope.station || 0}, regional: {selectedMemoryView.totals.byScope.regional || 0}
+          </small>
+          <small className="block text-slate-400">
+            Event types: {Object.entries(selectedMemoryView.byType).map(([key, count]) => `${key}:${count}`).join(' | ') || 'none'}
+          </small>
         </CardContent>
       </Card>
 
