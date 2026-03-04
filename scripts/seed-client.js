@@ -15,15 +15,18 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load environment variables from parent directory
+// Load environment variables from parent directory (.env.local preferred)
+const envLocalPath = join(__dirname, '../.env.local');
 const envPath = join(__dirname, '../.env');
-console.log(`📁 Loading environment from: ${envPath}`);
-const result = dotenv.config({ path: envPath });
-
+console.log(`📁 Loading environment from: ${envLocalPath} (fallback: ${envPath})`);
+const result = dotenv.config({ path: envLocalPath });
 if (result.error) {
-  console.error('❌ Error loading .env:', result.error);
-  console.log('\n💡 Make sure .env exists in the atlas directory with your Firebase config');
-  process.exit(1);
+  const fallbackResult = dotenv.config({ path: envPath });
+  if (fallbackResult.error) {
+    console.error('❌ Error loading .env.local and .env:', fallbackResult.error);
+    console.log('\n💡 Make sure .env.local (or .env) exists in the atlas directory with your Firebase config');
+    process.exit(1);
+  }
 }
 
 // Firebase configuration from environment variables
@@ -55,7 +58,7 @@ console.log('✅ Firebase configuration loaded successfully\n');
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = 'demo-app'; // Must match what the app uses
+const appId = process.env.VITE_APP_ID || process.env.APP_ID || 'demo-app'; // Must match the app's appId
 
 // Sample data
 const resources = [

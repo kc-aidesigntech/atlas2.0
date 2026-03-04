@@ -11,6 +11,26 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function hasRole(role) {
+      return isSignedIn() && request.auth.token.role == role;
+    }
+
+    function hasAnyRole() {
+      return hasRole('peerNavigator') ||
+        hasRole('stationOperator') ||
+        hasRole('regionalDirector') ||
+        hasRole('governanceAdmin') ||
+        hasRole('readOnlyFunder');
+    }
+
+    function canWriteOperationalData() {
+      return hasRole('peerNavigator') || hasRole('stationOperator') || hasRole('regionalDirector');
+    }
+
+    function isGovernanceAdmin() {
+      return hasRole('governanceAdmin');
+    }
+
     /**
      * User profiles
      * Each authenticated user can read and update their own profile document.
@@ -19,34 +39,57 @@ service cloud.firestore {
       allow read, write: if isCurrentUser(userId);
     }
 
+    /** Canonical ATLAS 2026 operational data **/
+    match /artifacts/{appId}/atlas2026/participants/{participantId} {
+      allow read: if hasAnyRole();
+      allow create, update: if canWriteOperationalData();
+      allow delete: if isGovernanceAdmin();
+    }
+
+    match /artifacts/{appId}/atlas2026/routes/{routeId} {
+      allow read: if hasAnyRole();
+      allow create, update: if canWriteOperationalData();
+      allow delete: if isGovernanceAdmin();
+    }
+
+    match /artifacts/{appId}/atlas2026/memoryEvents/{eventId} {
+      allow read: if hasAnyRole();
+      allow create: if canWriteOperationalData();
+      allow update, delete: if isGovernanceAdmin();
+    }
+
+    match /artifacts/{appId}/atlas2026/capacityTopology/{nodeId} {
+      allow read: if hasAnyRole();
+      allow create, update, delete: if isGovernanceAdmin();
+    }
+
+    match /artifacts/{appId}/atlas2026/ontology/{document=**} {
+      allow read: if hasAnyRole();
+      allow write: if isGovernanceAdmin();
+    }
+
     /**
-     * Shared application data (enrollees, resources, referrals, etc.)
-     * Permit any signed-in user to read and write during development.
-     * Tighten this later with role checks once server-side enforcement is added.
+     * Legacy collections are no longer writable in the 2026 clean-break posture.
+     * Reads are kept temporarily for audit and migration validation only.
      */
     match /artifacts/{appId}/public/data/{document=**} {
-      allow read, write: if isSignedIn();
+      allow read: if hasAnyRole();
+      allow write: if false;
     }
 
-    /**
-     * Participant journey artifacts (strip map stages, milestones, etc.)
-     * Allow authenticated users to read/write during development.
-     */
-    match /artifacts/{appId}/participants/{participantId}/journey/{docId} {
-      allow read, write: if isSignedIn();
+    match /artifacts/{appId}/participants/{participantId}/{document=**} {
+      allow read: if hasAnyRole();
+      allow write: if false;
     }
 
-    /**
-     * Partner stations (e.g., Public Defenders) and County Commons
-     * Development posture: allow authenticated reads/writes.
-     * TODO: tighten with role-aware checks when server-side enforcement lands.
-     */
     match /artifacts/{appId}/partners/{partnerId}/{document=**} {
-      allow read, write: if isSignedIn();
+      allow read: if hasAnyRole();
+      allow write: if false;
     }
 
     match /artifacts/{appId}/countyCommons/{countyId}/{document=**} {
-      allow read, write: if isSignedIn();
+      allow read: if hasAnyRole();
+      allow write: if false;
     }
   }
 }

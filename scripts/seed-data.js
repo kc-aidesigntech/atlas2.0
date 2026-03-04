@@ -8,7 +8,7 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-const appId = process.env.APP_ID || 'atlas-demo';
+const appId = process.env.VITE_APP_ID || process.env.APP_ID || 'demo-app';
 
 // Sample data
 const resources = [
