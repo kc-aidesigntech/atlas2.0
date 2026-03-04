@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getApps, initializeApp } from 'firebase/app'
 import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth'
-import { addDoc, collection, getFirestore, onSnapshot, serverTimestamp } from 'firebase/firestore'
+import { addDoc, collection, doc, getFirestore, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { evaluateParticipantForRoutes } from '@/core/atlas2026/intel-contract'
 import { createParticipantState, MEMORY_EVENT_TYPES, ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
 import { canRolePerform } from '@/core/atlas2026/policy'
 import { DEMO_CAPACITY_TOPOLOGY, DEMO_PARTICIPANTS } from './sample-data'
+import { generateRoutePlan } from '@/services/atlas2026/route-engine'
+import { buildMemoryView } from '@/services/atlas2026/memory-service'
+import { buildSituationalOverlay } from '@/services/atlas2026/situational-service'
 
 function normalizeParticipant(docId, raw) {
   return createParticipantState({
@@ -48,11 +51,23 @@ function resolveAppId() {
   return window.__app_id || import.meta.env.VITE_APP_ID || 'demo-app'
 }
 
+function createOptimisticId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 export function useAtlasDecisioning() {
   const [participants, setParticipants] = useState(DEMO_PARTICIPANTS)
   const [capacityTopology, setCapacityTopology] = useState(DEMO_CAPACITY_TOPOLOGY)
   const [routeRecords, setRouteRecords] = useState([])
   const [memoryEvents, setMemoryEvents] = useState([])
+  const [ontologyWeights, setOntologyWeights] = useState({
+    coverageWeight: 0.3,
+    phaseAlignmentWeight: 0.2,
+    specializationWeight: 0.2,
+    reversibilityWeight: 0.15,
+    transferCostPenalty: 0.1,
+    interferencePenalty: 0.05
+  })
   const [selectedParticipantId, setSelectedParticipantId] = useState(DEMO_PARTICIPANTS[0].participantId)
   const [selectedRole, setSelectedRole] = useState('peerNavigator')
   const [loadingLiveData, setLoadingLiveData] = useState(true)
@@ -62,6 +77,10 @@ export function useAtlasDecisioning() {
   const [savingRoute, setSavingRoute] = useState(false)
   const [savingMemoryEvent, setSavingMemoryEvent] = useState(false)
   const [dbContext, setDbContext] = useState(null)
+
+  useEffect(() => {
+    setActionError(null)
+  }, [selectedParticipantId, selectedRole])
 
   useEffect(() => {
     const firebaseConfig = resolveFirebaseConfig()
@@ -83,12 +102,14 @@ export function useAtlasDecisioning() {
     let unsubscribeCapacity = null
     let unsubscribeRoutes = null
     let unsubscribeMemoryEvents = null
+    let unsubscribeOntology = null
 
     const cleanupSnapshots = () => {
       if (unsubscribeParticipants) unsubscribeParticipants()
       if (unsubscribeCapacity) unsubscribeCapacity()
       if (unsubscribeRoutes) unsubscribeRoutes()
       if (unsubscribeMemoryEvents) unsubscribeMemoryEvents()
+      if (unsubscribeOntology) unsubscribeOntology()
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -114,10 +135,12 @@ export function useAtlasDecisioning() {
       const capacityPath = collection(db, `artifacts/${appId}/atlas2026/capacityTopology`)
       const routesPath = collection(db, `artifacts/${appId}/atlas2026/routes`)
       const memoryEventsPath = collection(db, `artifacts/${appId}/atlas2026/memoryEvents`)
+      const ontologyPath = collection(db, `artifacts/${appId}/atlas2026/ontology`)
       let participantsReady = false
       let capacityReady = false
       let routesReady = false
       let memoryReady = false
+      let ontologyReady = false
       setDbContext({ db, appId, userId: user.uid })
 
       unsubscribeParticipants = onSnapshot(
@@ -131,7 +154,7 @@ export function useAtlasDecisioning() {
             )
           }
           participantsReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -152,7 +175,7 @@ export function useAtlasDecisioning() {
             setCapacityTopology(nextCapacity)
           }
           capacityReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -175,7 +198,7 @@ export function useAtlasDecisioning() {
             }))
           )
           routesReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -198,7 +221,7 @@ export function useAtlasDecisioning() {
             }))
           )
           memoryReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady) {
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -206,6 +229,30 @@ export function useAtlasDecisioning() {
         },
         (error) => {
           setLoadError(`Memory events subscription failed: ${error.message}`)
+          setIsLiveData(false)
+          setLoadingLiveData(false)
+        }
+      )
+
+      unsubscribeOntology = onSnapshot(
+        ontologyPath,
+        (snapshot) => {
+          const weightsDoc = snapshot.docs.find((doc) => doc.id === 'weights')
+          if (weightsDoc) {
+            setOntologyWeights((current) => ({
+              ...current,
+              ...weightsDoc.data()
+            }))
+          }
+          ontologyReady = true
+          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady) {
+            setIsLiveData(snapshot.size > 0)
+            setLoadError(null)
+            setLoadingLiveData(false)
+          }
+        },
+        (error) => {
+          setLoadError(`Ontology subscription failed: ${error.message}`)
           setIsLiveData(false)
           setLoadingLiveData(false)
         }
@@ -238,16 +285,25 @@ export function useAtlasDecisioning() {
     [routeRecords, selectedParticipant]
   )
 
-  const selectedMemoryEvents = useMemo(
+  const selectedMemoryView = useMemo(
+    () => buildMemoryView({ events: memoryEvents, participant: selectedParticipant, selectedRole }),
+    [memoryEvents, selectedParticipant, selectedRole]
+  )
+
+  const routePlan = useMemo(
     () =>
-      memoryEvents
-        .filter((item) => item.participantId === selectedParticipant?.participantId)
-        .sort((a, b) => {
-          const left = a?.createdAt?.seconds ?? 0
-          const right = b?.createdAt?.seconds ?? 0
-          return right - left
-        }),
-    [memoryEvents, selectedParticipant]
+      generateRoutePlan({
+        participant: selectedParticipant,
+        capacityTopology,
+        activeRoutes: selectedRoutes,
+        completedStepIds: []
+      }),
+    [capacityTopology, selectedParticipant, selectedRoutes]
+  )
+
+  const situationalOverlay = useMemo(
+    () => buildSituationalOverlay({ participants, capacityTopology }),
+    [participants, capacityTopology]
   )
 
   async function activateRecommendedRoute() {
@@ -273,6 +329,37 @@ export function useAtlasDecisioning() {
 
     try {
       setSavingRoute(true)
+      const optimisticRouteId = createOptimisticId('optimistic-route')
+      const optimisticMemoryId = createOptimisticId('optimistic-memory')
+      const optimisticRoute = {
+        id: optimisticRouteId,
+        participantId: selectedParticipant.participantId,
+        routeId: chosenRoute.routeId,
+        partnerId: chosenRoute.partnerId,
+        status: ROUTE_LIFECYCLE.active,
+        score: chosenRoute.score,
+        interferenceRisk: chosenRoute.interferenceRisk,
+        transferCost: chosenRoute.transferCost,
+        activatedByRole: selectedRole,
+        activatedByUserId: dbContext.userId,
+        createdAt: { seconds: Math.floor(Date.now() / 1000) },
+        optimistic: true
+      }
+      const optimisticMemory = {
+        id: optimisticMemoryId,
+        participantId: selectedParticipant.participantId,
+        eventType: MEMORY_EVENT_TYPES.routeActivated,
+        phase: selectedParticipant.currentPhase,
+        label: `Route ${chosenRoute.routeId} activated via ${chosenRoute.partnerId}`,
+        verified: true,
+        createdByRole: selectedRole,
+        createdByUserId: dbContext.userId,
+        createdAt: { seconds: Math.floor(Date.now() / 1000) },
+        optimistic: true
+      }
+      setRouteRecords((current) => [optimisticRoute, ...current])
+      setMemoryEvents((current) => [optimisticMemory, ...current])
+
       await addDoc(collection(dbContext.db, `artifacts/${dbContext.appId}/atlas2026/routes`), {
         participantId: selectedParticipant.participantId,
         routeId: chosenRoute.routeId,
@@ -299,6 +386,8 @@ export function useAtlasDecisioning() {
       })
       return true
     } catch (error) {
+      setRouteRecords((current) => current.filter((item) => !item.optimistic))
+      setMemoryEvents((current) => current.filter((item) => !item.optimistic))
       setActionError(`Route activation failed: ${error.message}`)
       return false
     } finally {
@@ -323,6 +412,21 @@ export function useAtlasDecisioning() {
 
     try {
       setSavingMemoryEvent(true)
+      const optimisticMemoryId = createOptimisticId('optimistic-memory')
+      const optimisticMemory = {
+        id: optimisticMemoryId,
+        participantId: selectedParticipant.participantId,
+        eventType,
+        phase: selectedParticipant.currentPhase,
+        label: label || 'Milestone verified by station operator.',
+        verified,
+        createdByRole: selectedRole,
+        createdByUserId: dbContext.userId,
+        createdAt: { seconds: Math.floor(Date.now() / 1000) },
+        optimistic: true
+      }
+      setMemoryEvents((current) => [optimisticMemory, ...current])
+
       await addDoc(collection(dbContext.db, `artifacts/${dbContext.appId}/atlas2026/memoryEvents`), {
         participantId: selectedParticipant.participantId,
         eventType,
@@ -335,10 +439,38 @@ export function useAtlasDecisioning() {
       })
       return true
     } catch (error) {
+      setMemoryEvents((current) => current.filter((item) => !item.optimistic))
       setActionError(`Memory event write failed: ${error.message}`)
       return false
     } finally {
       setSavingMemoryEvent(false)
+    }
+  }
+
+  async function saveOntologyWeights(nextWeights) {
+    setActionError(null)
+    if (!canRolePerform(selectedRole, 'manageOntology')) {
+      setActionError(`Role "${selectedRole}" cannot modify ontology weights.`)
+      return false
+    }
+    if (!dbContext?.db || !dbContext?.appId) {
+      setActionError('Live datastore is not connected; ontology update skipped.')
+      return false
+    }
+
+    try {
+      setOntologyWeights((current) => ({ ...current, ...nextWeights }))
+      await setDoc(doc(dbContext.db, `artifacts/${dbContext.appId}/atlas2026/ontology/weights`), {
+        ...nextWeights,
+        kind: 'weights',
+        updatedByRole: selectedRole,
+        updatedByUserId: dbContext.userId,
+        updatedAt: serverTimestamp()
+      }, { merge: true })
+      return true
+    } catch (error) {
+      setActionError(`Ontology update failed: ${error.message}`)
+      return false
     }
   }
 
@@ -351,10 +483,14 @@ export function useAtlasDecisioning() {
     participants,
     capacityTopology,
     decisionPacket,
+    routePlan,
     selectedRoutes,
-    selectedMemoryEvents,
+    selectedMemoryView,
+    situationalOverlay,
+    ontologyWeights,
     activateRecommendedRoute,
     appendMemoryEvent,
+    saveOntologyWeights,
     actionError,
     savingRoute,
     savingMemoryEvent,

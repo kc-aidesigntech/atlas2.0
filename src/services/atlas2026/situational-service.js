@@ -1,0 +1,52 @@
+import { PRESSURE_DOMAINS } from '@/core/atlas2026/canonical-spec'
+
+function average(values) {
+  if (!values.length) return 0
+  return values.reduce((acc, value) => acc + value, 0) / values.length
+}
+
+export function buildSituationalOverlay({ participants, capacityTopology }) {
+  const domainPressure = PRESSURE_DOMAINS.map((domain) => {
+    const all = participants
+      .map((participant) => participant.pressureVectors?.find((vector) => vector.domain === domain.id)?.severity ?? 0)
+      .filter((value) => Number.isFinite(value))
+    return {
+      domain: domain.id,
+      label: domain.label,
+      pressure: Number(average(all).toFixed(3))
+    }
+  })
+
+  const capacityByDomain = PRESSURE_DOMAINS.map((domain) => {
+    const matching = capacityTopology.filter(
+      (node) =>
+        node.domain === domain.id ||
+        node.primaryDomain === domain.id ||
+        Array.isArray(node.domainCoverage) && node.domainCoverage.includes(domain.id)
+    )
+    const capacity = average(matching.map((node) => node.coverageScore ?? 0.5))
+    return { domain: domain.id, capacity: Number(capacity.toFixed(3)) }
+  })
+
+  const corridorPriorities = domainPressure
+    .map((entry) => {
+      const capacity = capacityByDomain.find((node) => node.domain === entry.domain)?.capacity ?? 0.5
+      const gap = Number((entry.pressure - capacity).toFixed(3))
+      return {
+        domain: entry.domain,
+        label: entry.label,
+        pressure: entry.pressure,
+        capacity,
+        gap,
+        priority: gap > 0.2 ? 'critical' : gap > 0.05 ? 'watch' : 'stable'
+      }
+    })
+    .sort((a, b) => b.gap - a.gap)
+
+  return {
+    domainPressure,
+    capacityByDomain,
+    corridorPriorities
+  }
+}
+
