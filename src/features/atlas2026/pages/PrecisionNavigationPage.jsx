@@ -3,6 +3,7 @@ import { Route } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
+import { STEP_STATUS } from '@/services/atlas2026/step-graph'
 import { canRolePerform } from '@/core/atlas2026/policy'
 
 function formatFirestoreTimestamp(value) {
@@ -16,10 +17,13 @@ export default function PrecisionNavigationPage({
   selectedRole,
   routePlan,
   selectedRoutes,
+  selectedRouteSteps,
   activateRecommendedRoute,
   transitionRouteStatus,
+  transitionRouteStepStatus,
   savingRoute,
   updatingRoute,
+  updatingStep,
   actionError
 }) {
   const canActivate = canRolePerform(selectedRole, 'activateRoute')
@@ -112,6 +116,67 @@ export default function PrecisionNavigationPage({
                     >
                       Block
                     </Button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Route Step Graph</CardTitle>
+          <CardDescription>Dependency-aware execution steps for active routes.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {selectedRouteSteps.length === 0 ? (
+            <small>No step graph records persisted yet. Activate a route first.</small>
+          ) : (
+            selectedRouteSteps.map((step) => (
+              <div key={step.id} className="mt-2 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                <small className="block">
+                  {step.stepId}: {step.label}
+                </small>
+                <small className="block text-slate-400">
+                  Status: {step.status}
+                  {step.optimistic ? ' - syncing...' : ''}
+                </small>
+                <small className="block text-slate-400">
+                  Dependencies: {Array.isArray(step.dependencies) && step.dependencies.length > 0 ? step.dependencies.join(', ') : 'None'}
+                </small>
+                {canTransition && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {step.status === STEP_STATUS.pending && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={updatingStep}
+                        onClick={() => transitionRouteStepStatus({ stepDocId: step.id, nextStatus: STEP_STATUS.inProgress })}
+                      >
+                        Start Step
+                      </Button>
+                    )}
+                    {step.status === STEP_STATUS.inProgress && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updatingStep}
+                          onClick={() => transitionRouteStepStatus({ stepDocId: step.id, nextStatus: STEP_STATUS.completed })}
+                        >
+                          Complete Step
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={updatingStep}
+                          onClick={() => transitionRouteStepStatus({ stepDocId: step.id, nextStatus: STEP_STATUS.blocked })}
+                        >
+                          Block Step
+                        </Button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

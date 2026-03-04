@@ -21,6 +21,20 @@ export async function createMemoryEvent({ db, appId, payload }) {
   })
 }
 
+export async function createRouteStepRecord({ db, appId, payload }) {
+  return addDoc(collection(db, `artifacts/${appId}/atlas2026/routeSteps`), {
+    ...payload,
+    createdAt: serverTimestamp()
+  })
+}
+
+export async function updateRouteStepRecord({ db, appId, stepDocId, payload }) {
+  return updateDoc(doc(db, `artifacts/${appId}/atlas2026/routeSteps/${stepDocId}`), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  })
+}
+
 export async function saveOntologyWeightsRecord({ db, appId, payload }) {
   return setDoc(
     doc(db, `artifacts/${appId}/atlas2026/ontology/weights`),

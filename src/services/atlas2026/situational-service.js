@@ -43,10 +43,21 @@ export function buildSituationalOverlay({ participants, capacityTopology }) {
     })
     .sort((a, b) => b.gap - a.gap)
 
+  const hotspotMarkers = corridorPriorities.slice(0, 5).map((corridor, index) => ({
+    id: `hotspot-${corridor.domain}`,
+    label: corridor.label,
+    priority: corridor.priority,
+    pressure: corridor.pressure,
+    capacity: corridor.capacity,
+    lat: Number((34.05 + index * 0.08).toFixed(3)),
+    lng: Number((-118.25 + index * 0.06).toFixed(3))
+  }))
+
   return {
     domainPressure,
     capacityByDomain,
-    corridorPriorities
+    corridorPriorities,
+    hotspotMarkers
   }
 }
 

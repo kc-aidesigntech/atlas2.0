@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState } from 'react'
-import { Activity, Compass, ScrollText, Settings, Plug } from 'lucide-react'
+import { Activity, Compass, ScrollText, Settings, Plug, BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ATLAS_ROLES } from '@/core/atlas2026/policy'
@@ -10,11 +10,13 @@ const PrecisionNavigationPage = lazy(() => import('./pages/PrecisionNavigationPa
 const CollectiveMemoryPage = lazy(() => import('./pages/CollectiveMemoryPage'))
 const GovernancePage = lazy(() => import('./pages/GovernancePage'))
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
+const OperationsPage = lazy(() => import('./pages/OperationsPage'))
 
 const WORKSPACES = {
   situationalAwareness: 'situationalAwareness',
   precisionNavigation: 'precisionNavigation',
   collectiveMemory: 'collectiveMemory',
+  operations: 'operations',
   governance: 'governance',
   integrations: 'integrations'
 }
@@ -67,6 +69,7 @@ function SurfaceNavigation({ surface, setSurface }) {
     { id: WORKSPACES.situationalAwareness, label: 'Situational Awareness', icon: Activity },
     { id: WORKSPACES.precisionNavigation, label: 'Precision Navigation', icon: Compass },
     { id: WORKSPACES.collectiveMemory, label: 'Collective Memory', icon: ScrollText },
+    { id: WORKSPACES.operations, label: 'Operations', icon: BarChart3 },
     { id: WORKSPACES.governance, label: 'Governance', icon: Settings },
     { id: WORKSPACES.integrations, label: 'Integrations', icon: Plug }
   ]
@@ -103,17 +106,21 @@ export default function AtlasShell() {
     decisionPacket,
     routePlan,
     selectedRoutes,
+    selectedRouteSteps,
     selectedMemoryView,
     situationalOverlay,
+    operationsSnapshot,
     ontologyWeights,
     ontologyAudit,
     activateRecommendedRoute,
     transitionRouteStatus,
+    transitionRouteStepStatus,
     appendMemoryEvent,
     saveOntologyWeights,
     actionError,
     savingRoute,
     updatingRoute,
+    updatingStep,
     savingMemoryEvent,
     isLiveData,
     loadingLiveData,
@@ -161,10 +168,13 @@ export default function AtlasShell() {
             selectedRole={selectedRole}
             routePlan={routePlan}
             selectedRoutes={selectedRoutes}
+            selectedRouteSteps={selectedRouteSteps}
             activateRecommendedRoute={activateRecommendedRoute}
             transitionRouteStatus={transitionRouteStatus}
+            transitionRouteStepStatus={transitionRouteStepStatus}
             savingRoute={savingRoute}
             updatingRoute={updatingRoute}
+            updatingStep={updatingStep}
             actionError={actionError}
           />
         )}
@@ -177,6 +187,7 @@ export default function AtlasShell() {
             actionError={actionError}
           />
         )}
+        {surface === WORKSPACES.operations && <OperationsPage operationsSnapshot={operationsSnapshot} />}
         {surface === WORKSPACES.governance && (
           <GovernancePage
             selectedRole={selectedRole}

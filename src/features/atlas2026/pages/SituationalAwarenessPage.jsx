@@ -45,6 +45,23 @@ export default function SituationalAwarenessPage({ selectedParticipant, decision
           ))}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Regional Hotspot Grid</CardTitle>
+          <CardDescription>Geo-style hotspot markers for county operations triage.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {situationalOverlay.hotspotMarkers.map((marker) => (
+            <div key={marker.id} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+              <p className="text-slate-100">{marker.label}</p>
+              <small className="block">Priority: {marker.priority}</small>
+              <small className="block">Coordinates: {marker.lat}, {marker.lng}</small>
+              <small className="block">Pressure/Capacity: {(marker.pressure * 100).toFixed(0)}% / {(marker.capacity * 100).toFixed(0)}%</small>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   )
 }

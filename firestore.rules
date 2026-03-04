@@ -52,6 +52,12 @@ service cloud.firestore {
       allow delete: if isGovernanceAdmin();
     }
 
+    match /artifacts/{appId}/atlas2026/routeSteps/{stepId} {
+      allow read: if hasAnyRole();
+      allow create, update: if canWriteOperationalData();
+      allow delete: if isGovernanceAdmin();
+    }
+
     match /artifacts/{appId}/atlas2026/memoryEvents/{eventId} {
       allow read: if hasAnyRole();
       allow create: if canWriteOperationalData();

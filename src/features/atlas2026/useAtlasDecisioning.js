@@ -9,13 +9,17 @@ import { DEMO_CAPACITY_TOPOLOGY, DEMO_PARTICIPANTS } from './sample-data'
 import { generateRoutePlan } from '@/services/atlas2026/route-engine'
 import { buildMemoryView } from '@/services/atlas2026/memory-service'
 import { buildSituationalOverlay } from '@/services/atlas2026/situational-service'
+import { buildOperationsSnapshot } from '@/services/atlas2026/operations-service'
 import {
   createMemoryEvent,
   createOntologyAuditRecord,
   createRouteRecord,
+  createRouteStepRecord,
   saveOntologyWeightsRecord,
+  updateRouteStepRecord,
   updateRouteRecord
 } from '@/services/atlas2026/contract-gateway'
+import { buildRouteSteps, canTransitionStep, deriveRouteLifecycleFromSteps, STEP_STATUS } from '@/services/atlas2026/step-graph'
 
 function normalizeParticipant(docId, raw) {
   return createParticipantState({
@@ -66,6 +70,7 @@ export function useAtlasDecisioning() {
   const [participants, setParticipants] = useState(DEMO_PARTICIPANTS)
   const [capacityTopology, setCapacityTopology] = useState(DEMO_CAPACITY_TOPOLOGY)
   const [routeRecords, setRouteRecords] = useState([])
+  const [routeSteps, setRouteSteps] = useState([])
   const [memoryEvents, setMemoryEvents] = useState([])
   const [ontologyAudit, setOntologyAudit] = useState([])
   const [ontologyWeights, setOntologyWeights] = useState({
@@ -84,6 +89,7 @@ export function useAtlasDecisioning() {
   const [actionError, setActionError] = useState(null)
   const [savingRoute, setSavingRoute] = useState(false)
   const [updatingRoute, setUpdatingRoute] = useState(false)
+  const [updatingStep, setUpdatingStep] = useState(false)
   const [savingMemoryEvent, setSavingMemoryEvent] = useState(false)
   const [dbContext, setDbContext] = useState(null)
 
@@ -110,6 +116,7 @@ export function useAtlasDecisioning() {
     let unsubscribeParticipants = null
     let unsubscribeCapacity = null
     let unsubscribeRoutes = null
+    let unsubscribeRouteSteps = null
     let unsubscribeMemoryEvents = null
     let unsubscribeOntology = null
     let unsubscribeOntologyAudit = null
@@ -118,6 +125,7 @@ export function useAtlasDecisioning() {
       if (unsubscribeParticipants) unsubscribeParticipants()
       if (unsubscribeCapacity) unsubscribeCapacity()
       if (unsubscribeRoutes) unsubscribeRoutes()
+      if (unsubscribeRouteSteps) unsubscribeRouteSteps()
       if (unsubscribeMemoryEvents) unsubscribeMemoryEvents()
       if (unsubscribeOntology) unsubscribeOntology()
       if (unsubscribeOntologyAudit) unsubscribeOntologyAudit()
@@ -145,12 +153,14 @@ export function useAtlasDecisioning() {
       const participantsPath = collection(db, `artifacts/${appId}/atlas2026/participants`)
       const capacityPath = collection(db, `artifacts/${appId}/atlas2026/capacityTopology`)
       const routesPath = collection(db, `artifacts/${appId}/atlas2026/routes`)
+      const routeStepsPath = collection(db, `artifacts/${appId}/atlas2026/routeSteps`)
       const memoryEventsPath = collection(db, `artifacts/${appId}/atlas2026/memoryEvents`)
       const ontologyPath = collection(db, `artifacts/${appId}/atlas2026/ontology`)
       const ontologyAuditPath = collection(db, `artifacts/${appId}/atlas2026/ontologyAudit`)
       let participantsReady = false
       let capacityReady = false
       let routesReady = false
+      let routeStepsReady = false
       let memoryReady = false
       let ontologyReady = false
       let ontologyAuditReady = false
@@ -167,7 +177,7 @@ export function useAtlasDecisioning() {
             )
           }
           participantsReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -188,7 +198,7 @@ export function useAtlasDecisioning() {
             setCapacityTopology(nextCapacity)
           }
           capacityReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -211,7 +221,7 @@ export function useAtlasDecisioning() {
             }))
           )
           routesReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -219,6 +229,29 @@ export function useAtlasDecisioning() {
         },
         (error) => {
           setLoadError(`Routes subscription failed: ${error.message}`)
+          setIsLiveData(false)
+          setLoadingLiveData(false)
+        }
+      )
+
+      unsubscribeRouteSteps = onSnapshot(
+        routeStepsPath,
+        (snapshot) => {
+          setRouteSteps(
+            snapshot.docs.map((item) => ({
+              id: item.id,
+              ...item.data()
+            }))
+          )
+          routeStepsReady = true
+          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
+            setIsLiveData(snapshot.size > 0)
+            setLoadError(null)
+            setLoadingLiveData(false)
+          }
+        },
+        (error) => {
+          setLoadError(`Route steps subscription failed: ${error.message}`)
           setIsLiveData(false)
           setLoadingLiveData(false)
         }
@@ -234,7 +267,7 @@ export function useAtlasDecisioning() {
             }))
           )
           memoryReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -258,7 +291,7 @@ export function useAtlasDecisioning() {
             }))
           }
           ontologyReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -280,7 +313,7 @@ export function useAtlasDecisioning() {
               .sort((a, b) => (b?.updatedAt?.seconds ?? 0) - (a?.updatedAt?.seconds ?? 0))
           )
           ontologyAuditReady = true
-          if (participantsReady && capacityReady && routesReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -320,6 +353,14 @@ export function useAtlasDecisioning() {
     [routeRecords, selectedParticipant]
   )
 
+  const selectedRouteSteps = useMemo(
+    () =>
+      routeSteps
+        .filter((step) => step.participantId === selectedParticipant?.participantId)
+        .sort((a, b) => (a?.sequence ?? 0) - (b?.sequence ?? 0)),
+    [routeSteps, selectedParticipant]
+  )
+
   const selectedMemoryView = useMemo(
     () => buildMemoryView({ events: memoryEvents, participant: selectedParticipant, selectedRole }),
     [memoryEvents, selectedParticipant, selectedRole]
@@ -331,11 +372,11 @@ export function useAtlasDecisioning() {
         participant: selectedParticipant,
         capacityTopology,
         activeRoutes: selectedRoutes,
-        completedStepIds: selectedRoutes
-          .filter((route) => route.status === ROUTE_LIFECYCLE.completed)
-          .map((route) => route.routeId)
+        completedStepIds: selectedRouteSteps
+          .filter((step) => step.status === STEP_STATUS.completed)
+          .map((step) => step.stepId)
       }),
-    [capacityTopology, selectedParticipant, selectedRoutes]
+    [capacityTopology, selectedParticipant, selectedRoutes, selectedRouteSteps]
   )
 
   const situationalOverlay = useMemo(
@@ -343,9 +384,20 @@ export function useAtlasDecisioning() {
     [participants, capacityTopology]
   )
 
+  const operationsSnapshot = useMemo(
+    () =>
+      buildOperationsSnapshot({
+        participants,
+        routes: routeRecords,
+        steps: routeSteps,
+        memoryEvents
+      }),
+    [participants, routeRecords, routeSteps, memoryEvents]
+  )
+
   async function activateRecommendedRoute() {
     setActionError(null)
-    if (!selectedParticipant || !decisionPacket.recommendedRouteId) {
+    if (!selectedParticipant || !routePlan.recommendedRouteId) {
       setActionError('No participant or recommended route is available.')
       return false
     }
@@ -358,7 +410,7 @@ export function useAtlasDecisioning() {
       return false
     }
 
-    const chosenRoute = decisionPacket.routeOptions.find((item) => item.routeId === decisionPacket.recommendedRouteId)
+    const chosenRoute = routePlan.routes.find((item) => item.routeId === routePlan.recommendedRouteId)
     if (!chosenRoute) {
       setActionError('Recommended route payload is unavailable.')
       return false
@@ -397,32 +449,54 @@ export function useAtlasDecisioning() {
       setRouteRecords((current) => [optimisticRoute, ...current])
       setMemoryEvents((current) => [optimisticMemory, ...current])
 
-      await createRouteRecord({
+      const routeDoc = await createRouteRecord({
         db: dbContext.db,
         appId: dbContext.appId,
         payload: {
-        participantId: selectedParticipant.participantId,
-        routeId: chosenRoute.routeId,
-        partnerId: chosenRoute.partnerId,
-        status: ROUTE_LIFECYCLE.active,
-        score: chosenRoute.score,
-        interferenceRisk: chosenRoute.interferenceRisk,
-        transferCost: chosenRoute.transferCost,
-        activatedByRole: selectedRole,
-        activatedByUserId: dbContext.userId
+          participantId: selectedParticipant.participantId,
+          routeId: chosenRoute.routeId,
+          partnerId: chosenRoute.partnerId,
+          status: ROUTE_LIFECYCLE.active,
+          score: chosenRoute.score,
+          interferenceRisk: chosenRoute.interferenceRisk,
+          transferCost: chosenRoute.transferCost,
+          activatedByRole: selectedRole,
+          activatedByUserId: dbContext.userId
         }
       })
+
+      const defaultSteps = buildRouteSteps(chosenRoute)
+      await Promise.all(
+        defaultSteps.map((step, index) =>
+          createRouteStepRecord({
+            db: dbContext.db,
+            appId: dbContext.appId,
+            payload: {
+              routeDocId: routeDoc.id,
+              routeId: chosenRoute.routeId,
+              participantId: selectedParticipant.participantId,
+              partnerId: chosenRoute.partnerId,
+              stepId: step.stepId,
+              label: step.label,
+              status: step.status,
+              dependencies: step.dependencies,
+              domain: step.domain,
+              sequence: index + 1
+            }
+          })
+        )
+      )
 
       await createMemoryEvent({
         db: dbContext.db,
         appId: dbContext.appId,
         payload: {
-        participantId: selectedParticipant.participantId,
-        eventType: MEMORY_EVENT_TYPES.routeActivated,
-        phase: selectedParticipant.currentPhase,
-        label: `Route ${chosenRoute.routeId} activated via ${chosenRoute.partnerId}`,
-        verified: true,
-        createdByRole: selectedRole,
+          participantId: selectedParticipant.participantId,
+          eventType: MEMORY_EVENT_TYPES.routeActivated,
+          phase: selectedParticipant.currentPhase,
+          label: `Route ${chosenRoute.routeId} activated via ${chosenRoute.partnerId}`,
+          verified: true,
+          createdByRole: selectedRole,
           createdByUserId: dbContext.userId
         }
       })
@@ -561,6 +635,86 @@ export function useAtlasDecisioning() {
     }
   }
 
+  async function transitionRouteStepStatus({ stepDocId, nextStatus }) {
+    setActionError(null)
+    if (!stepDocId || !nextStatus) {
+      setActionError('Step transition payload is incomplete.')
+      return false
+    }
+    if (!canRolePerform(selectedRole, 'transitionRoute')) {
+      setActionError(`Role "${selectedRole}" cannot transition route steps.`)
+      return false
+    }
+    if (!dbContext?.db || !dbContext?.appId) {
+      setActionError('Live datastore is not connected; step transition skipped.')
+      return false
+    }
+
+    const step = routeSteps.find((item) => item.id === stepDocId)
+    if (!step) {
+      setActionError('Step record not found.')
+      return false
+    }
+
+    const peerSteps = routeSteps.filter((item) => item.routeDocId === step.routeDocId)
+    const gate = canTransitionStep(step, nextStatus, peerSteps)
+    if (!gate.allowed) {
+      setActionError(gate.reason)
+      return false
+    }
+
+    try {
+      setUpdatingStep(true)
+      setRouteSteps((current) =>
+        current.map((item) => (item.id === stepDocId ? { ...item, status: nextStatus, optimistic: true } : item))
+      )
+
+      await updateRouteStepRecord({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        stepDocId,
+        payload: {
+          status: nextStatus,
+          updatedByRole: selectedRole,
+          updatedByUserId: dbContext.userId
+        }
+      })
+
+      const updatedSteps = peerSteps.map((item) => (item.id === stepDocId ? { ...item, status: nextStatus } : item))
+      const derivedRouteStatus = deriveRouteLifecycleFromSteps(updatedSteps)
+      await updateRouteRecord({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        routeDocId: step.routeDocId,
+        payload: {
+          status: derivedRouteStatus,
+          updatedByRole: selectedRole,
+          updatedByUserId: dbContext.userId
+        }
+      })
+
+      await createMemoryEvent({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        payload: {
+          participantId: step.participantId,
+          eventType: nextStatus === STEP_STATUS.blocked ? MEMORY_EVENT_TYPES.blockerDetected : MEMORY_EVENT_TYPES.milestoneVerified,
+          phase: selectedParticipant.currentPhase,
+          label: `Step ${step.stepId} transitioned to ${nextStatus}`,
+          verified: nextStatus !== STEP_STATUS.blocked,
+          createdByRole: selectedRole,
+          createdByUserId: dbContext.userId
+        }
+      })
+      return true
+    } catch (error) {
+      setActionError(`Step transition failed: ${error.message}`)
+      return false
+    } finally {
+      setUpdatingStep(false)
+    }
+  }
+
   async function saveOntologyWeights(nextWeights) {
     setActionError(null)
     if (!canRolePerform(selectedRole, 'manageOntology')) {
@@ -612,17 +766,21 @@ export function useAtlasDecisioning() {
     decisionPacket,
     routePlan,
     selectedRoutes,
+    selectedRouteSteps,
     selectedMemoryView,
     situationalOverlay,
+    operationsSnapshot,
     ontologyWeights,
     ontologyAudit,
     activateRecommendedRoute,
     transitionRouteStatus,
+    transitionRouteStepStatus,
     appendMemoryEvent,
     saveOntologyWeights,
     actionError,
     savingRoute,
     updatingRoute,
+    updatingStep,
     savingMemoryEvent,
     isLiveData,
     loadingLiveData,
