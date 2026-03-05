@@ -1,5 +1,7 @@
 import React from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { downloadCsv } from '@/services/atlas2026/export-service'
 
 function StatBlock({ label, value, hint }) {
   return (
@@ -20,7 +22,7 @@ function renderKeyValueRows(data = {}) {
 }
 
 export default function OperationsPage({ operationsSnapshot, countyComparisons, selectedCountyId }) {
-  const { totals, participantByPhase, routesByStatus, stepsByStatus, risk, activity } = operationsSnapshot
+  const { totals, participantByPhase, routesByStatus, stepsByStatus, risk, activity, sla } = operationsSnapshot
 
   return (
     <div className="space-y-4">
@@ -34,6 +36,43 @@ export default function OperationsPage({ operationsSnapshot, countyComparisons, 
           <StatBlock label="Routes" value={totals.routes} />
           <StatBlock label="Steps" value={totals.steps} />
           <StatBlock label="Memory Events" value={totals.memoryEvents} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Operations Export</CardTitle>
+          <CardDescription>Download current operations and county comparison snapshot.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() =>
+              downloadCsv(
+                [
+                  {
+                    participants: totals.participants,
+                    routes: totals.routes,
+                    steps: totals.steps,
+                    memoryEvents: totals.memoryEvents,
+                    blockedRoutes: risk.blockedRoutes,
+                    blockedRate: risk.blockedRate,
+                    completedRoutes: risk.completedRoutes,
+                    weeklyEvents: activity.weeklyEvents,
+                    averageReadiness: activity.averageReadiness,
+                    overdueSteps: sla.overdueSteps,
+                    averageStepAgeHours: sla.averageStepAgeHours
+                  }
+                ],
+                'atlas-operations-snapshot.csv'
+              )
+            }
+          >
+            Export Snapshot CSV
+          </Button>
+          <Button variant="outline" onClick={() => downloadCsv(countyComparisons, 'atlas-county-comparisons.csv')}>
+            Export County Comparisons CSV
+          </Button>
         </CardContent>
       </Card>
 
@@ -71,6 +110,7 @@ export default function OperationsPage({ operationsSnapshot, countyComparisons, 
             value={`${(activity.averageReadiness * 100).toFixed(1)}%`}
             hint="Average participant phase readiness score"
           />
+          <StatBlock label="Overdue Steps" value={sla.overdueSteps} hint={`Avg step age: ${sla.averageStepAgeHours} hours`} />
         </CardContent>
       </Card>
 
@@ -94,6 +134,7 @@ export default function OperationsPage({ operationsSnapshot, countyComparisons, 
                 <small className="block">
                   Completed steps: {county.completedSteps} | Avg readiness: {(county.averageReadiness * 100).toFixed(1)}%
                 </small>
+                <small className="block">Overdue steps: {county.overdueSteps}</small>
               </div>
             ))
           )}

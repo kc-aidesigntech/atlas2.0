@@ -1,5 +1,7 @@
-import React from 'react'
+import React, { useMemo, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { downloadCsv } from '@/services/atlas2026/export-service'
 
 function formatTime(millis) {
   if (!millis) return 'No timestamp'
@@ -7,10 +9,22 @@ function formatTime(millis) {
 }
 
 export default function ExecutionTimelinePage({ executionSnapshot, selectedRouteSteps }) {
+  const [selectedStepId, setSelectedStepId] = useState(null)
   const laneY = { route: 36, step: 80, memory: 124 }
   const latest = executionSnapshot.timeline[0]?.at || 0
   const oldest = executionSnapshot.timeline[executionSnapshot.timeline.length - 1]?.at || 0
   const spread = Math.max(1, latest - oldest)
+  const selectedStep = useMemo(
+    () => selectedRouteSteps.find((step) => step.id === selectedStepId) ?? null,
+    [selectedRouteSteps, selectedStepId]
+  )
+  const dependentSteps = useMemo(
+    () =>
+      selectedStep
+        ? selectedRouteSteps.filter((step) => (step.dependencies || []).includes(selectedStep.stepId)).map((step) => step.stepId)
+        : [],
+    [selectedRouteSteps, selectedStep]
+  )
 
   return (
     <div className="space-y-4">
@@ -37,6 +51,38 @@ export default function ExecutionTimelinePage({ executionSnapshot, selectedRoute
 
       <Card>
         <CardHeader>
+          <CardTitle>Execution Export</CardTitle>
+          <CardDescription>Download timeline and blocker queues for operational review.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => downloadCsv(executionSnapshot.timeline, 'atlas-execution-timeline.csv')}>
+            Export Timeline CSV
+          </Button>
+          <Button variant="outline" onClick={() => downloadCsv(executionSnapshot.blockerQueue, 'atlas-blocker-queue.csv')}>
+            Export Blockers CSV
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>SLA Monitoring</CardTitle>
+          <CardDescription>Aging indicators for step execution continuity.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+            <small className="block uppercase tracking-[0.12em] text-slate-400">Overdue Steps</small>
+            <p className="text-slate-100">{executionSnapshot.sla.overdueCount}</p>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+            <small className="block uppercase tracking-[0.12em] text-slate-400">Average Step Age (Hours)</small>
+            <p className="text-slate-100">{executionSnapshot.sla.averageAgeHours}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Step Dependency Graph</CardTitle>
           <CardDescription>Lane-style dependency chain for the selected participant route steps.</CardDescription>
         </CardHeader>
@@ -51,7 +97,17 @@ export default function ExecutionTimelinePage({ executionSnapshot, selectedRoute
                 const y = 90
                 return (
                   <g key={`dep-node-${step.id}`}>
-                    <rect x={x - 44} y={y - 26} width="88" height="52" rx="10" fill="#0f172a" stroke="#334155" />
+                    <rect
+                      x={x - 44}
+                      y={y - 26}
+                      width="88"
+                      height="52"
+                      rx="10"
+                      fill={selectedStepId === step.id ? '#1e293b' : '#0f172a'}
+                      stroke={selectedStepId === step.id ? '#38bdf8' : '#334155'}
+                      onClick={() => setSelectedStepId(step.id)}
+                      className="cursor-pointer"
+                    />
                     <text x={x} y={y - 2} textAnchor="middle" fill="#e2e8f0" fontSize="10">
                       {step.stepId}
                     </text>
@@ -73,6 +129,29 @@ export default function ExecutionTimelinePage({ executionSnapshot, selectedRoute
                 })
               )}
             </svg>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Step Inspector</CardTitle>
+          <CardDescription>Click a dependency node to inspect blockers, prerequisites, and downstream links.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!selectedStep ? (
+            <small>Select a step in the dependency graph to inspect details.</small>
+          ) : (
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+              <small className="block text-slate-100">{selectedStep.stepId}</small>
+              <small className="block text-slate-400">Status: {selectedStep.status}</small>
+              <small className="block text-slate-400">
+                Dependencies: {selectedStep.dependencies?.length ? selectedStep.dependencies.join(', ') : 'None'}
+              </small>
+              <small className="block text-slate-400">
+                Dependents: {dependentSteps.length ? dependentSteps.join(', ') : 'None'}
+              </small>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -117,6 +196,9 @@ export default function ExecutionTimelinePage({ executionSnapshot, selectedRoute
                 <small className="block text-slate-400">
                   Dependencies: {blocker.dependencies.length > 0 ? blocker.dependencies.join(', ') : 'None'}
                 </small>
+                {typeof blocker.ageHours === 'number' && (
+                  <small className="block text-slate-400">Age: {blocker.ageHours.toFixed(1)} hours</small>
+                )}
               </div>
             ))
           )}

@@ -11,6 +11,7 @@ export function buildExecutionSnapshot({ routes, steps, memoryEvents, participan
   const scopedSteps = steps.filter((step) => step.participantId === participantId)
   const scopedEvents = memoryEvents.filter((event) => event.participantId === participantId)
 
+  const now = Date.now()
   const blockerQueue = scopedSteps
     .filter((step) => step.status === STEP_STATUS.blocked)
     .map((step) => ({
@@ -18,7 +19,8 @@ export function buildExecutionSnapshot({ routes, steps, memoryEvents, participan
       stepId: step.stepId,
       label: step.label,
       routeId: step.routeId,
-      dependencies: step.dependencies || []
+      dependencies: step.dependencies || [],
+      ageHours: Number((((now - toMillis(step.updatedAt || step.createdAt)) || 0) / (1000 * 60 * 60)).toFixed(1))
     }))
 
   const timeline = [
@@ -48,6 +50,18 @@ export function buildExecutionSnapshot({ routes, steps, memoryEvents, participan
     ? scopedSteps.filter((step) => step.status === STEP_STATUS.completed).length / scopedSteps.length
     : 0
 
+  const stepAgeHours = scopedSteps.map((step) => {
+    const base = toMillis(step.updatedAt || step.createdAt)
+    const ageHours = base ? (now - base) / (1000 * 60 * 60) : 0
+    return { ...step, ageHours: Number(ageHours.toFixed(1)) }
+  })
+  const overdueSteps = stepAgeHours.filter(
+    (step) => [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) && step.ageHours >= 48
+  )
+  const averageAgeHours = stepAgeHours.length
+    ? stepAgeHours.reduce((sum, step) => sum + step.ageHours, 0) / stepAgeHours.length
+    : 0
+
   return {
     timeline,
     blockerQueue,
@@ -55,6 +69,11 @@ export function buildExecutionSnapshot({ routes, steps, memoryEvents, participan
       routes: scopedRoutes.length,
       steps: scopedSteps.length,
       completionRatio: Number(stepCompletion.toFixed(3))
+    },
+    sla: {
+      overdueCount: overdueSteps.length,
+      averageAgeHours: Number(averageAgeHours.toFixed(1)),
+      overdueSteps
     }
   }
 }

@@ -28,6 +28,19 @@ export function buildOperationsSnapshot({ participants, routes, steps, memoryEve
     ? participants.reduce((sum, participant) => sum + (participant.phaseReadiness || 0), 0) / participants.length
     : 0
 
+  const stepAges = steps.map((step) => {
+    const millis =
+      typeof step?.updatedAt?.toMillis === 'function'
+        ? step.updatedAt.toMillis()
+        : (step?.updatedAt?.seconds || step?.createdAt?.seconds || 0) * 1000
+    const ageHours = millis ? (now - millis) / (1000 * 60 * 60) : 0
+    return { ...step, ageHours }
+  })
+  const overdueSteps = stepAges.filter(
+    (step) => [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) && step.ageHours >= 48
+  )
+  const avgStepAgeHours = stepAges.length ? stepAges.reduce((sum, step) => sum + step.ageHours, 0) / stepAges.length : 0
+
   return {
     totals: {
       participants: participants.length,
@@ -46,6 +59,10 @@ export function buildOperationsSnapshot({ participants, routes, steps, memoryEve
     activity: {
       weeklyEvents,
       averageReadiness: Number(readinessAvg.toFixed(3))
+    },
+    sla: {
+      overdueSteps: overdueSteps.length,
+      averageStepAgeHours: Number(avgStepAgeHours.toFixed(1))
     }
   }
 }
@@ -63,6 +80,14 @@ export function buildCountyComparisonSnapshot({ participants, routes, steps, mem
     const blockedRoutes = scopedRoutes.filter((route) => route.status === ROUTE_LIFECYCLE.blocked).length
     const completedRoutes = scopedRoutes.filter((route) => route.status === ROUTE_LIFECYCLE.completed).length
     const completedSteps = scopedSteps.filter((step) => step.status === STEP_STATUS.completed).length
+    const overdueSteps = scopedSteps.filter((step) => {
+      const millis =
+        typeof step?.updatedAt?.toMillis === 'function'
+          ? step.updatedAt.toMillis()
+          : (step?.updatedAt?.seconds || step?.createdAt?.seconds || 0) * 1000
+      const ageHours = millis ? (Date.now() - millis) / (1000 * 60 * 60) : 0
+      return [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) && ageHours >= 48
+    }).length
 
     const readinessAvg = scopedParticipants.length
       ? scopedParticipants.reduce((sum, participant) => sum + (participant.phaseReadiness || 0), 0) / scopedParticipants.length
@@ -77,6 +102,7 @@ export function buildCountyComparisonSnapshot({ participants, routes, steps, mem
       blockedRoutes,
       completedRoutes,
       completedSteps,
+      overdueSteps,
       averageReadiness: Number(readinessAvg.toFixed(3))
     }
   })
