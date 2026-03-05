@@ -9,7 +9,8 @@ import { DEMO_CAPACITY_TOPOLOGY, DEMO_PARTICIPANTS } from './sample-data'
 import { generateRoutePlan } from '@/services/atlas2026/route-engine'
 import { buildMemoryView } from '@/services/atlas2026/memory-service'
 import { buildSituationalOverlay } from '@/services/atlas2026/situational-service'
-import { buildOperationsSnapshot } from '@/services/atlas2026/operations-service'
+import { buildCountyComparisonSnapshot, buildOperationsSnapshot } from '@/services/atlas2026/operations-service'
+import { buildExecutionSnapshot } from '@/services/atlas2026/execution-service'
 import {
   createMemoryEvent,
   createOntologyAuditRecord,
@@ -82,6 +83,7 @@ export function useAtlasDecisioning() {
     interferencePenalty: 0.05
   })
   const [selectedParticipantId, setSelectedParticipantId] = useState(DEMO_PARTICIPANTS[0].participantId)
+  const [selectedCountyId, setSelectedCountyId] = useState('all')
   const [selectedRole, setSelectedRole] = useState('peerNavigator')
   const [loadingLiveData, setLoadingLiveData] = useState(true)
   const [isLiveData, setIsLiveData] = useState(false)
@@ -95,7 +97,7 @@ export function useAtlasDecisioning() {
 
   useEffect(() => {
     setActionError(null)
-  }, [selectedParticipantId, selectedRole])
+  }, [selectedParticipantId, selectedRole, selectedCountyId])
 
   useEffect(() => {
     const firebaseConfig = resolveFirebaseConfig()
@@ -333,10 +335,30 @@ export function useAtlasDecisioning() {
     }
   }, [])
 
-  const selectedParticipant = useMemo(
-    () => participants.find((participant) => participant.participantId === selectedParticipantId) ?? participants[0],
-    [participants, selectedParticipantId]
+  const countyOptions = useMemo(() => {
+    const unique = [...new Set(participants.map((participant) => participant.countyId).filter(Boolean))]
+    return ['all', ...unique]
+  }, [participants])
+
+  const filteredParticipants = useMemo(
+    () => (selectedCountyId === 'all' ? participants : participants.filter((participant) => participant.countyId === selectedCountyId)),
+    [participants, selectedCountyId]
   )
+
+  const selectedParticipant = useMemo(
+    () =>
+      filteredParticipants.find((participant) => participant.participantId === selectedParticipantId) ??
+      filteredParticipants[0] ??
+      participants[0],
+    [filteredParticipants, participants, selectedParticipantId]
+  )
+
+  useEffect(() => {
+    if (!selectedParticipant) return
+    if (selectedParticipant.participantId !== selectedParticipantId) {
+      setSelectedParticipantId(selectedParticipant.participantId)
+    }
+  }, [selectedParticipant, selectedParticipantId])
 
   const decisionPacket = useMemo(
     () =>
@@ -379,20 +401,47 @@ export function useAtlasDecisioning() {
     [capacityTopology, selectedParticipant, selectedRoutes, selectedRouteSteps]
   )
 
+  const scopedParticipantIds = useMemo(
+    () => new Set(filteredParticipants.map((participant) => participant.participantId)),
+    [filteredParticipants]
+  )
+
   const situationalOverlay = useMemo(
-    () => buildSituationalOverlay({ participants, capacityTopology }),
-    [participants, capacityTopology]
+    () => buildSituationalOverlay({ participants: filteredParticipants, capacityTopology }),
+    [filteredParticipants, capacityTopology]
   )
 
   const operationsSnapshot = useMemo(
     () =>
       buildOperationsSnapshot({
+        participants: filteredParticipants,
+        routes: routeRecords.filter((route) => scopedParticipantIds.has(route.participantId)),
+        steps: routeSteps.filter((step) => scopedParticipantIds.has(step.participantId)),
+        memoryEvents: memoryEvents.filter((event) => scopedParticipantIds.has(event.participantId))
+      }),
+    [filteredParticipants, routeRecords, routeSteps, memoryEvents, scopedParticipantIds]
+  )
+
+  const countyComparisons = useMemo(
+    () =>
+      buildCountyComparisonSnapshot({
         participants,
         routes: routeRecords,
         steps: routeSteps,
         memoryEvents
       }),
     [participants, routeRecords, routeSteps, memoryEvents]
+  )
+
+  const executionSnapshot = useMemo(
+    () =>
+      buildExecutionSnapshot({
+        routes: routeRecords,
+        steps: routeSteps,
+        memoryEvents,
+        participantId: selectedParticipant?.participantId
+      }),
+    [routeRecords, routeSteps, memoryEvents, selectedParticipant]
   )
 
   async function activateRecommendedRoute() {
@@ -758,10 +807,13 @@ export function useAtlasDecisioning() {
   return {
     selectedRole,
     setSelectedRole,
+    selectedCountyId,
+    setSelectedCountyId,
+    countyOptions,
     selectedParticipant,
     selectedParticipantId,
     setSelectedParticipantId,
-    participants,
+    participants: filteredParticipants,
     capacityTopology,
     decisionPacket,
     routePlan,
@@ -770,6 +822,8 @@ export function useAtlasDecisioning() {
     selectedMemoryView,
     situationalOverlay,
     operationsSnapshot,
+    countyComparisons,
+    executionSnapshot,
     ontologyWeights,
     ontologyAudit,
     activateRecommendedRoute,

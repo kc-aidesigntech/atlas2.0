@@ -51,6 +51,26 @@ export default function SituationalAwarenessPage({ selectedParticipant, decision
           <CardTitle>Regional Hotspot Grid</CardTitle>
           <CardDescription>Geo-style hotspot markers for county operations triage.</CardDescription>
         </CardHeader>
+        <CardContent className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+          <svg viewBox="0 0 500 240" className="h-56 w-full rounded-xl border border-slate-800 bg-black">
+            <rect x="0" y="0" width="500" height="240" fill="#020617" />
+            {situationalOverlay.hotspotMarkers.map((marker, index) => {
+              const x = 70 + index * 90
+              const y = 60 + ((index % 3) * 52)
+              const intensity = Math.max(12, Math.round(marker.pressure * 32))
+              const fill = marker.priority === 'critical' ? '#ef4444' : marker.priority === 'watch' ? '#f59e0b' : '#22c55e'
+              return (
+                <g key={`map-${marker.id}`}>
+                  <circle cx={x} cy={y} r={intensity} fill={fill} fillOpacity="0.28" stroke={fill} />
+                  <circle cx={x} cy={y} r="4" fill={fill} />
+                  <text x={x + 10} y={y - 8} fill="#e2e8f0" fontSize="10">
+                    {marker.label}
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
+        </CardContent>
         <CardContent className="grid gap-3 md:grid-cols-2">
           {situationalOverlay.hotspotMarkers.map((marker) => (
             <div key={marker.id} className="rounded-xl border border-slate-800 bg-slate-950 p-3">

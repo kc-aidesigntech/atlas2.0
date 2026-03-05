@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
 import { STEP_STATUS } from '@/services/atlas2026/step-graph'
+import { getInterferenceMitigations } from '@/services/atlas2026/route-engine'
 import { canRolePerform } from '@/core/atlas2026/policy'
 
 function formatFirestoreTimestamp(value) {
@@ -64,6 +65,34 @@ export default function PrecisionNavigationPage({
             )}
             {actionError && <small className="mt-2 block text-amber-300">{actionError}</small>}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Interference Diagnostics</CardTitle>
+          <CardDescription>High and medium risk routes with recommended mitigation actions.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {routePlan.routes.filter((route) => ['high', 'medium'].includes(route.diagnostics.interference.risk)).length === 0 ? (
+            <small>No medium/high interference routes detected.</small>
+          ) : (
+            routePlan.routes
+              .filter((route) => ['high', 'medium'].includes(route.diagnostics.interference.risk))
+              .map((route) => (
+                <div key={`diag-${route.routeId}`} className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
+                  <small className="block text-slate-100">
+                    {route.routeId} ({route.diagnostics.interference.risk})
+                  </small>
+                  <small className="block text-slate-400">Reason: {route.diagnostics.interference.reason}</small>
+                  {getInterferenceMitigations(route).map((mitigation, index) => (
+                    <small key={`${route.routeId}-mitigation-${index}`} className="block text-slate-300">
+                      - {mitigation}
+                    </small>
+                  ))}
+                </div>
+              ))
+          )}
         </CardContent>
       </Card>
 

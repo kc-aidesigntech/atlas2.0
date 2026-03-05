@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState } from 'react'
-import { Activity, Compass, ScrollText, Settings, Plug, BarChart3 } from 'lucide-react'
+import { Activity, Compass, ScrollText, Settings, Plug, BarChart3, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ATLAS_ROLES } from '@/core/atlas2026/policy'
@@ -11,10 +11,12 @@ const CollectiveMemoryPage = lazy(() => import('./pages/CollectiveMemoryPage'))
 const GovernancePage = lazy(() => import('./pages/GovernancePage'))
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
 const OperationsPage = lazy(() => import('./pages/OperationsPage'))
+const ExecutionTimelinePage = lazy(() => import('./pages/ExecutionTimelinePage'))
 
 const WORKSPACES = {
   situationalAwareness: 'situationalAwareness',
   precisionNavigation: 'precisionNavigation',
+  executionTimeline: 'executionTimeline',
   collectiveMemory: 'collectiveMemory',
   operations: 'operations',
   governance: 'governance',
@@ -24,6 +26,9 @@ const WORKSPACES = {
 function RoleAndParticipantControls({
   selectedRole,
   setSelectedRole,
+  selectedCountyId,
+  setSelectedCountyId,
+  countyOptions,
   participants,
   selectedParticipantId,
   setSelectedParticipantId
@@ -40,6 +45,21 @@ function RoleAndParticipantControls({
             {Object.values(ATLAS_ROLES).map((role) => (
               <SelectItem key={role} value={role}>
                 {role}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="flex flex-col gap-2">
+        <small className="uppercase tracking-[0.2em] text-slate-400">County Scope</small>
+        <Select value={selectedCountyId} onValueChange={setSelectedCountyId}>
+          <SelectTrigger className="w-full md:w-[220px]">
+            <SelectValue placeholder="Select county" />
+          </SelectTrigger>
+          <SelectContent>
+            {countyOptions.map((countyId) => (
+              <SelectItem key={countyId} value={countyId}>
+                {countyId === 'all' ? 'All Counties' : countyId}
               </SelectItem>
             ))}
           </SelectContent>
@@ -68,6 +88,7 @@ function SurfaceNavigation({ surface, setSurface }) {
   const items = [
     { id: WORKSPACES.situationalAwareness, label: 'Situational Awareness', icon: Activity },
     { id: WORKSPACES.precisionNavigation, label: 'Precision Navigation', icon: Compass },
+    { id: WORKSPACES.executionTimeline, label: 'Execution Timeline', icon: Workflow },
     { id: WORKSPACES.collectiveMemory, label: 'Collective Memory', icon: ScrollText },
     { id: WORKSPACES.operations, label: 'Operations', icon: BarChart3 },
     { id: WORKSPACES.governance, label: 'Governance', icon: Settings },
@@ -99,6 +120,9 @@ export default function AtlasShell() {
   const {
     selectedRole,
     setSelectedRole,
+    selectedCountyId,
+    setSelectedCountyId,
+    countyOptions,
     selectedParticipant,
     selectedParticipantId,
     setSelectedParticipantId,
@@ -110,6 +134,8 @@ export default function AtlasShell() {
     selectedMemoryView,
     situationalOverlay,
     operationsSnapshot,
+    countyComparisons,
+    executionSnapshot,
     ontologyWeights,
     ontologyAudit,
     activateRecommendedRoute,
@@ -148,6 +174,9 @@ export default function AtlasShell() {
       <RoleAndParticipantControls
         selectedRole={selectedRole}
         setSelectedRole={setSelectedRole}
+        selectedCountyId={selectedCountyId}
+        setSelectedCountyId={setSelectedCountyId}
+        countyOptions={countyOptions}
         participants={participants}
         selectedParticipantId={selectedParticipantId}
         setSelectedParticipantId={setSelectedParticipantId}
@@ -187,7 +216,16 @@ export default function AtlasShell() {
             actionError={actionError}
           />
         )}
-        {surface === WORKSPACES.operations && <OperationsPage operationsSnapshot={operationsSnapshot} />}
+        {surface === WORKSPACES.executionTimeline && (
+          <ExecutionTimelinePage executionSnapshot={executionSnapshot} selectedRouteSteps={selectedRouteSteps} />
+        )}
+        {surface === WORKSPACES.operations && (
+          <OperationsPage
+            operationsSnapshot={operationsSnapshot}
+            countyComparisons={countyComparisons}
+            selectedCountyId={selectedCountyId}
+          />
+        )}
         {surface === WORKSPACES.governance && (
           <GovernancePage
             selectedRole={selectedRole}

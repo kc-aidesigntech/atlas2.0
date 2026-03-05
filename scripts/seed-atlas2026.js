@@ -60,6 +60,21 @@ const participants = [
       { domain: 'health', severity: 0.44, trajectory: 'down', reversibility: 0.64, confidence: 0.67 },
       { domain: 'mobility', severity: 0.4, trajectory: 'flat', reversibility: 0.68, confidence: 0.69 }
     ]
+  },
+  {
+    id: 'pt-305',
+    participantId: 'pt-305',
+    countyId: 'county-commons-02',
+    displayName: 'East County Participant',
+    currentPhase: 'Readiness',
+    phaseReadiness: 0.63,
+    pressureVectors: [
+      { domain: 'habitat', severity: 0.46, trajectory: 'down', reversibility: 0.66, confidence: 0.74 },
+      { domain: 'socialNetworks', severity: 0.58, trajectory: 'flat', reversibility: 0.57, confidence: 0.72 },
+      { domain: 'work', severity: 0.72, trajectory: 'up', reversibility: 0.44, confidence: 0.78 },
+      { domain: 'health', severity: 0.39, trajectory: 'down', reversibility: 0.7, confidence: 0.68 },
+      { domain: 'mobility', severity: 0.42, trajectory: 'flat', reversibility: 0.65, confidence: 0.7 }
+    ]
   }
 ]
 
@@ -154,6 +169,71 @@ async function seedAtlas2026() {
     label: 'Initial gate validated for stabilization intake.',
     verified: true,
     createdByRole: 'stationOperator',
+    createdByUserId: 'atlas-seed-script',
+    createdAt: serverTimestamp()
+  })
+
+  await setDoc(doc(db, `artifacts/${appId}/atlas2026/routes/seed-route-pt101-a`), {
+    participantId: 'pt-101',
+    routeId: 'route-plan-1',
+    partnerId: 'station-housing-01',
+    status: 'active',
+    score: 0.79,
+    interferenceRisk: 0.16,
+    transferCost: 0.22,
+    activatedByRole: 'stationOperator',
+    activatedByUserId: 'atlas-seed-script',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }, { merge: true })
+
+  const stepSeed = [
+    {
+      id: 'seed-step-1',
+      stepId: 'route-plan-1-intake',
+      label: 'Eligibility and intake confirmation',
+      status: 'completed',
+      dependencies: [],
+      sequence: 1
+    },
+    {
+      id: 'seed-step-2',
+      stepId: 'route-plan-1-coordination',
+      label: 'Partner coordination and scheduling',
+      status: 'inProgress',
+      dependencies: ['route-plan-1-intake'],
+      sequence: 2
+    },
+    {
+      id: 'seed-step-3',
+      stepId: 'route-plan-1-verification',
+      label: 'Outcome verification and memory update',
+      status: 'pending',
+      dependencies: ['route-plan-1-coordination'],
+      sequence: 3
+    }
+  ]
+
+  for (const step of stepSeed) {
+    await setDoc(doc(db, `artifacts/${appId}/atlas2026/routeSteps/${step.id}`), {
+      routeDocId: 'seed-route-pt101-a',
+      routeId: 'route-plan-1',
+      participantId: 'pt-101',
+      partnerId: 'station-housing-01',
+      domain: 'Readiness',
+      ...step,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true })
+  }
+
+  await addDoc(collection(db, `artifacts/${appId}/atlas2026/memoryEvents`), {
+    participantId: 'pt-101',
+    eventType: 'milestoneVerified',
+    phase: 'Readiness',
+    label: 'Route intake step completed and verified.',
+    verified: true,
+    createdByRole: 'peerNavigator',
     createdByUserId: 'atlas-seed-script',
     createdAt: serverTimestamp()
   })

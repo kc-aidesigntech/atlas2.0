@@ -107,3 +107,25 @@ export function generateRoutePlan({ participant, capacityTopology, activeRoutes 
   }
 }
 
+export function getInterferenceMitigations(route) {
+  const mitigations = []
+  const risk = route?.diagnostics?.interference?.risk || 'low'
+
+  if (risk === 'high') {
+    mitigations.push('Reassign to alternate partner to avoid active capacity conflict.')
+    mitigations.push('Delay activation until current partner workload deconflicts.')
+  } else if (risk === 'medium') {
+    mitigations.push('Add coordination checkpoint before activation.')
+    mitigations.push('Prefer route handoff with lower transfer complexity.')
+  }
+
+  if (route?.diagnostics?.dependencyGate && !route.diagnostics.dependencyGate.pass) {
+    mitigations.push('Complete prerequisite steps before progressing this route.')
+  }
+  if (route?.diagnostics?.phaseGate && !route.diagnostics.phaseGate.pass) {
+    mitigations.push('Stabilize phase readiness before phase transition route.')
+  }
+
+  return mitigations
+}
+

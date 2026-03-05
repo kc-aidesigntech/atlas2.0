@@ -19,7 +19,7 @@ function renderKeyValueRows(data = {}) {
   ))
 }
 
-export default function OperationsPage({ operationsSnapshot }) {
+export default function OperationsPage({ operationsSnapshot, countyComparisons, selectedCountyId }) {
   const { totals, participantByPhase, routesByStatus, stepsByStatus, risk, activity } = operationsSnapshot
 
   return (
@@ -71,6 +71,32 @@ export default function OperationsPage({ operationsSnapshot }) {
             value={`${(activity.averageReadiness * 100).toFixed(1)}%`}
             hint="Average participant phase readiness score"
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>County Comparisons</CardTitle>
+          <CardDescription>
+            Cross-county view for leadership calibration.
+            {selectedCountyId !== 'all' ? ` Current scope: ${selectedCountyId}` : ' Current scope: all counties.'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {countyComparisons.length === 0 ? (
+            <small>No county comparison data available.</small>
+          ) : (
+            countyComparisons.map((county) => (
+              <div key={county.countyId} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+                <p className="text-slate-100">{county.countyId}</p>
+                <small className="block">Participants: {county.participants} | Routes: {county.routes} | Steps: {county.steps}</small>
+                <small className="block">Blocked routes: {county.blockedRoutes} | Completed routes: {county.completedRoutes}</small>
+                <small className="block">
+                  Completed steps: {county.completedSteps} | Avg readiness: {(county.averageReadiness * 100).toFixed(1)}%
+                </small>
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
     </div>

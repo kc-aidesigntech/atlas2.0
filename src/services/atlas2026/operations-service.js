@@ -50,3 +50,35 @@ export function buildOperationsSnapshot({ participants, routes, steps, memoryEve
   }
 }
 
+export function buildCountyComparisonSnapshot({ participants, routes, steps, memoryEvents }) {
+  const counties = [...new Set(participants.map((participant) => participant.countyId).filter(Boolean))]
+
+  return counties.map((countyId) => {
+    const scopedParticipants = participants.filter((participant) => participant.countyId === countyId)
+    const participantIds = new Set(scopedParticipants.map((participant) => participant.participantId))
+    const scopedRoutes = routes.filter((route) => participantIds.has(route.participantId))
+    const scopedSteps = steps.filter((step) => participantIds.has(step.participantId))
+    const scopedEvents = memoryEvents.filter((event) => participantIds.has(event.participantId))
+
+    const blockedRoutes = scopedRoutes.filter((route) => route.status === ROUTE_LIFECYCLE.blocked).length
+    const completedRoutes = scopedRoutes.filter((route) => route.status === ROUTE_LIFECYCLE.completed).length
+    const completedSteps = scopedSteps.filter((step) => step.status === STEP_STATUS.completed).length
+
+    const readinessAvg = scopedParticipants.length
+      ? scopedParticipants.reduce((sum, participant) => sum + (participant.phaseReadiness || 0), 0) / scopedParticipants.length
+      : 0
+
+    return {
+      countyId,
+      participants: scopedParticipants.length,
+      routes: scopedRoutes.length,
+      steps: scopedSteps.length,
+      memoryEvents: scopedEvents.length,
+      blockedRoutes,
+      completedRoutes,
+      completedSteps,
+      averageReadiness: Number(readinessAvg.toFixed(3))
+    }
+  })
+}
+
