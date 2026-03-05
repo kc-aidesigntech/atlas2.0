@@ -22,7 +22,8 @@ function renderKeyValueRows(data = {}) {
 }
 
 export default function OperationsPage({ operationsSnapshot, countyComparisons, selectedCountyId }) {
-  const { totals, participantByPhase, routesByStatus, stepsByStatus, risk, activity, sla } = operationsSnapshot
+  const { totals, participantByPhase, routesByStatus, stepsByStatus, risk, activity, sla, blockerQueue, readinessAlerts } =
+    operationsSnapshot
   const buildWeeklyReportRows = () => [
     {
       rowType: 'summary',
@@ -172,6 +173,51 @@ export default function OperationsPage({ operationsSnapshot, countyComparisons, 
                   Completed steps: {county.completedSteps} | Avg readiness: {(county.averageReadiness * 100).toFixed(1)}%
                 </small>
                 <small className="block">Overdue steps: {county.overdueSteps}</small>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>County Blocker Triage Queue</CardTitle>
+          <CardDescription>Oldest blocked steps in scope with county attribution and operator guidance.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {blockerQueue.length === 0 ? (
+            <small>No blocked steps in current scope.</small>
+          ) : (
+            blockerQueue.map((blocker) => (
+              <div key={`ops-blocker-${blocker.id}`} className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
+                <small className="block text-slate-100">{blocker.stepId}: {blocker.label}</small>
+                <small className="block text-slate-400">
+                  County: {blocker.countyId} | Participant: {blocker.participantId}
+                </small>
+                <small className="block text-slate-400">Route: {blocker.routeId}</small>
+                <small className="block text-slate-300">Age: {blocker.ageHours}h</small>
+                <small className="block text-slate-300">Recommended action: {blocker.recommendedAction}</small>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Phase Readiness Alerts</CardTitle>
+          <CardDescription>County-level readiness exceptions that need pre-transition intervention.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {readinessAlerts.length === 0 ? (
+            <small>No readiness alerts in current scope.</small>
+          ) : (
+            readinessAlerts.map((alert) => (
+              <div key={`ops-readiness-${alert.participantId}`} className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
+                <small className="block text-slate-100">{alert.participantId}</small>
+                <small className="block text-slate-400">County: {alert.countyId}</small>
+                <small className="block text-slate-400">Current phase: {alert.currentPhase}</small>
+                <small className="block text-slate-300">Readiness: {(alert.phaseReadiness * 100).toFixed(1)}%</small>
               </div>
             ))
           )}

@@ -9,7 +9,14 @@ function countBy(items, keySelector) {
   }, {})
 }
 
-export function buildOperationsSnapshot({ participants, routes, steps, memoryEvents, slaThresholdHours = 48 }) {
+export function buildOperationsSnapshot({
+  participants,
+  routes,
+  steps,
+  memoryEvents,
+  slaThresholdHours = 48,
+  phaseReadinessAlertThreshold = 0.45
+}) {
   const participantByPhase = countBy(participants, (item) => item.currentPhase || 'Unknown')
   const routesByStatus = countBy(routes, (item) => item.status || ROUTE_LIFECYCLE.pending)
   const stepsByStatus = countBy(steps, (item) => item.status || STEP_STATUS.pending)
@@ -42,6 +49,32 @@ export function buildOperationsSnapshot({ participants, routes, steps, memoryEve
       step.ageHours >= slaThresholdHours
   )
   const avgStepAgeHours = stepAges.length ? stepAges.reduce((sum, step) => sum + step.ageHours, 0) / stepAges.length : 0
+  const participantCountyById = new Map(participants.map((participant) => [participant.participantId, participant.countyId || 'unknown']))
+  const blockerQueue = stepAges
+    .filter((step) => step.status === STEP_STATUS.blocked)
+    .sort((a, b) => b.ageHours - a.ageHours)
+    .slice(0, 10)
+    .map((step) => ({
+      id: step.id,
+      participantId: step.participantId,
+      countyId: participantCountyById.get(step.participantId) || 'unknown',
+      stepId: step.stepId,
+      label: step.label,
+      routeId: step.routeId,
+      ageHours: Number(step.ageHours.toFixed(1)),
+      recommendedAction:
+        (step.dependencies || []).length > 0
+          ? 'Resolve prerequisite steps then reset to pending.'
+          : 'Reset to pending and assign immediate operator checkpoint.'
+    }))
+  const readinessAlerts = participants
+    .filter((participant) => (participant.phaseReadiness ?? 1) < phaseReadinessAlertThreshold)
+    .map((participant) => ({
+      participantId: participant.participantId,
+      countyId: participant.countyId || 'unknown',
+      currentPhase: participant.currentPhase,
+      phaseReadiness: Number((participant.phaseReadiness ?? 0).toFixed(3))
+    }))
 
   return {
     totals: {
@@ -66,7 +99,9 @@ export function buildOperationsSnapshot({ participants, routes, steps, memoryEve
       thresholdHours: slaThresholdHours,
       overdueSteps: overdueSteps.length,
       averageStepAgeHours: Number(avgStepAgeHours.toFixed(1))
-    }
+    },
+    blockerQueue,
+    readinessAlerts
   }
 }
 

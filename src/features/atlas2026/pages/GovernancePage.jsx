@@ -23,11 +23,21 @@ function formatFirestoreTimestamp(value) {
 export default function GovernancePage({ selectedRole, ontologyWeights, ontologyAudit, saveOntologyWeights, actionError }) {
   const [localWeights, setLocalWeights] = useState(ontologyWeights)
   const [slaThresholdHours, setSlaThresholdHours] = useState(ontologyWeights.slaThresholdHours ?? 48)
+  const [interferenceMediumThreshold, setInterferenceMediumThreshold] = useState(
+    ontologyWeights.interferenceMediumThreshold ?? 0.35
+  )
+  const [interferenceHighThreshold, setInterferenceHighThreshold] = useState(ontologyWeights.interferenceHighThreshold ?? 0.6)
+  const [phaseReadinessAlertThreshold, setPhaseReadinessAlertThreshold] = useState(
+    ontologyWeights.phaseReadinessAlertThreshold ?? 0.45
+  )
   const canManage = canRolePerform(selectedRole, 'manageOntology')
 
   useEffect(() => {
     setLocalWeights(ontologyWeights)
     setSlaThresholdHours(ontologyWeights.slaThresholdHours ?? 48)
+    setInterferenceMediumThreshold(ontologyWeights.interferenceMediumThreshold ?? 0.35)
+    setInterferenceHighThreshold(ontologyWeights.interferenceHighThreshold ?? 0.6)
+    setPhaseReadinessAlertThreshold(ontologyWeights.phaseReadinessAlertThreshold ?? 0.45)
   }, [ontologyWeights])
 
   const onFieldChange = (field, value) => {
@@ -70,8 +80,56 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
               onChange={(event) => setSlaThresholdHours(Number(event.target.value))}
             />
           </div>
+          <div className="grid gap-1">
+            <small className="uppercase tracking-[0.12em] text-slate-400">interferenceMediumThreshold</small>
+            <Input
+              type="number"
+              value={interferenceMediumThreshold}
+              step="0.01"
+              min="0"
+              max="1"
+              disabled={!canManage}
+              onChange={(event) => setInterferenceMediumThreshold(Number(event.target.value))}
+            />
+          </div>
+          <div className="grid gap-1">
+            <small className="uppercase tracking-[0.12em] text-slate-400">interferenceHighThreshold</small>
+            <Input
+              type="number"
+              value={interferenceHighThreshold}
+              step="0.01"
+              min="0"
+              max="1"
+              disabled={!canManage}
+              onChange={(event) => setInterferenceHighThreshold(Number(event.target.value))}
+            />
+          </div>
+          <div className="grid gap-1">
+            <small className="uppercase tracking-[0.12em] text-slate-400">phaseReadinessAlertThreshold</small>
+            <Input
+              type="number"
+              value={phaseReadinessAlertThreshold}
+              step="0.01"
+              min="0"
+              max="1"
+              disabled={!canManage}
+              onChange={(event) => setPhaseReadinessAlertThreshold(Number(event.target.value))}
+            />
+          </div>
           {canManage ? (
-            <Button onClick={() => saveOntologyWeights({ ...localWeights, slaThresholdHours })}>Save Ontology Weights</Button>
+            <Button
+              onClick={() =>
+                saveOntologyWeights({
+                  ...localWeights,
+                  slaThresholdHours,
+                  interferenceMediumThreshold,
+                  interferenceHighThreshold: Math.max(interferenceHighThreshold, interferenceMediumThreshold),
+                  phaseReadinessAlertThreshold
+                })
+              }
+            >
+              Save Ontology Weights
+            </Button>
           ) : (
             <small className="block text-slate-400">Current role cannot modify governance settings.</small>
           )}

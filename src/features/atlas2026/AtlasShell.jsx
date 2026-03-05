@@ -196,6 +196,7 @@ export default function AtlasShell() {
           <PrecisionNavigationPage
             selectedRole={selectedRole}
             routePlan={routePlan}
+            ontologyWeights={ontologyWeights}
             selectedRoutes={selectedRoutes}
             selectedRouteSteps={selectedRouteSteps}
             activateRecommendedRoute={activateRecommendedRoute}

@@ -6,7 +6,15 @@ function toMillis(timestamp) {
   return (timestamp.seconds || 0) * 1000
 }
 
-export function buildExecutionSnapshot({ routes, steps, memoryEvents, participantId, slaThresholdHours = 48 }) {
+export function buildExecutionSnapshot({
+  routes,
+  steps,
+  memoryEvents,
+  participantId,
+  slaThresholdHours = 48,
+  selectedParticipant,
+  phaseReadinessAlertThreshold = 0.45
+}) {
   const scopedRoutes = routes.filter((route) => route.participantId === participantId)
   const scopedSteps = steps.filter((step) => step.participantId === participantId)
   const scopedEvents = memoryEvents.filter((event) => event.participantId === participantId)
@@ -81,7 +89,16 @@ export function buildExecutionSnapshot({ routes, steps, memoryEvents, participan
       overdueCount: overdueSteps.length,
       averageAgeHours: Number(averageAgeHours.toFixed(1)),
       overdueSteps
-    }
+    },
+    readinessAlert:
+      selectedParticipant && (selectedParticipant.phaseReadiness ?? 1) < phaseReadinessAlertThreshold
+        ? {
+            participantId,
+            currentPhase: selectedParticipant.currentPhase,
+            phaseReadiness: selectedParticipant.phaseReadiness,
+            reason: 'Phase readiness is below the transition safety threshold.'
+          }
+        : null
   }
 }
 

@@ -88,6 +88,27 @@ export default function ExecutionTimelinePage({
 
       <Card>
         <CardHeader>
+          <CardTitle>Phase Gate Readiness Alert</CardTitle>
+          <CardDescription>Participant-level readiness warning for execution governance.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {executionSnapshot.readinessAlert ? (
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
+              <small className="block text-slate-100">{executionSnapshot.readinessAlert.participantId}</small>
+              <small className="block text-slate-400">Current phase: {executionSnapshot.readinessAlert.currentPhase}</small>
+              <small className="block text-slate-300">
+                Phase readiness: {(executionSnapshot.readinessAlert.phaseReadiness * 100).toFixed(1)}%
+              </small>
+              <small className="block text-slate-400">{executionSnapshot.readinessAlert.reason}</small>
+            </div>
+          ) : (
+            <small>No phase gate readiness alert for the selected participant.</small>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Step Dependency Graph</CardTitle>
           <CardDescription>Lane-style dependency chain for the selected participant route steps.</CardDescription>
         </CardHeader>

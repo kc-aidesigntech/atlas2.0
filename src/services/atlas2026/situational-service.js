@@ -5,7 +5,7 @@ function average(values) {
   return values.reduce((acc, value) => acc + value, 0) / values.length
 }
 
-export function buildSituationalOverlay({ participants, capacityTopology }) {
+export function buildSituationalOverlay({ participants, capacityTopology, phaseReadinessAlertThreshold = 0.45 }) {
   const domainPressure = PRESSURE_DOMAINS.map((domain) => {
     const all = participants
       .map((participant) => participant.pressureVectors?.find((vector) => vector.domain === domain.id)?.severity ?? 0)
@@ -53,11 +53,23 @@ export function buildSituationalOverlay({ participants, capacityTopology }) {
     lng: Number((-118.25 + index * 0.06).toFixed(3))
   }))
 
+  const phaseReadinessAlerts = participants
+    .filter((participant) => (participant.phaseReadiness ?? 1) < phaseReadinessAlertThreshold)
+    .sort((a, b) => (a.phaseReadiness ?? 1) - (b.phaseReadiness ?? 1))
+    .slice(0, 8)
+    .map((participant) => ({
+      participantId: participant.participantId,
+      countyId: participant.countyId || 'unknown',
+      currentPhase: participant.currentPhase,
+      phaseReadiness: Number((participant.phaseReadiness ?? 0).toFixed(3))
+    }))
+
   return {
     domainPressure,
     capacityByDomain,
     corridorPriorities,
-    hotspotMarkers
+    hotspotMarkers,
+    phaseReadinessAlerts
   }
 }
 

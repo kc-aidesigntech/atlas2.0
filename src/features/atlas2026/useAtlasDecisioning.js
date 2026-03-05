@@ -81,7 +81,10 @@ export function useAtlasDecisioning() {
     reversibilityWeight: 0.15,
     transferCostPenalty: 0.1,
     interferencePenalty: 0.05,
-    slaThresholdHours: 48
+    slaThresholdHours: 48,
+    interferenceMediumThreshold: 0.35,
+    interferenceHighThreshold: 0.6,
+    phaseReadinessAlertThreshold: 0.45
   })
   const [selectedParticipantId, setSelectedParticipantId] = useState(DEMO_PARTICIPANTS[0].participantId)
   const [selectedCountyId, setSelectedCountyId] = useState('all')
@@ -397,9 +400,23 @@ export function useAtlasDecisioning() {
         activeRoutes: selectedRoutes,
         completedStepIds: selectedRouteSteps
           .filter((step) => step.status === STEP_STATUS.completed)
-          .map((step) => step.stepId)
+          .map((step) => step.stepId),
+        interferenceThresholds: {
+          medium: ontologyWeights.interferenceMediumThreshold ?? 0.35,
+          high: Math.max(
+            ontologyWeights.interferenceHighThreshold ?? 0.6,
+            ontologyWeights.interferenceMediumThreshold ?? 0.35
+          )
+        }
       }),
-    [capacityTopology, selectedParticipant, selectedRoutes, selectedRouteSteps]
+    [
+      capacityTopology,
+      selectedParticipant,
+      selectedRoutes,
+      selectedRouteSteps,
+      ontologyWeights.interferenceMediumThreshold,
+      ontologyWeights.interferenceHighThreshold
+    ]
   )
 
   const scopedParticipantIds = useMemo(
@@ -408,8 +425,13 @@ export function useAtlasDecisioning() {
   )
 
   const situationalOverlay = useMemo(
-    () => buildSituationalOverlay({ participants: filteredParticipants, capacityTopology }),
-    [filteredParticipants, capacityTopology]
+    () =>
+      buildSituationalOverlay({
+        participants: filteredParticipants,
+        capacityTopology,
+        phaseReadinessAlertThreshold: ontologyWeights.phaseReadinessAlertThreshold ?? 0.45
+      }),
+    [filteredParticipants, capacityTopology, ontologyWeights.phaseReadinessAlertThreshold]
   )
 
   const operationsSnapshot = useMemo(
@@ -419,9 +441,18 @@ export function useAtlasDecisioning() {
         routes: routeRecords.filter((route) => scopedParticipantIds.has(route.participantId)),
         steps: routeSteps.filter((step) => scopedParticipantIds.has(step.participantId)),
         memoryEvents: memoryEvents.filter((event) => scopedParticipantIds.has(event.participantId)),
-        slaThresholdHours: ontologyWeights.slaThresholdHours ?? 48
+        slaThresholdHours: ontologyWeights.slaThresholdHours ?? 48,
+        phaseReadinessAlertThreshold: ontologyWeights.phaseReadinessAlertThreshold ?? 0.45
       }),
-    [filteredParticipants, routeRecords, routeSteps, memoryEvents, scopedParticipantIds, ontologyWeights.slaThresholdHours]
+    [
+      filteredParticipants,
+      routeRecords,
+      routeSteps,
+      memoryEvents,
+      scopedParticipantIds,
+      ontologyWeights.slaThresholdHours,
+      ontologyWeights.phaseReadinessAlertThreshold
+    ]
   )
 
   const countyComparisons = useMemo(
@@ -443,9 +474,18 @@ export function useAtlasDecisioning() {
         steps: routeSteps,
         memoryEvents,
         participantId: selectedParticipant?.participantId,
-        slaThresholdHours: ontologyWeights.slaThresholdHours ?? 48
+        slaThresholdHours: ontologyWeights.slaThresholdHours ?? 48,
+        selectedParticipant,
+        phaseReadinessAlertThreshold: ontologyWeights.phaseReadinessAlertThreshold ?? 0.45
       }),
-    [routeRecords, routeSteps, memoryEvents, selectedParticipant, ontologyWeights.slaThresholdHours]
+    [
+      routeRecords,
+      routeSteps,
+      memoryEvents,
+      selectedParticipant,
+      ontologyWeights.slaThresholdHours,
+      ontologyWeights.phaseReadinessAlertThreshold
+    ]
   )
 
   async function activateRecommendedRoute() {

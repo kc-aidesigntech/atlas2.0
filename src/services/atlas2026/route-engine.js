@@ -50,7 +50,9 @@ export function validateDependencies(route, completedStepIds = []) {
   return { pass: true, reason: null, missing: [] }
 }
 
-export function diagnoseInterference(route, activeRoutes = []) {
+export function diagnoseInterference(route, activeRoutes = [], thresholds = {}) {
+  const mediumThreshold = thresholds.medium ?? 0.35
+  const highThreshold = thresholds.high ?? 0.6
   const conflicting = activeRoutes.filter((active) => active.partnerId === route.partnerId && active.status === 'active')
   if (conflicting.length > 0) {
     return {
@@ -59,13 +61,16 @@ export function diagnoseInterference(route, activeRoutes = []) {
       conflicts: conflicting.map((item) => item.routeId)
     }
   }
-  if ((route.interferenceRisk ?? 0) > 0.35) {
+  if ((route.interferenceRisk ?? 0) >= highThreshold) {
+    return { risk: 'high', reason: 'Route interference exceeds high-risk governance threshold.', conflicts: [] }
+  }
+  if ((route.interferenceRisk ?? 0) >= mediumThreshold) {
     return { risk: 'medium', reason: 'Route has elevated modeled interference risk.', conflicts: [] }
   }
   return { risk: 'low', reason: 'No meaningful interference detected.', conflicts: [] }
 }
 
-export function generateRoutePlan({ participant, capacityTopology, activeRoutes = [], completedStepIds = [] }) {
+export function generateRoutePlan({ participant, capacityTopology, activeRoutes = [], completedStepIds = [], interferenceThresholds }) {
   const participantPhaseIndex = STABILIZATION_PHASES.indexOf(participant.currentPhase)
 
   const enriched = capacityTopology.map((candidate, index) => {
@@ -79,7 +84,7 @@ export function generateRoutePlan({ participant, capacityTopology, activeRoutes 
 
     const phaseGate = validatePhaseGate(participant, route)
     const dependencyGate = validateDependencies(route, completedStepIds)
-    const interference = diagnoseInterference(route, activeRoutes)
+    const interference = diagnoseInterference(route, activeRoutes, interferenceThresholds)
     const { score, phaseAlignment } = scoreRoute(route, participantPhaseIndex)
 
     const blocked = !phaseGate.pass || !dependencyGate.pass || interference.risk === 'high'

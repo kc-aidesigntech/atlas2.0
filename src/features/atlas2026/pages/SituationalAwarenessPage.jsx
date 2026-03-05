@@ -48,6 +48,29 @@ export default function SituationalAwarenessPage({ selectedParticipant, decision
 
       <Card>
         <CardHeader>
+          <CardTitle>Phase Gate Readiness Alerts</CardTitle>
+          <CardDescription>
+            Participants with low readiness require stabilization work before phase advancement decisions.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {situationalOverlay.phaseReadinessAlerts?.length ? (
+            situationalOverlay.phaseReadinessAlerts.map((alert) => (
+              <div key={`readiness-${alert.participantId}`} className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
+                <small className="block text-slate-100">{alert.participantId}</small>
+                <small className="block text-slate-400">County: {alert.countyId}</small>
+                <small className="block text-slate-400">Current phase: {alert.currentPhase}</small>
+                <small className="block text-slate-300">Phase readiness: {(alert.phaseReadiness * 100).toFixed(1)}%</small>
+              </div>
+            ))
+          ) : (
+            <small>No phase readiness alerts in the current scope.</small>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Regional Hotspot Grid</CardTitle>
           <CardDescription>Geo-style hotspot markers for county operations triage.</CardDescription>
         </CardHeader>

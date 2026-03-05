@@ -18,6 +18,7 @@ function formatFirestoreTimestamp(value) {
 export default function PrecisionNavigationPage({
   selectedRole,
   routePlan,
+  ontologyWeights,
   selectedRoutes,
   selectedRouteSteps,
   activateRecommendedRoute,
@@ -87,6 +88,11 @@ export default function PrecisionNavigationPage({
                   partnerId: route.partnerId,
                   interferenceRisk: route.diagnostics.interference.risk,
                   interferenceReason: route.diagnostics.interference.reason,
+                  mediumThreshold: ontologyWeights?.interferenceMediumThreshold ?? 0.35,
+                  highThreshold: Math.max(
+                    ontologyWeights?.interferenceHighThreshold ?? 0.6,
+                    ontologyWeights?.interferenceMediumThreshold ?? 0.35
+                  ),
                   blockReasons: route.blockReasons.join(' | '),
                   mitigations: getInterferenceMitigations(route).join(' | ')
                 })),
@@ -102,9 +108,24 @@ export default function PrecisionNavigationPage({
       <Card>
         <CardHeader>
           <CardTitle>Interference Diagnostics</CardTitle>
-          <CardDescription>High and medium risk routes with recommended mitigation actions.</CardDescription>
+          <CardDescription>High and medium risk routes with governance-managed cutoffs and mitigation actions.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+            <small className="block text-slate-400">
+              Medium threshold: {((ontologyWeights?.interferenceMediumThreshold ?? 0.35) * 100).toFixed(0)}%
+            </small>
+            <small className="block text-slate-400">
+              High threshold:{' '}
+              {(
+                Math.max(
+                  ontologyWeights?.interferenceHighThreshold ?? 0.6,
+                  ontologyWeights?.interferenceMediumThreshold ?? 0.35
+                ) * 100
+              ).toFixed(0)}
+              %
+            </small>
+          </div>
           {routePlan.routes.filter((route) => ['high', 'medium'].includes(route.diagnostics.interference.risk)).length === 0 ? (
             <small>No medium/high interference routes detected.</small>
           ) : (
