@@ -72,6 +72,11 @@
     pointer-events: auto;
   }
 
+  body,
+  body * {
+    text-transform: lowercase !important;
+  }
+
   .antialiased {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
