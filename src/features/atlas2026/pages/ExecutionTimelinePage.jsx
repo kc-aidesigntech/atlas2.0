@@ -8,7 +8,12 @@ function formatTime(millis) {
   return new Date(millis).toLocaleString()
 }
 
-export default function ExecutionTimelinePage({ executionSnapshot, selectedRouteSteps }) {
+export default function ExecutionTimelinePage({
+  executionSnapshot,
+  selectedRouteSteps,
+  transitionRouteStepStatus,
+  updatingStep
+}) {
   const [selectedStepId, setSelectedStepId] = useState(null)
   const laneY = { route: 36, step: 80, memory: 124 }
   const latest = executionSnapshot.timeline[0]?.at || 0
@@ -198,6 +203,17 @@ export default function ExecutionTimelinePage({ executionSnapshot, selectedRoute
                 </small>
                 {typeof blocker.ageHours === 'number' && (
                   <small className="block text-slate-400">Age: {blocker.ageHours.toFixed(1)} hours</small>
+                )}
+                {transitionRouteStepStatus && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2"
+                    disabled={updatingStep}
+                    onClick={() => transitionRouteStepStatus({ stepDocId: blocker.id, nextStatus: 'pending' })}
+                  >
+                    Move to Pending
+                  </Button>
                 )}
               </div>
             ))

@@ -22,10 +22,12 @@ function formatFirestoreTimestamp(value) {
 
 export default function GovernancePage({ selectedRole, ontologyWeights, ontologyAudit, saveOntologyWeights, actionError }) {
   const [localWeights, setLocalWeights] = useState(ontologyWeights)
+  const [slaThresholdHours, setSlaThresholdHours] = useState(ontologyWeights.slaThresholdHours ?? 48)
   const canManage = canRolePerform(selectedRole, 'manageOntology')
 
   useEffect(() => {
     setLocalWeights(ontologyWeights)
+    setSlaThresholdHours(ontologyWeights.slaThresholdHours ?? 48)
   }, [ontologyWeights])
 
   const onFieldChange = (field, value) => {
@@ -57,8 +59,19 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
               />
             </div>
           ))}
+          <div className="grid gap-1">
+            <small className="uppercase tracking-[0.12em] text-slate-400">slaThresholdHours</small>
+            <Input
+              type="number"
+              value={slaThresholdHours}
+              min="1"
+              max="720"
+              disabled={!canManage}
+              onChange={(event) => setSlaThresholdHours(Number(event.target.value))}
+            />
+          </div>
           {canManage ? (
-            <Button onClick={() => saveOntologyWeights(localWeights)}>Save Ontology Weights</Button>
+            <Button onClick={() => saveOntologyWeights({ ...localWeights, slaThresholdHours })}>Save Ontology Weights</Button>
           ) : (
             <small className="block text-slate-400">Current role cannot modify governance settings.</small>
           )}

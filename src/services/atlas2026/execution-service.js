@@ -6,7 +6,7 @@ function toMillis(timestamp) {
   return (timestamp.seconds || 0) * 1000
 }
 
-export function buildExecutionSnapshot({ routes, steps, memoryEvents, participantId }) {
+export function buildExecutionSnapshot({ routes, steps, memoryEvents, participantId, slaThresholdHours = 48 }) {
   const scopedRoutes = routes.filter((route) => route.participantId === participantId)
   const scopedSteps = steps.filter((step) => step.participantId === participantId)
   const scopedEvents = memoryEvents.filter((event) => event.participantId === participantId)
@@ -56,7 +56,9 @@ export function buildExecutionSnapshot({ routes, steps, memoryEvents, participan
     return { ...step, ageHours: Number(ageHours.toFixed(1)) }
   })
   const overdueSteps = stepAgeHours.filter(
-    (step) => [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) && step.ageHours >= 48
+    (step) =>
+      [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) &&
+      step.ageHours >= slaThresholdHours
   )
   const averageAgeHours = stepAgeHours.length
     ? stepAgeHours.reduce((sum, step) => sum + step.ageHours, 0) / stepAgeHours.length
@@ -71,6 +73,7 @@ export function buildExecutionSnapshot({ routes, steps, memoryEvents, participan
       completionRatio: Number(stepCompletion.toFixed(3))
     },
     sla: {
+      thresholdHours: slaThresholdHours,
       overdueCount: overdueSteps.length,
       averageAgeHours: Number(averageAgeHours.toFixed(1)),
       overdueSteps

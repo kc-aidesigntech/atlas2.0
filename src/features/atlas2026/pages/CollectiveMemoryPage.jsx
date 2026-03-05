@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { canRolePerform } from '@/core/atlas2026/policy'
+import { downloadCsv } from '@/services/atlas2026/export-service'
 
 function formatFirestoreTimestamp(value) {
   if (!value) return 'No timestamp'
@@ -74,6 +75,30 @@ export default function CollectiveMemoryPage({
           <small className="block text-slate-400">
             Event types: {Object.entries(selectedMemoryView.byType).map(([key, count]) => `${key}:${count}`).join(' | ') || 'none'}
           </small>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => downloadCsv(selectedMemoryView.events, 'atlas-memory-events.csv')}>
+              Export Memory Events CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadCsv(
+                  [
+                    {
+                      verified: selectedMemoryView.totals.verified,
+                      unverified: selectedMemoryView.totals.unverified,
+                      recentWindowCount: selectedMemoryView.recentWindowCount,
+                      byScope: JSON.stringify(selectedMemoryView.totals.byScope),
+                      byType: JSON.stringify(selectedMemoryView.byType)
+                    }
+                  ],
+                  'atlas-memory-rollup.csv'
+                )
+              }
+            >
+              Export Memory Rollup CSV
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

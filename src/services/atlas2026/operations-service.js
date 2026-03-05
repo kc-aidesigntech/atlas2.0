@@ -9,7 +9,7 @@ function countBy(items, keySelector) {
   }, {})
 }
 
-export function buildOperationsSnapshot({ participants, routes, steps, memoryEvents }) {
+export function buildOperationsSnapshot({ participants, routes, steps, memoryEvents, slaThresholdHours = 48 }) {
   const participantByPhase = countBy(participants, (item) => item.currentPhase || 'Unknown')
   const routesByStatus = countBy(routes, (item) => item.status || ROUTE_LIFECYCLE.pending)
   const stepsByStatus = countBy(steps, (item) => item.status || STEP_STATUS.pending)
@@ -37,7 +37,9 @@ export function buildOperationsSnapshot({ participants, routes, steps, memoryEve
     return { ...step, ageHours }
   })
   const overdueSteps = stepAges.filter(
-    (step) => [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) && step.ageHours >= 48
+    (step) =>
+      [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) &&
+      step.ageHours >= slaThresholdHours
   )
   const avgStepAgeHours = stepAges.length ? stepAges.reduce((sum, step) => sum + step.ageHours, 0) / stepAges.length : 0
 
@@ -61,13 +63,14 @@ export function buildOperationsSnapshot({ participants, routes, steps, memoryEve
       averageReadiness: Number(readinessAvg.toFixed(3))
     },
     sla: {
+      thresholdHours: slaThresholdHours,
       overdueSteps: overdueSteps.length,
       averageStepAgeHours: Number(avgStepAgeHours.toFixed(1))
     }
   }
 }
 
-export function buildCountyComparisonSnapshot({ participants, routes, steps, memoryEvents }) {
+export function buildCountyComparisonSnapshot({ participants, routes, steps, memoryEvents, slaThresholdHours = 48 }) {
   const counties = [...new Set(participants.map((participant) => participant.countyId).filter(Boolean))]
 
   return counties.map((countyId) => {
@@ -86,7 +89,10 @@ export function buildCountyComparisonSnapshot({ participants, routes, steps, mem
           ? step.updatedAt.toMillis()
           : (step?.updatedAt?.seconds || step?.createdAt?.seconds || 0) * 1000
       const ageHours = millis ? (Date.now() - millis) / (1000 * 60 * 60) : 0
-      return [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) && ageHours >= 48
+      return (
+        [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) &&
+        ageHours >= slaThresholdHours
+      )
     }).length
 
     const readinessAvg = scopedParticipants.length

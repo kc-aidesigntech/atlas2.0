@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
 import { STEP_STATUS } from '@/services/atlas2026/step-graph'
+import { downloadCsv } from '@/services/atlas2026/export-service'
 import { getInterferenceMitigations } from '@/services/atlas2026/route-engine'
 import { canRolePerform } from '@/core/atlas2026/policy'
 
@@ -65,6 +66,36 @@ export default function PrecisionNavigationPage({
             )}
             {actionError && <small className="mt-2 block text-amber-300">{actionError}</small>}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Precision Exports</CardTitle>
+          <CardDescription>Download route scoring and interference diagnostics.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => downloadCsv(routePlan.routes, 'atlas-route-plan.csv')}>
+            Export Route Plan CSV
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              downloadCsv(
+                routePlan.routes.map((route) => ({
+                  routeId: route.routeId,
+                  partnerId: route.partnerId,
+                  interferenceRisk: route.diagnostics.interference.risk,
+                  interferenceReason: route.diagnostics.interference.reason,
+                  blockReasons: route.blockReasons.join(' | '),
+                  mitigations: getInterferenceMitigations(route).join(' | ')
+                })),
+                'atlas-interference-diagnostics.csv'
+              )
+            }
+          >
+            Export Diagnostics CSV
+          </Button>
         </CardContent>
       </Card>
 

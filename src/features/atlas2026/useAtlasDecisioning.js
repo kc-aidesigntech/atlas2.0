@@ -80,7 +80,8 @@ export function useAtlasDecisioning() {
     specializationWeight: 0.2,
     reversibilityWeight: 0.15,
     transferCostPenalty: 0.1,
-    interferencePenalty: 0.05
+    interferencePenalty: 0.05,
+    slaThresholdHours: 48
   })
   const [selectedParticipantId, setSelectedParticipantId] = useState(DEMO_PARTICIPANTS[0].participantId)
   const [selectedCountyId, setSelectedCountyId] = useState('all')
@@ -417,9 +418,10 @@ export function useAtlasDecisioning() {
         participants: filteredParticipants,
         routes: routeRecords.filter((route) => scopedParticipantIds.has(route.participantId)),
         steps: routeSteps.filter((step) => scopedParticipantIds.has(step.participantId)),
-        memoryEvents: memoryEvents.filter((event) => scopedParticipantIds.has(event.participantId))
+        memoryEvents: memoryEvents.filter((event) => scopedParticipantIds.has(event.participantId)),
+        slaThresholdHours: ontologyWeights.slaThresholdHours ?? 48
       }),
-    [filteredParticipants, routeRecords, routeSteps, memoryEvents, scopedParticipantIds]
+    [filteredParticipants, routeRecords, routeSteps, memoryEvents, scopedParticipantIds, ontologyWeights.slaThresholdHours]
   )
 
   const countyComparisons = useMemo(
@@ -428,9 +430,10 @@ export function useAtlasDecisioning() {
         participants,
         routes: routeRecords,
         steps: routeSteps,
-        memoryEvents
+        memoryEvents,
+        slaThresholdHours: ontologyWeights.slaThresholdHours ?? 48
       }),
-    [participants, routeRecords, routeSteps, memoryEvents]
+    [participants, routeRecords, routeSteps, memoryEvents, ontologyWeights.slaThresholdHours]
   )
 
   const executionSnapshot = useMemo(
@@ -439,9 +442,10 @@ export function useAtlasDecisioning() {
         routes: routeRecords,
         steps: routeSteps,
         memoryEvents,
-        participantId: selectedParticipant?.participantId
+        participantId: selectedParticipant?.participantId,
+        slaThresholdHours: ontologyWeights.slaThresholdHours ?? 48
       }),
-    [routeRecords, routeSteps, memoryEvents, selectedParticipant]
+    [routeRecords, routeSteps, memoryEvents, selectedParticipant, ontologyWeights.slaThresholdHours]
   )
 
   async function activateRecommendedRoute() {

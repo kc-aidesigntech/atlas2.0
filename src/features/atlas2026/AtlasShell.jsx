@@ -217,7 +217,12 @@ export default function AtlasShell() {
           />
         )}
         {surface === WORKSPACES.executionTimeline && (
-          <ExecutionTimelinePage executionSnapshot={executionSnapshot} selectedRouteSteps={selectedRouteSteps} />
+          <ExecutionTimelinePage
+            executionSnapshot={executionSnapshot}
+            selectedRouteSteps={selectedRouteSteps}
+            transitionRouteStepStatus={transitionRouteStepStatus}
+            updatingStep={updatingStep}
+          />
         )}
         {surface === WORKSPACES.operations && (
           <OperationsPage
