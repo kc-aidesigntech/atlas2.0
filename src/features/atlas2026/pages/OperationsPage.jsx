@@ -23,6 +23,40 @@ function renderKeyValueRows(data = {}) {
 
 export default function OperationsPage({ operationsSnapshot, countyComparisons, selectedCountyId }) {
   const { totals, participantByPhase, routesByStatus, stepsByStatus, risk, activity, sla } = operationsSnapshot
+  const buildWeeklyReportRows = () => [
+    {
+      rowType: 'summary',
+      scope: selectedCountyId,
+      participants: totals.participants,
+      routes: totals.routes,
+      steps: totals.steps,
+      memoryEvents: totals.memoryEvents,
+      blockedRoutes: risk.blockedRoutes,
+      blockedRate: risk.blockedRate,
+      completedRoutes: risk.completedRoutes,
+      weeklyEvents: activity.weeklyEvents,
+      averageReadiness: activity.averageReadiness,
+      overdueSteps: sla.overdueSteps,
+      averageStepAgeHours: sla.averageStepAgeHours,
+      slaThresholdHours: sla.thresholdHours
+    },
+    ...countyComparisons.map((county) => ({
+      rowType: 'county',
+      scope: county.countyId,
+      participants: county.participants,
+      routes: county.routes,
+      steps: county.steps,
+      memoryEvents: county.memoryEvents,
+      blockedRoutes: county.blockedRoutes,
+      blockedRate: county.routes ? Number((county.blockedRoutes / county.routes).toFixed(3)) : 0,
+      completedRoutes: county.completedRoutes,
+      weeklyEvents: '',
+      averageReadiness: county.averageReadiness,
+      overdueSteps: county.overdueSteps,
+      averageStepAgeHours: '',
+      slaThresholdHours: sla.thresholdHours
+    }))
+  ]
 
   return (
     <div className="space-y-4">
@@ -72,6 +106,9 @@ export default function OperationsPage({ operationsSnapshot, countyComparisons, 
           </Button>
           <Button variant="outline" onClick={() => downloadCsv(countyComparisons, 'atlas-county-comparisons.csv')}>
             Export County Comparisons CSV
+          </Button>
+          <Button variant="outline" onClick={() => downloadCsv(buildWeeklyReportRows(), 'atlas-weekly-ops-report.csv')}>
+            Export Weekly Ops Report
           </Button>
         </CardContent>
       </Card>

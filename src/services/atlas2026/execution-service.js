@@ -20,7 +20,11 @@ export function buildExecutionSnapshot({ routes, steps, memoryEvents, participan
       label: step.label,
       routeId: step.routeId,
       dependencies: step.dependencies || [],
-      ageHours: Number((((now - toMillis(step.updatedAt || step.createdAt)) || 0) / (1000 * 60 * 60)).toFixed(1))
+      ageHours: Number((((now - toMillis(step.updatedAt || step.createdAt)) || 0) / (1000 * 60 * 60)).toFixed(1)),
+      recommendedAction:
+        (step.dependencies || []).length > 0
+          ? 'Complete prerequisite steps, then move this step to pending.'
+          : 'Move to pending and assign immediate operator checkpoint.'
     }))
 
   const timeline = [

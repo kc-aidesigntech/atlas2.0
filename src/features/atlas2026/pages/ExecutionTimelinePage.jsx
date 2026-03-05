@@ -201,6 +201,7 @@ export default function ExecutionTimelinePage({
                 <small className="block text-slate-400">
                   Dependencies: {blocker.dependencies.length > 0 ? blocker.dependencies.join(', ') : 'None'}
                 </small>
+                <small className="block text-slate-300">Recommended action: {blocker.recommendedAction}</small>
                 {typeof blocker.ageHours === 'number' && (
                   <small className="block text-slate-400">Age: {blocker.ageHours.toFixed(1)} hours</small>
                 )}
