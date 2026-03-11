@@ -10,7 +10,8 @@ const WEIGHT_FIELDS = [
   'specializationWeight',
   'reversibilityWeight',
   'transferCostPenalty',
-  'interferencePenalty'
+  'interferencePenalty',
+  'civicDiplomacyBoost'
 ]
 
 function formatFirestoreTimestamp(value) {
@@ -30,6 +31,10 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
   const [phaseReadinessAlertThreshold, setPhaseReadinessAlertThreshold] = useState(
     ontologyWeights.phaseReadinessAlertThreshold ?? 0.45
   )
+  const [pcfRefinementWeight, setPcfRefinementWeight] = useState(ontologyWeights.pcfRefinementWeight ?? 0.6)
+  const [reciprocityActivationThreshold, setReciprocityActivationThreshold] = useState(
+    ontologyWeights.reciprocityActivationThreshold ?? 0.6
+  )
   const canManage = canRolePerform(selectedRole, 'manageOntology')
 
   useEffect(() => {
@@ -38,6 +43,8 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
     setInterferenceMediumThreshold(ontologyWeights.interferenceMediumThreshold ?? 0.35)
     setInterferenceHighThreshold(ontologyWeights.interferenceHighThreshold ?? 0.6)
     setPhaseReadinessAlertThreshold(ontologyWeights.phaseReadinessAlertThreshold ?? 0.45)
+    setPcfRefinementWeight(ontologyWeights.pcfRefinementWeight ?? 0.6)
+    setReciprocityActivationThreshold(ontologyWeights.reciprocityActivationThreshold ?? 0.6)
   }, [ontologyWeights])
 
   const onFieldChange = (field, value) => {
@@ -51,8 +58,24 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Governance and Ontology Controls</CardTitle>
-          <CardDescription>SRIG-aligned controls for routing weight calibration and policy boundaries.</CardDescription>
+          <CardTitle>Context</CardTitle>
+          <CardDescription>Current governance posture and who can act.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <small className="block text-slate-400">Role: {selectedRole}</small>
+          <small className="block text-slate-400">
+            Governance rights: {canManage ? 'can modify ontology settings' : 'read-only governance access'}
+          </small>
+          <small className="block text-slate-400">
+            Focus: maintain safe transitions, interference controls, and reciprocity-aligned activation thresholds.
+          </small>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Required Input</CardTitle>
+          <CardDescription>Adjust weights or thresholds only when field evidence indicates routing drift.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {WEIGHT_FIELDS.map((field) => (
@@ -116,6 +139,30 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
               onChange={(event) => setPhaseReadinessAlertThreshold(Number(event.target.value))}
             />
           </div>
+          <div className="grid gap-1">
+            <small className="uppercase tracking-[0.12em] text-slate-400">pcfRefinementWeight</small>
+            <Input
+              type="number"
+              value={pcfRefinementWeight}
+              step="0.01"
+              min="0"
+              max="1"
+              disabled={!canManage}
+              onChange={(event) => setPcfRefinementWeight(Number(event.target.value))}
+            />
+          </div>
+          <div className="grid gap-1">
+            <small className="uppercase tracking-[0.12em] text-slate-400">reciprocityActivationThreshold</small>
+            <Input
+              type="number"
+              value={reciprocityActivationThreshold}
+              step="0.01"
+              min="0"
+              max="1"
+              disabled={!canManage}
+              onChange={(event) => setReciprocityActivationThreshold(Number(event.target.value))}
+            />
+          </div>
           {canManage ? (
             <Button
               onClick={() =>
@@ -124,7 +171,9 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
                   slaThresholdHours,
                   interferenceMediumThreshold,
                   interferenceHighThreshold: Math.max(interferenceHighThreshold, interferenceMediumThreshold),
-                  phaseReadinessAlertThreshold
+                  phaseReadinessAlertThreshold,
+                  pcfRefinementWeight,
+                  reciprocityActivationThreshold
                 })
               }
             >
@@ -139,23 +188,31 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
 
       <Card>
         <CardHeader>
-          <CardTitle>Governance Audit Trail</CardTitle>
-          <CardDescription>Recent ontology changes with actor attribution.</CardDescription>
+          <CardTitle>Primary Decision Outcome</CardTitle>
+          <CardDescription>What atlas gives after governance changes are applied.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {ontologyAudit.length === 0 ? (
-            <small>No governance updates recorded yet.</small>
-          ) : (
-            ontologyAudit.slice(0, 10).map((entry) => (
-              <div key={entry.id} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-                <small className="block">Kind: {entry.kind || 'unknown'}</small>
-                <small className="block text-slate-400">
-                  Actor: {entry.updatedByRole || 'unknown'} / {entry.updatedByUserId || 'unknown'}
-                </small>
-                <small className="block text-slate-400">When: {formatFirestoreTimestamp(entry.updatedAt)}</small>
-              </div>
-            ))
-          )}
+          <small className="block text-slate-400">
+            Changes are applied globally and captured in immutable audit entries for accountability.
+          </small>
+          <details className="rounded-xl border border-slate-800 bg-slate-950 p-3">
+            <summary className="cursor-pointer text-slate-300">Show governance audit trail</summary>
+            <div className="mt-3 space-y-2">
+              {ontologyAudit.length === 0 ? (
+                <small>No governance updates recorded yet.</small>
+              ) : (
+                ontologyAudit.slice(0, 10).map((entry) => (
+                  <div key={entry.id} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                    <small className="block">Kind: {entry.kind || 'unknown'}</small>
+                    <small className="block text-slate-400">
+                      Actor: {entry.updatedByRole || 'unknown'} / {entry.updatedByUserId || 'unknown'}
+                    </small>
+                    <small className="block text-slate-400">When: {formatFirestoreTimestamp(entry.updatedAt)}</small>
+                  </div>
+                ))
+              )}
+            </div>
+          </details>
         </CardContent>
       </Card>
     </div>

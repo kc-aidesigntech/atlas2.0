@@ -36,6 +36,7 @@ export const DEMO_CAPACITY_TOPOLOGY = [
   {
     partnerId: 'station-housing-01',
     label: 'Housing Stabilization Station',
+    routeClass: 'stabilization',
     coverageScore: 0.84,
     phaseAlignment: 0.89,
     specializationScore: 0.82,
@@ -47,6 +48,7 @@ export const DEMO_CAPACITY_TOPOLOGY = [
   {
     partnerId: 'station-work-03',
     label: 'Work Restoration Station',
+    routeClass: 'readiness',
     coverageScore: 0.74,
     phaseAlignment: 0.75,
     specializationScore: 0.86,
@@ -58,13 +60,14 @@ export const DEMO_CAPACITY_TOPOLOGY = [
   {
     partnerId: 'station-network-02',
     label: 'Social Network Repair Station',
+    routeClass: 'civicDiplomacy',
     coverageScore: 0.78,
     phaseAlignment: 0.8,
     specializationScore: 0.72,
     reversibilitySupport: 0.66,
     transferCost: 0.31,
     interferenceRisk: 0.27,
-    phaseIndex: 1
+    phaseIndex: 2
   }
 ]
 

@@ -80,6 +80,12 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /artifacts/{appId}/atlas2026/renewalRoles/{participantId} {
+      allow read: if hasAnyRole();
+      allow create, update: if canWriteOperationalData() || isGovernanceAdmin();
+      allow delete: if isGovernanceAdmin();
+    }
+
     /**
      * Legacy collections are no longer writable in the 2026 clean-break posture.
      * Reads are kept temporarily for audit and migration validation only.

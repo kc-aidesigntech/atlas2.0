@@ -139,6 +139,19 @@
 }
 
 @layer utilities {
+  @keyframes atlasTickerMarquee {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .atlas-ticker {
+    animation: atlasTickerMarquee 45s linear infinite;
+  }
+
   .text-slate-900 {
     color: rgba(248, 250, 252, 0.98) !important;
   }

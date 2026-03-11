@@ -1,6 +1,6 @@
 import { ROUTE_SCORING_FACTORS, STABILIZATION_PHASES } from '@/core/atlas2026/canonical-spec'
 
-function scoreRoute(route, participantPhaseIndex) {
+function scoreRoute(route, participantPhaseIndex, civicDiplomacyBoost = 0.08) {
   const phaseDelta = Math.abs((route.phaseIndex ?? 0) - participantPhaseIndex)
   const phaseAlignment = Math.max(0, 1 - phaseDelta * 0.5)
   const coverage = route.coverageScore ?? 0.6
@@ -8,6 +8,7 @@ function scoreRoute(route, participantPhaseIndex) {
   const reversibility = route.reversibilitySupport ?? 0.6
   const transferCost = route.transferCost ?? 0.25
   const interference = route.interferenceRisk ?? 0.2
+  const diplomacyBonus = route.routeClass === 'civicDiplomacy' ? civicDiplomacyBoost : 0
 
   const composite =
     coverage * ROUTE_SCORING_FACTORS.coverageWeight +
@@ -15,7 +16,8 @@ function scoreRoute(route, participantPhaseIndex) {
     specialization * ROUTE_SCORING_FACTORS.specializationWeight +
     reversibility * ROUTE_SCORING_FACTORS.reversibilityWeight -
     transferCost * ROUTE_SCORING_FACTORS.transferCostPenalty -
-    interference * ROUTE_SCORING_FACTORS.interferencePenalty
+    interference * ROUTE_SCORING_FACTORS.interferencePenalty +
+    diplomacyBonus
 
   return {
     score: Number(composite.toFixed(3)),
@@ -70,22 +72,31 @@ export function diagnoseInterference(route, activeRoutes = [], thresholds = {}) 
   return { risk: 'low', reason: 'No meaningful interference detected.', conflicts: [] }
 }
 
-export function generateRoutePlan({ participant, capacityTopology, activeRoutes = [], completedStepIds = [], interferenceThresholds }) {
+export function generateRoutePlan({
+  participant,
+  capacityTopology,
+  activeRoutes = [],
+  completedStepIds = [],
+  interferenceThresholds,
+  civicDiplomacyBoost = 0.08
+}) {
   const participantPhaseIndex = STABILIZATION_PHASES.indexOf(participant.currentPhase)
 
   const enriched = capacityTopology.map((candidate, index) => {
+    const candidatePhaseIndex = candidate.phaseIndex ?? participantPhaseIndex
     const route = {
       routeId: candidate.routeId ?? `route-plan-${index + 1}`,
       partnerId: candidate.partnerId,
-      phaseIndex: candidate.phaseIndex ?? participantPhaseIndex,
+      phaseIndex: candidatePhaseIndex,
       dependencies: candidate.dependencies ?? [],
+      routeClass: candidate.routeClass ?? (candidatePhaseIndex >= 2 ? 'civicDiplomacy' : 'stabilization'),
       ...candidate
     }
 
     const phaseGate = validatePhaseGate(participant, route)
     const dependencyGate = validateDependencies(route, completedStepIds)
     const interference = diagnoseInterference(route, activeRoutes, interferenceThresholds)
-    const { score, phaseAlignment } = scoreRoute(route, participantPhaseIndex)
+    const { score, phaseAlignment } = scoreRoute(route, participantPhaseIndex, civicDiplomacyBoost)
 
     const blocked = !phaseGate.pass || !dependencyGate.pass || interference.risk === 'high'
 

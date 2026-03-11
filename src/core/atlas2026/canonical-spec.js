@@ -1,4 +1,5 @@
 export const STABILIZATION_PHASES = ['Regulation', 'Readiness', 'Renewal']
+export const RECIPROCITY_ETHOS = 'This community takes care of me - and I take care of it.'
 
 export const ATLAS_2026_PRINCIPLES = [
   'Navigation under pressure over exploratory analytics.',
@@ -65,5 +66,30 @@ export const MEMORY_EVIDENCE_RULES = [
   'Phase transitions require completion evidence for gate criteria.',
   'Unverified events remain hidden from shared collective memory.',
   'Events are immutable after verification; corrections append as new events.'
+]
+
+export const ENGINE_OF_ASCENT_OUTPUTS = [
+  'moralClarity',
+  'principledAction',
+  'stewardship',
+  'institutionalCoherence',
+  'communityRegeneration'
+]
+
+export const SRIG_COORDINATION_AREAS = [
+  'policyGovernance',
+  'institutionalMaturation',
+  'stabilizationPathways',
+  'civicDiplomacy',
+  'earlyInterventionRouting',
+  'renewalStandards'
+]
+
+export const INSTITUTIONAL_ECOSYSTEM = [
+  { id: 'lucidLiving', label: 'Lucid Living', function: 'field operations, direct service, contracts' },
+  { id: 'srigInstitute', label: 'SRIG Institute', function: 'methodology, evaluation, governance standards, r&d' },
+  { id: 'schoolOfSocialAid', label: 'School of Social Aid', function: 'training, credentialing, human infrastructure' },
+  { id: 'atlas', label: 'ATLAS', function: 'computational cortex: risk intelligence, routing, dashboards' },
+  { id: 'civicIconography', label: 'Civic Iconography', function: 'public art as psychosocial vessels' }
 ]
 

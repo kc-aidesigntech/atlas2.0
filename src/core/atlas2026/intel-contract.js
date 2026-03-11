@@ -72,6 +72,8 @@ export function evaluateParticipantForRoutes({ participantState, capacityTopolog
     recommendedRouteId: recommended?.routeId ?? null,
     explainability: {
       model: 'deterministic-weighted-routing',
+      meaningCore: 'atlas-intel',
+      movementDesign: 'make-the-next-safe-move-obvious',
       currentPhase: participantState.currentPhase,
       averageDomainPressure: Number(pressure.averageSeverity.toFixed(3)),
       highPressureDomains: pressure.highPressureDomains,

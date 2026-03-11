@@ -54,3 +54,15 @@ export async function createOntologyAuditRecord({ db, appId, payload }) {
   })
 }
 
+export async function saveRenewalRoleRecord({ db, appId, participantId, payload }) {
+  return setDoc(
+    doc(db, `artifacts/${appId}/atlas2026/renewalRoles/${participantId}`),
+    {
+      participantId,
+      ...payload,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  )
+}
+

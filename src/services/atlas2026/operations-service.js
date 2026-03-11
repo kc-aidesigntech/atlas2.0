@@ -15,7 +15,8 @@ export function buildOperationsSnapshot({
   steps,
   memoryEvents,
   slaThresholdHours = 48,
-  phaseReadinessAlertThreshold = 0.45
+  phaseReadinessAlertThreshold = 0.45,
+  reciprocityActivationThreshold = 0.6
 }) {
   const participantByPhase = countBy(participants, (item) => item.currentPhase || 'Unknown')
   const routesByStatus = countBy(routes, (item) => item.status || ROUTE_LIFECYCLE.pending)
@@ -75,6 +76,14 @@ export function buildOperationsSnapshot({
       currentPhase: participant.currentPhase,
       phaseReadiness: Number((participant.phaseReadiness ?? 0).toFixed(3))
     }))
+  const contributionEvents = memoryEvents.filter((event) =>
+    /(mentor|community|policy|steward|volunteer|restorative|civic|contribute|care plan|impact)/i.test(
+      `${event.label || ''} ${event.eventType || ''}`
+    )
+  ).length
+  const routeCompletionRatio = routes.length ? completedRoutes / routes.length : 0
+  const contributionRatio = memoryEvents.length ? contributionEvents / memoryEvents.length : 0
+  const reciprocityIndex = Number((readinessAvg * 0.45 + routeCompletionRatio * 0.35 + contributionRatio * 0.2).toFixed(3))
 
   return {
     totals: {
@@ -99,6 +108,11 @@ export function buildOperationsSnapshot({
       thresholdHours: slaThresholdHours,
       overdueSteps: overdueSteps.length,
       averageStepAgeHours: Number(avgStepAgeHours.toFixed(1))
+    },
+    reciprocity: {
+      reciprocityIndex,
+      threshold: reciprocityActivationThreshold,
+      active: reciprocityIndex >= reciprocityActivationThreshold
     },
     blockerQueue,
     readinessAlerts

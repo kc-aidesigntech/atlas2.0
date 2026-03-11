@@ -12,11 +12,17 @@ import { buildSituationalOverlay } from '@/services/atlas2026/situational-servic
 import { buildCountyComparisonSnapshot, buildOperationsSnapshot } from '@/services/atlas2026/operations-service'
 import { buildExecutionSnapshot } from '@/services/atlas2026/execution-service'
 import {
+  buildAscentEngineSnapshot,
+  buildInstitutionalEcosystemSnapshot,
+  buildRenewalSnapshot
+} from '@/services/atlas2026/civic-bioengineering-service'
+import {
   createMemoryEvent,
   createOntologyAuditRecord,
   createRouteRecord,
   createRouteStepRecord,
   saveOntologyWeightsRecord,
+  saveRenewalRoleRecord,
   updateRouteStepRecord,
   updateRouteRecord
 } from '@/services/atlas2026/contract-gateway'
@@ -30,16 +36,18 @@ function normalizeParticipant(docId, raw) {
 }
 
 function normalizeCapacityNode(docId, raw) {
+  const phaseIndex = raw?.phaseIndex ?? 0
   return {
     partnerId: raw?.partnerId ?? docId,
     label: raw?.label ?? raw?.partnerId ?? docId,
+    routeClass: raw?.routeClass ?? (phaseIndex >= 2 ? 'civicDiplomacy' : phaseIndex >= 1 ? 'readiness' : 'stabilization'),
     coverageScore: raw?.coverageScore ?? 0.65,
     phaseAlignment: raw?.phaseAlignment ?? 0.7,
     specializationScore: raw?.specializationScore ?? 0.7,
     reversibilitySupport: raw?.reversibilitySupport ?? 0.65,
     transferCost: raw?.transferCost ?? 0.25,
     interferenceRisk: raw?.interferenceRisk ?? 0.2,
-    phaseIndex: raw?.phaseIndex ?? 0,
+    phaseIndex,
     blockers: Array.isArray(raw?.blockers) ? raw.blockers : []
   }
 }
@@ -74,6 +82,7 @@ export function useAtlasDecisioning() {
   const [routeSteps, setRouteSteps] = useState([])
   const [memoryEvents, setMemoryEvents] = useState([])
   const [ontologyAudit, setOntologyAudit] = useState([])
+  const [renewalRoles, setRenewalRoles] = useState([])
   const [ontologyWeights, setOntologyWeights] = useState({
     coverageWeight: 0.3,
     phaseAlignmentWeight: 0.2,
@@ -81,10 +90,13 @@ export function useAtlasDecisioning() {
     reversibilityWeight: 0.15,
     transferCostPenalty: 0.1,
     interferencePenalty: 0.05,
+    civicDiplomacyBoost: 0.08,
     slaThresholdHours: 48,
     interferenceMediumThreshold: 0.35,
     interferenceHighThreshold: 0.6,
-    phaseReadinessAlertThreshold: 0.45
+    phaseReadinessAlertThreshold: 0.45,
+    pcfRefinementWeight: 0.6,
+    reciprocityActivationThreshold: 0.6
   })
   const [selectedParticipantId, setSelectedParticipantId] = useState(DEMO_PARTICIPANTS[0].participantId)
   const [selectedCountyId, setSelectedCountyId] = useState('all')
@@ -97,6 +109,7 @@ export function useAtlasDecisioning() {
   const [updatingRoute, setUpdatingRoute] = useState(false)
   const [updatingStep, setUpdatingStep] = useState(false)
   const [savingMemoryEvent, setSavingMemoryEvent] = useState(false)
+  const [assigningRenewalRole, setAssigningRenewalRole] = useState(false)
   const [dbContext, setDbContext] = useState(null)
 
   useEffect(() => {
@@ -126,6 +139,7 @@ export function useAtlasDecisioning() {
     let unsubscribeMemoryEvents = null
     let unsubscribeOntology = null
     let unsubscribeOntologyAudit = null
+    let unsubscribeRenewalRoles = null
 
     const cleanupSnapshots = () => {
       if (unsubscribeParticipants) unsubscribeParticipants()
@@ -135,6 +149,7 @@ export function useAtlasDecisioning() {
       if (unsubscribeMemoryEvents) unsubscribeMemoryEvents()
       if (unsubscribeOntology) unsubscribeOntology()
       if (unsubscribeOntologyAudit) unsubscribeOntologyAudit()
+      if (unsubscribeRenewalRoles) unsubscribeRenewalRoles()
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -163,6 +178,7 @@ export function useAtlasDecisioning() {
       const memoryEventsPath = collection(db, `artifacts/${appId}/atlas2026/memoryEvents`)
       const ontologyPath = collection(db, `artifacts/${appId}/atlas2026/ontology`)
       const ontologyAuditPath = collection(db, `artifacts/${appId}/atlas2026/ontologyAudit`)
+      const renewalRolesPath = collection(db, `artifacts/${appId}/atlas2026/renewalRoles`)
       let participantsReady = false
       let capacityReady = false
       let routesReady = false
@@ -170,6 +186,7 @@ export function useAtlasDecisioning() {
       let memoryReady = false
       let ontologyReady = false
       let ontologyAuditReady = false
+      let renewalRolesReady = false
       setDbContext({ db, appId, userId: user.uid })
 
       unsubscribeParticipants = onSnapshot(
@@ -183,8 +200,17 @@ export function useAtlasDecisioning() {
             )
           }
           participantsReady = true
-          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
-            setIsLiveData(snapshot.size > 0)
+          if (
+            participantsReady &&
+            capacityReady &&
+            routesReady &&
+            routeStepsReady &&
+            memoryReady &&
+            ontologyReady &&
+            ontologyAuditReady &&
+            renewalRolesReady
+          ) {
+            setIsLiveData((current) => current || snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
           }
@@ -204,7 +230,16 @@ export function useAtlasDecisioning() {
             setCapacityTopology(nextCapacity)
           }
           capacityReady = true
-          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (
+            participantsReady &&
+            capacityReady &&
+            routesReady &&
+            routeStepsReady &&
+            memoryReady &&
+            ontologyReady &&
+            ontologyAuditReady &&
+            renewalRolesReady
+          ) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -227,7 +262,16 @@ export function useAtlasDecisioning() {
             }))
           )
           routesReady = true
-          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (
+            participantsReady &&
+            capacityReady &&
+            routesReady &&
+            routeStepsReady &&
+            memoryReady &&
+            ontologyReady &&
+            ontologyAuditReady &&
+            renewalRolesReady
+          ) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -250,7 +294,16 @@ export function useAtlasDecisioning() {
             }))
           )
           routeStepsReady = true
-          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (
+            participantsReady &&
+            capacityReady &&
+            routesReady &&
+            routeStepsReady &&
+            memoryReady &&
+            ontologyReady &&
+            ontologyAuditReady &&
+            renewalRolesReady
+          ) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -273,7 +326,16 @@ export function useAtlasDecisioning() {
             }))
           )
           memoryReady = true
-          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (
+            participantsReady &&
+            capacityReady &&
+            routesReady &&
+            routeStepsReady &&
+            memoryReady &&
+            ontologyReady &&
+            ontologyAuditReady &&
+            renewalRolesReady
+          ) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -297,7 +359,16 @@ export function useAtlasDecisioning() {
             }))
           }
           ontologyReady = true
-          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (
+            participantsReady &&
+            capacityReady &&
+            routesReady &&
+            routeStepsReady &&
+            memoryReady &&
+            ontologyReady &&
+            ontologyAuditReady &&
+            renewalRolesReady
+          ) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -319,7 +390,16 @@ export function useAtlasDecisioning() {
               .sort((a, b) => (b?.updatedAt?.seconds ?? 0) - (a?.updatedAt?.seconds ?? 0))
           )
           ontologyAuditReady = true
-          if (participantsReady && capacityReady && routesReady && routeStepsReady && memoryReady && ontologyReady && ontologyAuditReady) {
+          if (
+            participantsReady &&
+            capacityReady &&
+            routesReady &&
+            routeStepsReady &&
+            memoryReady &&
+            ontologyReady &&
+            ontologyAuditReady &&
+            renewalRolesReady
+          ) {
             setIsLiveData(snapshot.size > 0)
             setLoadError(null)
             setLoadingLiveData(false)
@@ -327,6 +407,33 @@ export function useAtlasDecisioning() {
         },
         (error) => {
           setLoadError(`Ontology audit subscription failed: ${error.message}`)
+          setIsLiveData(false)
+          setLoadingLiveData(false)
+        }
+      )
+
+      unsubscribeRenewalRoles = onSnapshot(
+        renewalRolesPath,
+        (snapshot) => {
+          setRenewalRoles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
+          renewalRolesReady = true
+          if (
+            participantsReady &&
+            capacityReady &&
+            routesReady &&
+            routeStepsReady &&
+            memoryReady &&
+            ontologyReady &&
+            ontologyAuditReady &&
+            renewalRolesReady
+          ) {
+            setIsLiveData(snapshot.size > 0)
+            setLoadError(null)
+            setLoadingLiveData(false)
+          }
+        },
+        (error) => {
+          setLoadError(`Renewal roles subscription failed: ${error.message}`)
           setIsLiveData(false)
           setLoadingLiveData(false)
         }
@@ -392,6 +499,41 @@ export function useAtlasDecisioning() {
     [memoryEvents, selectedParticipant, selectedRole]
   )
 
+  const selectedRenewalRoleRecord = useMemo(
+    () => renewalRoles.find((item) => item.participantId === selectedParticipant?.participantId) || null,
+    [renewalRoles, selectedParticipant]
+  )
+
+  const civicBioSnapshot = useMemo(() => {
+    const scopedRoutes = routeRecords.filter((route) => route.participantId === selectedParticipant?.participantId)
+    const scopedSteps = routeSteps.filter((step) => step.participantId === selectedParticipant?.participantId)
+    const scopedMemoryEvents = memoryEvents.filter((event) => event.participantId === selectedParticipant?.participantId)
+    return {
+      ascentEngine: buildAscentEngineSnapshot({
+        participant: selectedParticipant,
+        routes: scopedRoutes,
+        steps: scopedSteps,
+        pcfRefinementWeight: ontologyWeights.pcfRefinementWeight ?? 0.6
+      }),
+      renewal: buildRenewalSnapshot({
+        participant: selectedParticipant,
+        routes: scopedRoutes,
+        steps: scopedSteps,
+        memoryEvents: scopedMemoryEvents,
+        reciprocityActivationThreshold: ontologyWeights.reciprocityActivationThreshold ?? 0.6
+      }),
+      ecosystem: buildInstitutionalEcosystemSnapshot({ isLiveData })
+    }
+  }, [
+    routeRecords,
+    routeSteps,
+    memoryEvents,
+    selectedParticipant,
+    ontologyWeights.pcfRefinementWeight,
+    ontologyWeights.reciprocityActivationThreshold,
+    isLiveData
+  ])
+
   const routePlan = useMemo(
     () =>
       generateRoutePlan({
@@ -407,7 +549,8 @@ export function useAtlasDecisioning() {
             ontologyWeights.interferenceHighThreshold ?? 0.6,
             ontologyWeights.interferenceMediumThreshold ?? 0.35
           )
-        }
+        },
+        civicDiplomacyBoost: ontologyWeights.civicDiplomacyBoost ?? 0.08
       }),
     [
       capacityTopology,
@@ -415,7 +558,8 @@ export function useAtlasDecisioning() {
       selectedRoutes,
       selectedRouteSteps,
       ontologyWeights.interferenceMediumThreshold,
-      ontologyWeights.interferenceHighThreshold
+      ontologyWeights.interferenceHighThreshold,
+      ontologyWeights.civicDiplomacyBoost
     ]
   )
 
@@ -442,7 +586,8 @@ export function useAtlasDecisioning() {
         steps: routeSteps.filter((step) => scopedParticipantIds.has(step.participantId)),
         memoryEvents: memoryEvents.filter((event) => scopedParticipantIds.has(event.participantId)),
         slaThresholdHours: ontologyWeights.slaThresholdHours ?? 48,
-        phaseReadinessAlertThreshold: ontologyWeights.phaseReadinessAlertThreshold ?? 0.45
+        phaseReadinessAlertThreshold: ontologyWeights.phaseReadinessAlertThreshold ?? 0.45,
+        reciprocityActivationThreshold: ontologyWeights.reciprocityActivationThreshold ?? 0.6
       }),
     [
       filteredParticipants,
@@ -451,7 +596,8 @@ export function useAtlasDecisioning() {
       memoryEvents,
       scopedParticipantIds,
       ontologyWeights.slaThresholdHours,
-      ontologyWeights.phaseReadinessAlertThreshold
+      ontologyWeights.phaseReadinessAlertThreshold,
+      ontologyWeights.reciprocityActivationThreshold
     ]
   )
 
@@ -518,6 +664,7 @@ export function useAtlasDecisioning() {
         participantId: selectedParticipant.participantId,
         routeId: chosenRoute.routeId,
         partnerId: chosenRoute.partnerId,
+        routeClass: chosenRoute.routeClass || 'stabilization',
         status: ROUTE_LIFECYCLE.active,
         score: chosenRoute.score,
         interferenceRisk: chosenRoute.interferenceRisk,
@@ -549,6 +696,7 @@ export function useAtlasDecisioning() {
           participantId: selectedParticipant.participantId,
           routeId: chosenRoute.routeId,
           partnerId: chosenRoute.partnerId,
+          routeClass: chosenRoute.routeClass || 'stabilization',
           status: ROUTE_LIFECYCLE.active,
           score: chosenRoute.score,
           interferenceRisk: chosenRoute.interferenceRisk,
@@ -808,6 +956,92 @@ export function useAtlasDecisioning() {
     }
   }
 
+  async function assignRenewalRole({ roleName, contributionDomain, notes }) {
+    setActionError(null)
+    if (!selectedParticipant) {
+      setActionError('No participant selected for renewal role assignment.')
+      return false
+    }
+    if (!roleName) {
+      setActionError('Renewal role is required.')
+      return false
+    }
+    if (!canRolePerform(selectedRole, 'assignRenewalRole')) {
+      setActionError(`Role "${selectedRole}" cannot assign renewal roles.`)
+      return false
+    }
+    if (!dbContext?.db || !dbContext?.appId) {
+      setActionError('Live datastore is not connected; renewal role assignment skipped.')
+      return false
+    }
+
+    const reciprocityIndex = civicBioSnapshot.renewal.reciprocityIndex ?? 0
+    const threshold = ontologyWeights.reciprocityActivationThreshold ?? 0.6
+    if (reciprocityIndex < threshold && selectedRole !== 'governanceAdmin') {
+      setActionError('Reciprocity index is below activation threshold; escalate to governance or continue renewal progress.')
+      return false
+    }
+
+    const previousRenewalRoles = renewalRoles
+    const optimisticRecord = {
+      id: selectedParticipant.participantId,
+      participantId: selectedParticipant.participantId,
+      roleName,
+      contributionDomain: contributionDomain || 'community-care',
+      status: reciprocityIndex >= threshold ? 'active' : 'provisional',
+      notes: notes || '',
+      assignedByRole: selectedRole,
+      assignedByUserId: dbContext.userId,
+      updatedAt: { seconds: Math.floor(Date.now() / 1000) },
+      optimistic: true
+    }
+
+    try {
+      setAssigningRenewalRole(true)
+      setRenewalRoles((current) => {
+        const others = current.filter((item) => item.participantId !== selectedParticipant.participantId)
+        return [optimisticRecord, ...others]
+      })
+
+      await saveRenewalRoleRecord({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        participantId: selectedParticipant.participantId,
+        payload: {
+          roleName,
+          contributionDomain: contributionDomain || 'community-care',
+          status: reciprocityIndex >= threshold ? 'active' : 'provisional',
+          notes: notes || '',
+          assignedByRole: selectedRole,
+          assignedByUserId: dbContext.userId,
+          reciprocityIndex,
+          activationThreshold: threshold
+        }
+      })
+
+      await createMemoryEvent({
+        db: dbContext.db,
+        appId: dbContext.appId,
+        payload: {
+          participantId: selectedParticipant.participantId,
+          eventType: MEMORY_EVENT_TYPES.milestoneVerified,
+          phase: 'Renewal',
+          label: `Renewal role assigned: ${roleName} (${contributionDomain || 'community-care'})`,
+          verified: true,
+          createdByRole: selectedRole,
+          createdByUserId: dbContext.userId
+        }
+      })
+      return true
+    } catch (error) {
+      setRenewalRoles(previousRenewalRoles)
+      setActionError(`Renewal role assignment failed: ${error.message}`)
+      return false
+    } finally {
+      setAssigningRenewalRole(false)
+    }
+  }
+
   async function saveOntologyWeights(nextWeights) {
     setActionError(null)
     if (!canRolePerform(selectedRole, 'manageOntology')) {
@@ -860,10 +1094,12 @@ export function useAtlasDecisioning() {
     participants: filteredParticipants,
     capacityTopology,
     decisionPacket,
+    civicBioSnapshot,
     routePlan,
     selectedRoutes,
     selectedRouteSteps,
     selectedMemoryView,
+    selectedRenewalRoleRecord,
     situationalOverlay,
     operationsSnapshot,
     countyComparisons,
@@ -874,12 +1110,14 @@ export function useAtlasDecisioning() {
     transitionRouteStatus,
     transitionRouteStepStatus,
     appendMemoryEvent,
+    assignRenewalRole,
     saveOntologyWeights,
     actionError,
     savingRoute,
     updatingRoute,
     updatingStep,
     savingMemoryEvent,
+    assigningRenewalRole,
     isLiveData,
     loadingLiveData,
     loadError
