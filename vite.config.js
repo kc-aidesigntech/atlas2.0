@@ -3,8 +3,10 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig(({ command }) => ({
-  // Keep local dev at root, build for GitHub Pages repo path.
-  base: command === 'serve' ? '/' : '/atlas2.0/',
+  // Local dev stays at root. Production build path is configurable:
+  // - GitHub Pages: VITE_BASE_PATH=/atlas2.0/
+  // - Heroku/Vercel/root hosting: VITE_BASE_PATH=/
+  base: command === 'serve' ? '/' : process.env.VITE_BASE_PATH || '/',
   plugins: [react()],
   resolve: {
     alias: {
