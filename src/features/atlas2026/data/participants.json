@@ -1,0 +1,17 @@
+[
+  {
+    "id": "participant-north-01",
+    "name": "north district participant",
+    "county": "north district",
+    "currentPhase": "readiness",
+    "readinessScore": 0.62,
+    "activeJourneyId": "journey-001"
+  },
+  {
+    "id": "participant-central-02",
+    "name": "central district participant",
+    "county": "central district",
+    "currentPhase": "regulation",
+    "readinessScore": 0.41
+  }
+]

@@ -8,8 +8,8 @@
     --header-height: 96px;
     --spacing-unit: 4px;
 
-    --font-body: "Helvetica Neue", Helvetica;
-    --font-heading: "Helvetica Neue", Helvetica;
+    --font-body: Helvetica, Arial, sans-serif;
+    --font-heading: Helvetica, Arial, sans-serif;
     --text-base: 17px;
     --line-height-base: 1.65;
 

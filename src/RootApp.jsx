@@ -1,7 +1,7 @@
 import React from 'react'
-import AtlasShell from '@/features/atlas2026/AtlasShell'
+import StreamlinedAtlasShell from '@/features/atlas2026/streamlined/StreamlinedAtlasShell'
 
 export default function RootApp() {
-  return <AtlasShell />
+  return <StreamlinedAtlasShell />
 }
 

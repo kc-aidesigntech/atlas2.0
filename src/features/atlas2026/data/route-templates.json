@@ -1,0 +1,20 @@
+[
+  {
+    "id": "template-fast-stabilization",
+    "name": "fast stabilization",
+    "description": "short sequence to move from threat control to readiness posture.",
+    "targetPhase": "readiness",
+    "bomItemIds": ["bom-safety-triage", "bom-housing-anchor"],
+    "stepIds": ["step-001", "step-002"],
+    "isCore": true
+  },
+  {
+    "id": "template-social-restoration",
+    "name": "social restoration",
+    "description": "readiness through social/work rhythm and renewal activation.",
+    "targetPhase": "renewal",
+    "bomItemIds": ["bom-housing-anchor", "bom-employment-rhythm", "bom-civic-contribution"],
+    "stepIds": ["step-002", "step-003", "step-004"],
+    "isCore": true
+  }
+]

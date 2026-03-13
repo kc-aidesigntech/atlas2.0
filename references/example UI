@@ -1,0 +1,526 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  Activity, 
+  Navigation, 
+  Clock, 
+  Shield, 
+  Users, 
+  Briefcase, 
+  Home, 
+  CheckCircle2,
+  Menu,
+  Zap,
+  Info,
+  ChevronRight,
+  PlusCircle,
+  FileText,
+  Lock,
+  Globe,
+  Search,
+  AlertTriangle,
+  PhoneCall,
+  Wind,
+  Circle,
+  TrendingUp,
+  Layout
+} from 'lucide-react';
+import { 
+  Radar, 
+  RadarChart, 
+  PolarGrid, 
+  PolarAngleAxis, 
+  ResponsiveContainer 
+} from 'recharts';
+
+// firebase imports
+import { initializeApp } from 'firebase/app';
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  onSnapshot, 
+  updateDoc, 
+  getDocs,
+  addDoc 
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signInAnonymously, 
+  signInWithCustomToken 
+} from 'firebase/auth';
+
+/**
+ * environment globals
+ */
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'atlas-default';
+
+/**
+ * mta-inspired design tokens
+ */
+const COLORS = {
+  bg: '#000000',
+  surface: '#0d0d0d',
+  border: '#222222',
+  text: '#ffffff',
+  accent: '#ff6319',
+  lines: {
+    reg: '#0039a6', // blue
+    rdy: '#ff6319', // orange
+    rnw: '#00933c', // green
+    habitat: '#f48221',
+    social: '#ee352e',
+    work: '#00933c',
+    legal: '#ffcc00',
+    edu: '#6d6e71'
+  }
+};
+
+const SERVICE_DOMAINS = [
+  { id: 'z59', label: 'habitat / housing', color: COLORS.lines.habitat, icon: Home },
+  { id: 'z60', label: 'social environment', color: COLORS.lines.social, icon: Users },
+  { id: 'z56', label: 'work / employment', color: COLORS.lines.work, icon: Briefcase },
+  { id: 'z55', label: 'education / literacy', color: COLORS.lines.edu, icon: FileText },
+  { id: 'z65', label: 'legal / justice', color: COLORS.lines.legal, icon: Shield },
+  { id: 'z63', label: 'family / household', color: COLORS.lines.social, icon: Activity },
+  { id: 'z64', label: 'psychosocial / spiritual', color: COLORS.lines.reg, icon: Zap },
+  { id: 'z75', label: 'care access', color: COLORS.lines.reg, icon: Navigation },
+  { id: 'z57', label: 'occupational hazard', color: COLORS.lines.work, icon: Info },
+  { id: 'z62', label: 'upbringing', color: COLORS.lines.rdy, icon: PlusCircle }
+];
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState('navigation');
+  const [enrollees, setEnrollees] = useState([]);
+  const [selectedEnrolleeId, setSelectedEnrolleeId] = useState(null);
+  const [activeRouteTemplate, setActiveRouteTemplate] = useState(null);
+  const [milestones, setMilestones] = useState([]);
+  const [signals, setSignals] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMilestone, setSelectedMilestone] = useState(null);
+
+  // 1. auth lifecycle
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) {
+        console.error("auth initialization failed", e);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // 2. data sync lifecycle
+  useEffect(() => {
+    if (!user) return;
+
+    const enrolleesRef = collection(db, 'artifacts', appId, 'public', 'data', 'enrollees');
+    const milestonesRef = collection(db, 'artifacts', appId, 'public', 'data', 'milestones');
+    const signalsRef = collection(db, 'artifacts', appId, 'public', 'data', 'signals');
+
+    const unsubEnrollees = onSnapshot(enrolleesRef, (snap) => {
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setEnrollees(docs);
+      if (docs.length > 0 && !selectedEnrolleeId) setSelectedEnrolleeId(docs[0].id);
+    }, (err) => console.error("enrollee sync error", err));
+
+    const unsubMilestones = onSnapshot(milestonesRef, (snap) => {
+      setMilestones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error("milestone sync error", err));
+
+    const unsubSignals = onSnapshot(signalsRef, (snap) => {
+      setSignals(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error("signals sync error", err));
+
+    const seedData = async () => {
+      const snap = await getDocs(milestonesRef);
+      if (snap.empty) {
+        const initialMilestones = [
+          { label: 'impact reports generated', status: 'complete', type: 'reg', order: 1, description: 'baseline regional pressure data compiled and visualized.' },
+          { label: '100 leaders invested', status: 'complete', type: 'reg', order: 2, description: 'stewards from across sectors gathered for common agenda.' },
+          { label: 'common agenda published', status: 'complete', type: 'reg', order: 3, description: 'multi-agency roadmap for ruin prevention finalized.' },
+          { label: '3rd gen cpted pilots', status: 'active', type: 'rdy', order: 4, description: 'prosocial prescribing initiatives launched in target zones.' },
+          { label: 'community care plan', status: 'pending', type: 'rdy', order: 5, description: 'formal regional benchmarks for unburdening established.' },
+          { label: 'regional civic yield', status: 'pending', type: 'rnw', order: 6, description: 'reciprocity and contribution at scale verified.' }
+        ];
+        for (const m of initialMilestones) { await addDoc(milestonesRef, m); }
+        
+        const initialEnrollees = [
+          {
+            name: 'sv-stress-vulnerable',
+            type: 'dv survivor',
+            phase: 'readiness',
+            load: [{ domain: 'habitat', value: 0.8 }, { domain: 'social', value: 0.9 }, { domain: 'work', value: 0.4 }, { domain: 'regulation', value: 0.3 }],
+            route: [
+              { label: 'respite entry', type: 'reg', status: 'complete' },
+              { label: 'nervous system stabilization', type: 'reg', status: 'complete' },
+              { label: 'habitat: safety modification', type: 'rdy', status: 'active' },
+              { label: 'social: tie severance', type: 'rdy', status: 'pending' },
+              { label: 'work: schedule stabilization', type: 'rdy', status: 'pending' }
+            ],
+            activeRouteTitle: null
+          }
+        ];
+        for (const en of initialEnrollees) { await addDoc(enrolleesRef, en); }
+      }
+    };
+    seedData();
+
+    return () => {
+      unsubEnrollees();
+      unsubMilestones();
+      unsubSignals();
+    };
+  }, [user, selectedEnrolleeId]);
+
+  const selectedEnrollee = useMemo(() => 
+    enrollees.find(e => e.id === selectedEnrolleeId), [enrollees, selectedEnrolleeId]);
+
+  const sortedMilestones = useMemo(() => {
+    return [...milestones].sort((a, b) => (a.order || 0) - (b.order || 0));
+  }, [milestones]);
+
+  const currentYield = useMemo(() => {
+    if (milestones.length === 0) return 0;
+    const complete = milestones.filter(m => m.status === 'complete').length;
+    return Math.round((complete / milestones.length) * 100);
+  }, [milestones]);
+
+  const handleActivateRoute = async () => {
+    if (!selectedEnrollee || !activeRouteTemplate) return;
+    try {
+      const enrolleeRef = doc(db, 'artifacts', appId, 'public', 'data', 'enrollees', selectedEnrollee.id);
+      
+      const updatedRoute = selectedEnrollee.route.map((step, idx) => {
+        if (step.status === 'active') return { ...step, status: 'complete' };
+        if (idx === selectedEnrollee.route.findIndex(s => s.status === 'active') + 1) return { ...step, status: 'active' };
+        return step;
+      });
+
+      await updateDoc(enrolleeRef, {
+        activeRouteTitle: activeRouteTemplate.title,
+        route: updatedRoute
+      });
+      
+      setActiveRouteTemplate(null);
+    } catch (e) {
+      console.error("route activation failed", e);
+    }
+  };
+
+  const activeStep = selectedEnrollee?.route?.find(s => s.status === 'active') || selectedEnrollee?.route?.[0];
+
+  if (!user) return <div className="min-h-screen bg-black flex items-center justify-center text-xs font-bold text-gray-600 lowercase tracking-[0.3em] animate-pulse">establishing sovereign connection...</div>;
+
+  return (
+    <div className="min-h-screen bg-black text-white selection:bg-orange-600" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>
+      
+      {/* header component */}
+      <header className="fixed top-0 w-full z-50 bg-black/95 backdrop-blur-sm border-b border-[#222]">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-white rounded flex items-center justify-center">
+              <span className="text-black font-black text-xl lowercase">a</span>
+            </div>
+            <div className="hidden sm:block">
+              <h1 className="text-sm font-black tracking-widest lowercase leading-tight">atlas-intel</h1>
+              <p className="text-[9px] text-gray-500 font-bold lowercase tracking-wider">sovereign civic navigation</p>
+            </div>
+          </div>
+          <nav className="flex items-center gap-6 lg:gap-10">
+            {['navigation', 'intelligence', 'route-planner'].map(v => (
+              <button 
+                key={v} 
+                onClick={() => setView(v)} 
+                className={`text-[10px] font-black lowercase tracking-widest transition-all ${view === v ? 'text-white border-b-2 border-orange-600 pb-1' : 'text-gray-600 hover:text-gray-400'}`}
+              >
+                {v.replace('-', ' ')}
+              </button>
+            ))}
+          </nav>
+          <div className="flex items-center gap-3">
+             <div className="text-[9px] font-bold text-gray-700 lowercase hidden lg:block">node: {user.uid.substring(0,8)}</div>
+             <Menu className="w-5 h-5 text-gray-600 cursor-pointer" />
+          </div>
+        </div>
+      </header>
+
+      <main className="pt-24 pb-32 px-6 max-w-6xl mx-auto">
+        
+        {/* view: regional intelligence */}
+        {view === 'intelligence' && (
+          <div className="space-y-8">
+            <section className="bg-surface border border-border rounded-2xl p-8 lg:p-12 relative overflow-hidden">
+               <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 mb-16 relative z-10">
+                 <div>
+                   <div className="flex items-center gap-2 mb-4">
+                     <TrendingUp className="w-5 h-5 text-orange-600" />
+                     <h2 className="text-[12px] font-black text-orange-600 lowercase tracking-[0.2em]">regional scoreboard</h2>
+                   </div>
+                   <h3 className="text-4xl lg:text-5xl font-black lowercase tracking-tighter leading-none mb-4">collective impact corridor</h3>
+                   <p className="text-lg text-gray-500 font-bold lowercase max-w-2xl leading-relaxed">
+                     the verified maturation of regional capacity from regulatory stabilization toward civic renewal.
+                   </p>
+                 </div>
+                 
+                 <div className="flex gap-12 border-l border-border pl-12">
+                   <div>
+                     <p className="text-[10px] text-gray-600 font-black lowercase tracking-widest mb-1">civic yield</p>
+                     <p className="text-5xl font-black text-white">{currentYield}%</p>
+                   </div>
+                   <div>
+                     <p className="text-[10px] text-gray-600 font-black lowercase tracking-widest mb-1">reciprocity</p>
+                     <p className="text-5xl font-black text-green-500">high</p>
+                   </div>
+                 </div>
+               </div>
+
+               <div className="relative flex items-center w-full py-20 px-8">
+                <div className="absolute left-8 right-8 h-2 bg-[#1a1a1a] rounded-full" />
+                <div className="absolute left-8 h-2 bg-gradient-to-r from-blue-600 via-orange-600 to-green-600 rounded-full transition-all duration-1000 ease-out" 
+                     style={{ width: currentYield > 0 ? `calc(${currentYield}% - 32px)` : '0px' }} />
+                
+                <div className="flex justify-between w-full relative">
+                  {sortedMilestones.map((m, i) => (
+                    <div key={m.id || i} className="flex flex-col items-center gap-6 group cursor-pointer" onClick={() => setSelectedMilestone(m)}>
+                      <div className={`w-6 h-6 rounded-full border-4 bg-black z-10 transition-all duration-500 
+                        ${m.status === 'complete' ? 'bg-white border-white shadow-[0_0_20px_rgba(255,255,255,0.4)] scale-125' : 
+                          m.status === 'active' ? 'border-white animate-pulse shadow-[0_0_15px_rgba(255,255,255,0.2)]' : 
+                          'border-[#333]'}`} />
+                      <div className="flex flex-col items-center max-w-[140px] text-center">
+                        <p className={`text-[12px] font-black lowercase tracking-tight leading-tight transition-colors duration-500
+                          ${m.status === 'pending' ? 'text-gray-800' : 'text-white'}`}>
+                          {m.label}
+                        </p>
+                        <span className={`text-[8px] font-bold uppercase tracking-widest mt-2 
+                          ${m.type === 'reg' ? 'text-blue-500' : m.type === 'rdy' ? 'text-orange-500' : 'text-green-500'}`}>
+                          {m.type}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {selectedMilestone && (
+                <div className="mt-12 bg-black border border-border p-8 rounded-xl animate-in fade-in zoom-in-95 duration-300">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h4 className="text-xl font-black lowercase tracking-tight mb-1">{selectedMilestone.label}</h4>
+                      <p className="text-sm text-gray-500 lowercase font-bold italic">{selectedMilestone.description}</p>
+                    </div>
+                    <button onClick={() => setSelectedMilestone(null)} className="text-[10px] font-black text-gray-600 hover:text-white uppercase tracking-widest">close details</button>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              <div className="lg:col-span-8">
+                <section className="bg-surface border border-border rounded-2xl p-8 h-full">
+                  <h2 className="text-[12px] font-black text-gray-500 lowercase tracking-[0.2em] mb-8">civic service lines</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {SERVICE_DOMAINS.map(d => (
+                      <div key={d.id} className="flex flex-col items-center gap-4 p-6 bg-black border border-border rounded-xl group">
+                        <div className="p-4 bg-white/5 rounded-full">
+                          <d.icon className="w-6 h-6" style={{ color: d.color }} />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[9px] text-gray-600 font-bold lowercase mb-1">{d.id}</p>
+                          <p className="text-[11px] text-white font-black lowercase leading-tight">{d.label.split(' / ')[0]}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+
+              <div className="lg:col-span-4">
+                <section className="bg-surface border border-border rounded-2xl p-8 h-full">
+                  <h2 className="text-[12px] font-black text-gray-500 lowercase tracking-[0.2em] mb-8">civic signals</h2>
+                  <div className="space-y-4">
+                    {signals.map((sig, i) => (
+                      <div key={i} className="flex items-start gap-4 p-4 bg-black border-l-2 border-orange-600 rounded-r-lg">
+                        <div className="flex-1">
+                          <p className="text-[10px] font-black lowercase tracking-widest text-orange-600 mb-1">{sig.label}</p>
+                          <p className="text-xs font-bold lowercase text-gray-300 leading-snug">{sig.content}</p>
+                        </div>
+                        <span className="text-[10px] text-gray-700 font-bold">{sig.time}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* view: individual navigation */}
+        {view === 'navigation' && selectedEnrollee && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-4 space-y-6">
+              <section className="bg-surface border border-border rounded-2xl p-8">
+                <h2 className="text-[12px] font-black text-gray-500 lowercase tracking-[0.2em] mb-6">individual load</h2>
+                <div className="h-64 flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={selectedEnrollee.load || []}>
+                      <PolarGrid stroke="#222" />
+                      <PolarAngleAxis dataKey="domain" tick={{ fill: '#888', fontSize: 10, fontWeight: 'bold' }} />
+                      <Radar name="load" dataKey="value" stroke={COLORS.accent} fill={COLORS.accent} fillOpacity={0.1} strokeWidth={2} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+              <section className="bg-surface border border-border rounded-2xl p-8">
+                <h2 className="text-[12px] font-black text-gray-500 lowercase tracking-[0.2em] mb-4">enrollee lookup</h2>
+                <div className="relative mb-6">
+                   <Search className="absolute left-3 top-3.5 w-4 h-4 text-gray-700" />
+                   <input type="text" placeholder="search..." className="w-full bg-black border border-border p-3.5 pl-10 rounded-lg text-sm lowercase outline-none focus:border-gray-500" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                </div>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {enrollees.filter(e => e.name?.toLowerCase().includes(searchQuery.toLowerCase())).map(en => (
+                    <button key={en.id} onClick={() => setSelectedEnrolleeId(en.id)} className={`w-full p-4 text-left rounded-lg text-xs lowercase font-bold transition-all ${selectedEnrolleeId === en.id ? 'bg-white text-black' : 'bg-black text-gray-500 hover:text-white border border-transparent hover:border-border'}`}>
+                      {en.name}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </div>
+            
+            <div className="lg:col-span-8">
+              <div className="bg-surface border border-border rounded-2xl p-10 relative min-h-[600px]">
+                <h2 className="text-2xl font-black tracking-tight lowercase mb-12">individual strip map</h2>
+                
+                <div className="relative flex flex-col py-6">
+                  <div className="absolute left-[27px] top-0 bottom-0 w-[6px] bg-[#1a1a1a] rounded-full" />
+                  <div className="space-y-12 relative">
+                    {selectedEnrollee.route?.map((step, idx) => {
+                      const isComplete = step.status === 'complete';
+                      const isActive = step.status === 'active';
+                      return (
+                        <div key={idx} className="flex items-center group">
+                          <div className="w-[60px] flex justify-center z-10">
+                            <div className={`w-7 h-7 rounded-full border-4 flex items-center justify-center transition-all duration-300 
+                              ${isComplete ? 'bg-white border-white scale-110 shadow-lg' : 
+                                isActive ? 'bg-black border-white animate-pulse shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 
+                                'bg-black border-[#222]'}`} />
+                          </div>
+                          <div className="flex-1 ml-6 pr-4">
+                            <p className={`text-[10px] font-black lowercase tracking-widest mb-1
+                              ${isComplete ? 'text-blue-500' : isActive ? 'text-orange-500' : 'text-gray-700'}`}>
+                              {step.type || 'psr'}
+                            </p>
+                            <h3 className={`text-lg font-bold lowercase transition-colors 
+                              ${isActive ? 'text-white' : isComplete ? 'text-gray-400' : 'text-gray-800'}`}>
+                              {step.label}
+                            </h3>
+                          </div>
+                          {isComplete && <CheckCircle2 className="w-6 h-6 text-white" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="absolute bottom-8 right-8 left-8">
+                  <div className="bg-black border border-border p-8 rounded-xl flex items-center justify-between shadow-2xl">
+                    <div className="flex items-center gap-6">
+                      <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/5">
+                        <Navigation className="w-8 h-8 text-orange-600" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-600 font-black lowercase tracking-widest mb-1">suggested safe move</p>
+                        <p className="text-xl font-bold lowercase text-white">{activeStep?.label || 'stabilization pending'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* view: route planner */}
+        {view === 'route-planner' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+             <div className="lg:col-span-4 space-y-6">
+              <section className="bg-surface border border-border rounded-2xl p-8">
+                <h2 className="text-[12px] font-black text-gray-500 lowercase tracking-[0.2em] mb-6">target selection</h2>
+                <div className="space-y-3">
+                  {enrollees.map(en => (
+                    <button key={en.id} onClick={() => setSelectedEnrolleeId(en.id)} className={`w-full p-6 rounded-xl border text-left flex items-center justify-between transition-all ${selectedEnrolleeId === en.id ? 'bg-white text-black border-white scale-[1.02]' : 'bg-black text-white border-border hover:border-gray-500'}`}>
+                      <div>
+                        <p className="text-sm font-black lowercase">{en.name}</p>
+                        <p className={`text-[10px] font-bold mt-1 ${selectedEnrolleeId === en.id ? 'text-gray-800' : 'text-gray-600'}`}>routing: {en.activeRouteTitle || 'unassigned'}</p>
+                      </div>
+                      <ChevronRight className="w-5 h-5 opacity-50" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            </div>
+            
+            <div className="lg:col-span-8">
+              <div className="bg-surface border border-border rounded-2xl p-10 min-h-[500px]">
+                <h2 className="text-2xl font-black tracking-tight lowercase mb-10">available routes</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   {[
+                     { title: 'fast stabilization', desc: 'rapid regulation & habitat safety.', lines: ['reg', 'reg', 'rdy'] },
+                     { title: 'social restoration', desc: 'rebuilding voluntary social supports.', lines: ['reg', 'rdy', 'rdy', 'rnw'] }
+                   ].map((route, i) => (
+                    <div key={i} className={`p-8 bg-black border-2 rounded-2xl cursor-pointer transition-all ${activeRouteTemplate?.title === route.title ? 'border-white shadow-lg' : 'border-border hover:border-gray-600'}`}
+                         onClick={() => setActiveRouteTemplate(route)}>
+                      <h4 className="text-lg font-black lowercase mb-2">{route.title}</h4>
+                      <p className="text-xs text-gray-500 font-bold lowercase mb-6">{route.desc}</p>
+                      <div className="flex gap-2 mb-8">
+                        {route.lines.map((l, idx) => (
+                          <div key={idx} className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black text-white" style={{ backgroundColor: COLORS.lines[l] }}>{l.charAt(0)}</div>
+                        ))}
+                      </div>
+                      {activeRouteTemplate?.title === route.title && (
+                        <button onClick={handleActivateRoute} className="w-full py-4 bg-white text-black text-[11px] font-black lowercase tracking-widest rounded-lg animate-pulse">activate move</button>
+                      )}
+                    </div>
+                   ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* global ticker */}
+      <footer className="fixed bottom-0 w-full bg-black border-t border-[#222] h-14 overflow-hidden flex items-center z-50">
+        <div className="flex items-center whitespace-nowrap animate-marquee">
+          <div className="flex items-center gap-16 px-8">
+            <span className="text-[11px] font-black text-gray-600 lowercase tracking-widest flex items-center gap-2"><Activity className="w-4 h-4 text-orange-600"/> system load: moderate</span>
+            <span className="text-[11px] font-black text-gray-600 lowercase tracking-widest flex items-center gap-2"><Globe className="w-4 h-4 text-blue-600"/> watershed weights calibrated</span>
+            <span className="text-[11px] font-black text-gray-600 lowercase tracking-widest flex items-center gap-2"><Lock className="w-4 h-4 text-gray-800"/> sovereign interpretation locked</span>
+            <span className="text-[11px] font-black text-gray-600 lowercase tracking-widest flex items-center gap-2"><Layout className="w-4 h-4 text-green-600"/> regional yield: {currentYield}%</span>
+          </div>
+        </div>
+      </footer>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .animate-marquee { animation: marquee 60s linear infinite; }
+        * { text-transform: lowercase !important; -webkit-font-smoothing: antialiased; letter-spacing: -0.01em; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+      `}} />
+    </div>
+  );
+}

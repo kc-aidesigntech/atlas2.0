@@ -15,6 +15,75 @@ function formatFirestoreTimestamp(value) {
   return new Date(millis).toLocaleString()
 }
 
+const ROUTE_CLASS_STYLES = {
+  stabilization: {
+    rail: '#fdcc09',
+    chip: 'bg-amber-500/20 text-amber-200 border-amber-400/40',
+    card: 'border-amber-400/35 bg-amber-500/10'
+  },
+  readiness: {
+    rail: '#0039a5',
+    chip: 'bg-blue-500/20 text-blue-200 border-blue-400/40',
+    card: 'border-blue-400/35 bg-blue-500/10'
+  },
+  civicDiplomacy: {
+    rail: '#ee352e',
+    chip: 'bg-red-500/20 text-red-200 border-red-400/40',
+    card: 'border-red-400/35 bg-red-500/10'
+  }
+}
+
+function resolveRouteClass(routeClass) {
+  return routeClass || 'stabilization'
+}
+
+function PrecisionSubwayOverlay() {
+  return (
+    <div className="pointer-events-none fixed bottom-12 right-[35px] top-16 z-[45] w-[6vw] min-w-[72px] max-w-[96px] overflow-visible opacity-95">
+      <svg
+        className="h-full w-full"
+        viewBox="108 0 132 1080"
+        preserveAspectRatio="xMidYMid meet"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden
+      >
+        <line y1="30" x2="38" transform="translate(134.5 924.5)" fill="none" stroke="#ee352e" strokeLinecap="round" strokeWidth="5" />
+        <line x1="38" y1="38" transform="translate(175.5 201.5)" fill="none" stroke="#000aff" strokeLinecap="round" strokeWidth="5" />
+        <line y1="410" transform="translate(213.5 239.5)" fill="none" stroke="#0039a5" strokeLinecap="round" strokeWidth="5" />
+        <line x2="38" y2="38" transform="translate(134.5 161.5)" fill="none" stroke="#ee352e" strokeLinecap="round" strokeWidth="5" />
+        <line y1="30" x2="38" transform="translate(175.5 649.5)" fill="none" stroke="#0039a6" strokeLinecap="round" strokeWidth="5" />
+        <line y1="1080" transform="translate(134.5 0.5)" fill="none" stroke="#fccc0a" strokeWidth="5" />
+        <line y1="725" transform="translate(172.5 199.5)" fill="none" stroke="#ee352e" strokeLinecap="round" strokeWidth="5" />
+        <ellipse cx="18.5" cy="18" rx="18.5" ry="18" transform="translate(116 995)" fill="#fdcc09" />
+        <text transform="translate(127 1022)" fontSize="26" fontFamily="Helvetica-Bold, Helvetica" fontWeight="700">
+          <tspan x="0" y="0">
+            1
+          </tspan>
+        </text>
+        <ellipse cx="18.5" cy="18" rx="18.5" ry="18" transform="translate(154 850)" fill="#ee352e" />
+        <text transform="translate(165 876)" fill="#fff" fontSize="26" fontFamily="Helvetica-Bold, Helvetica" fontWeight="700">
+          <tspan x="0" y="0">
+            2
+          </tspan>
+        </text>
+        <ellipse cx="18.5" cy="18" rx="18.5" ry="18" transform="translate(153 726)" fill="#ee352e" />
+        <text transform="translate(165 753)" fill="#fff" fontSize="26" fontFamily="Helvetica-Bold, Helvetica" fontWeight="700">
+          <tspan x="0" y="0">
+            3
+          </tspan>
+        </text>
+        <line x2="38" y2="38" transform="translate(134.5 498.5)" fill="none" stroke="#ee352e" strokeLinecap="round" strokeWidth="5" />
+        <ellipse cx="18.5" cy="18" rx="18.5" ry="18" transform="translate(195 534)" fill="#0039a5" />
+        <text transform="translate(205 561)" fill="#fff" fontSize="26" fontFamily="Helvetica-Bold, Helvetica" fontWeight="700">
+          <tspan x="0" y="0">
+            4
+          </tspan>
+        </text>
+      </svg>
+    </div>
+  )
+}
+
 export default function PrecisionNavigationPage({
   selectedRole,
   routePlan,
@@ -33,9 +102,11 @@ export default function PrecisionNavigationPage({
   const canTransition = canRolePerform(selectedRole, 'transitionRoute')
   const recommendedRoute = routePlan.routes.find((route) => route.routeId === routePlan.recommendedRouteId) || null
   const highestInterference = routePlan.routes.find((route) => ['high', 'medium'].includes(route.diagnostics.interference.risk)) || null
+  const orderedPreviewRoutes = routePlan.routes.slice(0, 4)
 
   return (
     <div className="space-y-4">
+      <PrecisionSubwayOverlay />
       <Card>
         <CardHeader>
           <CardTitle>Context</CardTitle>
@@ -43,14 +114,45 @@ export default function PrecisionNavigationPage({
         </CardHeader>
         <CardContent className="space-y-3">
           {recommendedRoute ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-black p-4">
               <p className="text-slate-100">
                 <Route className="mr-2 inline h-4 w-4" />
                 Recommended: {recommendedRoute.routeId} via {recommendedRoute.partnerId}
               </p>
-              <small className="block">Class: {recommendedRoute.routeClass || 'stabilization'}</small>
-              <small className="block">Composite score: {(recommendedRoute.score * 100).toFixed(1)}</small>
-              <small className="block">Phase alignment: {(recommendedRoute.phaseAlignment * 100).toFixed(0)}%</small>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <small
+                  className={`rounded-full border px-2 py-1 ${
+                    ROUTE_CLASS_STYLES[resolveRouteClass(recommendedRoute.routeClass)]?.chip || ROUTE_CLASS_STYLES.stabilization.chip
+                  }`}
+                >
+                  class: {resolveRouteClass(recommendedRoute.routeClass)}
+                </small>
+                <small className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-1 text-slate-200">
+                  score: {(recommendedRoute.score * 100).toFixed(1)}
+                </small>
+                <small className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-1 text-slate-200">
+                  alignment: {(recommendedRoute.phaseAlignment * 100).toFixed(0)}%
+                </small>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {orderedPreviewRoutes.map((route, index) => (
+                  <small
+                    key={`route-stop-${route.routeId}`}
+                    className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/85 px-2 py-1 text-slate-200"
+                  >
+                    <span
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black text-black"
+                      style={{
+                        backgroundColor:
+                          ROUTE_CLASS_STYLES[resolveRouteClass(route.routeClass)]?.rail || ROUTE_CLASS_STYLES.stabilization.rail
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+                    {route.routeId}
+                  </small>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4">
@@ -88,7 +190,12 @@ export default function PrecisionNavigationPage({
             <summary className="cursor-pointer text-slate-300">Show route options</summary>
             <div className="mt-3 space-y-2">
               {routePlan.routes.map((route) => (
-                <div key={route.routeId} className="rounded-xl border border-slate-800 bg-slate-900 p-3">
+                <div
+                  key={route.routeId}
+                  className={`rounded-xl border p-3 ${
+                    ROUTE_CLASS_STYLES[resolveRouteClass(route.routeClass)]?.card || ROUTE_CLASS_STYLES.stabilization.card
+                  }`}
+                >
                   <small className="block text-slate-100">
                     {route.routeId} via {route.partnerId}
                   </small>
@@ -110,20 +217,24 @@ export default function PrecisionNavigationPage({
           <CardDescription>What atlas gives back once the route decision is made.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-            <small className="block text-slate-400">
-              Medium threshold: {((ontologyWeights?.interferenceMediumThreshold ?? 0.35) * 100).toFixed(0)}%
-            </small>
-            <small className="block text-slate-400">
-              High threshold:{' '}
-              {(
-                Math.max(
-                  ontologyWeights?.interferenceHighThreshold ?? 0.6,
-                  ontologyWeights?.interferenceMediumThreshold ?? 0.35
-                ) * 100
-              ).toFixed(0)}
-              %
-            </small>
+          <div className="rounded-xl border border-slate-800 bg-black p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <small className="inline-flex items-center gap-2 text-slate-300">
+                <span className="inline-block h-2 w-8 rounded-full bg-[#0039a5]" />
+                medium threshold: {((ontologyWeights?.interferenceMediumThreshold ?? 0.35) * 100).toFixed(0)}%
+              </small>
+              <small className="inline-flex items-center gap-2 text-slate-300">
+                <span className="inline-block h-2 w-8 rounded-full bg-[#ee352e]" />
+                high threshold:{' '}
+                {(
+                  Math.max(
+                    ontologyWeights?.interferenceHighThreshold ?? 0.6,
+                    ontologyWeights?.interferenceMediumThreshold ?? 0.35
+                  ) * 100
+                ).toFixed(0)}
+                %
+              </small>
+            </div>
           </div>
           <small className="block text-slate-300">
             Atlas returns a dependency-aware step graph, persisted route status, and interference mitigations for execution handoff.
