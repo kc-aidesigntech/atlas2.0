@@ -39,23 +39,26 @@ export default function SinglePaneApp() {
         onSelectEnrollee={setSelectedEnrolleeId}
       />
 
-      <main className="h-[calc(100vh-92px)] px-[14px] py-[10px]">
-        <section className="relative h-full rounded-[24px] border bg-black pl-[74px] pr-[20px] pt-[14px]" style={{ borderColor: SP_COLORS.blue }}>
-          <LeftRailLane />
+      <main className="relative h-[calc(100vh-92px)] px-[14px] py-[10px]">
+        <LeftRailLane />
 
+        <section
+          className="relative mx-auto h-full w-[calc(100%-132px)] rounded-[38px] border bg-black px-[20px] pb-[12px] pt-[14px]"
+          style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
+        >
           <div className="flex h-full flex-col gap-[10px]">
-            <div className="grid grid-cols-[1.58fr_0.72fr] gap-3 border-b pb-[6px]" style={{ borderColor: SP_COLORS.border }}>
+            <div className="grid h-[252px] grid-cols-[1.58fr_0.72fr] gap-3 border-b pb-[6px]" style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}>
               <ProfilePanel enrollee={selectedEnrollee} />
               <div className="flex items-start justify-end pr-2">
                 <RadialLoadChart load={selectedLoad} />
               </div>
             </div>
 
-            <div className="flex items-center justify-center">
+            <div className="flex h-[46px] items-center justify-center">
               <RoleMenus label={activeAction} onAppendLog={appendRouteLog} />
             </div>
 
-            <div className="min-h-0 flex-1 pt-1">
+            <div className="flex min-h-[220px] flex-1 items-center pt-1">
               <StripMapTimeline events={selectedLogs} />
             </div>
           </div>

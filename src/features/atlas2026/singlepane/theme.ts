@@ -3,6 +3,7 @@ export const SP_COLORS = {
   panel: '#050505',
   border: '#2a2a2a',
   text: '#ffffff',
+  white: '#ffffff',
   muted: '#a7a9ac',
   steel: '#808183',
   blue: '#0039a6',

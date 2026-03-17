@@ -19,9 +19,9 @@ const STATUS_COLORS = {
 export default function StripMapTimeline({ events }: StripMapTimelineProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(920)
-  const height = 220
-  const baselineY = 136
-  const marginX = 84
+  const height = 260
+  const baselineY = 154
+  const marginX = 96
 
   useEffect(() => {
     const node = wrapperRef.current
@@ -61,18 +61,18 @@ export default function StripMapTimeline({ events }: StripMapTimelineProps) {
   )
 
   return (
-    <div ref={wrapperRef} className="h-[230px] w-full">
+    <div ref={wrapperRef} className="h-[260px] w-full">
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         <Group>
-          <LinePath data={baselinePoints} x={(point) => point.x} y={(point) => point.y} stroke={SP_COLORS.white} strokeWidth={3} />
+          <LinePath data={baselinePoints} x={(point) => point.x} y={(point) => point.y} stroke={SP_COLORS.white} strokeWidth={6} />
 
           {/* directional arrows */}
           {[0.3, 0.65].map((ratio) => {
             const arrowX = marginX + (width - marginX * 2) * ratio
             return (
               <g key={ratio} transform={`translate(${arrowX}, ${baselineY})`}>
-                <line x1="-30" y1="-28" x2="0" y2="0" stroke={SP_COLORS.white} strokeWidth="3" strokeLinecap="round" />
-                <line x1="-30" y1="28" x2="0" y2="0" stroke={SP_COLORS.white} strokeWidth="3" strokeLinecap="round" />
+                <line x1="-34" y1="-32" x2="0" y2="0" stroke={SP_COLORS.white} strokeWidth="6" strokeLinecap="round" />
+                <line x1="-34" y1="32" x2="0" y2="0" stroke={SP_COLORS.white} strokeWidth="6" strokeLinecap="round" />
               </g>
             )
           })}
@@ -82,7 +82,7 @@ export default function StripMapTimeline({ events }: StripMapTimelineProps) {
             const color = STATUS_COLORS[event.status]
             return (
               <g key={event.id} transform={`translate(${x}, ${baselineY})`}>
-                <circle r="6" fill={color} stroke={SP_COLORS.white} strokeWidth="1" fillOpacity="0.95" />
+                <circle r="8" fill={color} stroke={SP_COLORS.white} strokeWidth="2" fillOpacity="0.95" />
                 <text y={-16} textAnchor="middle" fill={SP_COLORS.white} fontFamily="Helvetica, Arial, sans-serif" fontSize="9">
                   {index + 1}
                 </text>
