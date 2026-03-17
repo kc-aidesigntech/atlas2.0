@@ -4,41 +4,65 @@
     "enrolleeId": "enrollee-001",
     "label": "intake confirmed",
     "timestampIso": "2026-03-01T09:30:00.000Z",
-    "status": "completed"
+    "status": "completed",
+    "phase": "regulation",
+    "milestoneType": "intervention",
+    "domainsRelieved": ["health", "social"],
+    "stationIcon": "health"
   },
   {
     "id": "log-002",
     "enrolleeId": "enrollee-001",
     "label": "housing stabilization referral",
     "timestampIso": "2026-03-04T11:00:00.000Z",
-    "status": "completed"
+    "status": "completed",
+    "phase": "regulation",
+    "milestoneType": "verifiedMilestone",
+    "domainsRelieved": ["housing", "legal"],
+    "stationIcon": "housing"
   },
   {
     "id": "log-003",
     "enrolleeId": "enrollee-001",
     "label": "employment rhythm planning",
     "timestampIso": "2026-03-09T14:15:00.000Z",
-    "status": "active"
+    "status": "active",
+    "phase": "readiness",
+    "milestoneType": "intervention",
+    "domainsRelieved": ["work", "education"],
+    "stationIcon": "work"
   },
   {
     "id": "log-004",
     "enrolleeId": "enrollee-001",
     "label": "civic role assignment",
     "timestampIso": "2026-03-15T10:45:00.000Z",
-    "status": "planned"
+    "status": "planned",
+    "phase": "renewal",
+    "milestoneType": "sustainedChange",
+    "domainsRelieved": ["social", "work"],
+    "stationIcon": "flag"
   },
   {
     "id": "log-005",
     "enrolleeId": "enrollee-002",
     "label": "intake confirmed",
     "timestampIso": "2026-03-02T08:30:00.000Z",
-    "status": "completed"
+    "status": "completed",
+    "phase": "regulation",
+    "milestoneType": "intervention",
+    "domainsRelieved": ["health", "social"],
+    "stationIcon": "health"
   },
   {
     "id": "log-006",
     "enrolleeId": "enrollee-002",
     "label": "family coordination",
     "timestampIso": "2026-03-08T09:15:00.000Z",
-    "status": "active"
+    "status": "active",
+    "phase": "readiness",
+    "milestoneType": "verifiedMilestone",
+    "domainsRelieved": ["social", "housing"],
+    "stationIcon": "social"
   }
 ]

@@ -19,6 +19,7 @@ export default function SinglePaneApp() {
     selectedLoad,
     selectedLogs,
     selectedRoleConfig,
+    timelineConfig,
     appendRouteLog
   } = useSinglePaneData()
 
@@ -47,9 +48,12 @@ export default function SinglePaneApp() {
           style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
         >
           <div className="flex h-full flex-col gap-[10px]">
-            <div className="grid h-[252px] grid-cols-[1.58fr_0.72fr] gap-3 border-b pb-[6px]" style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}>
+            <div
+              className="grid min-h-[282px] grid-cols-1 gap-3 border-b pb-[8px] xl:grid-cols-[1.58fr_0.72fr]"
+              style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+            >
               <ProfilePanel enrollee={selectedEnrollee} />
-              <div className="flex items-start justify-end pr-2">
+              <div className="flex items-start justify-start pr-0 xl:justify-end xl:pr-2">
                 <RadialLoadChart load={selectedLoad} />
               </div>
             </div>
@@ -59,7 +63,7 @@ export default function SinglePaneApp() {
             </div>
 
             <div className="flex min-h-[220px] flex-1 items-center pt-1">
-              <StripMapTimeline events={selectedLogs} />
+              <StripMapTimeline events={selectedLogs} timelineConfig={timelineConfig} />
             </div>
           </div>
         </section>

@@ -26,7 +26,7 @@ export default function RadialLoadChart({ load }: RadialLoadChartProps) {
   const polarAngles = [90, 30, -30, -90, -150, -210]
 
   return (
-    <div className="flex h-[250px] w-[360px] flex-col items-center justify-center">
+    <div className="flex h-[280px] w-[360px] flex-col items-center justify-center">
       <ResponsiveContainer width="100%" height="84%">
         <RadarChart
           cx="50%"
@@ -43,8 +43,8 @@ export default function RadialLoadChart({ load }: RadialLoadChartProps) {
             polarRadius={polarRadius}
             polarAngles={polarAngles}
             stroke={SP_COLORS.text}
-            strokeOpacity={1}
-            strokeWidth={1.4}
+            strokeOpacity={.5}
+            strokeWidth={.4}
           />
           <PolarRadiusAxis
             domain={[0, 100]}

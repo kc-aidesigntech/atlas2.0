@@ -9,10 +9,17 @@ interface ProfilePanelProps {
 const TAG_COLORS = [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue]
 
 export default function ProfilePanel({ enrollee }: ProfilePanelProps) {
+  const avatarSrc = enrollee.avatarUrl || '/assets/Kolbi Christianson-lt.png'
+
   return (
     <div className="flex items-start gap-3 pt-0.5">
-      <div className="flex w-[148px] flex-col items-start">
-        <div className="h-40 w-[148px] rounded-[22px] border bg-white" style={{ borderColor: SP_COLORS.border }} />
+      <div className="flex w-[150px] flex-col items-start">
+        <div
+          className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-white"
+          style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
+        >
+          <img src={avatarSrc} alt={`${enrollee.fullName} profile`} className="h-full w-full object-cover" />
+        </div>
         <div className="mt-4 flex items-center gap-[10px]">
           {enrollee.zCodeTags.map((tag, index) => (
             <span
