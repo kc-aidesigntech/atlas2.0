@@ -1,0 +1,14 @@
+[
+  {
+    "enrolleeId": "enrollee-001",
+    "habitat": 72,
+    "work": 46,
+    "socialNetworks": 63
+  },
+  {
+    "enrolleeId": "enrollee-002",
+    "habitat": 58,
+    "work": 64,
+    "socialNetworks": 51
+  }
+]

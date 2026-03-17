@@ -1,0 +1,17 @@
+[
+  {
+    "role": "navigator",
+    "topMenus": ["assigned enrollees", "requests to enroll", "referral portal", "route planning", "my station", "county commons"],
+    "actionMenus": ["log contact", "append route step", "escalate risk"]
+  },
+  {
+    "role": "partner",
+    "topMenus": ["assigned enrollees", "partner referrals", "route planning", "service capacity", "county commons"],
+    "actionMenus": ["submit service update", "confirm milestone", "request support"]
+  },
+  {
+    "role": "administrator",
+    "topMenus": ["assigned enrollees", "system operations", "route planning", "governance", "county commons"],
+    "actionMenus": ["set policy threshold", "approve route template", "audit event logs"]
+  }
+]

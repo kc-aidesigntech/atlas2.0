@@ -1,0 +1,20 @@
+[
+  {
+    "id": "enrollee-001",
+    "fullName": "kolbi christianson",
+    "dob": "08/11/1991",
+    "caseId": "###-##-####",
+    "email": "kchristianson@aidesigntech.com",
+    "assignedNavigator": "atlas navigator",
+    "zCodeTags": ["z56", "z55", "z57"]
+  },
+  {
+    "id": "enrollee-002",
+    "fullName": "aria donovan",
+    "dob": "05/16/1994",
+    "caseId": "###-##-####",
+    "email": "adonovan@aidesigntech.com",
+    "assignedNavigator": "atlas navigator",
+    "zCodeTags": ["z59", "z60", "z64"]
+  }
+]

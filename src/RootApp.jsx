@@ -1,7 +1,7 @@
 import React from 'react'
-import StreamlinedAtlasShell from '@/features/atlas2026/streamlined/StreamlinedAtlasShell'
+import SinglePaneApp from '@/features/atlas2026/singlepane/SinglePaneApp'
 
 export default function RootApp() {
-  return <StreamlinedAtlasShell />
+  return <SinglePaneApp />
 }
 
