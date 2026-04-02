@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Group } from '@visx/group'
 import { LinePath } from '@visx/shape'
 import { scaleTime } from 'd3-scale'
-import type { RouteLogEvent, StabilizationPhase, StationIcon, TimelineConfig, ZDomain } from '../types'
+import type { JourneyStationMarker, RouteLogEvent, StabilizationPhase, StationIcon, TimelineConfig, ZDomain } from '../types'
 import { SP_COLORS } from '../theme'
 
 interface StripMapTimelineProps {
   events: RouteLogEvent[]
   timelineConfig: TimelineConfig
+  stationMarkers?: JourneyStationMarker[]
 }
 
 const STATUS_COLORS = {
@@ -18,8 +19,8 @@ const STATUS_COLORS = {
 }
 
 const PHASE_COLORS: Record<StabilizationPhase, string> = {
-  regulation: SP_COLORS.yellow,
-  readiness: SP_COLORS.blue,
+  regulation: SP_COLORS.red,
+  readiness: SP_COLORS.yellow,
   renewal: SP_COLORS.deepGreen
 }
 
@@ -49,7 +50,7 @@ function addMonths(date: Date, months: number) {
   return clone
 }
 
-export default function StripMapTimeline({ events, timelineConfig }: StripMapTimelineProps) {
+export default function StripMapTimeline({ events, timelineConfig, stationMarkers = [] }: StripMapTimelineProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(920)
   const height = 280
@@ -179,6 +180,20 @@ export default function StripMapTimeline({ events, timelineConfig }: StripMapTim
                     </text>
                   </g>
                 ))}
+              </g>
+            )
+          })}
+
+          {stationMarkers.map((marker) => {
+            const x = Number(timeScale(new Date(marker.assignedAtIso)))
+            if (!Number.isFinite(x)) return null
+            const glyph = (marker.stationName || '?').trim().charAt(0).toUpperCase() || '?'
+            return (
+              <g key={marker.id} transform={`translate(${x}, ${baselineY - 40})`}>
+                <circle r="10" fill="#000000" stroke={SP_COLORS.white} strokeWidth="1.8" />
+                <text y="4" textAnchor="middle" fill={SP_COLORS.white} fontFamily="Helvetica, Arial, sans-serif" fontSize="9" fontWeight={700}>
+                  {glyph}
+                </text>
               </g>
             )
           })}

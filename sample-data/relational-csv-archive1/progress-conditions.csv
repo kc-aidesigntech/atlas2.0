@@ -1,0 +1,7 @@
+progress_condition_id,condition_key,phase,label,description,sort_order
+pc-001,regulation-intake-complete,regulation,intake complete,baseline profile validated and first contact logged,10
+pc-002,regulation-housing-stabilized,regulation,housing stabilized,urgent housing and safety risks are reduced,20
+pc-003,readiness-routine-engaged,readiness,routine engaged,person is engaging consistently with planned supports,30
+pc-004,readiness-work-plan-active,readiness,work plan active,work or education pathway has active milestones,40
+pc-005,renewal-civic-role-assigned,renewal,civic role assigned,person contributes through community-facing role,50
+pc-006,renewal-sustained-change,renewal,sustained change,stability maintained across multiple domains,60

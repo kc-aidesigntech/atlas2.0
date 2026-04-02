@@ -2,6 +2,7 @@ export type AtlasRole = 'navigator' | 'partner' | 'administrator'
 
 export interface EnrolleeProfile {
   id: string
+  enrollmentId?: string
   fullName: string
   dob: string
   caseId: string
@@ -54,4 +55,61 @@ export interface TimelineConfig {
   durationMonths: number
   maxDurationMonths: number
   gates: TimelineGate[]
+}
+
+export interface EnrollmentRequestRecord {
+  id: string
+  submittedAt: string
+  status: 'pending' | 'accepted' | 'rejected' | 'assigned'
+  prospectiveEnrollee: string
+  email?: string
+}
+
+export interface RouteCandidateRecord {
+  stationId: string
+  partnerId: string
+  stationName: string
+  score: number
+  specializeHits: number
+  conflictHits: number
+  interfereHits: number
+  matchedZCodes: string[]
+}
+
+export interface CountyHeatPoint {
+  countyId: string
+  countyName: string
+  zGroup: number
+  activeCaseCount: number
+}
+
+export interface AdminDataQualityMetric {
+  metric: string
+  countValue: number
+}
+
+export interface JourneyStationMarker {
+  id: string
+  stationName: string
+  assignedAtIso: string
+  phase: StabilizationPhase
+  iconSlug?: string
+}
+
+export interface AccountSettings {
+  fullName: string
+  email: string
+  organization: string
+  enabledRoles: AtlasRole[]
+}
+
+export interface EnrolleeIntakeRecord {
+  enrolleeId: string
+  fullName: string
+  dob: string
+  caseId: string
+  email: string
+  assignedNavigator: string
+  enrollmentStartIso: string
+  zCodeTags: string[]
 }

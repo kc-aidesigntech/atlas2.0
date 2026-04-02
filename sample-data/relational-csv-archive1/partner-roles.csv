@@ -1,0 +1,6 @@
+partner_role_id,partner_station_id,role_id,is_service_role,notes
+pr-001,station-harbor,role-partner,true,clinical and stabilization services
+pr-002,station-north,role-partner,true,family and social support services
+pr-003,station-jamaica,role-partner,true,employment and education services
+pr-004,station-harbor,role-navigator,false,navigator hotdesk for co-planning
+pr-005,station-jamaica,role-navigator,false,navigator rotating desk

@@ -1,0 +1,9 @@
+contact_id,person_id,contact_type,contact_value,is_primary,is_verified,notes
+pci-001,person-enrollee-001,email,kchristianson@aidesigntech.com,true,true,primary enrollee email
+pci-002,person-enrollee-001,phone,+1-917-555-0101,true,false,mobile number pending verification
+pci-003,person-enrollee-002,email,adonovan@aidesigntech.com,true,true,primary enrollee email
+pci-004,person-enrollee-002,phone,+1-718-555-0199,true,false,mobile number pending verification
+pci-005,person-nav-001,email,navigator@aidesigntech.com,true,true,navigator contact
+pci-006,person-partner-001,email,morgan.lee@harborstation.org,true,true,partner clinician contact
+pci-007,person-partner-002,email,samira.hale@jamaicaworkstation.org,true,true,partner workforce contact
+pci-008,person-admin-001,email,admin.ops@aidesigntech.com,true,true,administrator contact

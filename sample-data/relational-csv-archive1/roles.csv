@@ -1,0 +1,5 @@
+role_id,role_key,role_name,scope,description
+role-enrollee,enrollee,enrollee,person,receives services and participates in route milestones
+role-navigator,navigator,navigator,system,coordinates route planning and care progression
+role-partner,partner,partner,station,delivers services at partner stations
+role-administrator,administrator,administrator,system,oversees governance and policy thresholds

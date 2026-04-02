@@ -1,0 +1,6 @@
+referral_id,person_id,referred_by_person_id,partner_station_id,z_code_id,progress_condition_id,referral_date,status,priority,notes
+ref-001,person-enrollee-001,person-nav-001,station-harbor,zcode-64,pc-001,2026-03-01,accepted,high,intake confirmed and first assessment completed
+ref-002,person-enrollee-001,person-nav-001,station-harbor,zcode-59,pc-002,2026-03-04,accepted,high,housing stabilization referral from navigator
+ref-003,person-enrollee-001,person-nav-001,station-jamaica,zcode-56,pc-004,2026-03-09,in_progress,medium,employment rhythm planning session scheduled
+ref-004,person-enrollee-002,person-nav-001,station-north,zcode-60,pc-003,2026-03-08,in_progress,medium,family coordination pathway initiated
+ref-005,person-enrollee-002,person-nav-001,station-jamaica,zcode-55,pc-004,2026-03-11,pending,low,education upskilling intake pending station capacity

@@ -1,0 +1,4 @@
+partner_station_id,station_name,station_type,address_id,county_id,state_id,country_id,capacity_total,capacity_available,status
+station-harbor,harbor wellness station,clinic,addr-station-harbor,county-pierce,state-wa,country-us,120,34,active
+station-north,north sound family hub,community-center,addr-station-north,county-king,state-wa,country-us,90,21,active
+station-jamaica,south sound workforce station,workforce,addr-station-jamaica,county-king,state-wa,country-us,80,18,active

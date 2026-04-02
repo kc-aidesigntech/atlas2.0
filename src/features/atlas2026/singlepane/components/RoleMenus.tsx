@@ -2,20 +2,37 @@ import React from 'react'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
 interface RoleMenusProps {
-  label: string
-  onAppendLog: (label: string) => void
+  labels?: string[]
+  label?: string
+  activeLabel?: string
+  onAction: (label: string) => void
 }
 
-export default function RoleMenus({ label, onAppendLog }: RoleMenusProps) {
+export default function RoleMenus({ labels, label, activeLabel, onAction }: RoleMenusProps) {
+  const safeLabels = labels?.length ? labels : label ? [label] : []
+  const currentActiveLabel = activeLabel || safeLabels[0] || ''
+
   return (
-    <div className="flex items-center justify-center">
-      <button
-        onClick={() => onAppendLog(label)}
-        className="rounded-full border px-12 py-[5px] text-[15px] font-medium text-white"
-        style={{ borderColor: SP_COLORS.border }}
-      >
-        {label}
-      </button>
+    <div className="flex w-full items-center justify-center overflow-x-auto">
+      <div className="flex min-w-max items-center gap-2 px-1">
+        {safeLabels.map((nextLabel) => {
+          const isActive = nextLabel === currentActiveLabel
+          return (
+            <button
+              key={nextLabel}
+              type="button"
+              onClick={() => onAction(nextLabel)}
+              className="rounded-full border px-5 py-[5px] text-[15px] font-medium text-white transition-colors"
+              style={{
+                borderColor: isActive ? SP_COLORS.white : SP_COLORS.border,
+                backgroundColor: isActive ? '#111111' : 'transparent'
+              }}
+            >
+              {nextLabel}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

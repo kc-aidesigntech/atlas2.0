@@ -1,0 +1,7 @@
+assignment_id,person_id,role_id,partner_station_id,start_date,end_date,is_primary
+pra-001,person-enrollee-001,role-enrollee,,2026-03-01,,true
+pra-002,person-enrollee-002,role-enrollee,,2026-03-02,,true
+pra-003,person-nav-001,role-navigator,,2026-01-10,,true
+pra-004,person-partner-001,role-partner,station-harbor,2026-01-12,,true
+pra-005,person-partner-002,role-partner,station-jamaica,2026-01-14,,true
+pra-006,person-admin-001,role-administrator,,2026-01-01,,true

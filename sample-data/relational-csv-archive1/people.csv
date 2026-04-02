@@ -1,0 +1,7 @@
+person_id,external_ref,first_name,last_name,display_name,date_of_birth,person_type,status,created_at
+person-enrollee-001,enrollee-001,kolbi,christianson,kolbi christianson,1991-08-11,enrollee,active,2026-03-01T09:00:00Z
+person-enrollee-002,enrollee-002,aria,donovan,aria donovan,1994-05-16,enrollee,active,2026-03-02T09:00:00Z
+person-nav-001,staff-001,atlas,navigator,atlas navigator,1986-11-04,staff,active,2026-01-10T12:00:00Z
+person-partner-001,staff-101,morgan,lee,morgan lee,1988-02-15,staff,active,2026-01-12T12:00:00Z
+person-partner-002,staff-102,samira,hale,samira hale,1990-09-26,staff,active,2026-01-14T12:00:00Z
+person-admin-001,staff-900,alex,rowe,alex rowe,1982-06-21,staff,active,2026-01-01T12:00:00Z

@@ -1,0 +1,6 @@
+address_id,line1,line2,city,county_id,state_id,country_id,postal_code,latitude,longitude
+addr-person-kolbi,15413 1st Avenue Ct S,Suite 1A,tacoma,county-pierce,state-wa,country-us,98444,47.1164,-122.4368
+addr-person-aria,10417 36th Ave Ct E,Apt 12,tacoma,county-pierce,state-wa,country-us,98446,47.2286,-122.2938
+addr-station-harbor,1145 broadway,suite 220,tacoma,county-pierce,state-wa,country-us,98402,47.2529,-122.4410
+addr-station-north,401 broadway e,floor 2,seattle,county-king,state-wa,country-us,98102,47.6228,-122.3200
+addr-station-jamaica,4201 s othello st,suite 304,seattle,county-king,state-wa,country-us,98118,47.5378,-122.2809

@@ -26,7 +26,7 @@ export default function RadialLoadChart({ load }: RadialLoadChartProps) {
   const polarAngles = [90, 30, -30, -90, -150, -210]
 
   return (
-    <div className="flex h-[280px] w-[360px] flex-col items-center justify-center">
+    <div className="flex h-[250px] w-full max-w-[340px] flex-col items-center justify-center sm:h-[280px] sm:max-w-[360px]">
       <ResponsiveContainer width="100%" height="84%">
         <RadarChart
           cx="50%"
