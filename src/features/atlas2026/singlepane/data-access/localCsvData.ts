@@ -51,7 +51,7 @@ interface LocalSinglePaneDataset {
   >
 }
 
-const DEFAULT_AVATAR_URL = '/assets/Kolbi Christianson-lt.png'
+const DEFAULT_AVATAR_URL = ''
 
 const ROLE_MENUS: Record<AtlasRole, RoleMenuConfig> = {
   navigator: {

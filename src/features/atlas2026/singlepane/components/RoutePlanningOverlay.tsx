@@ -140,7 +140,7 @@ export default function RoutePlanningOverlay({
                       </div>
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      <MetricChip label="specialize hits" value={candidate.specializeHits} color={SP_COLORS.deepGreen} />
+                      <MetricChip label="specialties" value={candidate.specializeHits} color={SP_COLORS.deepGreen} />
                       <MetricChip label="conflicts" value={candidate.conflictHits} color={SP_COLORS.orange} />
                       <MetricChip label="interference" value={candidate.interfereHits} color={SP_COLORS.red} />
                     </div>
