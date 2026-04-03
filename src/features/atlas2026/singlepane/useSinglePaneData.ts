@@ -4,12 +4,14 @@ import type {
   AccountSettings,
   AtlasRole,
   CountyHeatPoint,
+  DomainLoadBreakdown,
   DomainLoad,
   EnrolleeIntakeRecord,
   EnrollmentRequestRecord,
   EnrolleeProfile,
   JourneyStationMarker,
   RoleMenuConfig,
+  RouteAssignmentRecord,
   RouteCandidateRecord,
   RouteLogEvent,
   StabilizationPhase,
@@ -25,9 +27,13 @@ import {
   loadEnrollmentRequests,
   loadJourneyStationMarkers,
   loadPartnerRadialLoad,
+  loadPartnerRadialLoadBreakdown,
+  loadRouteAssignments,
   loadRouteCandidates,
   loadSinglePaneBootstrap,
   saveAccountSettings as persistAccountSettings,
+  saveRouteAssignment as persistRouteAssignment,
+  saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 
@@ -56,6 +62,7 @@ export function useSinglePaneData() {
   const [activeMenu, setActiveMenu] = useState<string>('assigned enrollees')
   const [enrollees, setEnrollees] = useState<EnrolleeProfile[]>([])
   const [loads, setLoads] = useState<DomainLoad[]>([])
+  const [loadBreakdownsByEnrolleeId, setLoadBreakdownsByEnrolleeId] = useState<Record<string, DomainLoadBreakdown>>({})
   const [roleConfigs, setRoleConfigs] = useState<RoleMenuConfig[]>([])
   const [timelineConfig, setTimelineConfig] = useState<TimelineConfig | null>(null)
   const [timelineConfigsByEnrolleeId, setTimelineConfigsByEnrolleeId] = useState<Record<string, TimelineConfig>>({})
@@ -65,7 +72,9 @@ export function useSinglePaneData() {
   const [countyHeatmap, setCountyHeatmap] = useState<CountyHeatPoint[]>([])
   const [adminMetrics, setAdminMetrics] = useState<AdminDataQualityMetric[]>([])
   const [partnerLoad, setPartnerLoad] = useState<DomainLoad | null>(null)
+  const [partnerLoadBreakdown, setPartnerLoadBreakdown] = useState<DomainLoadBreakdown | null>(null)
   const [journeyStationMarkers, setJourneyStationMarkers] = useState<JourneyStationMarker[]>([])
+  const [routeAssignmentsByEnrolleeId, setRouteAssignmentsByEnrolleeId] = useState<Record<string, RouteAssignmentRecord>>({})
   const [accountSettings, setAccountSettings] = useState<AccountSettings>({
     fullName: 'atlas operator',
     email: 'operator@atlas.local',
@@ -82,18 +91,21 @@ export function useSinglePaneData() {
         setIsLoading(true)
       }
       const data = await loadSinglePaneBootstrap(role)
-      const [requests, heatmap, quality, partnerViewLoad, nextAccountSettings, savedIntakes] = await Promise.all([
+      const [requests, heatmap, quality, partnerViewLoad, partnerViewLoadBreakdown, nextAccountSettings, savedIntakes, savedRouteAssignments] = await Promise.all([
         loadEnrollmentRequests(role),
         loadCountyHeatmap(),
         loadAdminDataQuality(),
         loadPartnerRadialLoad(),
+        loadPartnerRadialLoadBreakdown(),
         loadAccountSettings(),
-        loadEnrolleeIntakes()
+        loadEnrolleeIntakes(),
+        loadRouteAssignments()
       ])
 
       if (!isMounted) return
       setEnrollees(data.enrollees || [])
       setLoads(data.loads || [])
+      setLoadBreakdownsByEnrolleeId(data.loadBreakdownsByEnrolleeId || {})
       setRoleConfigs(data.roleConfigs || [])
       setTimelineConfig(data.timelineConfig)
       setTimelineConfigsByEnrolleeId(data.timelineConfigsByEnrolleeId || {})
@@ -102,8 +114,10 @@ export function useSinglePaneData() {
       setCountyHeatmap(heatmap)
       setAdminMetrics(quality)
       setPartnerLoad(partnerViewLoad)
+      setPartnerLoadBreakdown(partnerViewLoadBreakdown)
       setAccountSettings(nextAccountSettings)
       setIntakeFormsByEnrolleeId(savedIntakes)
+      setRouteAssignmentsByEnrolleeId(savedRouteAssignments)
       setSelectedEnrolleeId((prev) => prev || data.enrollees?.[0]?.id || '')
       setIsLoading(false)
     }
@@ -124,6 +138,14 @@ export function useSinglePaneData() {
       return loads.find((item) => item.enrolleeId === selectedEnrollee?.id) || loads[0] || null
     },
     [loads, partnerLoad, role, selectedEnrollee]
+  )
+
+  const selectedLoadBreakdown = useMemo(
+    () => {
+      if (role === 'partner' && partnerLoadBreakdown) return partnerLoadBreakdown
+      return loadBreakdownsByEnrolleeId[selectedEnrollee?.id || ''] || Object.values(loadBreakdownsByEnrolleeId)[0] || null
+    },
+    [loadBreakdownsByEnrolleeId, partnerLoadBreakdown, role, selectedEnrollee]
   )
 
   const selectedTimelineConfig = useMemo(
@@ -172,6 +194,11 @@ export function useSinglePaneData() {
         .slice()
         .sort((a, b) => new Date(a.timestampIso).getTime() - new Date(b.timestampIso).getTime()),
     [logs, selectedEnrollee]
+  )
+
+  const selectedRouteAssignment = useMemo(
+    () => (selectedEnrollee ? routeAssignmentsByEnrolleeId[selectedEnrollee.id] || null : null),
+    [routeAssignmentsByEnrolleeId, selectedEnrollee]
   )
 
   useEffect(() => {
@@ -253,6 +280,48 @@ export function useSinglePaneData() {
     appendRouteLogRecord(logs, next).then((finalLogs) => setLogs(finalLogs))
   }
 
+  function updateRouteLogTimelinePosition(logId: string, timelinePositionRatio: number | null) {
+    setLogs((current) => {
+      const nextLogs = current.map((log) =>
+        log.id === logId
+          ? {
+              ...log,
+              timelinePositionRatio:
+                typeof timelinePositionRatio === 'number' && Number.isFinite(timelinePositionRatio)
+                  ? Math.max(0, Math.min(1, timelinePositionRatio))
+                  : null
+            }
+          : log
+      )
+      persistRouteLogs(nextLogs)
+      return nextLogs
+    })
+  }
+
+  function updateRouteLogDate(logId: string, nextTimestampIso: string) {
+    setLogs((current) => {
+      const nextLogs = current.map((log) =>
+        log.id === logId
+          ? {
+              ...log,
+              timestampIso: nextTimestampIso,
+              timelinePositionRatio: null
+            }
+          : log
+      )
+      persistRouteLogs(nextLogs)
+      return nextLogs
+    })
+  }
+
+  function updateTimelineStartDate(nextStartIso: string) {
+    if (!selectedIntake) return
+    saveEnrolleeIntake({
+      ...selectedIntake,
+      enrollmentStartIso: nextStartIso
+    })
+  }
+
   function saveAccountSettings(nextSettings: AccountSettings) {
     const enabledRoles = nextSettings.enabledRoles.length ? nextSettings.enabledRoles : [role]
     const finalSettings = { ...nextSettings, enabledRoles }
@@ -304,6 +373,37 @@ export function useSinglePaneData() {
     })
   }
 
+  function saveRouteAssignment(candidate: RouteCandidateRecord, phase: StabilizationPhase) {
+    if (!selectedEnrollee) return
+    const assignment: RouteAssignmentRecord = {
+      enrolleeId: selectedEnrollee.id,
+      stationId: candidate.stationId,
+      stationName: candidate.stationName,
+      assignedAtIso: new Date().toISOString(),
+      phase,
+      matchedZCodes: candidate.matchedZCodes
+    }
+    persistRouteAssignment(assignment).then((saved) => {
+      setRouteAssignmentsByEnrolleeId((current) => ({
+        ...current,
+        [saved.enrolleeId]: saved
+      }))
+      setJourneyStationMarkers((current) => {
+        const withoutSelected = current.filter((marker) => marker.markerType !== 'selected')
+        return [
+          ...withoutSelected,
+          {
+            id: `route-assignment-${saved.enrolleeId}`,
+            stationName: saved.stationName,
+            assignedAtIso: saved.assignedAtIso,
+            phase: saved.phase,
+            markerType: 'selected'
+          }
+        ]
+      })
+    })
+  }
+
   return {
     role,
     setRole,
@@ -315,6 +415,7 @@ export function useSinglePaneData() {
     enrollees,
     selectedEnrollee,
     selectedLoad,
+    selectedLoadBreakdown,
     selectedLogs,
     selectedRoleConfig,
     timelineConfig: selectedTimelineConfig,
@@ -323,11 +424,16 @@ export function useSinglePaneData() {
     countyHeatmap,
     adminMetrics,
     journeyStationMarkers,
+    selectedRouteAssignment,
     appendRouteLog,
+    updateRouteLogTimelinePosition,
+    updateRouteLogDate,
+    updateTimelineStartDate,
     accountSettings,
     selectedIntake,
     hasSavedIntake,
     saveAccountSettings,
-    saveEnrolleeIntake
+    saveEnrolleeIntake,
+    saveRouteAssignment
   }
 }

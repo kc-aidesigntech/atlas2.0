@@ -1,6 +1,7 @@
 import type {
   AdminDataQualityMetric,
   AtlasRole,
+  DomainLoadBreakdown,
   CountyHeatPoint,
   DomainLoad,
   EnrollmentRequestRecord,
@@ -30,6 +31,7 @@ type CsvRecord = Record<string, string>
 interface LocalSinglePaneDataset {
   enrollees: EnrolleeProfile[]
   loads: DomainLoad[]
+  loadBreakdownsByEnrolleeId: Record<string, DomainLoadBreakdown>
   roleConfigs: RoleMenuConfig[]
   timelineConfig: TimelineConfig
   timelineConfigsByEnrolleeId: Record<string, TimelineConfig>
@@ -38,6 +40,7 @@ interface LocalSinglePaneDataset {
   countyHeatmap: CountyHeatPoint[]
   adminMetrics: AdminDataQualityMetric[]
   partnerLoad: DomainLoad | null
+  partnerLoadBreakdown: DomainLoadBreakdown | null
   surveyCapabilitiesByOrganization: Map<
     string,
     {
@@ -201,6 +204,30 @@ function normalizeLoadValue(count: number) {
   return Math.min(100, 20 + count * 26)
 }
 
+function createDomainCounts() {
+  return { habitat: 0, work: 0, socialNetworks: 0 }
+}
+
+function buildDomainLoad(enrolleeId: string, counts: { habitat: number; work: number; socialNetworks: number }): DomainLoad {
+  return {
+    enrolleeId,
+    habitat: normalizeLoadValue(counts.habitat),
+    work: normalizeLoadValue(counts.work),
+    socialNetworks: normalizeLoadValue(counts.socialNetworks)
+  }
+}
+
+function sortBreakdownRows(rows: DomainLoadBreakdown['rows']) {
+  return rows
+    .slice()
+    .sort(
+      (left, right) =>
+        right.rawCount - left.rawCount ||
+        left.mappedDomain.localeCompare(right.mappedDomain) ||
+        left.zCodeGroup.localeCompare(right.zCodeGroup)
+    )
+}
+
 function mapReferralStatus(status: string): RouteLogStatus {
   if (status === 'accepted') return 'completed'
   if (status === 'in_progress') return 'active'
@@ -295,25 +322,49 @@ function getLocalDataset(): LocalSinglePaneDataset {
 
   const personIdByEnrolleeId = new Map(enrollees.map((enrollee) => [enrollee.id, people.find((person) => person.external_ref === enrollee.id)?.person_id || '']))
 
-  const loads = enrollees.map((enrollee) => {
+  const loadBreakdownsByEnrolleeId = enrollees.reduce<Record<string, DomainLoadBreakdown>>((acc, enrollee) => {
     const personId = personIdByEnrolleeId.get(enrollee.id)
     const personReferrals = (personId && referralsByPersonId.get(personId)) || []
-    const counts = { habitat: 0, work: 0, socialNetworks: 0 }
+    const counts = createDomainCounts()
+    const rowMap = new Map<string, DomainLoadBreakdown['rows'][number]>()
 
     for (const referral of personReferrals) {
       const zCode = zCodeById.get(referral.z_code_id)
-      const domain = mapGroupToDomain(getZGroup(zCode?.code || ''))
-      if (!domain) continue
+      const zCodeGroup = getZGroup(zCode?.code || '')
+      const domain = mapGroupToDomain(zCodeGroup)
+      if (!domain || !zCodeGroup) continue
       const bucket = domainToLoadBucket(domain)
       counts[bucket] += 1
+      const existingRow = rowMap.get(zCodeGroup) || {
+        id: `${enrollee.id}-${zCodeGroup}`,
+        zCodeGroup,
+        mappedDomain: bucket,
+        rawCount: 0
+      }
+      existingRow.rawCount += 1
+      rowMap.set(zCodeGroup, existingRow)
     }
 
-    return {
-      enrolleeId: enrollee.id,
-      habitat: normalizeLoadValue(counts.habitat),
-      work: normalizeLoadValue(counts.work),
-      socialNetworks: normalizeLoadValue(counts.socialNetworks)
+    acc[enrollee.id] = {
+      subjectId: enrollee.id,
+      subjectLabel: enrollee.fullName,
+      sourceKind: 'enrolleeRecords',
+      sourceLabel: 'Active enrollee Z-Code records',
+      habitatTotal: counts.habitat,
+      workTotal: counts.work,
+      socialNetworksTotal: counts.socialNetworks,
+      rows: sortBreakdownRows(Array.from(rowMap.values()))
     }
+    return acc
+  }, {})
+
+  const loads = enrollees.map((enrollee) => {
+    const breakdown = loadBreakdownsByEnrolleeId[enrollee.id]
+    return buildDomainLoad(enrollee.id, {
+      habitat: breakdown?.habitatTotal || 0,
+      work: breakdown?.workTotal || 0,
+      socialNetworks: breakdown?.socialNetworksTotal || 0
+    })
   })
 
   const logs = referrals
@@ -417,13 +468,26 @@ function getLocalDataset(): LocalSinglePaneDataset {
     surveyCapabilitiesByOrganization.set(organizationName, existing)
   }
 
-  const partnerLoadCounts = { habitat: 0, work: 0, socialNetworks: 0 }
+  const partnerLoadCounts = createDomainCounts()
+  const partnerBreakdownRowMap = new Map<string, DomainLoadBreakdown['rows'][number]>()
   for (const capability of surveyCapabilitiesByOrganization.values()) {
     for (const [group, relationCounts] of capability.groups.entries()) {
       const domain = mapGroupToDomain(group)
       if (!domain) continue
       const bucket = domainToLoadBucket(domain)
       partnerLoadCounts[bucket] += relationCounts.specialize
+      const existingRow = partnerBreakdownRowMap.get(group) || {
+        id: `partner-${group}`,
+        zCodeGroup: group,
+        mappedDomain: bucket,
+        rawCount: 0,
+        specializeCount: 0,
+        interfereCount: 0
+      }
+      existingRow.rawCount += relationCounts.specialize
+      existingRow.specializeCount = (existingRow.specializeCount || 0) + relationCounts.specialize
+      existingRow.interfereCount = (existingRow.interfereCount || 0) + relationCounts.interfere
+      partnerBreakdownRowMap.set(group, existingRow)
     }
   }
 
@@ -433,6 +497,16 @@ function getLocalDataset(): LocalSinglePaneDataset {
     habitat: Math.round((partnerLoadCounts.habitat / maxPartnerLoad) * 100),
     work: Math.round((partnerLoadCounts.work / maxPartnerLoad) * 100),
     socialNetworks: Math.round((partnerLoadCounts.socialNetworks / maxPartnerLoad) * 100)
+  }
+  const partnerLoadBreakdown: DomainLoadBreakdown = {
+    subjectId: 'partner-view',
+    subjectLabel: 'Partner network',
+    sourceKind: 'partnerSurvey',
+    sourceLabel: 'Partner Z-Code survey responses',
+    habitatTotal: partnerLoadCounts.habitat,
+    workTotal: partnerLoadCounts.work,
+    socialNetworksTotal: partnerLoadCounts.socialNetworks,
+    rows: sortBreakdownRows(Array.from(partnerBreakdownRowMap.values()))
   }
 
   const stationsNearCapacity = stations.filter((station) => {
@@ -466,6 +540,7 @@ function getLocalDataset(): LocalSinglePaneDataset {
   cachedDataset = {
     enrollees,
     loads,
+    loadBreakdownsByEnrolleeId,
     roleConfigs,
     timelineConfig,
     timelineConfigsByEnrolleeId,
@@ -474,6 +549,7 @@ function getLocalDataset(): LocalSinglePaneDataset {
     countyHeatmap,
     adminMetrics,
     partnerLoad,
+    partnerLoadBreakdown,
     surveyCapabilitiesByOrganization
   }
 
@@ -483,6 +559,7 @@ function getLocalDataset(): LocalSinglePaneDataset {
 export interface SinglePaneBootstrapData {
   enrollees: EnrolleeProfile[]
   loads: DomainLoad[]
+  loadBreakdownsByEnrolleeId: Record<string, DomainLoadBreakdown>
   roleConfigs: RoleMenuConfig[]
   timelineConfig: TimelineConfig
   timelineConfigsByEnrolleeId: Record<string, TimelineConfig>
@@ -494,6 +571,7 @@ export function getLocalSinglePaneBootstrap(): SinglePaneBootstrapData {
   return {
     enrollees: dataset.enrollees,
     loads: dataset.loads,
+    loadBreakdownsByEnrolleeId: dataset.loadBreakdownsByEnrolleeId,
     roleConfigs: dataset.roleConfigs.length ? dataset.roleConfigs : Object.values(ROLE_MENUS),
     timelineConfig: dataset.timelineConfig,
     timelineConfigsByEnrolleeId: dataset.timelineConfigsByEnrolleeId,
@@ -519,6 +597,10 @@ export function getLocalAdminDataQuality() {
 
 export function getLocalPartnerRadialLoad() {
   return getLocalDataset().partnerLoad
+}
+
+export function getLocalPartnerRadialLoadBreakdown() {
+  return getLocalDataset().partnerLoadBreakdown
 }
 
 export function getLocalRouteCandidates(activeZCodes: string[] = []): RouteCandidateRecord[] {

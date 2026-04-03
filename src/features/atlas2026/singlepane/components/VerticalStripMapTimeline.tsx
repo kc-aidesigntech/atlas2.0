@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react'
+import LocalDateInputBox from './LocalDateInputBox'
 import type { JourneyStationMarker, RouteLogEvent, RouteLogStatus, StabilizationPhase, TimelineConfig, ZDomain } from '../types'
 import { SP_COLORS } from '../theme'
 
@@ -6,6 +7,9 @@ interface VerticalStripMapTimelineProps {
   events: RouteLogEvent[]
   timelineConfig: TimelineConfig
   stationMarkers?: JourneyStationMarker[]
+  highlightedStationName?: string | null
+  onStartDateChange?: (nextStartIso: string) => void
+  onEventDateChange?: (logId: string, nextTimestampIso: string) => void
 }
 
 const STATUS_COLORS: Record<RouteLogStatus, string> = {
@@ -50,11 +54,89 @@ function formatPhaseRange(startIso: string, startOffset: number, endOffset: numb
   return `${formatter.format(start)}-${formatter.format(end)}`
 }
 
-export default function VerticalStripMapTimeline({ events, timelineConfig, stationMarkers = [] }: VerticalStripMapTimelineProps) {
+function formatDateInputValue(timestampIso: string) {
+  const date = new Date(timestampIso)
+  if (!Number.isFinite(date.getTime())) return ''
+  const year = date.getUTCFullYear()
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getUTCDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function mergeDateInputWithTime(dateInput: string, currentIso: string) {
+  const date = new Date(currentIso)
+  const safeHours = Number.isFinite(date.getTime()) ? date.getUTCHours() : 9
+  const safeMinutes = Number.isFinite(date.getTime()) ? date.getUTCMinutes() : 0
+  const safeSeconds = Number.isFinite(date.getTime()) ? date.getUTCSeconds() : 0
+  const safeMilliseconds = Number.isFinite(date.getTime()) ? date.getUTCMilliseconds() : 0
+  const next = new Date(`${dateInput}T00:00:00.000Z`)
+  next.setUTCHours(safeHours, safeMinutes, safeSeconds, safeMilliseconds)
+  return next.toISOString()
+}
+
+export default function VerticalStripMapTimeline({
+  events,
+  timelineConfig,
+  stationMarkers = [],
+  highlightedStationName = null,
+  onStartDateChange,
+  onEventDateChange
+}: VerticalStripMapTimelineProps) {
+  const [dateEditor, setDateEditor] = React.useState<
+    | {
+        kind: 'start' | 'event'
+        value: string
+        label: string
+        logId?: string
+        currentIso: string
+      }
+    | null
+  >(null)
+  const [dateEditorError, setDateEditorError] = React.useState<string | null>(null)
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => new Date(a.timestampIso).getTime() - new Date(b.timestampIso).getTime()),
     [events]
   )
+  const suggestedMarkers = useMemo(() => stationMarkers.filter((marker) => marker.markerType === 'suggested'), [stationMarkers])
+
+  function handleStartDateClick() {
+    if (!onStartDateChange) return
+    setDateEditor({
+      kind: 'start',
+      value: formatDateInputValue(timelineConfig.planStartIso),
+      label: 'timeline start date',
+      currentIso: timelineConfig.planStartIso
+    })
+    setDateEditorError(null)
+  }
+
+  function handleEventDateClick(event: RouteLogEvent) {
+    if (!onEventDateChange) return
+    setDateEditor({
+      kind: 'event',
+      value: formatDateInputValue(event.timestampIso),
+      label: event.label,
+      logId: event.id,
+      currentIso: event.timestampIso
+    })
+    setDateEditorError(null)
+  }
+
+  function commitDateEditor() {
+    if (!dateEditor) return
+    const parsed = new Date(`${dateEditor.value}T00:00:00.000Z`)
+    if (!dateEditor.value || !Number.isFinite(parsed.getTime())) {
+      setDateEditorError('Use a valid date in YYYY-MM-DD format.')
+      return
+    }
+    if (dateEditor.kind === 'start') {
+      onStartDateChange?.(parsed.toISOString())
+    } else if (dateEditor.logId) {
+      onEventDateChange?.(dateEditor.logId, mergeDateInputWithTime(dateEditor.value, dateEditor.currentIso))
+    }
+    setDateEditor(null)
+    setDateEditorError(null)
+  }
 
   return (
     <div className="w-full rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff40' }}>
@@ -69,6 +151,34 @@ export default function VerticalStripMapTimeline({ events, timelineConfig, stati
           {timelineConfig.durationMonths}-month plan
         </small>
       </div>
+
+      <button
+        type="button"
+        onClick={handleStartDateClick}
+        className="mt-3 inline-flex rounded-full border px-3 py-1 text-[11px]"
+        style={{ borderColor: `${SP_COLORS.yellow}80`, color: SP_COLORS.yellow }}
+      >
+        start: {formatDateLabel(timelineConfig.planStartIso)}
+      </button>
+
+      {dateEditor?.kind === 'start' ? (
+        <div className="mt-3">
+          <LocalDateInputBox
+            label={dateEditor.label}
+            value={dateEditor.value}
+            error={dateEditorError}
+            onChange={(nextValue) => {
+              setDateEditor((current) => (current ? { ...current, value: nextValue } : current))
+              setDateEditorError(null)
+            }}
+            onSave={commitDateEditor}
+            onCancel={() => {
+              setDateEditor(null)
+              setDateEditorError(null)
+            }}
+          />
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {timelineConfig.gates.slice(0, -1).map((gate, index) => {
@@ -109,9 +219,14 @@ export default function VerticalStripMapTimeline({ events, timelineConfig, stati
                     </small>
                     <div className="text-[15px] leading-tight text-white">{event.label}</div>
                   </div>
-                  <small className="shrink-0 text-[11px]" style={{ color: SP_COLORS.muted }}>
+                  <button
+                    type="button"
+                    onClick={() => handleEventDateClick(event)}
+                    className="shrink-0 text-[11px]"
+                    style={{ color: SP_COLORS.muted }}
+                  >
                     {formatDateLabel(event.timestampIso)}
-                  </small>
+                  </button>
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -128,6 +243,25 @@ export default function VerticalStripMapTimeline({ events, timelineConfig, stati
                     {event.status}
                   </span>
                 </div>
+
+                {dateEditor?.kind === 'event' && dateEditor.logId === event.id ? (
+                  <div className="mt-3">
+                    <LocalDateInputBox
+                      label={dateEditor.label}
+                      value={dateEditor.value}
+                      error={dateEditorError}
+                      onChange={(nextValue) => {
+                        setDateEditor((current) => (current ? { ...current, value: nextValue } : current))
+                        setDateEditorError(null)
+                      }}
+                      onSave={commitDateEditor}
+                      onCancel={() => {
+                        setDateEditor(null)
+                        setDateEditorError(null)
+                      }}
+                    />
+                  </div>
+                ) : null}
 
                 {event.domainsRelieved.length > 0 ? (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -151,9 +285,18 @@ export default function VerticalStripMapTimeline({ events, timelineConfig, stati
                         <span
                           key={marker.id}
                           className="inline-flex rounded-full border px-2.5 py-1 text-[11px] text-white"
-                          style={{ borderColor: '#ffffff45' }}
+                          style={{
+                            borderColor:
+                              marker.stationName === highlightedStationName || marker.markerType === 'suggested'
+                                ? `${SP_COLORS.yellow}aa`
+                                : '#ffffff45',
+                            color:
+                              marker.stationName === highlightedStationName || marker.markerType === 'suggested'
+                                ? SP_COLORS.yellow
+                                : SP_COLORS.white
+                          }}
                         >
-                          station: {marker.stationName}
+                          {marker.markerType === 'suggested' ? 'suggested stop' : 'station'}: {marker.stationName}
                         </span>
                       ))}
                   </div>
@@ -163,6 +306,25 @@ export default function VerticalStripMapTimeline({ events, timelineConfig, stati
           )
         })}
       </div>
+
+      {suggestedMarkers.length > 0 ? (
+        <div className="mt-4 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.yellow}70`, backgroundColor: '#080808' }}>
+          <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.yellow }}>
+            ranked station suggestions
+          </small>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {suggestedMarkers.map((marker, index) => (
+              <span
+                key={marker.id}
+                className="inline-flex rounded-full border px-2.5 py-1 text-[11px]"
+                style={{ borderColor: `${SP_COLORS.yellow}90`, color: SP_COLORS.yellow }}
+              >
+                {index + 1}. {marker.stationName}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

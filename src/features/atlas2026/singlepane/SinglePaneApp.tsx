@@ -4,6 +4,7 @@ import AccountSettingsPanel from '@/features/atlas2026/singlepane/components/Acc
 import ContextPanels from '@/features/atlas2026/singlepane/components/ContextPanels'
 import ProfilePanel from '@/features/atlas2026/singlepane/components/ProfilePanel'
 import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLoadChart'
+import RadialLoadTableOverlay from '@/features/atlas2026/singlepane/components/RadialLoadTableOverlay'
 import RoleMenus from '@/features/atlas2026/singlepane/components/RoleMenus'
 import RoutePlanningOverlay from '@/features/atlas2026/singlepane/components/RoutePlanningOverlay'
 import StripMapTimeline from '@/features/atlas2026/singlepane/components/StripMapTimeline'
@@ -11,6 +12,7 @@ import TopNav from '@/features/atlas2026/singlepane/components/TopNav'
 import VerticalStripMapTimeline from '@/features/atlas2026/singlepane/components/VerticalStripMapTimeline'
 import ZCodeTaskPane from '@/features/atlas2026/singlepane/components/ZCodeTaskPane'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type { JourneyStationMarker, StabilizationPhase } from '@/features/atlas2026/singlepane/types'
 import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePaneData'
 
 export default function SinglePaneApp() {
@@ -25,6 +27,7 @@ export default function SinglePaneApp() {
     enrollees,
     selectedEnrollee,
     selectedLoad,
+    selectedLoadBreakdown,
     selectedLogs,
     selectedRoleConfig,
     timelineConfig,
@@ -33,16 +36,23 @@ export default function SinglePaneApp() {
     countyHeatmap,
     adminMetrics,
     journeyStationMarkers,
+    selectedRouteAssignment,
     appendRouteLog,
+    updateRouteLogTimelinePosition,
+    updateRouteLogDate,
+    updateTimelineStartDate,
     accountSettings,
     selectedIntake,
     hasSavedIntake,
     saveAccountSettings,
-    saveEnrolleeIntake
+    saveEnrolleeIntake,
+    saveRouteAssignment
   } = useSinglePaneData()
   const [activeZCode, setActiveZCode] = React.useState<string | null>(null)
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = React.useState(false)
   const [isRoutePlanningOpen, setIsRoutePlanningOpen] = React.useState(false)
+  const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
+  const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [lastContentMenu, setLastContentMenu] = React.useState('assigned enrollees')
   const actionMenus = selectedRoleConfig.actionMenus?.length ? selectedRoleConfig.actionMenus : ['route planning']
 
@@ -52,9 +62,41 @@ export default function SinglePaneApp() {
     }
   }, [activeMenu])
 
+  React.useEffect(() => {
+    if (!isRoutePlanningOpen) {
+      setSelectedRouteCandidateId(selectedRouteAssignment?.stationId || null)
+      return
+    }
+    if (!routeCandidates.length) {
+      setSelectedRouteCandidateId(null)
+      return
+    }
+    setSelectedRouteCandidateId((current) =>
+      current && routeCandidates.some((candidate) => candidate.stationId === current)
+        ? current
+        : selectedRouteAssignment?.stationId && routeCandidates.some((candidate) => candidate.stationId === selectedRouteAssignment.stationId)
+          ? selectedRouteAssignment.stationId
+          : routeCandidates[0].stationId
+    )
+  }, [isRoutePlanningOpen, routeCandidates, selectedRouteAssignment])
+
   const activeAction = actionMenus[0] || 'route planning'
   const isAdminSection = role === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
   const isReady = Boolean(selectedEnrollee && timelineConfig)
+  const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
+  const highlightedStationName = isRoutePlanningOpen
+    ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
+    : selectedRouteAssignment?.stationName || null
+  const previewStationMarkers = React.useMemo(() => {
+    const suggestedMarkers: JourneyStationMarker[] = routeCandidates.map((candidate) => ({
+      id: `suggested-${candidate.stationId}`,
+      stationName: candidate.stationName,
+      assignedAtIso: timelineConfig?.planStartIso || new Date().toISOString(),
+      phase: 'readiness',
+      markerType: 'suggested'
+    }))
+    return [...journeyStationMarkers, ...suggestedMarkers]
+  }, [journeyStationMarkers, routeCandidates, timelineConfig?.planStartIso])
 
   function handleMenuSelect(menu: string) {
     if (menu === 'route planning') {
@@ -76,6 +118,7 @@ export default function SinglePaneApp() {
 
   function closeRoutePlanning() {
     setIsRoutePlanningOpen(false)
+    setSelectedRouteCandidateId(null)
     const fallbackMenu =
       lastContentMenu && lastContentMenu !== 'route planning' ? lastContentMenu : selectedRoleConfig.topMenus?.[0] || 'assigned enrollees'
     setActiveMenu(fallbackMenu)
@@ -114,9 +157,20 @@ export default function SinglePaneApp() {
             isOpen={isRoutePlanningOpen}
             enrollee={selectedEnrollee}
             routeCandidates={routeCandidates}
+            selectedCandidateId={selectedRouteCandidateId}
+            onSelectCandidate={setSelectedRouteCandidateId}
+            assignedCandidateId={selectedRouteAssignment?.stationId || null}
+            onCommitCandidate={(candidate) => saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs))}
             enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
             hasRecordedIntake={hasSavedIntake}
+            suggestedPhase={getNextSuggestedPhase(selectedLogs)}
             onClose={closeRoutePlanning}
+          />
+          <RadialLoadTableOverlay
+            isOpen={isLoadTableOpen}
+            load={selectedLoad}
+            breakdown={selectedLoadBreakdown}
+            onClose={() => setIsLoadTableOpen(false)}
           />
           <ZCodeTaskPane zCode={activeZCode} onClose={() => setActiveZCode(null)} />
           <div className="flex min-h-full flex-col gap-[10px]">
@@ -136,7 +190,7 @@ export default function SinglePaneApp() {
                     />
                   </div>
                   <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
-                    <RadialLoadChart load={selectedLoad} />
+                    <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
                   </div>
                 </div>
 
@@ -157,10 +211,25 @@ export default function SinglePaneApp() {
                 ) : (
                   <>
                     <div className="hidden min-h-[220px] flex-1 items-center pt-1 md:flex">
-                      <StripMapTimeline events={selectedLogs} timelineConfig={timelineConfig} stationMarkers={journeyStationMarkers} />
+                      <StripMapTimeline
+                        events={selectedLogs}
+                        timelineConfig={timelineConfig}
+                        stationMarkers={previewStationMarkers}
+                        highlightedStationName={highlightedStationName}
+                        onEventPositionChange={updateRouteLogTimelinePosition}
+                        onEventDateChange={updateRouteLogDate}
+                        onStartDateChange={updateTimelineStartDate}
+                      />
                     </div>
                     <div className="flex min-h-[220px] flex-1 items-start pt-1 md:hidden">
-                      <VerticalStripMapTimeline events={selectedLogs} timelineConfig={timelineConfig} stationMarkers={journeyStationMarkers} />
+                      <VerticalStripMapTimeline
+                        events={selectedLogs}
+                        timelineConfig={timelineConfig}
+                        stationMarkers={previewStationMarkers}
+                        highlightedStationName={highlightedStationName}
+                        onEventDateChange={updateRouteLogDate}
+                        onStartDateChange={updateTimelineStartDate}
+                      />
                     </div>
                     <ContextPanels
                       activeMenu={activeMenu}
@@ -205,6 +274,15 @@ function LoadingShell() {
       <div className="h-[220px] rounded-[28px] border border-white/15 bg-white/5" />
     </>
   )
+}
+
+function getNextSuggestedPhase(logs: { phase: StabilizationPhase; status: string }[]) {
+  const last = logs[logs.length - 1]
+  if (!last) return 'regulation'
+  if (last.status !== 'active') return last.phase
+  if (last.phase === 'regulation') return 'readiness'
+  if (last.phase === 'readiness') return 'renewal'
+  return 'renewal'
 }
 
 function formatDateLabel(dateValue: string) {

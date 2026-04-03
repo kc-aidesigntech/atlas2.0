@@ -3,11 +3,13 @@ import type {
   AccountSettings,
   AtlasRole,
   CountyHeatPoint,
+  DomainLoadBreakdown,
   DomainLoad,
   EnrolleeIntakeRecord,
   EnrolleeProfile,
   EnrollmentRequestRecord,
   JourneyStationMarker,
+  RouteAssignmentRecord,
   RouteCandidateRecord,
   RouteLogEvent
 } from '@/features/atlas2026/singlepane/types'
@@ -17,6 +19,7 @@ import {
   getLocalCountyHeatmap,
   getLocalEnrollmentRequests,
   getLocalPartnerRadialLoad,
+  getLocalPartnerRadialLoadBreakdown,
   getLocalRouteCandidates,
   getLocalSinglePaneBootstrap,
   type SinglePaneBootstrapData
@@ -25,6 +28,7 @@ import {
 const STORAGE_KEY = 'atlas2026.singlepane.logs.v3'
 const ACCOUNT_SETTINGS_KEY = 'atlas2026.singlepane.account-settings.v1'
 const ENROLLEE_INTAKES_KEY = 'atlas2026.singlepane.enrollee-intakes.v1'
+const ROUTE_ASSIGNMENTS_KEY = 'atlas2026.singlepane.route-assignments.v1'
 
 interface PersistedRouteLogState {
   appendedLogs: RouteLogEvent[]
@@ -37,7 +41,11 @@ function normalizeLog(log: RouteLogEvent): RouteLogEvent {
     phase: log.phase || 'regulation',
     milestoneType: log.milestoneType || 'intervention',
     domainsRelieved: Array.isArray(log.domainsRelieved) ? log.domainsRelieved : ['social'],
-    stationIcon: log.stationIcon || 'check'
+    stationIcon: log.stationIcon || 'check',
+    timelinePositionRatio:
+      typeof log.timelinePositionRatio === 'number' && Number.isFinite(log.timelinePositionRatio)
+        ? Math.max(0, Math.min(1, log.timelinePositionRatio))
+        : null
   }
 }
 
@@ -51,6 +59,7 @@ function areLogsEqual(left: RouteLogEvent, right: RouteLogEvent) {
     left.phase === right.phase &&
     left.milestoneType === right.milestoneType &&
     left.stationIcon === right.stationIcon &&
+    left.timelinePositionRatio === right.timelinePositionRatio &&
     left.domainsRelieved.join('|') === right.domainsRelieved.join('|')
   )
 }
@@ -157,6 +166,24 @@ function persistEnrolleeIntakeState(intakes: Record<string, EnrolleeIntakeRecord
   window.localStorage.setItem(ENROLLEE_INTAKES_KEY, JSON.stringify(intakes))
 }
 
+function loadRouteAssignmentState(): Record<string, RouteAssignmentRecord> {
+  if (typeof window === 'undefined') return {}
+  const raw = window.localStorage.getItem(ROUTE_ASSIGNMENTS_KEY)
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as Record<string, RouteAssignmentRecord>
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed
+  } catch {
+    return {}
+  }
+}
+
+function persistRouteAssignmentState(assignments: Record<string, RouteAssignmentRecord>) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(ROUTE_ASSIGNMENTS_KEY, JSON.stringify(assignments))
+}
+
 function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrides: Record<string, EnrolleeIntakeRecord>) {
   return enrollees.map((enrollee) => {
     const intake = intakeOverrides[enrollee.id]
@@ -202,6 +229,12 @@ export async function appendRouteLog(logs: RouteLogEvent[], nextLog: RouteLogEve
   return finalLogs
 }
 
+export async function saveRouteLogs(logs: RouteLogEvent[]) {
+  const finalLogs = logs.map(normalizeLog)
+  persistLocalLogs(finalLogs)
+  return finalLogs
+}
+
 export async function loadEnrollmentRequests(role: AtlasRole): Promise<EnrollmentRequestRecord[]> {
   return getLocalEnrollmentRequests(role)
 }
@@ -220,19 +253,36 @@ export async function loadAdminDataQuality(): Promise<AdminDataQualityMetric[]> 
 
 export async function loadJourneyStationMarkers(enrollmentId?: string): Promise<JourneyStationMarker[]> {
   if (!enrollmentId) return []
-  return loadLocalLogs()
+  const historyMarkers = loadLocalLogs()
     .filter((log) => log.enrolleeId === enrollmentId && log.phase !== 'regulation')
     .map((log, index) => ({
       id: `station-marker-${log.id}`,
       stationName: index === 0 ? 'partner station' : `partner station ${index + 1}`,
       assignedAtIso: log.timestampIso,
       phase: log.phase,
-      iconSlug: log.stationIcon
+      iconSlug: log.stationIcon,
+      markerType: 'history' as const
     }))
+  const selectedAssignment = loadRouteAssignmentState()[enrollmentId]
+  if (!selectedAssignment) return historyMarkers
+  return [
+    ...historyMarkers,
+    {
+      id: `route-assignment-${selectedAssignment.enrolleeId}`,
+      stationName: selectedAssignment.stationName,
+      assignedAtIso: selectedAssignment.assignedAtIso,
+      phase: selectedAssignment.phase,
+      markerType: 'selected'
+    }
+  ]
 }
 
 export async function loadPartnerRadialLoad(): Promise<DomainLoad | null> {
   return getLocalPartnerRadialLoad()
+}
+
+export async function loadPartnerRadialLoadBreakdown(): Promise<DomainLoadBreakdown | null> {
+  return getLocalPartnerRadialLoadBreakdown()
 }
 
 export async function loadAccountSettings(): Promise<AccountSettings> {
@@ -255,4 +305,17 @@ export async function saveEnrolleeIntake(intake: EnrolleeIntakeRecord): Promise<
   }
   persistEnrolleeIntakeState(nextState)
   return intake
+}
+
+export async function loadRouteAssignments(): Promise<Record<string, RouteAssignmentRecord>> {
+  return loadRouteAssignmentState()
+}
+
+export async function saveRouteAssignment(assignment: RouteAssignmentRecord): Promise<RouteAssignmentRecord> {
+  const nextState = {
+    ...loadRouteAssignmentState(),
+    [assignment.enrolleeId]: assignment
+  }
+  persistRouteAssignmentState(nextState)
+  return assignment
 }

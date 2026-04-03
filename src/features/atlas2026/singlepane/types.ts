@@ -19,6 +19,29 @@ export interface DomainLoad {
   socialNetworks: number
 }
 
+export type DomainLoadBucket = 'habitat' | 'work' | 'socialNetworks'
+export type DomainLoadSourceKind = 'partnerSurvey' | 'enrolleeRecords'
+
+export interface DomainLoadBreakdownRow {
+  id: string
+  zCodeGroup: string
+  mappedDomain: DomainLoadBucket
+  rawCount: number
+  specializeCount?: number
+  interfereCount?: number
+}
+
+export interface DomainLoadBreakdown {
+  subjectId: string
+  subjectLabel: string
+  sourceKind: DomainLoadSourceKind
+  sourceLabel: string
+  habitatTotal: number
+  workTotal: number
+  socialNetworksTotal: number
+  rows: DomainLoadBreakdownRow[]
+}
+
 export type StabilizationPhase = 'regulation' | 'readiness' | 'renewal'
 export type ZDomain = 'housing' | 'health' | 'work' | 'social' | 'legal' | 'education'
 export type RouteLogStatus = 'planned' | 'active' | 'completed' | 'blocked'
@@ -35,6 +58,7 @@ export interface RouteLogEvent {
   milestoneType: RouteMilestoneType
   domainsRelieved: ZDomain[]
   stationIcon?: StationIcon
+  timelinePositionRatio?: number | null
 }
 
 export interface RoleMenuConfig {
@@ -94,6 +118,7 @@ export interface JourneyStationMarker {
   assignedAtIso: string
   phase: StabilizationPhase
   iconSlug?: string
+  markerType?: 'history' | 'suggested' | 'selected'
 }
 
 export interface AccountSettings {
@@ -112,4 +137,13 @@ export interface EnrolleeIntakeRecord {
   assignedNavigator: string
   enrollmentStartIso: string
   zCodeTags: string[]
+}
+
+export interface RouteAssignmentRecord {
+  enrolleeId: string
+  stationId: string
+  stationName: string
+  assignedAtIso: string
+  phase: StabilizationPhase
+  matchedZCodes: string[]
 }

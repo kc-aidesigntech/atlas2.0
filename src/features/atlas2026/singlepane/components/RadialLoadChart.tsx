@@ -5,9 +5,10 @@ import { SP_COLORS } from '../theme'
 
 interface RadialLoadChartProps {
   load: DomainLoad | null
+  onClick?: () => void
 }
 
-export default function RadialLoadChart({ load }: RadialLoadChartProps) {
+export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps) {
   const habitat = load?.habitat || 0
   const work = load?.work || 0
   const social = load?.socialNetworks || 0
@@ -24,9 +25,17 @@ export default function RadialLoadChart({ load }: RadialLoadChartProps) {
   ]
   const polarRadius = [12, 24, 36, 48, 60, 72]
   const polarAngles = [90, 30, -30, -90, -150, -210]
+  const Wrapper = onClick ? 'button' : 'div'
 
   return (
-    <div className="flex h-[250px] w-full max-w-[340px] flex-col items-center justify-center sm:h-[280px] sm:max-w-[360px]">
+    <Wrapper
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`flex h-[250px] w-full max-w-[340px] flex-col items-center justify-center sm:h-[280px] sm:max-w-[360px] ${
+        onClick ? 'cursor-pointer rounded-[28px] transition-opacity hover:opacity-90' : ''
+      }`}
+      aria-label={onClick ? 'Open radial load source table' : undefined}
+    >
       <ResponsiveContainer width="100%" height="84%">
         <RadarChart
           cx="50%"
@@ -71,6 +80,9 @@ export default function RadialLoadChart({ load }: RadialLoadChartProps) {
           destabilizing load
         </small>
       </div>
-    </div>
+      {onClick ? (
+        <small className="mt-1 text-[11px] uppercase tracking-[0.08em] text-[#9f9f9f]">click chart to inspect source rows</small>
+      ) : null}
+    </Wrapper>
   )
 }
