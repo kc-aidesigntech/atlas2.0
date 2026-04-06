@@ -17,6 +17,7 @@ import type {
   ZDomain
 } from '@/features/atlas2026/singlepane/types'
 import countiesCsv from '../../../../../sample-data/relational-csv-archive1/counties.csv?raw'
+import kolbiAvatarUrl from '../../../../../assets/Kolbi Christianson-lt.png'
 import peopleCsv from '../../../../../sample-data/relational-csv-archive1/people.csv?raw'
 import contactCsv from '../../../../../sample-data/relational-csv-archive1/people-contactinfo.csv?raw'
 import progressConditionsCsv from '../../../../../sample-data/relational-csv-archive1/progress-conditions.csv?raw'
@@ -51,7 +52,7 @@ interface LocalSinglePaneDataset {
   >
 }
 
-const DEFAULT_AVATAR_URL = ''
+const DEFAULT_AVATAR_URL = kolbiAvatarUrl
 
 const ROLE_MENUS: Record<AtlasRole, RoleMenuConfig> = {
   navigator: {
