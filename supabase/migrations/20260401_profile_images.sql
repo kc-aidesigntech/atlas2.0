@@ -87,18 +87,21 @@ for each row execute function atlas.fn_sync_primary_profile_image();
 
 alter table atlas.profile_images enable row level security;
 
-create policy if not exists profile_images_admin_all on atlas.profile_images
+drop policy if exists profile_images_admin_all on atlas.profile_images;
+create policy profile_images_admin_all on atlas.profile_images
 for all
 using (coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator');
 
-create policy if not exists storage_profile_images_admin_insert on storage.objects
+drop policy if exists storage_profile_images_admin_insert on storage.objects;
+create policy storage_profile_images_admin_insert on storage.objects
 for insert to authenticated
 with check (
   bucket_id = 'profile-images'
   and coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator'
 );
 
-create policy if not exists storage_profile_images_admin_update on storage.objects
+drop policy if exists storage_profile_images_admin_update on storage.objects;
+create policy storage_profile_images_admin_update on storage.objects
 for update to authenticated
 using (
   bucket_id = 'profile-images'
@@ -109,13 +112,15 @@ with check (
   and coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator'
 );
 
-create policy if not exists storage_profile_images_admin_delete on storage.objects
+drop policy if exists storage_profile_images_admin_delete on storage.objects;
+create policy storage_profile_images_admin_delete on storage.objects
 for delete to authenticated
 using (
   bucket_id = 'profile-images'
   and coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator'
 );
 
-create policy if not exists storage_profile_images_authenticated_read on storage.objects
+drop policy if exists storage_profile_images_authenticated_read on storage.objects;
+create policy storage_profile_images_authenticated_read on storage.objects
 for select to authenticated
 using (bucket_id = 'profile-images');

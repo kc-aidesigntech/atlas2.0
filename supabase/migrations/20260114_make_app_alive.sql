@@ -128,10 +128,25 @@ create table if not exists atlas.enrollments (
   enrollee_id uuid not null references atlas.enrollees(id) on delete cascade,
   start_date date not null,
   target_duration_months int not null default 6 check (target_duration_months between 6 and 12),
-  expected_end_date date generated always as (start_date + ((target_duration_months || ' months')::interval)) stored,
+  expected_end_date date,
   status text not null default 'active' check (status in ('active', 'paused', 'completed', 'cancelled')),
   created_at timestamptz not null default now()
 );
+
+create or replace function atlas.fn_sync_enrollment_expected_end_date()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.expected_end_date := (new.start_date + make_interval(months => new.target_duration_months))::date;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sync_enrollment_expected_end_date on atlas.enrollments;
+create trigger trg_sync_enrollment_expected_end_date
+before insert or update of start_date, target_duration_months on atlas.enrollments
+for each row execute function atlas.fn_sync_enrollment_expected_end_date();
 
 create table if not exists atlas.navigator_assignments (
   id uuid primary key default gen_random_uuid(),
@@ -495,22 +510,27 @@ alter table atlas.enrollments enable row level security;
 alter table atlas.partner_stations enable row level security;
 alter table atlas.journey_logs enable row level security;
 
-create policy if not exists people_admin_all on atlas.people
+drop policy if exists people_admin_all on atlas.people;
+create policy people_admin_all on atlas.people
 for all
 using (coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator');
 
-create policy if not exists enrollees_admin_all on atlas.enrollees
+drop policy if exists enrollees_admin_all on atlas.enrollees;
+create policy enrollees_admin_all on atlas.enrollees
 for all
 using (coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator');
 
-create policy if not exists enrollments_admin_all on atlas.enrollments
+drop policy if exists enrollments_admin_all on atlas.enrollments;
+create policy enrollments_admin_all on atlas.enrollments
 for all
 using (coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator');
 
-create policy if not exists partner_stations_admin_all on atlas.partner_stations
+drop policy if exists partner_stations_admin_all on atlas.partner_stations;
+create policy partner_stations_admin_all on atlas.partner_stations
 for all
 using (coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator');
 
-create policy if not exists journey_logs_admin_all on atlas.journey_logs
+drop policy if exists journey_logs_admin_all on atlas.journey_logs;
+create policy journey_logs_admin_all on atlas.journey_logs
 for all
 using (coalesce(auth.jwt() -> 'app_metadata' ->> 'atlas_role', '') = 'administrator');
