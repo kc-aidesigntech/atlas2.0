@@ -7,6 +7,7 @@ import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLo
 import RadialLoadTableOverlay from '@/features/atlas2026/singlepane/components/RadialLoadTableOverlay'
 import RoleMenus from '@/features/atlas2026/singlepane/components/RoleMenus'
 import RoutePlanningOverlay from '@/features/atlas2026/singlepane/components/RoutePlanningOverlay'
+import ServiceCapacitySurveyPanel from '@/features/atlas2026/singlepane/components/ServiceCapacitySurveyPanel'
 import StripMapTimeline from '@/features/atlas2026/singlepane/components/StripMapTimeline'
 import TopNav from '@/features/atlas2026/singlepane/components/TopNav'
 import VerticalStripMapTimeline from '@/features/atlas2026/singlepane/components/VerticalStripMapTimeline'
@@ -36,6 +37,10 @@ export default function SinglePaneApp() {
     countyHeatmap,
     adminMetrics,
     journeyStationMarkers,
+    partnerServiceCapacitySurvey,
+    partnerServiceCapacityDefaultHeader,
+    isSavingPartnerServiceCapacitySurvey,
+    partnerServiceCapacitySurveyError,
     selectedRouteAssignment,
     appendRouteLog,
     updateRouteLogTimelinePosition,
@@ -46,7 +51,8 @@ export default function SinglePaneApp() {
     hasSavedIntake,
     saveAccountSettings,
     saveEnrolleeIntake,
-    saveRouteAssignment
+    saveRouteAssignment,
+    savePartnerServiceCapacitySurvey
   } = useSinglePaneData()
   const [activeZCode, setActiveZCode] = React.useState<string | null>(null)
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = React.useState(false)
@@ -82,6 +88,7 @@ export default function SinglePaneApp() {
 
   const activeAction = actionMenus[0] || 'route planning'
   const isAdminSection = role === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
+  const isServiceCapacitySection = role === 'partner' && activeMenu === 'service capacity'
   const isReady = Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const highlightedStationName = isRoutePlanningOpen
@@ -206,6 +213,16 @@ export default function SinglePaneApp() {
                       intake={selectedIntake}
                       hasRecordedIntake={hasSavedIntake}
                       onSaveIntake={saveEnrolleeIntake}
+                    />
+                  </div>
+                ) : isServiceCapacitySection ? (
+                  <div className="flex min-h-[220px] flex-1 items-start pt-1">
+                    <ServiceCapacitySurveyPanel
+                      savedSubmission={partnerServiceCapacitySurvey}
+                      defaultHeader={partnerServiceCapacityDefaultHeader}
+                      isSaving={isSavingPartnerServiceCapacitySurvey}
+                      saveError={partnerServiceCapacitySurveyError}
+                      onSubmit={savePartnerServiceCapacitySurvey}
                     />
                   </div>
                 ) : (

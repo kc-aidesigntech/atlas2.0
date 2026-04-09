@@ -100,6 +100,75 @@ export interface RouteCandidateRecord {
   matchedZCodes: string[]
 }
 
+export type PartnerSurveyRespondentRole = 'administrator' | 'direct_service_provider' | 'other'
+
+export interface PartnerServiceCapacityScaleOption {
+  value: number
+  label: string
+  description: string
+}
+
+export interface ZCodeSurveyPrompt {
+  id: string
+  parentCode: string
+  parentTheme: string
+  zCode: string
+  normalizedZCode: string
+  title: string
+  description: string
+}
+
+export interface ZCodeSurveySection {
+  parentCode: string
+  theme: string
+  prompts: ZCodeSurveyPrompt[]
+}
+
+export interface PartnerServiceCapacityHeader {
+  firstName: string
+  lastName: string
+  organizationName: string
+  jobTitle: string
+  respondentRoles: PartnerSurveyRespondentRole[]
+  otherRoleText: string
+}
+
+export interface PartnerServiceCapacityAnswer {
+  promptId: string
+  parentCode: string
+  zCode: string
+  normalizedZCode: string
+  title: string
+  description: string
+  score: number
+}
+
+export interface PartnerServiceCapacitySubmissionInput {
+  header: PartnerServiceCapacityHeader
+  answers: PartnerServiceCapacityAnswer[]
+  formVersion: string
+}
+
+export interface PartnerServiceCapacitySubmissionRecord extends PartnerServiceCapacitySubmissionInput {
+  id: string
+  partnerId: string | null
+  organizationNameNormalized: string
+  submittedAtIso: string
+  updatedAtIso: string
+}
+
+export interface PartnerZCodeBurdenRecord {
+  id: string
+  partnerId: string | null
+  submissionId: string | null
+  zCode: string
+  normalizedZCode: string
+  score: number
+  derivedRelationType: 'specialize' | 'interfere' | null
+  strength: number
+  updatedAtIso: string
+}
+
 export interface CountyHeatPoint {
   countyId: string
   countyName: string

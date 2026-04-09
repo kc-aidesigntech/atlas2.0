@@ -10,6 +10,9 @@ import type {
   EnrollmentRequestRecord,
   EnrolleeProfile,
   JourneyStationMarker,
+  PartnerServiceCapacityHeader,
+  PartnerServiceCapacitySubmissionInput,
+  PartnerServiceCapacitySubmissionRecord,
   RoleMenuConfig,
   RouteAssignmentRecord,
   RouteCandidateRecord,
@@ -28,10 +31,12 @@ import {
   loadJourneyStationMarkers,
   loadPartnerRadialLoad,
   loadPartnerRadialLoadBreakdown,
+  loadPartnerServiceCapacitySurvey,
   loadRouteAssignments,
   loadRouteCandidates,
   loadSinglePaneBootstrap,
   saveAccountSettings as persistAccountSettings,
+  savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveRouteAssignment as persistRouteAssignment,
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake
@@ -56,6 +61,16 @@ function nextPhase(current?: StabilizationPhase): StabilizationPhase {
   return 'renewal'
 }
 
+function splitFullName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return { firstName: '', lastName: '' }
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return {
+    firstName: parts.slice(0, -1).join(' '),
+    lastName: parts[parts.length - 1]
+  }
+}
+
 export function useSinglePaneData() {
   const [role, setRole] = useState<AtlasRole>('navigator')
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
@@ -75,6 +90,9 @@ export function useSinglePaneData() {
   const [partnerLoadBreakdown, setPartnerLoadBreakdown] = useState<DomainLoadBreakdown | null>(null)
   const [journeyStationMarkers, setJourneyStationMarkers] = useState<JourneyStationMarker[]>([])
   const [routeAssignmentsByEnrolleeId, setRouteAssignmentsByEnrolleeId] = useState<Record<string, RouteAssignmentRecord>>({})
+  const [partnerServiceCapacitySurvey, setPartnerServiceCapacitySurvey] = useState<PartnerServiceCapacitySubmissionRecord | null>(null)
+  const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
+  const [partnerServiceCapacitySurveyError, setPartnerServiceCapacitySurveyError] = useState<string | null>(null)
   const [accountSettings, setAccountSettings] = useState<AccountSettings>({
     fullName: 'atlas operator',
     email: 'operator@atlas.local',
@@ -201,6 +219,18 @@ export function useSinglePaneData() {
     [routeAssignmentsByEnrolleeId, selectedEnrollee]
   )
 
+  const partnerServiceCapacityDefaultHeader = useMemo<PartnerServiceCapacityHeader>(() => {
+    const splitName = splitFullName(accountSettings.fullName)
+    return {
+      firstName: splitName.firstName,
+      lastName: splitName.lastName,
+      organizationName: accountSettings.organization || '',
+      jobTitle: '',
+      respondentRoles: role === 'administrator' ? ['administrator'] : ['direct_service_provider'],
+      otherRoleText: ''
+    }
+  }, [accountSettings.fullName, accountSettings.organization, role])
+
   useEffect(() => {
     let isMounted = true
     async function refreshRouteCandidates() {
@@ -245,6 +275,37 @@ export function useSinglePaneData() {
       isMounted = false
     }
   }, [routeCandidates, selectedEnrollee?.enrollmentId, selectedEnrollee?.id, selectedLogs])
+
+  useEffect(() => {
+    let isMounted = true
+    async function hydratePartnerServiceCapacitySurvey() {
+      if (role !== 'partner') {
+        if (isMounted) {
+          setPartnerServiceCapacitySurvey(null)
+          setPartnerServiceCapacitySurveyError(null)
+        }
+        return
+      }
+      const organizationName = accountSettings.organization?.trim()
+      if (!organizationName) {
+        if (isMounted) setPartnerServiceCapacitySurvey(null)
+        return
+      }
+      try {
+        const savedSurvey = await loadPartnerServiceCapacitySurvey(organizationName)
+        if (!isMounted) return
+        setPartnerServiceCapacitySurvey(savedSurvey)
+        setPartnerServiceCapacitySurveyError(null)
+      } catch (error) {
+        if (!isMounted) return
+        setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to load service capacity survey.')
+      }
+    }
+    hydratePartnerServiceCapacitySurvey()
+    return () => {
+      isMounted = false
+    }
+  }, [accountSettings.organization, role])
 
   function appendRouteLog(label: string) {
     if (!selectedEnrollee || !label.trim()) return
@@ -404,6 +465,27 @@ export function useSinglePaneData() {
     })
   }
 
+  async function savePartnerServiceCapacitySurvey(input: PartnerServiceCapacitySubmissionInput) {
+    setIsSavingPartnerServiceCapacitySurvey(true)
+    setPartnerServiceCapacitySurveyError(null)
+    try {
+      const saved = await persistPartnerServiceCapacitySurvey(input)
+      setPartnerServiceCapacitySurvey(saved)
+      const nextAccountSettings = {
+        ...accountSettings,
+        fullName: `${input.header.firstName} ${input.header.lastName}`.trim() || accountSettings.fullName,
+        organization: input.header.organizationName
+      }
+      setAccountSettings(nextAccountSettings)
+      persistAccountSettings(nextAccountSettings)
+    } catch (error) {
+      setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to save service capacity survey.')
+      throw error
+    } finally {
+      setIsSavingPartnerServiceCapacitySurvey(false)
+    }
+  }
+
   return {
     role,
     setRole,
@@ -424,6 +506,10 @@ export function useSinglePaneData() {
     countyHeatmap,
     adminMetrics,
     journeyStationMarkers,
+    partnerServiceCapacitySurvey,
+    partnerServiceCapacityDefaultHeader,
+    isSavingPartnerServiceCapacitySurvey,
+    partnerServiceCapacitySurveyError,
     selectedRouteAssignment,
     appendRouteLog,
     updateRouteLogTimelinePosition,
@@ -434,6 +520,7 @@ export function useSinglePaneData() {
     hasSavedIntake,
     saveAccountSettings,
     saveEnrolleeIntake,
-    saveRouteAssignment
+    saveRouteAssignment,
+    savePartnerServiceCapacitySurvey
   }
 }
