@@ -1,3 +1,13 @@
+-- Partner service-capacity survey bootstrap
+--
+-- Run this after:
+-- 1. supabase/migrations/20260114_make_app_alive.sql
+-- 2. supabase/seeds/seed_z_code_taxonomy.sql
+--
+-- Optional but recommended before production hardening:
+-- - add auth-linked RLS policies
+-- - replace anon write access with authenticated or edge-function writes
+
 create or replace function atlas.fn_touch_updated_at()
 returns trigger
 language plpgsql
