@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   buildDefaultPartnerServiceCapacityAnswers,
   getScaleOption,
@@ -31,6 +31,18 @@ const ROLE_OPTIONS: Array<{ value: PartnerSurveyRespondentRole; label: string }>
   { value: 'other', label: 'Other' }
 ]
 
+const SECTION_ACCENT_COLORS: Record<string, string> = {
+  Z55: SP_COLORS.blue,
+  Z56: SP_COLORS.orange,
+  Z57: SP_COLORS.deepGreen,
+  Z59: SP_COLORS.red,
+  Z60: SP_COLORS.purple,
+  Z62: SP_COLORS.brown,
+  Z63: SP_COLORS.green,
+  Z64: SP_COLORS.yellow,
+  Z65: SP_COLORS.steel
+}
+
 interface DraftState {
   header: PartnerServiceCapacityHeader
   answers: PartnerServiceCapacityAnswer[]
@@ -48,6 +60,8 @@ export default function ServiceCapacitySurveyPanel({
     answers: buildDefaultPartnerServiceCapacityAnswers()
   }))
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
+  const numericInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const hasAutoFocusedFirstCard = useRef(false)
 
   useEffect(() => {
     const defaults = buildDefaultPartnerServiceCapacityAnswers()
@@ -59,7 +73,24 @@ export default function ServiceCapacitySurveyPanel({
   }, [defaultHeader, savedSubmission])
 
   const answersByPromptId = useMemo(() => new Map(draft.answers.map((answer) => [answer.promptId, answer])), [draft.answers])
+  const orderedPromptIds = useMemo(
+    () => SERVICE_CAPACITY_SURVEY_SECTIONS.flatMap((section) => section.prompts.map((promptItem) => promptItem.id)),
+    []
+  )
   const completedCount = draft.answers.filter((answer) => answer.score >= 1 && answer.score <= 9).length
+
+  useEffect(() => {
+    if (hasAutoFocusedFirstCard.current) return
+    const firstPromptId = orderedPromptIds[0]
+    const firstInput = firstPromptId ? numericInputRefs.current[firstPromptId] : null
+    if (!firstInput) return
+
+    hasAutoFocusedFirstCard.current = true
+    requestAnimationFrame(() => {
+      firstInput.focus()
+      firstInput.select()
+    })
+  }, [orderedPromptIds, draft.answers])
 
   function updateHeader<K extends keyof PartnerServiceCapacityHeader>(key: K, value: PartnerServiceCapacityHeader[K]) {
     setDraft((current) => ({
@@ -85,6 +116,21 @@ export default function ServiceCapacitySurveyPanel({
       ...current,
       answers: current.answers.map((answer) => (answer.promptId === promptId ? { ...answer, score } : answer))
     }))
+  }
+
+  function focusAdjacentNumericInput(promptId: string, direction: 1 | -1) {
+    const currentIndex = orderedPromptIds.indexOf(promptId)
+    if (currentIndex === -1) return false
+
+    const nextPromptId = orderedPromptIds[currentIndex + direction]
+    if (!nextPromptId) return false
+
+    const nextInput = numericInputRefs.current[nextPromptId]
+    if (!nextInput) return false
+
+    nextInput.focus()
+    nextInput.select()
+    return true
   }
 
   async function handleSubmit() {
@@ -131,21 +177,21 @@ export default function ServiceCapacitySurveyPanel({
     <div className="w-full rounded-[30px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: '#020202' }}>
       <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style={{ borderColor: '#ffffff20' }}>
         <div className="max-w-[720px]">
-          <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+          <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
             partner service capacity
           </small>
-          <h3 className="mt-1 text-[26px] font-medium text-white md:text-[30px]">Z-code burden survey</h3>
-          <small className="block text-[13px] text-[#bdbdbd] md:text-[15px]">
+          <h3 className="mt-1 text-[28px] font-medium text-white md:text-[34px]">Z-code burden survey</h3>
+          <small className="block text-[14px] text-[#bdbdbd] md:text-[17px]">
             Capture how well your organization can handle each Z-code pressure area on a 1-9 burden scale.
           </small>
         </div>
         <div className="flex flex-col items-end gap-2">
           {lastSavedLabel ? (
-            <small className="text-[12px]" style={{ color: SP_COLORS.muted }}>
+            <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
               last saved {lastSavedLabel}
             </small>
           ) : (
-            <small className="text-[12px]" style={{ color: SP_COLORS.muted }}>
+            <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
               no saved survey yet
             </small>
           )}
@@ -153,7 +199,7 @@ export default function ServiceCapacitySurveyPanel({
             type="button"
             onClick={handleSubmit}
             disabled={isSaving}
-            className="rounded-full border px-4 py-2 text-[12px] font-medium"
+            className="rounded-full border px-4 py-2 text-[12px] font-medium md:text-[13px]"
             style={{ borderColor: SP_COLORS.yellow, color: SP_COLORS.yellow, opacity: isSaving ? 0.6 : 1 }}
           >
             {isSaving ? 'saving survey...' : 'save survey'}
@@ -163,7 +209,7 @@ export default function ServiceCapacitySurveyPanel({
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff25' }}>
-          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[13px]">respondent details</small>
+          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[14px]">respondent details</small>
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Your Name*" requiredHint="This field is required.">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -198,7 +244,7 @@ export default function ServiceCapacitySurveyPanel({
                       key={option.value}
                       type="button"
                       onClick={() => toggleRole(option.value)}
-                      className="rounded-full border px-3 py-1.5 text-[12px]"
+                      className="rounded-full border px-3 py-1.5 text-[12px] md:text-[13px]"
                       style={{
                         borderColor: isSelected ? SP_COLORS.yellow : '#ffffff30',
                         color: isSelected ? SP_COLORS.yellow : SP_COLORS.white
@@ -223,17 +269,17 @@ export default function ServiceCapacitySurveyPanel({
         </section>
 
         <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff25' }}>
-          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[13px]">scale guide</small>
+          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[14px]">scale guide</small>
           <div className="grid gap-2">
             {SERVICE_CAPACITY_SCALE.map((option) => (
               <div key={option.value} className="rounded-[18px] border px-3 py-2" style={{ borderColor: '#ffffff18', backgroundColor: '#060606' }}>
-                <div className="text-[12px] font-medium md:text-[13px]" style={{ color: option.value >= 7 ? SP_COLORS.deepGreen : option.value <= 3 ? SP_COLORS.red : SP_COLORS.yellow }}>
+                <div className="text-[13px] font-medium md:text-[15px]" style={{ color: option.value >= 7 ? SP_COLORS.deepGreen : option.value <= 3 ? SP_COLORS.red : SP_COLORS.yellow }}>
                   {option.value} - {option.label}
                 </div>
-                <small className="block text-[11px] text-[#bdbdbd] md:text-[12px]">{option.description}</small>
+                <small className="block text-[12px] text-[#bdbdbd] md:text-[13px]">{option.description}</small>
               </div>
             ))}
-            <small className="pt-2 text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+            <small className="pt-2 text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
               {completedCount} of {draft.answers.length} cards currently rated.
             </small>
           </div>
@@ -241,7 +287,7 @@ export default function ServiceCapacitySurveyPanel({
       </div>
 
       {validationMessage || saveError ? (
-        <div className="mt-4 rounded-[18px] border px-4 py-3 text-[13px]" style={{ borderColor: `${SP_COLORS.red}70`, color: SP_COLORS.red }}>
+        <div className="mt-4 rounded-[18px] border px-4 py-3 text-[13px] md:text-[14px]" style={{ borderColor: `${SP_COLORS.red}70`, color: SP_COLORS.red }}>
           {validationMessage || saveError}
         </div>
       ) : null}
@@ -251,12 +297,12 @@ export default function ServiceCapacitySurveyPanel({
           <section key={section.parentCode} className="rounded-[26px] border px-4 py-4 md:px-5" style={{ borderColor: '#ffffff25' }}>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2 border-b pb-3" style={{ borderColor: '#ffffff12' }}>
               <div>
-                <small className="block text-[12px] uppercase tracking-[0.14em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+                <small className="block text-[12px] uppercase tracking-[0.14em] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
                   {section.parentCode}
                 </small>
-                <div className="text-[18px] font-medium text-white md:text-[20px]">{section.theme}</div>
+                <div className="text-[19px] font-medium text-white md:text-[23px]">{section.theme}</div>
               </div>
-              <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+              <small className="text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
                 {section.prompts.length} cards
               </small>
             </div>
@@ -269,6 +315,11 @@ export default function ServiceCapacitySurveyPanel({
                     key={promptItem.id}
                     promptItem={promptItem}
                     score={answer.score}
+                    accentColor={SECTION_ACCENT_COLORS[section.parentCode] || SP_COLORS.white}
+                    inputRef={(element) => {
+                      numericInputRefs.current[promptItem.id] = element
+                    }}
+                    onTabNavigate={(direction) => focusAdjacentNumericInput(promptItem.id, direction)}
                     onChange={(score) => updateAnswer(promptItem.id, score)}
                   />
                 )
@@ -283,7 +334,7 @@ export default function ServiceCapacitySurveyPanel({
           type="button"
           onClick={handleSubmit}
           disabled={isSaving}
-          className="rounded-full border px-5 py-2 text-[13px] font-medium"
+          className="rounded-full border px-5 py-2 text-[13px] font-medium md:text-[14px]"
           style={{ borderColor: SP_COLORS.yellow, color: SP_COLORS.yellow, opacity: isSaving ? 0.6 : 1 }}
         >
           {isSaving ? 'saving survey...' : 'save partner burden survey'}
@@ -296,14 +347,21 @@ export default function ServiceCapacitySurveyPanel({
 function BurdenCard({
   promptItem,
   score,
+  accentColor,
+  inputRef,
+  onTabNavigate,
   onChange
 }: {
   promptItem: ZCodeSurveyPrompt
   score: number
+  accentColor: string
+  inputRef?: (element: HTMLInputElement | null) => void
+  onTabNavigate: (direction: 1 | -1) => boolean
   onChange: (score: number) => void
 }) {
   const scaleState = getScaleOption(score)
   const thumbPercent = ((score - 1) / 8) * 100
+  const badgeTextColor = accentColor === SP_COLORS.yellow ? SP_COLORS.bg : SP_COLORS.white
 
   function handleNumberInputChange(nextValue: string) {
     if (!nextValue) {
@@ -316,13 +374,22 @@ function BurdenCard({
   }
 
   return (
-    <div className="rounded-[22px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
-      <div className="flex items-start gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-medium text-white md:text-[17px]">{promptItem.zCode}</div>
-          <small className="mt-1 block text-[12px] text-[#bdbdbd] md:text-[13px]">{promptItem.description}</small>
+    <div className="relative rounded-[22px] border px-4 pb-3 pt-3 md:px-5 md:pb-3.5" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
+      <div
+        className="pointer-events-none absolute left-0 right-0 top-[33px] border-t"
+        style={{ borderColor: '#ffffff22' }}
+      />
+      <div className="flex items-start gap-3 md:gap-4">
+        <div className="relative z-10 w-[88px] shrink-0 pt-[14px] text-left md:w-[104px]">
+          <div className="inline-flex rounded-full bg-[#050505] pr-3 text-[14px] font-medium text-white md:text-[16px]">
+            {promptItem.zCode}
+          </div>
+        </div>
 
-          <div className="relative mt-5 pt-9">
+        <div className="min-w-0 flex-1 pt-[6px]">
+          <div className="pr-2 text-[13px] text-[#d6d6d6] md:text-[15px]">{promptItem.description}</div>
+
+          <div className="relative mt-3 pt-8 md:mt-3.5">
             <div
               className="pointer-events-none absolute top-0 z-10 w-[220px] max-w-[calc(100%-8px)] -translate-x-1/2 rounded-[16px] border px-3 py-2"
               style={{
@@ -331,13 +398,13 @@ function BurdenCard({
                 backgroundColor: '#080808'
               }}
             >
-              <small className="block text-[11px] md:text-[12px]" style={{ color: SP_COLORS.muted }}>
+              <small className="block text-[11px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
                 {scaleState.value} - {scaleState.label}
               </small>
-              <small className="block text-[11px] text-white md:text-[12px]">{scaleState.description}</small>
+              <small className="block text-[11px] text-white md:text-[13px]">{scaleState.description}</small>
             </div>
 
-            <div className="rounded-[20px] border px-3 py-3" style={{ borderColor: '#ffffff12', backgroundColor: '#020202' }}>
+            <div className="rounded-[20px] border px-3 py-2.5 md:px-3.5 md:py-3" style={{ borderColor: '#ffffff12', backgroundColor: '#020202' }}>
               <div className="flex flex-wrap items-center gap-3">
                 <input
                   type="range"
@@ -346,23 +413,33 @@ function BurdenCard({
                   step={1}
                   value={score}
                   onChange={(event) => onChange(Number(event.target.value))}
+                  tabIndex={-1}
                   className="min-w-[220px] flex-1 accent-white"
                 />
-                <label className="flex items-center gap-2 text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+                <label className="flex items-center gap-2 text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
                   <span>value</span>
                   <input
+                    ref={inputRef}
                     type="number"
                     min={1}
                     max={9}
                     step={1}
                     value={score}
                     onChange={(event) => handleNumberInputChange(event.target.value)}
-                    className="w-[64px] rounded-xl border bg-black px-2 py-1 text-center text-[14px] text-white"
+                    onFocus={(event) => event.currentTarget.select()}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Tab') return
+                      if (onTabNavigate(event.shiftKey ? -1 : 1)) {
+                        event.preventDefault()
+                      }
+                    }}
+                    inputMode="numeric"
+                    className="w-[64px] rounded-xl border bg-black px-2 py-1 text-center text-[14px] text-white md:text-[15px]"
                     style={{ borderColor: '#ffffff30' }}
                   />
                 </label>
               </div>
-              <div className="mt-2 flex items-center justify-between text-[10px]" style={{ color: SP_COLORS.muted }}>
+              <div className="mt-1.5 flex items-center justify-between text-[10px] md:text-[11px]" style={{ color: SP_COLORS.muted }}>
                 {SERVICE_CAPACITY_SCALE.map((option) => (
                   <span key={option.value}>{option.value}</span>
                 ))}
@@ -371,12 +448,12 @@ function BurdenCard({
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-col items-center gap-3 pt-1">
+        <div className="relative z-10 flex shrink-0 flex-col items-center gap-2 bg-[#050505] pl-2 pt-[2px]">
           <div
-            className="rounded-full border px-3 py-1 text-[12px]"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-medium md:h-11 md:w-11 md:text-[14px]"
             style={{
-              borderColor: score >= 7 ? `${SP_COLORS.deepGreen}90` : score <= 3 ? `${SP_COLORS.red}90` : `${SP_COLORS.yellow}90`,
-              color: score >= 7 ? SP_COLORS.deepGreen : score <= 3 ? SP_COLORS.red : SP_COLORS.yellow
+              backgroundColor: accentColor,
+              color: badgeTextColor
             }}
           >
             {score}
@@ -385,7 +462,7 @@ function BurdenCard({
             src={downArrowUrl}
             alt=""
             aria-hidden="true"
-            className="h-20 w-8 rotate-180 object-contain opacity-70"
+            className="h-16 w-7 rotate-180 object-contain opacity-70 md:h-20 md:w-8"
           />
         </div>
       </div>
@@ -403,9 +480,9 @@ function Field({
   requiredHint?: string
 }) {
   return (
-    <label className="block text-[12px] text-[#bcbcbc]">
-      <span className="md:text-[13px]">{label}</span>
-      {requiredHint ? <small className="mt-1 block text-[11px] text-[#8f8f8f] md:text-[12px]">{requiredHint}</small> : null}
+    <label className="block text-[12px] text-[#bcbcbc] md:text-[14px]">
+      <span>{label}</span>
+      {requiredHint ? <small className="mt-1 block text-[11px] text-[#8f8f8f] md:text-[13px]">{requiredHint}</small> : null}
       <div className="mt-2">{children}</div>
     </label>
   )
@@ -425,7 +502,7 @@ function Input({
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded-2xl border bg-black px-3 py-2 text-[14px] text-white md:text-[15px]"
+      className="w-full rounded-2xl border bg-black px-3 py-2 text-[14px] text-white md:text-[16px]"
       style={{ borderColor: '#ffffff30' }}
     />
   )

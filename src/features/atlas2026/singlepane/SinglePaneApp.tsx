@@ -44,9 +44,11 @@ export default function SinglePaneApp() {
     accountSettings,
     selectedIntake,
     hasSavedIntake,
+    supervisorNavigatorCompetency,
     saveAccountSettings,
     saveEnrolleeIntake,
-    saveRouteAssignment
+    saveRouteAssignment,
+    saveNavigatorCompetencyAssessment
   } = useSinglePaneData()
   const [activeZCode, setActiveZCode] = React.useState<string | null>(null)
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = React.useState(false)
@@ -126,6 +128,21 @@ export default function SinglePaneApp() {
     if (label.trim().toLowerCase() === 'route planning') {
       setActiveMenu('route planning')
       setIsRoutePlanningOpen(true)
+      return
+    }
+    if (role === 'supervisor' && label.trim().toLowerCase() === 'record navigator assessment') {
+      if (!selectedEnrollee || !selectedLoadBreakdown) return
+      const answers = selectedLoadBreakdown.rows.slice(0, 12).map((row) => ({
+        parentCode: row.zCodeGroup.toUpperCase(),
+        theme: row.mappedDomain,
+        score: toCompetencyScore(row.rawCount, row.specializeCount || 0)
+      }))
+      saveNavigatorCompetencyAssessment({
+        navigatorName: selectedEnrollee.assignedNavigator,
+        supervisorName: accountSettings.fullName,
+        formVersion: 'v1',
+        answers
+      })
       return
     }
     appendRouteLog(label)
@@ -247,9 +264,11 @@ export default function SinglePaneApp() {
                       />
                     </div>
                     <ContextPanels
+                      role={role}
                       activeMenu={activeMenu}
                       enrollmentRequests={enrollmentRequests}
                       countyHeatmap={countyHeatmap}
+                      supervisorNavigatorCompetency={supervisorNavigatorCompetency}
                     />
                   </>
                 )}
@@ -304,4 +323,9 @@ function formatDateLabel(dateValue: string) {
   const date = new Date(dateValue)
   if (!Number.isFinite(date.getTime())) return dateValue
   return new Intl.DateTimeFormat('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).format(date)
+}
+
+function toCompetencyScore(rawCount: number, specializeCount: number) {
+  const baseline = Math.min(10, Math.max(1, 4 + specializeCount + Math.round(rawCount / 2)))
+  return baseline
 }

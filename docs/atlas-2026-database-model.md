@@ -13,6 +13,7 @@ Apply migrations in this order for a new environment:
 3. `supabase/migrations/20260402_partner_service_capacity_surveys.sql`
 4. `supabase/migrations/20260411_grant_delete_partner_service_capacity.sql`
 5. `supabase/migrations/20260411_authorization_foundation.sql`
+6. `supabase/migrations/20260411_supervisor_navigator_competency.sql`
 
 ## Domain Map
 
@@ -35,6 +36,11 @@ The `atlas` schema is organized into these layers:
   - `atlas.partner_service_capacity_submissions`
   - `atlas.partner_service_capacity_answers`
   - `atlas.partner_z_code_burden_scores`
+- Supervisor competency and team governance
+  - `atlas.supervisor_navigator_assignments`
+  - `atlas.navigator_competency_assessments`
+  - `atlas.navigator_competency_assessment_answers`
+  - `atlas.v_supervisor_navigator_competency_rollup`
 
 ## Authorization Foundation (New)
 
@@ -97,6 +103,20 @@ Recommended hardening path:
 2. Verify `roles`, `role_permissions`, and exceptions are complete.
 3. Disable toggles one modality at a time (`read`, then `write`, then `delete`).
 4. Validate app behavior after each toggle.
+
+## Supervisor Competency Model
+
+Supervisor scoring follows a weighted rolling average over the three most recent navigator assessments:
+
+- most recent assessment average score x `3`
+- previous assessment average score x `2`
+- third most recent assessment average score x `1`
+
+Computed score formula:
+
+`weighted_rolling_average = (score_1 * 3 + score_2 * 2 + score_3 * 1) / 6`
+
+When fewer than three assessments are present, the denominator is the sum of available weights.
 
 ## Notes for API Clients
 

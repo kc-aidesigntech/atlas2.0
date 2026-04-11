@@ -17,6 +17,7 @@ ATLAS is designed as an operating system for accountable care navigation, where 
 ### Strategic Achievement Snapshot
 
 - Implemented role-based platform shell for `Navigator`, `Partner`, and `Administrator` operating contexts.
+- Expanded role model to include `Supervisor` for navigator competency governance and team burden oversight.
 - Established Supabase/Postgres foundation for partner capacity surveys and burden/capability updates.
 - Implemented authorization foundation (`permissions`, `role_permissions`, exceptions, and policy toggles).
 - Added monorepo direction for web + mobile (`Vite` + `Expo/React Native`) with shared package structure.
@@ -96,6 +97,11 @@ The UI is intentionally dark and operational, not pastel/civic-light.
 - **Partner**
   - service-capacity survey and burden/capability updates
   - station profile context
+- **Supervisor**
+  - assigned navigator oversight and competency tracking
+  - navigator assessments aligned to Z-code parent themes
+  - rolling weighted competency average using last three assessments (`3x most recent + 2x prior + 1x previous`)
+  - supervisor shell parity: milestone strip-map and team-level radial burden view
 - **Administrator**
   - admin-only operations panels
   - data controls, governance scaffolding, and policy toggles
@@ -175,6 +181,9 @@ Key authz components now implemented:
 - `atlas.role_permissions`
 - `atlas.user_permission_exceptions`
 - `atlas.authorization_settings`
+- `atlas.supervisor_navigator_assignments`
+- `atlas.navigator_competency_assessments`
+- `atlas.navigator_competency_assessment_answers`
 
 Phased rollout toggles:
 
@@ -191,6 +200,7 @@ Apply in this sequence for a new Supabase environment:
 3. `supabase/migrations/20260402_partner_service_capacity_surveys.sql`
 4. `supabase/migrations/20260411_grant_delete_partner_service_capacity.sql`
 5. `supabase/migrations/20260411_authorization_foundation.sql`
+6. `supabase/migrations/20260411_supervisor_navigator_competency.sql`
 
 ## Useful Scripts
 

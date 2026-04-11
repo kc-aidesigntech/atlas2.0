@@ -133,6 +133,79 @@ export interface AtlasDatabase {
           burden_score: number;
         }>;
       };
+      supervisor_navigator_assignments: {
+        Row: {
+          id: string;
+          supervisor_person_id: string;
+          navigator_person_id: string;
+          starts_on: string;
+          ends_on: string | null;
+          created_at: string;
+        };
+        Insert: {
+          supervisor_person_id: string;
+          navigator_person_id: string;
+          starts_on?: string;
+          ends_on?: string | null;
+        };
+        Update: Partial<{
+          starts_on: string;
+          ends_on: string | null;
+        }>;
+      };
+      navigator_competency_assessments: {
+        Row: {
+          id: string;
+          supervisor_person_id: string;
+          navigator_person_id: string;
+          form_version: string;
+          assessed_at: string;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: {
+          supervisor_person_id: string;
+          navigator_person_id: string;
+          form_version?: string;
+          assessed_at?: string;
+          notes?: string | null;
+        };
+        Update: Partial<{
+          form_version: string;
+          assessed_at: string;
+          notes: string | null;
+        }>;
+      };
+      navigator_competency_assessment_answers: {
+        Row: {
+          id: string;
+          assessment_id: string;
+          parent_code: string;
+          z_code: string;
+          normalized_z_code: string;
+          title: string;
+          description: string | null;
+          competency_score: number;
+          created_at: string;
+        };
+        Insert: {
+          assessment_id: string;
+          parent_code: string;
+          z_code: string;
+          normalized_z_code: string;
+          title: string;
+          description?: string | null;
+          competency_score: number;
+        };
+        Update: Partial<{
+          parent_code: string;
+          z_code: string;
+          normalized_z_code: string;
+          title: string;
+          description: string | null;
+          competency_score: number;
+        }>;
+      };
     };
     Views: {
       v_navigator_assigned_enrollees: {
@@ -155,6 +228,17 @@ export interface AtlasDatabase {
           station_id: string;
           station_name: string;
           icon_slug: string | null;
+        };
+      };
+      v_supervisor_navigator_competency_rollup: {
+        Row: {
+          supervisor_person_id: string;
+          supervisor_name: string;
+          navigator_person_id: string;
+          navigator_name: string;
+          assessment_count: number;
+          last_assessed_at: string | null;
+          weighted_rolling_average: number | null;
         };
       };
     };

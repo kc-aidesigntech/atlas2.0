@@ -13,6 +13,8 @@ import type {
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
+  NavigatorCompetencyAssessmentRecord,
+  SupervisorNavigatorCompetencySummary,
   RoleMenuConfig,
   RouteAssignmentRecord,
   RouteCandidateRecord,
@@ -28,6 +30,7 @@ import {
   loadCountyHeatmap,
   loadEnrolleeIntakes,
   loadEnrollmentRequests,
+  loadNavigatorCompetencyAssessments,
   loadJourneyStationMarkers,
   loadPartnerRadialLoad,
   loadPartnerRadialLoadBreakdown,
@@ -37,6 +40,7 @@ import {
   loadSinglePaneBootstrap,
   saveAccountSettings as persistAccountSettings,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
+  saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
   saveRouteAssignment as persistRouteAssignment,
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake
@@ -50,6 +54,7 @@ const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'submit service update': ['housing'],
   'confirm milestone': ['work'],
   'request support': ['social', 'health'],
+  'record navigator assessment': ['education', 'social'],
   'set policy threshold': ['legal'],
   'approve route template': ['education'],
   'audit event logs': ['legal', 'social']
@@ -91,13 +96,14 @@ export function useSinglePaneData() {
   const [journeyStationMarkers, setJourneyStationMarkers] = useState<JourneyStationMarker[]>([])
   const [routeAssignmentsByEnrolleeId, setRouteAssignmentsByEnrolleeId] = useState<Record<string, RouteAssignmentRecord>>({})
   const [partnerServiceCapacitySurvey, setPartnerServiceCapacitySurvey] = useState<PartnerServiceCapacitySubmissionRecord | null>(null)
+  const [navigatorCompetencyAssessments, setNavigatorCompetencyAssessments] = useState<NavigatorCompetencyAssessmentRecord[]>([])
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [partnerServiceCapacitySurveyError, setPartnerServiceCapacitySurveyError] = useState<string | null>(null)
   const [accountSettings, setAccountSettings] = useState<AccountSettings>({
     fullName: 'atlas operator',
     email: 'operator@atlas.local',
     organization: 'atlas operations',
-    enabledRoles: ['administrator', 'partner', 'navigator']
+    enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
   })
   const [intakeFormsByEnrolleeId, setIntakeFormsByEnrolleeId] = useState<Record<string, EnrolleeIntakeRecord>>({})
   const [isLoading, setIsLoading] = useState(true)
@@ -109,7 +115,7 @@ export function useSinglePaneData() {
         setIsLoading(true)
       }
       const data = await loadSinglePaneBootstrap(role)
-      const [requests, heatmap, quality, partnerViewLoad, partnerViewLoadBreakdown, nextAccountSettings, savedIntakes, savedRouteAssignments] = await Promise.all([
+      const [requests, heatmap, quality, partnerViewLoad, partnerViewLoadBreakdown, nextAccountSettings, savedIntakes, savedRouteAssignments, savedNavigatorAssessments] = await Promise.all([
         loadEnrollmentRequests(role),
         loadCountyHeatmap(),
         loadAdminDataQuality(),
@@ -117,7 +123,8 @@ export function useSinglePaneData() {
         loadPartnerRadialLoadBreakdown(),
         loadAccountSettings(),
         loadEnrolleeIntakes(),
-        loadRouteAssignments()
+        loadRouteAssignments(),
+        loadNavigatorCompetencyAssessments()
       ])
 
       if (!isMounted) return
@@ -136,6 +143,7 @@ export function useSinglePaneData() {
       setAccountSettings(nextAccountSettings)
       setIntakeFormsByEnrolleeId(savedIntakes)
       setRouteAssignmentsByEnrolleeId(savedRouteAssignments)
+      setNavigatorCompetencyAssessments(savedNavigatorAssessments)
       setSelectedEnrolleeId((prev) => prev || data.enrollees?.[0]?.id || '')
       setIsLoading(false)
     }
@@ -152,7 +160,7 @@ export function useSinglePaneData() {
 
   const selectedLoad = useMemo(
     () => {
-      if (role === 'partner' && partnerLoad) return partnerLoad
+      if ((role === 'partner' || role === 'supervisor') && partnerLoad) return partnerLoad
       return loads.find((item) => item.enrolleeId === selectedEnrollee?.id) || loads[0] || null
     },
     [loads, partnerLoad, role, selectedEnrollee]
@@ -160,7 +168,7 @@ export function useSinglePaneData() {
 
   const selectedLoadBreakdown = useMemo(
     () => {
-      if (role === 'partner' && partnerLoadBreakdown) return partnerLoadBreakdown
+      if ((role === 'partner' || role === 'supervisor') && partnerLoadBreakdown) return partnerLoadBreakdown
       return loadBreakdownsByEnrolleeId[selectedEnrollee?.id || ''] || Object.values(loadBreakdownsByEnrolleeId)[0] || null
     },
     [loadBreakdownsByEnrolleeId, partnerLoadBreakdown, role, selectedEnrollee]
@@ -230,6 +238,32 @@ export function useSinglePaneData() {
       otherRoleText: ''
     }
   }, [accountSettings.fullName, accountSettings.organization, role])
+
+  const supervisorNavigatorCompetency = useMemo<SupervisorNavigatorCompetencySummary[]>(() => {
+    const navigatorNames = Array.from(new Set(enrollees.map((enrollee) => enrollee.assignedNavigator).filter(Boolean)))
+    const byNavigator = navigatorNames.map((navigatorName) => {
+      const records = navigatorCompetencyAssessments
+        .filter((assessment) => assessment.navigatorName === navigatorName)
+        .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime())
+      const recent = records.slice(0, 3)
+      const weightMap = [3, 2, 1]
+      const weighted = recent.map((record, index) => {
+        const avg = record.answers.length
+          ? record.answers.reduce((sum, answer) => sum + answer.score, 0) / record.answers.length
+          : 0
+        return { avg, weight: weightMap[index] || 1 }
+      })
+      const weightedScore = weighted.reduce((sum, item) => sum + item.avg * item.weight, 0)
+      const weightTotal = weighted.reduce((sum, item) => sum + item.weight, 0)
+      return {
+        navigatorName,
+        assessmentCount: records.length,
+        weightedRollingAverage: weightTotal ? Number((weightedScore / weightTotal).toFixed(2)) : 0,
+        lastAssessmentAtIso: records[0]?.submittedAtIso || null
+      } satisfies SupervisorNavigatorCompetencySummary
+    })
+    return byNavigator
+  }, [enrollees, navigatorCompetencyAssessments])
 
   useEffect(() => {
     let isMounted = true
@@ -486,6 +520,17 @@ export function useSinglePaneData() {
     }
   }
 
+  async function saveNavigatorCompetencyAssessment(input: {
+    navigatorName: string
+    supervisorName: string
+    formVersion: string
+    answers: NavigatorCompetencyAssessmentRecord['answers']
+  }) {
+    const saved = await persistNavigatorCompetencyAssessment(input)
+    setNavigatorCompetencyAssessments((current) => [saved, ...current])
+    return saved
+  }
+
   return {
     role,
     setRole,
@@ -510,6 +555,8 @@ export function useSinglePaneData() {
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
+    supervisorNavigatorCompetency,
+    navigatorCompetencyAssessments,
     selectedRouteAssignment,
     appendRouteLog,
     updateRouteLogTimelinePosition,
@@ -521,6 +568,7 @@ export function useSinglePaneData() {
     saveAccountSettings,
     saveEnrolleeIntake,
     saveRouteAssignment,
-    savePartnerServiceCapacitySurvey
+    savePartnerServiceCapacitySurvey,
+    saveNavigatorCompetencyAssessment
   }
 }

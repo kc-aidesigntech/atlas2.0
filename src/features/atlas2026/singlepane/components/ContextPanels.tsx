@@ -1,15 +1,18 @@
 import React from 'react'
 import CountyCommonsHeatmap from '@/features/atlas2026/singlepane/components/CountyCommonsHeatmap'
-import type { CountyHeatPoint, EnrollmentRequestRecord } from '@/features/atlas2026/singlepane/types'
+import SupervisorCompetencyPanel from '@/features/atlas2026/singlepane/components/SupervisorCompetencyPanel'
+import type { AtlasRole, CountyHeatPoint, EnrollmentRequestRecord, SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
 interface ContextPanelsProps {
+  role: AtlasRole
   activeMenu: string
   enrollmentRequests: EnrollmentRequestRecord[]
   countyHeatmap: CountyHeatPoint[]
+  supervisorNavigatorCompetency: SupervisorNavigatorCompetencySummary[]
 }
 
-export default function ContextPanels({ activeMenu, enrollmentRequests, countyHeatmap }: ContextPanelsProps) {
+export default function ContextPanels({ role, activeMenu, enrollmentRequests, countyHeatmap, supervisorNavigatorCompetency }: ContextPanelsProps) {
   if (activeMenu === 'requests to enroll') {
     return (
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
@@ -31,6 +34,10 @@ export default function ContextPanels({ activeMenu, enrollmentRequests, countyHe
 
   if (activeMenu === 'county commons') {
     return <CountyCommonsHeatmap points={countyHeatmap} />
+  }
+
+  if (role === 'supervisor' && (activeMenu === 'navigator assessments' || activeMenu === 'assigned navigators')) {
+    return <SupervisorCompetencyPanel competencyByNavigator={supervisorNavigatorCompetency} />
   }
 
   if (activeMenu === 'referral portal') {
