@@ -65,6 +65,11 @@ const ROLE_MENUS: Record<AtlasRole, RoleMenuConfig> = {
     topMenus: ['assigned enrollees', 'partner referrals', 'route planning', 'service capacity', 'county commons'],
     actionMenus: ['route planning']
   },
+  supervisor: {
+    role: 'supervisor',
+    topMenus: ['assigned navigators', 'navigator assessments', 'route planning', 'team burden', 'county commons'],
+    actionMenus: ['record navigator assessment']
+  },
   administrator: {
     role: 'administrator',
     topMenus: ['assigned enrollees', 'system operations', 'route planning', 'governance', 'county commons'],
@@ -292,9 +297,15 @@ function getLocalDataset(): LocalSinglePaneDataset {
     referralsByPersonId.set(referral.person_id, next)
   }
 
-  const roleConfigs = roles
+  const roleConfigsFromCsv = roles
     .map((row) => ROLE_MENUS[row.role_key as AtlasRole])
     .filter(Boolean)
+  const roleConfigs = [
+    ...roleConfigsFromCsv,
+    ...Object.values(ROLE_MENUS).filter(
+      (defaultConfig) => !roleConfigsFromCsv.some((item) => item.role === defaultConfig.role)
+    )
+  ]
 
   const enrollees = people
     .filter((row) => row.person_type === 'enrollee')

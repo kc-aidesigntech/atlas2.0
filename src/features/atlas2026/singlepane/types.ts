@@ -6,7 +6,7 @@ import type {
   PartnerSurveyRespondentRole
 } from '@atlas/shared'
 
-export type AtlasRole = 'navigator' | 'partner' | 'administrator'
+export type AtlasRole = 'navigator' | 'partner' | 'supervisor' | 'administrator'
 
 export interface EnrolleeProfile {
   id: string
@@ -190,4 +190,26 @@ export interface RouteAssignmentRecord {
   assignedAtIso: string
   phase: StabilizationPhase
   matchedZCodes: string[]
+}
+
+export interface NavigatorCompetencyAssessmentAnswer {
+  parentCode: string
+  theme: string
+  score: number
+}
+
+export interface NavigatorCompetencyAssessmentRecord {
+  id: string
+  navigatorName: string
+  supervisorName: string
+  submittedAtIso: string
+  formVersion: string
+  answers: NavigatorCompetencyAssessmentAnswer[]
+}
+
+export interface SupervisorNavigatorCompetencySummary {
+  navigatorName: string
+  assessmentCount: number
+  weightedRollingAverage: number
+  lastAssessmentAtIso: string | null
 }

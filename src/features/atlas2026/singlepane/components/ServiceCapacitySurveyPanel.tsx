@@ -131,11 +131,11 @@ export default function ServiceCapacitySurveyPanel({
     <div className="w-full rounded-[30px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: '#020202' }}>
       <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style={{ borderColor: '#ffffff20' }}>
         <div className="max-w-[720px]">
-          <small className="block text-[12px] uppercase tracking-[0.16em]" style={{ color: SP_COLORS.muted }}>
+          <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
             partner service capacity
           </small>
-          <h3 className="mt-1 text-[26px] font-medium text-white">Z-code burden survey</h3>
-          <small className="block text-[13px] text-[#bdbdbd]">
+          <h3 className="mt-1 text-[26px] font-medium text-white md:text-[30px]">Z-code burden survey</h3>
+          <small className="block text-[13px] text-[#bdbdbd] md:text-[15px]">
             Capture how well your organization can handle each Z-code pressure area on a 1-9 burden scale.
           </small>
         </div>
@@ -163,7 +163,7 @@ export default function ServiceCapacitySurveyPanel({
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff25' }}>
-          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd]">respondent details</small>
+          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[13px]">respondent details</small>
           <div className="grid gap-3 md:grid-cols-2">
             <Field label="Your Name*" requiredHint="This field is required.">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -223,17 +223,17 @@ export default function ServiceCapacitySurveyPanel({
         </section>
 
         <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff25' }}>
-          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd]">scale guide</small>
+          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[13px]">scale guide</small>
           <div className="grid gap-2">
             {SERVICE_CAPACITY_SCALE.map((option) => (
               <div key={option.value} className="rounded-[18px] border px-3 py-2" style={{ borderColor: '#ffffff18', backgroundColor: '#060606' }}>
-                <div className="text-[12px] font-medium" style={{ color: option.value >= 7 ? SP_COLORS.deepGreen : option.value <= 3 ? SP_COLORS.red : SP_COLORS.yellow }}>
+                <div className="text-[12px] font-medium md:text-[13px]" style={{ color: option.value >= 7 ? SP_COLORS.deepGreen : option.value <= 3 ? SP_COLORS.red : SP_COLORS.yellow }}>
                   {option.value} - {option.label}
                 </div>
-                <small className="block text-[11px] text-[#bdbdbd]">{option.description}</small>
+                <small className="block text-[11px] text-[#bdbdbd] md:text-[12px]">{option.description}</small>
               </div>
             ))}
-            <small className="pt-2 text-[12px]" style={{ color: SP_COLORS.muted }}>
+            <small className="pt-2 text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
               {completedCount} of {draft.answers.length} cards currently rated.
             </small>
           </div>
@@ -251,12 +251,12 @@ export default function ServiceCapacitySurveyPanel({
           <section key={section.parentCode} className="rounded-[26px] border px-4 py-4 md:px-5" style={{ borderColor: '#ffffff25' }}>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2 border-b pb-3" style={{ borderColor: '#ffffff12' }}>
               <div>
-                <small className="block text-[12px] uppercase tracking-[0.14em]" style={{ color: SP_COLORS.muted }}>
+                <small className="block text-[12px] uppercase tracking-[0.14em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
                   {section.parentCode}
                 </small>
-                <div className="text-[18px] font-medium text-white">{section.theme}</div>
+                <div className="text-[18px] font-medium text-white md:text-[20px]">{section.theme}</div>
               </div>
-              <small className="text-[12px]" style={{ color: SP_COLORS.muted }}>
+              <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
                 {section.prompts.length} cards
               </small>
             </div>
@@ -319,8 +319,8 @@ function BurdenCard({
     <div className="rounded-[22px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
       <div className="flex items-start gap-4">
         <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-medium text-white">{promptItem.zCode}</div>
-          <small className="mt-1 block text-[12px] text-[#bdbdbd]">{promptItem.description}</small>
+          <div className="text-[15px] font-medium text-white md:text-[17px]">{promptItem.zCode}</div>
+          <small className="mt-1 block text-[12px] text-[#bdbdbd] md:text-[13px]">{promptItem.description}</small>
 
           <div className="relative mt-5 pt-9">
             <div
@@ -331,10 +331,10 @@ function BurdenCard({
                 backgroundColor: '#080808'
               }}
             >
-              <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
+              <small className="block text-[11px] md:text-[12px]" style={{ color: SP_COLORS.muted }}>
                 {scaleState.value} - {scaleState.label}
               </small>
-              <small className="block text-[11px] text-white">{scaleState.description}</small>
+              <small className="block text-[11px] text-white md:text-[12px]">{scaleState.description}</small>
             </div>
 
             <div className="rounded-[20px] border px-3 py-3" style={{ borderColor: '#ffffff12', backgroundColor: '#020202' }}>
@@ -348,7 +348,7 @@ function BurdenCard({
                   onChange={(event) => onChange(Number(event.target.value))}
                   className="min-w-[220px] flex-1 accent-white"
                 />
-                <label className="flex items-center gap-2 text-[12px]" style={{ color: SP_COLORS.muted }}>
+                <label className="flex items-center gap-2 text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
                   <span>value</span>
                   <input
                     type="number"
@@ -404,8 +404,8 @@ function Field({
 }) {
   return (
     <label className="block text-[12px] text-[#bcbcbc]">
-      <span>{label}</span>
-      {requiredHint ? <small className="mt-1 block text-[11px] text-[#8f8f8f]">{requiredHint}</small> : null}
+      <span className="md:text-[13px]">{label}</span>
+      {requiredHint ? <small className="mt-1 block text-[11px] text-[#8f8f8f] md:text-[12px]">{requiredHint}</small> : null}
       <div className="mt-2">{children}</div>
     </label>
   )
@@ -425,7 +425,7 @@ function Input({
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded-2xl border bg-black px-3 py-2 text-[14px] text-white"
+      className="w-full rounded-2xl border bg-black px-3 py-2 text-[14px] text-white md:text-[15px]"
       style={{ borderColor: '#ffffff30' }}
     />
   )

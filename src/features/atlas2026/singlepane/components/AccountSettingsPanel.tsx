@@ -11,7 +11,7 @@ interface AccountSettingsPanelProps {
   onSave: (settings: AccountSettings) => void
 }
 
-const ROLE_OPTIONS: AtlasRole[] = ['administrator', 'partner', 'navigator']
+const ROLE_OPTIONS: AtlasRole[] = ['administrator', 'supervisor', 'partner', 'navigator']
 
 export default function AccountSettingsPanel({
   isOpen,

@@ -2,6 +2,73 @@
 
 ATLAS is a role-based care coordination and navigation platform centered on the 2026 operating model (`Regulation -> Readiness -> Renewal`), with a single-pane workflow for rapid field operations.
 
+## Executive and Operations Brief
+
+ATLAS is designed as an operating system for accountable care navigation, where policy, field execution, and data governance are treated as one continuous control loop. The product is intentionally structured so executive leadership can see strategic posture, operations can execute with speed and consistency, and administrators can enforce compliance without disrupting frontline throughput.
+
+### Policy Design Intent
+
+- **Operational safety first**: All workflows prioritize immediate stabilization and risk containment before progression.
+- **Role-bound execution**: Navigator, partner, and administrator scopes are explicit and enforced.
+- **Evidence-backed movement**: Progression across phases is linked to measurable outputs and logged milestones.
+- **Governance by design**: Authorization, exceptions, and rollout toggles are implemented as first-class infrastructure.
+- **Cross-platform continuity**: Web and mobile are aligned through shared TypeScript contracts and data wrappers.
+
+### Strategic Achievement Snapshot
+
+- Implemented role-based platform shell for `Navigator`, `Partner`, and `Administrator` operating contexts.
+- Established Supabase/Postgres foundation for partner capacity surveys and burden/capability updates.
+- Implemented authorization foundation (`permissions`, `role_permissions`, exceptions, and policy toggles).
+- Added monorepo direction for web + mobile (`Vite` + `Expo/React Native`) with shared package structure.
+
+### System Operating Model
+
+```mermaid
+flowchart LR
+  A[Regulation<br/>stabilize risk] --> B[Readiness<br/>build capacity]
+  B --> C[Renewal<br/>sustain contribution]
+  C --> D[Feedback and Audit]
+  D --> A
+```
+
+### End-to-End Process Flow
+
+```mermaid
+sequenceDiagram
+  participant Nav as Navigator
+  participant Ops as Operations Control
+  participant Partner as Partner Station
+  participant Atlas as ATLAS Platform
+  participant Data as Supabase/Atlas Schema
+
+  Nav->>Atlas: Intake or select enrollee
+  Atlas->>Data: Load assignments, requests, and context views
+  Atlas->>Ops: Display risk/readiness posture
+  Nav->>Atlas: Build/assign route and next safe move
+  Atlas->>Partner: Issue route-aligned service request
+  Partner->>Atlas: Submit capacity and burden updates
+  Atlas->>Data: Persist logs, submissions, and capabilities
+  Data-->>Ops: Surface metrics, quality, and governance signals
+```
+
+### Governance and Access Control Structure
+
+```mermaid
+flowchart TD
+  U[Authenticated User] --> R{Role Context}
+  R --> N[Navigator Scope]
+  R --> P[Partner Scope]
+  R --> A[Administrator Scope]
+
+  A --> G[Authorization Settings and Exceptions]
+  G --> L[RLS and Permission Policies]
+  N --> L
+  P --> L
+
+  L --> DB[(Atlas Schema Data Objects)]
+  DB --> Q[Operational and Audit Views]
+```
+
 ## Current Product State
 
 - Primary app shell is `src/features/atlas2026/singlepane/SinglePaneApp.tsx` via `src/RootApp.jsx`
@@ -35,7 +102,7 @@ The UI is intentionally dark and operational, not pastel/civic-light.
 
 Detailed behavior spec: `MAKE_APP_ALIVE.md`
 
-## Tech Stack
+## Technical Setup
 
 - React 18 + Vite (web)
 - Expo + React Native (mobile)

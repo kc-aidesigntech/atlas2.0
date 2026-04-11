@@ -10,6 +10,11 @@
     "actionMenus": ["submit service update", "confirm milestone", "request support"]
   },
   {
+    "role": "supervisor",
+    "topMenus": ["assigned navigators", "navigator assessments", "route planning", "team burden", "county commons"],
+    "actionMenus": ["record navigator assessment", "append route step", "confirm milestone"]
+  },
+  {
     "role": "administrator",
     "topMenus": ["assigned enrollees", "system operations", "route planning", "governance", "county commons"],
     "actionMenus": ["set policy threshold", "approve route template", "audit event logs"]

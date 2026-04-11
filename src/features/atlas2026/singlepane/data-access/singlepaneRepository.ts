@@ -11,6 +11,7 @@ import type {
   JourneyStationMarker,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
+  NavigatorCompetencyAssessmentRecord,
   RouteAssignmentRecord,
   RouteCandidateRecord,
   RouteLogEvent
@@ -37,6 +38,7 @@ const ACCOUNT_SETTINGS_KEY = 'atlas2026.singlepane.account-settings.v1'
 const ENROLLEE_INTAKES_KEY = 'atlas2026.singlepane.enrollee-intakes.v1'
 const ROUTE_ASSIGNMENTS_KEY = 'atlas2026.singlepane.route-assignments.v1'
 const PARTNER_SERVICE_CAPACITY_SURVEY_KEY = 'atlas2026.singlepane.partner-service-capacity.v1'
+const NAVIGATOR_ASSESSMENTS_KEY = 'atlas2026.singlepane.navigator-assessments.v1'
 
 interface PersistedRouteLogState {
   appendedLogs: RouteLogEvent[]
@@ -129,7 +131,7 @@ function getDefaultAccountSettings(): AccountSettings {
     fullName: 'atlas operator',
     email: 'operator@atlas.local',
     organization: 'atlas operations',
-    enabledRoles: ['administrator', 'partner', 'navigator']
+    enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
   }
 }
 
@@ -140,7 +142,7 @@ function loadAccountSettingsState(): AccountSettings {
   try {
     const parsed = JSON.parse(raw) as Partial<AccountSettings>
     const enabledRoles = Array.isArray(parsed.enabledRoles)
-      ? parsed.enabledRoles.filter((role): role is AtlasRole => ['navigator', 'partner', 'administrator'].includes(String(role)))
+      ? parsed.enabledRoles.filter((role): role is AtlasRole => ['navigator', 'partner', 'supervisor', 'administrator'].includes(String(role)))
       : getDefaultAccountSettings().enabledRoles
     return {
       fullName: parsed.fullName || getDefaultAccountSettings().fullName,
@@ -229,6 +231,23 @@ function loadPartnerServiceCapacityState(): PersistedPartnerServiceCapacityState
 function persistPartnerServiceCapacityState(state: PersistedPartnerServiceCapacityState) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(PARTNER_SERVICE_CAPACITY_SURVEY_KEY, JSON.stringify(state))
+}
+
+function loadNavigatorAssessmentState(): NavigatorCompetencyAssessmentRecord[] {
+  if (typeof window === 'undefined') return []
+  const raw = window.localStorage.getItem(NAVIGATOR_ASSESSMENTS_KEY)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as NavigatorCompetencyAssessmentRecord[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function persistNavigatorAssessmentState(records: NavigatorCompetencyAssessmentRecord[]) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(NAVIGATOR_ASSESSMENTS_KEY, JSON.stringify(records))
 }
 
 function toSubmissionRecord(input: PartnerServiceCapacitySubmissionInput, partnerId: string | null, submittedAtIso: string, id: string) {
@@ -498,4 +517,21 @@ export async function savePartnerServiceCapacitySurvey(
   }
 
   return persistedRecord
+}
+
+export async function loadNavigatorCompetencyAssessments(): Promise<NavigatorCompetencyAssessmentRecord[]> {
+  return loadNavigatorAssessmentState()
+}
+
+export async function saveNavigatorCompetencyAssessment(
+  input: Omit<NavigatorCompetencyAssessmentRecord, 'id' | 'submittedAtIso'>
+): Promise<NavigatorCompetencyAssessmentRecord> {
+  const record: NavigatorCompetencyAssessmentRecord = {
+    id: `navigator-assessment-${Date.now().toString(36)}`,
+    submittedAtIso: new Date().toISOString(),
+    ...input
+  }
+  const nextState = [record, ...loadNavigatorAssessmentState()]
+  persistNavigatorAssessmentState(nextState)
+  return record
 }
