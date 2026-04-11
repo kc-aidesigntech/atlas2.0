@@ -61,6 +61,7 @@ export default function ServiceCapacitySurveyPanel({
   }))
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
   const numericInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const hasAutoFocusedFirstCard = useRef(false)
 
   useEffect(() => {
@@ -130,6 +131,33 @@ export default function ServiceCapacitySurveyPanel({
 
     nextInput.focus()
     nextInput.select()
+    return true
+  }
+
+  function scrollToAdjacentCard(promptId: string, direction: 1 | -1) {
+    const currentIndex = orderedPromptIds.indexOf(promptId)
+    if (currentIndex === -1) return false
+
+    const nextPromptId = orderedPromptIds[currentIndex + direction]
+    if (!nextPromptId) return false
+
+    const nextCard = cardRefs.current[nextPromptId]
+    if (!nextCard) return false
+
+    const nextCardTop = window.scrollY + nextCard.getBoundingClientRect().top
+    window.scrollTo({
+      top: Math.max(0, nextCardTop - 20),
+      behavior: 'smooth'
+    })
+
+    const nextInput = numericInputRefs.current[nextPromptId]
+    if (nextInput) {
+      window.setTimeout(() => {
+        nextInput.focus()
+        nextInput.select()
+      }, 320)
+    }
+
     return true
   }
 
@@ -316,10 +344,14 @@ export default function ServiceCapacitySurveyPanel({
                     promptItem={promptItem}
                     score={answer.score}
                     accentColor={SECTION_ACCENT_COLORS[section.parentCode] || SP_COLORS.white}
+                    cardRef={(element) => {
+                      cardRefs.current[promptItem.id] = element
+                    }}
                     inputRef={(element) => {
                       numericInputRefs.current[promptItem.id] = element
                     }}
                     onTabNavigate={(direction) => focusAdjacentNumericInput(promptItem.id, direction)}
+                    onArrowNavigate={() => scrollToAdjacentCard(promptItem.id, 1)}
                     onChange={(score) => updateAnswer(promptItem.id, score)}
                   />
                 )
@@ -348,20 +380,28 @@ function BurdenCard({
   promptItem,
   score,
   accentColor,
+  cardRef,
   inputRef,
   onTabNavigate,
+  onArrowNavigate,
   onChange
 }: {
   promptItem: ZCodeSurveyPrompt
   score: number
   accentColor: string
+  cardRef?: (element: HTMLDivElement | null) => void
   inputRef?: (element: HTMLInputElement | null) => void
   onTabNavigate: (direction: 1 | -1) => boolean
+  onArrowNavigate: () => boolean
   onChange: (score: number) => void
 }) {
   const scaleState = getScaleOption(score)
   const thumbPercent = ((score - 1) / 8) * 100
   const badgeTextColor = accentColor === SP_COLORS.yellow ? SP_COLORS.bg : SP_COLORS.white
+  const tooltipHalfWidth = 110
+  const thumbInset = 18
+  const thumbOffsetPx = (0.5 - thumbPercent / 100) * thumbInset
+  const tooltipLeft = `clamp(${tooltipHalfWidth}px, calc(${thumbPercent}% + ${thumbOffsetPx.toFixed(2)}px), calc(100% - ${tooltipHalfWidth}px))`
 
   function handleNumberInputChange(nextValue: string) {
     if (!nextValue) {
@@ -374,7 +414,11 @@ function BurdenCard({
   }
 
   return (
-    <div className="relative rounded-[22px] border px-4 pb-3 pt-3 md:px-5 md:pb-3.5" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
+    <div
+      ref={cardRef}
+      className="relative scroll-mt-5 rounded-[22px] border px-4 pb-3 pt-3 md:px-5 md:pb-3.5 md:scroll-mt-6"
+      style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}
+    >
       <div
         className="pointer-events-none absolute left-0 right-0 top-[33px] border-t"
         style={{ borderColor: '#ffffff22' }}
@@ -393,7 +437,7 @@ function BurdenCard({
             <div
               className="pointer-events-none absolute top-0 z-10 w-[220px] max-w-[calc(100%-8px)] -translate-x-1/2 rounded-[16px] border px-3 py-2"
               style={{
-                left: `clamp(110px, ${thumbPercent}%, calc(100% - 110px))`,
+                left: tooltipLeft,
                 borderColor: '#ffffff25',
                 backgroundColor: '#080808'
               }}
@@ -405,18 +449,25 @@ function BurdenCard({
             </div>
 
             <div className="rounded-[20px] border px-3 py-2.5 md:px-3.5 md:py-3" style={{ borderColor: '#ffffff12', backgroundColor: '#020202' }}>
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  type="range"
-                  min={1}
-                  max={9}
-                  step={1}
-                  value={score}
-                  onChange={(event) => onChange(Number(event.target.value))}
-                  tabIndex={-1}
-                  className="min-w-[220px] flex-1 accent-white"
-                />
-                <label className="flex items-center gap-2 text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="min-w-[220px] flex-1">
+                  <input
+                    type="range"
+                    min={1}
+                    max={9}
+                    step={1}
+                    value={score}
+                    onChange={(event) => onChange(Number(event.target.value))}
+                    tabIndex={-1}
+                    className="w-full accent-white"
+                  />
+                  <div className="mt-1.5 grid grid-cols-9 text-center text-[10px] md:text-[11px]" style={{ color: SP_COLORS.muted }}>
+                    {SERVICE_CAPACITY_SCALE.map((option) => (
+                      <span key={option.value}>{option.value}</span>
+                    ))}
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 pt-0.5 text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
                   <span>value</span>
                   <input
                     ref={inputRef}
@@ -439,11 +490,6 @@ function BurdenCard({
                   />
                 </label>
               </div>
-              <div className="mt-1.5 flex items-center justify-between text-[10px] md:text-[11px]" style={{ color: SP_COLORS.muted }}>
-                {SERVICE_CAPACITY_SCALE.map((option) => (
-                  <span key={option.value}>{option.value}</span>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -458,12 +504,19 @@ function BurdenCard({
           >
             {score}
           </div>
-          <img
-            src={downArrowUrl}
-            alt=""
-            aria-hidden="true"
-            className="h-16 w-7 rotate-180 object-contain opacity-70 md:h-20 md:w-8"
-          />
+          <button
+            type="button"
+            onClick={onArrowNavigate}
+            className="rounded-full p-1 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-white/40"
+            aria-label={`Jump to next card after ${promptItem.zCode}`}
+          >
+            <img
+              src={downArrowUrl}
+              alt=""
+              aria-hidden="true"
+              className="h-16 w-7 rotate-180 object-contain opacity-70 md:h-20 md:w-8"
+            />
+          </button>
         </div>
       </div>
     </div>
