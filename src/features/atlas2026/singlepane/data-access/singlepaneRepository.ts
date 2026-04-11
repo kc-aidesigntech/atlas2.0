@@ -16,11 +16,9 @@ import type {
   RouteLogEvent
 } from '@/features/atlas2026/singlepane/types'
 import {
-  type AtlasDatabase,
   getLatestPartnerServiceCapacitySubmission,
   savePartnerServiceCapacitySubmission
 } from '@atlas/shared'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   getLocalAdminDataQuality,
   getLocalBaseLogs,
@@ -398,7 +396,7 @@ export async function loadPartnerServiceCapacitySurvey(organizationName: string)
   }
 
   return getLatestPartnerServiceCapacitySubmission(
-    supabase as SupabaseClient<AtlasDatabase>,
+    supabase,
     organizationNameNormalized
   )
 }
@@ -421,7 +419,7 @@ export async function savePartnerServiceCapacitySurvey(
   }
 
   const persistedRecord = await savePartnerServiceCapacitySubmission(
-    supabase as SupabaseClient<AtlasDatabase>,
+    supabase,
     input
   )
   const submissionId = persistedRecord.id
