@@ -194,7 +194,7 @@ views are created in `supabase/migrations/20260114_make_app_alive.sql`.
    - `scripts/build-partner-capabilities.js` output into db upsert.
 3. configure app env vars:
    - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_SUPABASE_PUBLISHABLE_KEY`
 4. switch single-pane runtime to repository supabase mode.
 5. validate role-scope access with test users.
 6. enable admin-only operations panel.

@@ -12,7 +12,7 @@
 ## env vars for app runtime
 
 - `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 
 when these are missing, the app falls back to local seeds so development can continue without a live db.
 
