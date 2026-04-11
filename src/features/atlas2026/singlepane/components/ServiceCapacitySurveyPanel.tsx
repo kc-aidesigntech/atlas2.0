@@ -402,6 +402,9 @@ function BurdenCard({
   const thumbInset = 18
   const thumbOffsetPx = (0.5 - thumbPercent / 100) * thumbInset
   const tooltipLeft = `clamp(${tooltipHalfWidth}px, calc(${thumbPercent}% + ${thumbOffsetPx.toFixed(2)}px), calc(100% - ${tooltipHalfWidth}px))`
+  const sliderScaleColors = SERVICE_CAPACITY_SCALE.map((option) =>
+    option.value <= 3 ? SP_COLORS.red : option.value <= 6 ? SP_COLORS.yellow : SP_COLORS.deepGreen
+  )
 
   function handleNumberInputChange(nextValue: string) {
     if (!nextValue) {
@@ -461,9 +464,11 @@ function BurdenCard({
                     tabIndex={-1}
                     className="w-full accent-white"
                   />
-                  <div className="mt-1.5 grid grid-cols-9 text-center text-[10px] md:text-[11px]" style={{ color: SP_COLORS.muted }}>
-                    {SERVICE_CAPACITY_SCALE.map((option) => (
-                      <span key={option.value}>{option.value}</span>
+                  <div className="mt-1.5 grid grid-cols-9 text-center text-[10px] md:text-[11px]">
+                    {SERVICE_CAPACITY_SCALE.map((option, index) => (
+                      <span key={option.value} style={{ color: sliderScaleColors[index] }}>
+                        {option.value}
+                      </span>
                     ))}
                   </div>
                 </div>
