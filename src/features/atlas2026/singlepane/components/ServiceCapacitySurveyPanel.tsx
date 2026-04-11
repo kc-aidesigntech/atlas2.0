@@ -45,8 +45,10 @@ const SECTION_ACCENT_COLORS: Record<string, string> = {
 
 interface DraftState {
   header: PartnerServiceCapacityHeader
-  answers: PartnerServiceCapacityAnswer[]
+  answers: DraftAnswer[]
 }
+
+type DraftAnswer = Omit<PartnerServiceCapacityAnswer, 'score'> & { score: number | null }
 
 export default function ServiceCapacitySurveyPanel({
   savedSubmission,
@@ -57,7 +59,7 @@ export default function ServiceCapacitySurveyPanel({
 }: ServiceCapacitySurveyPanelProps) {
   const [draft, setDraft] = useState<DraftState>(() => ({
     header: defaultHeader,
-    answers: buildDefaultPartnerServiceCapacityAnswers()
+    answers: buildDefaultPartnerServiceCapacityAnswers().map((answer) => ({ ...answer, score: null }))
   }))
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
   const numericInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -65,7 +67,7 @@ export default function ServiceCapacitySurveyPanel({
   const hasAutoFocusedFirstCard = useRef(false)
 
   useEffect(() => {
-    const defaults = buildDefaultPartnerServiceCapacityAnswers()
+    const defaults = buildDefaultPartnerServiceCapacityAnswers().map((answer) => ({ ...answer, score: null as number | null }))
     const answersByPromptId = new Map(savedSubmission?.answers.map((answer) => [answer.promptId, answer]) || [])
     setDraft({
       header: savedSubmission?.header || defaultHeader,
@@ -112,7 +114,7 @@ export default function ServiceCapacitySurveyPanel({
     updateHeader('otherRoleText', '')
   }
 
-  function updateAnswer(promptId: string, score: number) {
+  function updateAnswer(promptId: string, score: number | null) {
     setDraft((current) => ({
       ...current,
       answers: current.answers.map((answer) => (answer.promptId === promptId ? { ...answer, score } : answer))
@@ -175,8 +177,13 @@ export default function ServiceCapacitySurveyPanel({
       setValidationMessage('Add the role description for “Other” before saving the survey.')
       return
     }
+    if (draft.answers.some((answer) => typeof answer.score !== 'number')) {
+      setValidationMessage('Complete every card rating before saving the survey.')
+      return
+    }
 
     setValidationMessage(null)
+    const completedAnswers = draft.answers.map((answer) => ({ ...answer, score: answer.score as number }))
     await onSubmit({
       header: {
         ...draft.header,
@@ -186,7 +193,7 @@ export default function ServiceCapacitySurveyPanel({
         jobTitle: draft.header.jobTitle.trim(),
         otherRoleText: draft.header.otherRoleText.trim()
       },
-      answers: draft.answers,
+      answers: completedAnswers,
       formVersion: SERVICE_CAPACITY_FORM_VERSION
     })
   }
@@ -387,17 +394,19 @@ function BurdenCard({
   onChange
 }: {
   promptItem: ZCodeSurveyPrompt
-  score: number
+  score: number | null
   accentColor: string
   cardRef?: (element: HTMLDivElement | null) => void
   inputRef?: (element: HTMLInputElement | null) => void
   onTabNavigate: (direction: 1 | -1) => boolean
   onArrowNavigate: () => boolean
-  onChange: (score: number) => void
+  onChange: (score: number | null) => void
 }) {
-  const scaleState = getScaleOption(score)
-  const thumbPercent = ((score - 1) / 8) * 100
-  const badgeTextColor = accentColor === SP_COLORS.yellow ? SP_COLORS.bg : SP_COLORS.white
+  const effectiveScore = score ?? 5
+  const scaleState = getScaleOption(effectiveScore)
+  const thumbPercent = ((effectiveScore - 1) / 8) * 100
+  const badgeTextColor =
+    accentColor === SP_COLORS.yellow || accentColor === SP_COLORS.green ? SP_COLORS.bg : SP_COLORS.white
   const tooltipHalfWidth = 110
   const thumbInset = 18
   const thumbOffsetPx = (0.5 - thumbPercent / 100) * thumbInset
@@ -405,10 +414,26 @@ function BurdenCard({
   const sliderScaleColors = SERVICE_CAPACITY_SCALE.map((option) =>
     option.value <= 3 ? SP_COLORS.red : option.value <= 6 ? SP_COLORS.yellow : SP_COLORS.deepGreen
   )
+  const localInputRef = useRef<HTMLInputElement | null>(null)
+
+  const setNumericInputRef = React.useCallback(
+    (element: HTMLInputElement | null) => {
+      localInputRef.current = element
+      inputRef?.(element)
+    },
+    [inputRef]
+  )
+
+  function focusNumericInput() {
+    const target = localInputRef.current
+    if (!target) return
+    target.focus()
+    target.select()
+  }
 
   function handleNumberInputChange(nextValue: string) {
     if (!nextValue) {
-      onChange(1)
+      onChange(null)
       return
     }
     const parsed = Number(nextValue)
@@ -416,29 +441,56 @@ function BurdenCard({
     onChange(Math.max(1, Math.min(9, Math.round(parsed))))
   }
 
+  function handleCardClick(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target
+    if (!(target instanceof HTMLElement)) {
+      focusNumericInput()
+      return
+    }
+
+    if (target.closest('button, input, label')) return
+    focusNumericInput()
+  }
+
   return (
     <div
       ref={cardRef}
-      className="relative scroll-mt-5 rounded-[22px] border px-4 pb-3 pt-3 md:px-5 md:pb-3.5 md:scroll-mt-6"
-      style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}
+      onClick={handleCardClick}
+      className="relative scroll-mt-5 rounded-[22px] border px-4 pb-3 pt-3 transition-[box-shadow,border-color] duration-150 ease-out hover:border-white/40 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_24px_rgba(255,255,255,0.08)] focus-within:border-white/50 focus-within:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_28px_rgba(255,255,255,0.1)] active:border-white/45 active:shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_0_26px_rgba(255,255,255,0.09)] md:px-5 md:pb-3.5 md:scroll-mt-6"
+      style={{ borderColor: '#ffffff30', borderWidth: '1.5px', backgroundColor: '#050505' }}
     >
       <div
-        className="pointer-events-none absolute left-0 right-0 top-[33px] border-t"
-        style={{ borderColor: '#ffffff22' }}
-      />
-      <div className="flex items-start gap-3 md:gap-4">
-        <div className="relative z-10 w-[88px] shrink-0 pt-[14px] text-left md:w-[104px]">
-          <div className="inline-flex rounded-full bg-[#050505] pr-3 text-[14px] font-medium text-white md:text-[16px]">
+        className="flex items-start justify-between gap-3 border-b pb-3 md:gap-4 md:pb-3.5"
+        style={{ borderColor: '#ffffff40', borderBottomWidth: '1.5px' }}
+      >
+        <div className="min-w-0 flex flex-1 items-baseline gap-3 md:gap-4">
+          <div className="w-[88px] shrink-0 text-[14px] font-medium leading-none text-white md:w-[104px] md:text-[16px]">
             {promptItem.zCode}
           </div>
+          <div className="min-w-0 flex-1 pr-2 text-[13px] leading-tight text-[#d6d6d6] md:text-[15px]">
+            {promptItem.description}
+          </div>
         </div>
+        <div className="flex shrink-0 items-start">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-full text-[24px] font-bold leading-none md:h-11 md:w-11 md:text-[30px]"
+            style={{
+              backgroundColor: accentColor,
+              color: badgeTextColor,
+              opacity: score == null ? 0.35 : 1
+            }}
+          >
+            {score ?? ''}
+          </div>
+        </div>
+      </div>
 
-        <div className="min-w-0 flex-1 pt-[6px]">
-          <div className="pr-2 text-[13px] text-[#d6d6d6] md:text-[15px]">{promptItem.description}</div>
-
-          <div className="relative mt-3 pt-8 md:mt-3.5">
+      <div className="flex items-start gap-3 pt-3 md:gap-4 md:pt-3.5">
+        <div className="w-[88px] shrink-0 md:w-[104px]" />
+        <div className="min-w-0 flex-1">
+          <div className="relative pt-8">
             <div
-              className="pointer-events-none absolute top-0 z-10 w-[220px] max-w-[calc(100%-8px)] -translate-x-1/2 rounded-[16px] border px-3 py-2"
+              className={`pointer-events-none absolute top-0 z-10 w-[220px] max-w-[calc(100%-8px)] -translate-x-1/2 rounded-[16px] border px-3 py-2 transition-opacity duration-150 ${score == null ? 'opacity-0' : 'opacity-100'}`}
               style={{
                 left: tooltipLeft,
                 borderColor: '#ffffff25',
@@ -451,7 +503,10 @@ function BurdenCard({
               <small className="block text-[11px] text-white md:text-[13px]">{scaleState.description}</small>
             </div>
 
-            <div className="rounded-[20px] border px-3 py-2.5 md:px-3.5 md:py-3" style={{ borderColor: '#ffffff12', backgroundColor: '#020202' }}>
+            <div
+              className="rounded-[20px] border px-3 py-2.5 md:px-3.5 md:py-3"
+              style={{ borderColor: '#ffffff26', borderWidth: '1.5px', backgroundColor: '#020202' }}
+            >
               <div className="flex flex-wrap items-start gap-3">
                 <div className="min-w-[220px] flex-1">
                   <input
@@ -459,10 +514,10 @@ function BurdenCard({
                     min={1}
                     max={9}
                     step={1}
-                    value={score}
+                    value={effectiveScore}
                     onChange={(event) => onChange(Number(event.target.value))}
                     tabIndex={-1}
-                    className="w-full accent-white"
+                    className={`w-full accent-white ${score == null ? 'opacity-55' : ''}`}
                   />
                   <div className="mt-1.5 grid grid-cols-9 text-center text-[10px] md:text-[11px]">
                     {SERVICE_CAPACITY_SCALE.map((option, index) => (
@@ -475,12 +530,12 @@ function BurdenCard({
                 <label className="flex items-center gap-2 pt-0.5 text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
                   <span>value</span>
                   <input
-                    ref={inputRef}
+                    ref={setNumericInputRef}
                     type="number"
                     min={1}
                     max={9}
                     step={1}
-                    value={score}
+                    value={score ?? ''}
                     onChange={(event) => handleNumberInputChange(event.target.value)}
                     onFocus={(event) => event.currentTarget.select()}
                     onKeyDown={(event) => {
@@ -499,20 +554,11 @@ function BurdenCard({
           </div>
         </div>
 
-        <div className="relative z-10 flex shrink-0 flex-col items-center gap-2 bg-[#050505] pl-2 pt-[2px]">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-full text-[13px] font-medium md:h-11 md:w-11 md:text-[14px]"
-            style={{
-              backgroundColor: accentColor,
-              color: badgeTextColor
-            }}
-          >
-            {score}
-          </div>
+        <div className="relative z-10 flex shrink-0 flex-col items-center gap-2 pl-2 pt-1">
           <button
             type="button"
             onClick={onArrowNavigate}
-            className="rounded-full p-1 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-white/40"
+            className="rounded-full p-1 transition-[box-shadow,opacity,background-color] duration-150 ease-out hover:bg-white/5 hover:opacity-100 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_18px_rgba(255,255,255,0.12)] focus:outline-none focus:ring-2 focus:ring-white/40 focus:bg-white/5 focus:shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_0_18px_rgba(255,255,255,0.12)] active:bg-white/5 active:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_16px_rgba(255,255,255,0.1)]"
             aria-label={`Jump to next card after ${promptItem.zCode}`}
           >
             <img
