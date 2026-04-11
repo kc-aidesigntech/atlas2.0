@@ -1,16 +1,19 @@
-import { createClient } from '@supabase/supabase-js'
+import { createAtlasSupabaseClient, hasSupabaseConfig as hasConfig } from '@atlas/shared'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabasePublishableKey =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const hasSupabaseConfig = Boolean(supabaseUrl && supabasePublishableKey)
+const config = {
+  url: supabaseUrl,
+  publishableKey: supabasePublishableKey
+}
 
-export const supabase = hasSupabaseConfig
-  ? createClient(supabaseUrl, supabasePublishableKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true
-      }
-    })
-  : null
+export const hasSupabaseConfig = hasConfig(config)
+
+export const supabase = createAtlasSupabaseClient(config, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true
+  }
+})

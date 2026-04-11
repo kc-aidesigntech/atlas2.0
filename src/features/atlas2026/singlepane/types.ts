@@ -1,3 +1,11 @@
+import type {
+  PartnerServiceCapacityAnswer,
+  PartnerServiceCapacityHeader,
+  PartnerServiceCapacitySubmissionInput,
+  PartnerServiceCapacitySubmissionRecord,
+  PartnerSurveyRespondentRole
+} from '@atlas/shared'
+
 export type AtlasRole = 'navigator' | 'partner' | 'administrator'
 
 export interface EnrolleeProfile {
@@ -100,7 +108,7 @@ export interface RouteCandidateRecord {
   matchedZCodes: string[]
 }
 
-export type PartnerSurveyRespondentRole = 'administrator' | 'direct_service_provider' | 'other'
+export type { PartnerServiceCapacityAnswer, PartnerServiceCapacityHeader, PartnerServiceCapacitySubmissionInput, PartnerServiceCapacitySubmissionRecord, PartnerSurveyRespondentRole }
 
 export interface PartnerServiceCapacityScaleOption {
   value: number
@@ -122,39 +130,6 @@ export interface ZCodeSurveySection {
   parentCode: string
   theme: string
   prompts: ZCodeSurveyPrompt[]
-}
-
-export interface PartnerServiceCapacityHeader {
-  firstName: string
-  lastName: string
-  organizationName: string
-  jobTitle: string
-  respondentRoles: PartnerSurveyRespondentRole[]
-  otherRoleText: string
-}
-
-export interface PartnerServiceCapacityAnswer {
-  promptId: string
-  parentCode: string
-  zCode: string
-  normalizedZCode: string
-  title: string
-  description: string
-  score: number
-}
-
-export interface PartnerServiceCapacitySubmissionInput {
-  header: PartnerServiceCapacityHeader
-  answers: PartnerServiceCapacityAnswer[]
-  formVersion: string
-}
-
-export interface PartnerServiceCapacitySubmissionRecord extends PartnerServiceCapacitySubmissionInput {
-  id: string
-  partnerId: string | null
-  organizationNameNormalized: string
-  submittedAtIso: string
-  updatedAtIso: string
 }
 
 export interface PartnerZCodeBurdenRecord {

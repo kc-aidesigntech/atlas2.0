@@ -11,11 +11,16 @@ import type {
   JourneyStationMarker,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
-  PartnerSurveyRespondentRole,
   RouteAssignmentRecord,
   RouteCandidateRecord,
   RouteLogEvent
 } from '@/features/atlas2026/singlepane/types'
+import {
+  type AtlasDatabase,
+  getLatestPartnerServiceCapacitySubmission,
+  savePartnerServiceCapacitySubmission
+} from '@atlas/shared'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   getLocalAdminDataQuality,
   getLocalBaseLogs,
@@ -264,28 +269,6 @@ function aggregateAnswersByNormalizedZCode(input: PartnerServiceCapacitySubmissi
   return Array.from(grouped.values())
 }
 
-async function ensurePartnerRecord(organizationName: string) {
-  if (!supabase) return null
-  const organizationNameNormalized = normalizeOrganizationName(organizationName)
-  const nowIso = new Date().toISOString()
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('partners')
-    .upsert(
-      {
-        organization_name: organizationName.trim(),
-        organization_name_normalized: organizationNameNormalized,
-        updated_at: nowIso
-      },
-      { onConflict: 'organization_name_normalized' }
-    )
-    .select('id, organization_name, organization_name_normalized')
-    .single()
-
-  if (error) throw error
-  return data
-}
-
 export async function loadSinglePaneBootstrap(_role: AtlasRole): Promise<SinglePaneBootstrapData> {
   const bootstrap = getLocalSinglePaneBootstrap()
   const logs = loadLocalLogs()
@@ -414,52 +397,10 @@ export async function loadPartnerServiceCapacitySurvey(organizationName: string)
     return loadPartnerServiceCapacityState()[organizationNameNormalized] || null
   }
 
-  const { data: submissions, error } = await supabase
-    .schema('atlas')
-    .from('partner_service_capacity_submissions')
-    .select('*')
-    .eq('organization_name_normalized', organizationNameNormalized)
-    .order('submitted_at', { ascending: false })
-    .limit(1)
-
-  if (error) throw error
-  const submission = submissions?.[0]
-  if (!submission) return null
-
-  const { data: answers, error: answersError } = await supabase
-    .schema('atlas')
-    .from('partner_service_capacity_answers')
-    .select('*')
-    .eq('submission_id', submission.id)
-    .order('created_at', { ascending: true })
-
-  if (answersError) throw answersError
-
-  return {
-    id: submission.id,
-    partnerId: submission.partner_id || null,
-    organizationNameNormalized: submission.organization_name_normalized,
-    submittedAtIso: submission.submitted_at,
-    updatedAtIso: submission.updated_at || submission.submitted_at,
-    formVersion: submission.form_version,
-    header: {
-      firstName: submission.respondent_first_name,
-      lastName: submission.respondent_last_name,
-      organizationName: submission.organization_name,
-      jobTitle: submission.job_title || '',
-      respondentRoles: (submission.respondent_roles || []) as PartnerSurveyRespondentRole[],
-      otherRoleText: submission.other_role_text || ''
-    },
-    answers: (answers || []).map((answer) => ({
-      promptId: answer.prompt_id,
-      parentCode: answer.parent_code,
-      zCode: answer.z_code,
-      normalizedZCode: answer.normalized_z_code,
-      title: answer.title,
-      description: answer.description || '',
-      score: answer.burden_score
-    }))
-  }
+  return getLatestPartnerServiceCapacitySubmission(
+    supabase as SupabaseClient<AtlasDatabase>,
+    organizationNameNormalized
+  )
 }
 
 export async function savePartnerServiceCapacitySurvey(
@@ -479,43 +420,12 @@ export async function savePartnerServiceCapacitySurvey(
     return nextRecord
   }
 
-  const partner = await ensurePartnerRecord(input.header.organizationName)
-  const partnerId = partner?.id || null
-
-  const { data: insertedSubmission, error: submissionError } = await supabase
-    .schema('atlas')
-    .from('partner_service_capacity_submissions')
-    .insert({
-      partner_id: partnerId,
-      organization_name: input.header.organizationName.trim(),
-      organization_name_normalized: organizationNameNormalized,
-      respondent_first_name: input.header.firstName.trim(),
-      respondent_last_name: input.header.lastName.trim(),
-      job_title: input.header.jobTitle.trim() || null,
-      respondent_roles: input.header.respondentRoles,
-      other_role_text: input.header.otherRoleText.trim() || null,
-      form_version: input.formVersion,
-      raw_payload: input
-    })
-    .select('*')
-    .single()
-
-  if (submissionError) throw submissionError
-
-  const submissionId = insertedSubmission.id
-  const answerRows = input.answers.map((answer) => ({
-    submission_id: submissionId,
-    prompt_id: answer.promptId,
-    parent_code: answer.parentCode,
-    z_code: answer.zCode,
-    normalized_z_code: answer.normalizedZCode,
-    title: answer.title,
-    description: answer.description,
-    burden_score: answer.score
-  }))
-
-  const { error: answerError } = await supabase.schema('atlas').from('partner_service_capacity_answers').insert(answerRows)
-  if (answerError) throw answerError
+  const persistedRecord = await savePartnerServiceCapacitySubmission(
+    supabase as SupabaseClient<AtlasDatabase>,
+    input
+  )
+  const submissionId = persistedRecord.id
+  const partnerId = persistedRecord.partnerId
 
   const normalizedAnswers = aggregateAnswersByNormalizedZCode(input)
   const normalizedZCodes = normalizedAnswers.map((answer) => answer.normalizedZCode)
@@ -589,5 +499,5 @@ export async function savePartnerServiceCapacitySurvey(
     }
   }
 
-  return toSubmissionRecord(input, partnerId, insertedSubmission.submitted_at || submittedAtIso, submissionId)
+  return persistedRecord
 }

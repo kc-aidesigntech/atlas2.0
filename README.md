@@ -37,10 +37,12 @@ Detailed behavior spec: `MAKE_APP_ALIVE.md`
 
 ## Tech Stack
 
-- React 18 + Vite
+- React 18 + Vite (web)
+- Expo + React Native (mobile)
 - Tailwind + Radix primitives
 - Supabase JS client (`@supabase/supabase-js`) for Postgres/API integration
 - Firebase SDK still present for legacy/transition services
+- Shared cross-platform TypeScript package at `packages/shared`
 
 ## Quick Start
 
@@ -49,12 +51,26 @@ npm install
 npm run dev
 ```
 
+Mobile app (Expo):
+
+```bash
+npm run mobile:start
+```
+
 Build and preview:
 
 ```bash
 npm run build
 npm run preview
 ```
+
+Platform targets:
+
+- `npm run dev:web` - web dev server (Vite)
+- `npm run mobile:start` - Expo dev server
+- `npm run mobile:ios` - run iOS simulator (when available)
+- `npm run mobile:android` - run Android emulator/device
+- `npm run mobile:web` - Expo web target
 
 ## Environment Variables
 
@@ -72,6 +88,11 @@ Notes:
 
 - The client includes a compatibility fallback for `VITE_SUPABASE_ANON_KEY`.
 - Non-`public` schema requests use PostgREST schema profiles (`atlas`).
+
+Mobile runtime (`apps/mobile/.env`):
+
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
 ## Database and Authorization
 
