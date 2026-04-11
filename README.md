@@ -1,239 +1,128 @@
-# ATLAS - Community Information Exchange Portal
+# ATLAS
 
-A professional-facing React web application for the ATLAS/PRAXIS Community Information Exchange (CIE) system. This portal enables Peer Counselors, Case Managers, and RNs to manage enrollees, track social risk, coordinate care, and make referrals to community resources.
+ATLAS is a role-based care coordination and navigation platform centered on the 2026 operating model (`Regulation -> Readiness -> Renewal`), with a single-pane workflow for rapid field operations.
 
-## 🎯 Overview
+## Current Product State
 
-ATLAS is designed with a **civic-friendly, accessible** interface focused on mental health and social services. The application emphasizes:
+- Primary app shell is `src/features/atlas2026/singlepane/SinglePaneApp.tsx` via `src/RootApp.jsx`
+- Standalone partner survey route is available at `/service-capacity-survey`
+- Supabase/Postgres is active for survey and capacity workflows
+- Authorization foundation is now in place (roles, permissions, user exceptions, RLS toggles)
+- Legacy Firebase paths still exist in the repo for specific 2026 services and migration continuity
 
-- **Accessibility**: WCAG 2.1 AA compliant, built with shadcn/ui and Radix UI
-- **Professional Design**: Calm color palette with soft blues (sky) and greens (emerald)
-- **Mental Health Focus**: Clean layouts with generous whitespace and empathetic language
-- **Real-time Collaboration**: Firebase/Firestore backend with live updates
+## Visual Direction
 
-## 🚀 Features
+The UI is intentionally dark and operational, not pastel/civic-light.
 
-### Core Functionality
+- Base surface: black-first (`SP_COLORS.bg = #000000`)
+- Reference palette model: `references/NYC-subway-pantone-colors.jpg`
+- Accent colors align with subway-inspired signal tones in `src/features/atlas2026/singlepane/theme.ts`
+- Typography and casing follow the current shell behavior (including lowercase UI treatment from `src/index.css`)
 
-1. **Dashboard**
-   - Overview of enrollee count, pending referrals, and recent updates
-   - Regional scoreboard showing community-wide impact metrics
-   - Quick access to key metrics and tasks
+## Core Workflows
 
-2. **My Enrollees**
-   - View all assigned enrollees in a sortable table
-   - Risk tier visualization (Tiers 1-3)
-   - Care team size indicators
-   - Click-through to detailed enrollee profiles
+- **Navigator**
+  - assigned enrollees
+  - requests to enroll
+  - route planning with z-code-aware partner ranking
+  - station and county context
+- **Partner**
+  - service-capacity survey and burden/capability updates
+  - station profile context
+- **Administrator**
+  - admin-only operations panels
+  - data controls, governance scaffolding, and policy toggles
 
-3. **Enrollee Profile Pages**
-   - **Risk Rating Tab**: Interactive pie chart showing 8 Dimensions of Wellness
-     - Physical, Emotional, Intellectual, Spiritual, Social, Occupational, Environmental, Financial
-     - Expandable accordion for risk tiers (Z-Codes, LS/CMI scores)
-   - **Shared Care Plan Tab**: Longitudinal record with:
-     - Care notes from team members
-     - PRAXIS AI insights with accept/dismiss functionality
-     - System alerts
-   - **Details Tab**: Demographics and care team information
+Detailed behavior spec: `MAKE_APP_ALIVE.md`
 
-4. **Community Resources**
-   - Searchable directory of community services
-   - Dynamic filtering by enrollee eligibility (Z-Codes, income level)
-   - Category-coded resources (Food, Housing, Healthcare, etc.)
-   - One-click referral creation
+## Tech Stack
 
-5. **Referrals Management**
-   - Track all referrals with status updates (Pending, Accepted, Rejected)
-   - Referral dialog with enrollee selection and notes
-   - Summary statistics (total, pending, accepted, rejected)
-   - Real-time status tracking
+- React 18 + Vite
+- Tailwind + Radix primitives
+- Supabase JS client (`@supabase/supabase-js`) for Postgres/API integration
+- Firebase SDK still present for legacy/transition services
 
-6. **New Enrollee Creation**
-   - Simple form for adding new enrollees
-   - Automatic care team assignment
-   - Initial risk profile setup
-
-## 🛠 Technology Stack
-
-- **Frontend**: React.js 18.3+ (Vite)
-- **UI Framework**: shadcn/ui (built on Radix UI)
-- **Styling**: Tailwind CSS with custom civic theme
-- **Icons**: lucide-react
-- **Charts**: recharts (for risk visualization)
-- **State Management**: React Context (authentication) + local state
-- **Backend**: Firebase/Firestore
-- **Authentication**: Firebase Auth with custom tokens
-
-## 📦 Installation
+## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Run development server
 npm run dev
+```
 
-# Build for production
+Build and preview:
+
+```bash
 npm run build
-
-# Preview production build
 npm run preview
 ```
 
-## 🔥 Firebase Configuration
+## Environment Variables
 
-The app expects the following global variables to be defined:
+Frontend runtime (required for Supabase-connected paths):
 
-```javascript
-window.__firebase_config = {
-  apiKey: "your-api-key",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "your-sender-id",
-  appId: "your-app-id"
-}
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-window.__app_id = "your-app-id"
-window.__initial_auth_token = "optional-custom-token"
-```
+Security rule:
 
-## 📊 Firestore Data Model
+- Never expose service credentials in `VITE_*` vars.
+- Keep `SUPABASE_SECRET_KEY` server-side only.
 
-### Collections Structure
+Notes:
 
-```
-/artifacts/{appId}/
-  ├── users/{userId}/profile/{profileDoc}
-  │   └── { name, role, email, assignedEnrollees[] }
-  │
-  └── public/data/
-      ├── enrollees/{enrolleeId}
-      │   ├── { demographics, careTeam[], riskProfile }
-      │   └── carePlan/{noteId}
-      │       └── { type, timestamp, authorUserId, content, status }
-      │
-      ├── resources/{resourceId}
-      │   └── { name, category, description, eligibilityCriteria }
-      │
-      └── referrals/{referralId}
-          └── { enrolleeId, resourceId, status, notes, createdTimestamp }
-```
+- The client includes a compatibility fallback for `VITE_SUPABASE_ANON_KEY`.
+- Non-`public` schema requests use PostgREST schema profiles (`atlas`).
 
-### Key Data Schemas
+## Database and Authorization
 
-**Enrollee:**
-```javascript
-{
-  demographics: { firstName, lastName, dob, photoUrl },
-  careTeam: [{ userId, name, role }],
-  riskProfile: {
-    tier: 1-3,
-    wellnessScores: { physical, emotional, ... },
-    zCodes: ["Z59.0", ...],
-    lscmiScores: { antisocial, family, ... }
-  }
-}
-```
+Start here for the current model:
 
-**Care Plan Entry:**
-```javascript
-{
-  type: "Note" | "PRAXISInsight" | "Alert",
-  timestamp: ServerTimestamp,
-  authorUserId: string,
-  authorName: string,
-  content: string,
-  status?: "Pending" | "Accepted" | "Dismissed"  // For PRAXIS insights
-}
-```
+- `docs/atlas-2026-database-model.md` (canonical model and authz foundation)
+- `supabase/README.md` (migration order and runtime setup)
+- `SQL_SCHEMA.md` (expanded schema map)
 
-**Resource:**
-```javascript
-{
-  name: string,
-  category: "Food" | "Housing" | "Healthcare" | ...,
-  description: string,
-  eligibilityCriteria: {
-    zCodes: string[],
-    income: string
-  }
-}
-```
+Key authz components now implemented:
 
-**Referral:**
-```javascript
-{
-  enrolleeId: string,
-  enrolleeName: string,
-  resourceId: string,
-  resourceName: string,
-  referringUserId: string,
-  referringUserName: string,
-  status: "Pending" | "Accepted" | "Rejected",
-  notes: string,
-  createdTimestamp: ServerTimestamp
-}
-```
+- `atlas.permissions`
+- `atlas.role_permissions`
+- `atlas.user_permission_exceptions`
+- `atlas.authorization_settings`
 
-## 🎨 Design System
+Phased rollout toggles:
 
-### Colors
+- `allow_legacy_public_partner_capacity_read`
+- `allow_legacy_public_partner_capacity_write`
+- `allow_legacy_public_partner_capacity_delete`
 
-- **Primary**: Sky blue (`sky-600`, `#0284c7`)
-- **Secondary**: Emerald green (`emerald-600`, `#059669`)
-- **Warning**: Amber (`amber-600`, `#d97706`)
-- **Destructive**: Rose (`rose-600`, `#e11d48`)
+## Migrations (Current Baseline)
 
-### Risk Tier Colors
+Apply in this sequence for a new Supabase environment:
 
-- **Tier 1**: Green (basic wellness)
-- **Tier 2**: Yellow (social determinants)
-- **Tier 3**: Red (criminogenic risk)
+1. `supabase/migrations/20260114_make_app_alive.sql`
+2. `supabase/migrations/20260401_profile_images.sql`
+3. `supabase/migrations/20260402_partner_service_capacity_surveys.sql`
+4. `supabase/migrations/20260411_grant_delete_partner_service_capacity.sql`
+5. `supabase/migrations/20260411_authorization_foundation.sql`
 
-## 🔐 Security & Privacy
+## Useful Scripts
 
-- Firebase Security Rules should be configured to ensure:
-  - Users can only read/write their own profile
-  - Enrollee data is shared among assigned care team members
-  - Resources are publicly readable
-  - Referrals are only visible to the referring user
+- `npm run data:partner-capabilities` - builds partner capability seed artifact
+- `npm run test:route-ranking` - validates route ranking behavior
 
-## 📱 Responsive Design
+## Documentation Map
 
-The application is fully responsive with breakpoints:
-- Mobile: < 768px
-- Tablet: 768px - 1024px
-- Desktop: > 1024px
+- Product behavior and execution spec: `MAKE_APP_ALIVE.md`
+- Canonical 2026 technical orientation: `docs/atlas-2026-canonical-spec.md`
+- Security and governance model notes: `docs/atlas-2026-security-model.md`
+- Repo cutover plan: `docs/atlas-2026-repo-cutover.md`
+- Seeding guide: `docs/atlas-2026-seeding.md`
 
-## ♿ Accessibility
+## Contribution Guidance
 
-- WCAG 2.1 AA compliant
-- Keyboard navigation support
-- Screen reader friendly (ARIA labels)
-- High contrast mode compatible
-- Focus indicators on all interactive elements
+When making changes:
 
-## 🧪 Development Notes
-
-- The app uses a single-file architecture (`App.jsx`) for simplicity
-- All components are defined in `App.jsx`
-- Firebase functions are imported inline using `require()`
-- State management is handled through React hooks and Context API
-
-## 📝 License
-
-This application is built for the ATLAS/PRAXIS Community Information Exchange system.
-
-## 🤝 Contributing
-
-This is a professional healthcare coordination tool. All contributions should maintain:
-1. Accessibility standards (WCAG 2.1 AA)
-2. Professional, empathetic tone
-3. Clean, maintainable code
-4. Comprehensive error handling
-
----
-
-**Built with ❤️ for community health coordination**
+- Preserve the single-pane operational interaction model unless explicitly changing IA.
+- Keep role boundaries strict (navigator vs partner vs administrator).
+- Treat authorization and data policy changes as migration-backed, reviewed infrastructure work.
+- Update docs in the same PR when behavior or architecture changes.
 

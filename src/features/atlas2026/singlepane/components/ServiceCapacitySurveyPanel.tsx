@@ -7,6 +7,7 @@ import {
   SERVICE_CAPACITY_SURVEY_SECTIONS
 } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import downArrowUrl from '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
 import type {
   PartnerServiceCapacityAnswer,
   PartnerServiceCapacityHeader,
@@ -304,51 +305,88 @@ function BurdenCard({
   const scaleState = getScaleOption(score)
   const thumbPercent = ((score - 1) / 8) * 100
 
+  function handleNumberInputChange(nextValue: string) {
+    if (!nextValue) {
+      onChange(1)
+      return
+    }
+    const parsed = Number(nextValue)
+    if (!Number.isFinite(parsed)) return
+    onChange(Math.max(1, Math.min(9, Math.round(parsed))))
+  }
+
   return (
     <div className="rounded-[22px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="max-w-[760px]">
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1">
           <div className="text-[15px] font-medium text-white">{promptItem.zCode}</div>
           <small className="mt-1 block text-[12px] text-[#bdbdbd]">{promptItem.description}</small>
-        </div>
-        <div
-          className="rounded-full border px-3 py-1 text-[12px]"
-          style={{ borderColor: score >= 7 ? `${SP_COLORS.deepGreen}90` : score <= 3 ? `${SP_COLORS.red}90` : `${SP_COLORS.yellow}90`, color: score >= 7 ? SP_COLORS.deepGreen : score <= 3 ? SP_COLORS.red : SP_COLORS.yellow }}
-        >
-          {score}
-        </div>
-      </div>
 
-      <div className="relative mt-5 pt-9">
-        <div
-          className="pointer-events-none absolute top-0 z-10 w-[220px] max-w-[calc(100%-8px)] -translate-x-1/2 rounded-[16px] border px-3 py-2"
-          style={{
-            left: `clamp(110px, ${thumbPercent}%, calc(100% - 110px))`,
-            borderColor: '#ffffff25',
-            backgroundColor: '#080808'
-          }}
-        >
-          <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
-            {scaleState.value} - {scaleState.label}
-          </small>
-          <small className="block text-[11px] text-white">{scaleState.description}</small>
-        </div>
+          <div className="relative mt-5 pt-9">
+            <div
+              className="pointer-events-none absolute top-0 z-10 w-[220px] max-w-[calc(100%-8px)] -translate-x-1/2 rounded-[16px] border px-3 py-2"
+              style={{
+                left: `clamp(110px, ${thumbPercent}%, calc(100% - 110px))`,
+                borderColor: '#ffffff25',
+                backgroundColor: '#080808'
+              }}
+            >
+              <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
+                {scaleState.value} - {scaleState.label}
+              </small>
+              <small className="block text-[11px] text-white">{scaleState.description}</small>
+            </div>
 
-        <div className="rounded-[20px] border px-3 py-3" style={{ borderColor: '#ffffff12', backgroundColor: '#020202' }}>
-          <input
-            type="range"
-            min={1}
-            max={9}
-            step={1}
-            value={score}
-            onChange={(event) => onChange(Number(event.target.value))}
-            className="w-full accent-white"
-          />
-          <div className="mt-2 flex items-center justify-between text-[10px]" style={{ color: SP_COLORS.muted }}>
-            {SERVICE_CAPACITY_SCALE.map((option) => (
-              <span key={option.value}>{option.value}</span>
-            ))}
+            <div className="rounded-[20px] border px-3 py-3" style={{ borderColor: '#ffffff12', backgroundColor: '#020202' }}>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={9}
+                  step={1}
+                  value={score}
+                  onChange={(event) => onChange(Number(event.target.value))}
+                  className="min-w-[220px] flex-1 accent-white"
+                />
+                <label className="flex items-center gap-2 text-[12px]" style={{ color: SP_COLORS.muted }}>
+                  <span>value</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={9}
+                    step={1}
+                    value={score}
+                    onChange={(event) => handleNumberInputChange(event.target.value)}
+                    className="w-[64px] rounded-xl border bg-black px-2 py-1 text-center text-[14px] text-white"
+                    style={{ borderColor: '#ffffff30' }}
+                  />
+                </label>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[10px]" style={{ color: SP_COLORS.muted }}>
+                {SERVICE_CAPACITY_SCALE.map((option) => (
+                  <span key={option.value}>{option.value}</span>
+                ))}
+              </div>
+            </div>
           </div>
+        </div>
+
+        <div className="flex shrink-0 flex-col items-center gap-3 pt-1">
+          <div
+            className="rounded-full border px-3 py-1 text-[12px]"
+            style={{
+              borderColor: score >= 7 ? `${SP_COLORS.deepGreen}90` : score <= 3 ? `${SP_COLORS.red}90` : `${SP_COLORS.yellow}90`,
+              color: score >= 7 ? SP_COLORS.deepGreen : score <= 3 ? SP_COLORS.red : SP_COLORS.yellow
+            }}
+          >
+            {score}
+          </div>
+          <img
+            src={downArrowUrl}
+            alt=""
+            aria-hidden="true"
+            className="h-20 w-8 rotate-180 object-contain opacity-70"
+          />
         </div>
       </div>
     </div>

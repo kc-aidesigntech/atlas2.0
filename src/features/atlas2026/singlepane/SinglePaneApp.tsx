@@ -7,7 +7,6 @@ import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLo
 import RadialLoadTableOverlay from '@/features/atlas2026/singlepane/components/RadialLoadTableOverlay'
 import RoleMenus from '@/features/atlas2026/singlepane/components/RoleMenus'
 import RoutePlanningOverlay from '@/features/atlas2026/singlepane/components/RoutePlanningOverlay'
-import ServiceCapacitySurveyPanel from '@/features/atlas2026/singlepane/components/ServiceCapacitySurveyPanel'
 import StripMapTimeline from '@/features/atlas2026/singlepane/components/StripMapTimeline'
 import TopNav from '@/features/atlas2026/singlepane/components/TopNav'
 import VerticalStripMapTimeline from '@/features/atlas2026/singlepane/components/VerticalStripMapTimeline'
@@ -37,10 +36,6 @@ export default function SinglePaneApp() {
     countyHeatmap,
     adminMetrics,
     journeyStationMarkers,
-    partnerServiceCapacitySurvey,
-    partnerServiceCapacityDefaultHeader,
-    isSavingPartnerServiceCapacitySurvey,
-    partnerServiceCapacitySurveyError,
     selectedRouteAssignment,
     appendRouteLog,
     updateRouteLogTimelinePosition,
@@ -51,8 +46,7 @@ export default function SinglePaneApp() {
     hasSavedIntake,
     saveAccountSettings,
     saveEnrolleeIntake,
-    saveRouteAssignment,
-    savePartnerServiceCapacitySurvey
+    saveRouteAssignment
   } = useSinglePaneData()
   const [activeZCode, setActiveZCode] = React.useState<string | null>(null)
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = React.useState(false)
@@ -61,12 +55,22 @@ export default function SinglePaneApp() {
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [lastContentMenu, setLastContentMenu] = React.useState('assigned enrollees')
   const actionMenus = selectedRoleConfig.actionMenus?.length ? selectedRoleConfig.actionMenus : ['route planning']
+  const standaloneSurveyUrl = React.useMemo(() => {
+    if (typeof window === 'undefined') return '/service-capacity-survey'
+    return new URL('service-capacity-survey', `${window.location.origin}${import.meta.env.BASE_URL}`).toString()
+  }, [])
 
   React.useEffect(() => {
     if (activeMenu !== 'route planning') {
       setLastContentMenu(activeMenu)
     }
   }, [activeMenu])
+
+  React.useEffect(() => {
+    if (role === 'partner' && activeMenu === 'service capacity') {
+      window.location.assign(standaloneSurveyUrl)
+    }
+  }, [activeMenu, role, standaloneSurveyUrl])
 
   React.useEffect(() => {
     if (!isRoutePlanningOpen) {
@@ -106,6 +110,10 @@ export default function SinglePaneApp() {
   }, [journeyStationMarkers, routeCandidates, timelineConfig?.planStartIso])
 
   function handleMenuSelect(menu: string) {
+    if (role === 'partner' && menu === 'service capacity') {
+      window.location.assign(standaloneSurveyUrl)
+      return
+    }
     if (menu === 'route planning') {
       setActiveMenu(menu)
       setIsRoutePlanningOpen(true)
@@ -215,17 +223,7 @@ export default function SinglePaneApp() {
                       onSaveIntake={saveEnrolleeIntake}
                     />
                   </div>
-                ) : isServiceCapacitySection ? (
-                  <div className="flex min-h-[220px] flex-1 items-start pt-1">
-                    <ServiceCapacitySurveyPanel
-                      savedSubmission={partnerServiceCapacitySurvey}
-                      defaultHeader={partnerServiceCapacityDefaultHeader}
-                      isSaving={isSavingPartnerServiceCapacitySurvey}
-                      saveError={partnerServiceCapacitySurveyError}
-                      onSubmit={savePartnerServiceCapacitySurvey}
-                    />
-                  </div>
-                ) : (
+                ) : isServiceCapacitySection ? null : (
                   <>
                     <div className="hidden min-h-[220px] flex-1 items-center pt-1 md:flex">
                       <StripMapTimeline

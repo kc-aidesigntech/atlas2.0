@@ -16,6 +16,23 @@
 
 when these are missing, the app falls back to local seeds so development can continue without a live db.
 
+## authorization foundation (roles, permissions, exceptions)
+
+Migration `migrations/20260411_authorization_foundation.sql` adds:
+
+- `atlas.permissions`
+- `atlas.role_permissions`
+- `atlas.user_permission_exceptions`
+- `atlas.authorization_settings`
+
+It also introduces helper functions for permission checks and RLS policies on partner service-capacity tables. During rollout, legacy/public access remains controlled by settings rows:
+
+- `allow_legacy_public_partner_capacity_read`
+- `allow_legacy_public_partner_capacity_write`
+- `allow_legacy_public_partner_capacity_delete`
+
+Set these to `false` once auth-linked user role mapping and exception workflows are fully live.
+
 ## profile images
 
 - Supabase Storage bucket: `profile-images`
