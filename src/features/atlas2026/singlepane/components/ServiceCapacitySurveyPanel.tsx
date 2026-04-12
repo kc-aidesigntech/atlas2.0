@@ -418,6 +418,7 @@ function BurdenCard({
   const tooltipRef = useRef<HTMLDivElement | null>(null)
   const [tooltipHeight, setTooltipHeight] = useState(0)
   const tooltipReservedHeight = score == null ? 0 : Math.max(tooltipHeight, 62)
+  const sliderEndpointSpreadPx = 24
 
   const setNumericInputRef = React.useCallback(
     (element: HTMLInputElement | null) => {
@@ -548,17 +549,22 @@ function BurdenCard({
                     value={effectiveScore}
                     onChange={(event) => onChange(Number(event.target.value))}
                     tabIndex={-1}
-                    className={`w-full accent-white ${score == null ? 'opacity-55' : ''}`}
+                    className={`service-capacity-slider w-full ${score == null ? 'opacity-55' : ''}`}
                   />
-                  <div className="relative mt-1.5 h-4 text-[10px] md:h-[18px] md:text-[11px]">
+                  <div
+                    className="relative mt-1.5 h-4 overflow-visible text-[10px] md:h-[18px] md:text-[11px]"
+                    style={{
+                      width: `calc(100% + ${sliderEndpointSpreadPx}px)`,
+                      left: `-${sliderEndpointSpreadPx / 2}px`
+                    }}
+                  >
                     {SERVICE_CAPACITY_SCALE.map((option, index) => (
                       <span
                         key={option.value}
                         className="absolute top-0 leading-none"
                         style={{
                           left: `${((option.value - 1) / 8) * 100}%`,
-                          transform:
-                            option.value === 1 ? 'translateX(0%)' : option.value === 9 ? 'translateX(-100%)' : 'translateX(-50%)',
+                          transform: 'translateX(-50%)',
                           color: sliderScaleColors[index]
                         }}
                       >
