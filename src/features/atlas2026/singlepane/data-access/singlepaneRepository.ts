@@ -9,6 +9,20 @@ import type {
   RouteCandidateRecord
 } from '@/features/atlas2026/singlepane/types'
 import {
+  fetchAppRoleNavigation,
+  fetchPartnerLoadBreakdown,
+  fetchSinglePaneAdminMetrics,
+  fetchSinglePaneCountyHeatmap,
+  fetchSinglePaneEnrolleeDomainLoadBreakdown,
+  fetchSinglePaneEnrolleeDomainLoads,
+  fetchSinglePaneEnrolleeProfiles,
+  fetchSinglePaneEnrollmentRequests,
+  fetchSinglePaneRouteCandidates,
+  fetchSinglePaneTimelineConfig
+} from '@atlas/shared'
+import { fetchEnrollmentStationMarkers } from '@atlas/shared'
+import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
+import {
   applyIntakeOverrides,
   loadAccountSettings,
   loadEnrolleeIntakes,
@@ -17,16 +31,6 @@ import {
   saveEnrolleeIntake,
   saveRouteAssignment
 } from '@/features/atlas2026/singlepane/data-access/localStateRepository'
-import {
-  getLocalAdminDataQuality,
-  getLocalCountyHeatmap,
-  getLocalEnrollmentRequests,
-  getLocalPartnerRadialLoad,
-  getLocalPartnerRadialLoadBreakdown,
-  getLocalRouteCandidates,
-  getLocalSinglePaneBootstrap,
-  type SinglePaneBootstrapData
-} from '@/features/atlas2026/singlepane/data-access/localCsvData'
 import {
   appendRouteLog,
   loadLocalLogs,
@@ -43,10 +47,128 @@ import {
   searchPartnerIdentifierRecordMatches
 } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
 
+export interface SinglePaneBootstrapData {
+  enrollees: import('@/features/atlas2026/singlepane/types').EnrolleeProfile[]
+  loads: DomainLoad[]
+  loadBreakdownsByEnrolleeId: Record<string, DomainLoadBreakdown>
+  roleConfigs: import('@/features/atlas2026/singlepane/types').RoleMenuConfig[]
+  timelineConfig: import('@/features/atlas2026/singlepane/types').TimelineConfig
+  timelineConfigsByEnrolleeId: Record<string, import('@/features/atlas2026/singlepane/types').TimelineConfig>
+  logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]
+}
+
 export async function loadSinglePaneBootstrap(_role: AtlasRole): Promise<SinglePaneBootstrapData> {
-  const bootstrap = getLocalSinglePaneBootstrap()
   const logs = loadLocalLogs()
   const intakeOverrides = await loadEnrolleeIntakes()
+
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      enrollees: [],
+      loads: [],
+      loadBreakdownsByEnrolleeId: {},
+      roleConfigs: [],
+      timelineConfig: {
+        planStartIso: new Date().toISOString(),
+        durationMonths: 9,
+        maxDurationMonths: 12,
+        gates: []
+      },
+      timelineConfigsByEnrolleeId: {},
+      logs
+    }
+  }
+
+  const [profiles, loadRows, breakdownRows, roleNavigation, timelineDefaults] = await Promise.all([
+    fetchSinglePaneEnrolleeProfiles(supabase),
+    fetchSinglePaneEnrolleeDomainLoads(supabase),
+    fetchSinglePaneEnrolleeDomainLoadBreakdown(supabase),
+    fetchAppRoleNavigation(supabase, 'singlepane'),
+    fetchSinglePaneTimelineConfig(supabase)
+  ])
+
+  const bootstrapEnrollees = profiles.map((profile) => ({
+    id: profile.enrolleeId,
+    enrollmentId: profile.enrollmentId,
+    fullName: profile.fullName,
+    dob: profile.dob,
+    caseId: profile.caseId,
+    email: profile.email,
+    avatarUrl: profile.avatarUrl || undefined,
+    assignedNavigator: profile.assignedNavigator,
+    zCodeTags: profile.zCodeTags
+  }))
+
+  const roleConfigs = roleNavigation.map((item) => ({
+    role: item.roleKey as AtlasRole,
+    topMenus: item.topMenus,
+    actionMenus: item.actionMenus
+  }))
+
+  const loads = loadRows.map((row) => ({
+    enrolleeId: profiles.find((profile) => profile.enrollmentId === row.enrollmentId)?.enrolleeId || row.enrollmentId,
+    habitat: row.habitat,
+    work: row.work,
+    socialNetworks: row.socialNetworks
+  }))
+
+  const loadBreakdownsByEnrolleeId = Object.fromEntries(
+    profiles.map((profile) => {
+      const rows = breakdownRows
+        .filter((row) => row.enrollmentId === profile.enrollmentId)
+        .map((row) => ({
+          id: `${profile.enrolleeId}:${row.zCodeGroup}`,
+          zCodeGroup: row.zCodeGroup,
+          mappedDomain: row.mappedDomain,
+          rawCount: row.rawCount
+        }))
+      const totals = rows.reduce(
+        (accumulator, row) => {
+          if (row.mappedDomain === 'habitat') accumulator.habitatTotal += row.rawCount
+          if (row.mappedDomain === 'work') accumulator.workTotal += row.rawCount
+          if (row.mappedDomain === 'socialNetworks') accumulator.socialNetworksTotal += row.rawCount
+          return accumulator
+        },
+        { habitatTotal: 0, workTotal: 0, socialNetworksTotal: 0 }
+      )
+      return [
+        profile.enrolleeId,
+        {
+          subjectId: profile.enrolleeId,
+          subjectLabel: profile.fullName,
+          sourceKind: 'enrolleeRecords' as const,
+          sourceLabel: 'Supabase enrollee z-codes',
+          ...totals,
+          rows
+        } satisfies DomainLoadBreakdown
+      ]
+    })
+  )
+
+  const baseTimelineConfig = {
+    planStartIso: new Date().toISOString(),
+    durationMonths: timelineDefaults.durationMonths,
+    maxDurationMonths: timelineDefaults.maxDurationMonths,
+    gates: timelineDefaults.gates
+  }
+
+  const bootstrap: SinglePaneBootstrapData = {
+    enrollees: bootstrapEnrollees,
+    loads,
+    loadBreakdownsByEnrolleeId,
+    roleConfigs,
+    timelineConfig: baseTimelineConfig,
+    timelineConfigsByEnrolleeId: Object.fromEntries(
+      profiles.map((profile) => [
+        profile.enrolleeId,
+        {
+          ...baseTimelineConfig,
+          planStartIso: profile.enrollmentStartIso || baseTimelineConfig.planStartIso,
+          durationMonths: profile.targetDurationMonths || baseTimelineConfig.durationMonths
+        }
+      ])
+    ),
+    logs
+  }
   const enrollees = applyIntakeOverrides(bootstrap.enrollees, intakeOverrides)
   const timelineConfigsByEnrolleeId = Object.fromEntries(
     Object.entries(bootstrap.timelineConfigsByEnrolleeId).map(([enrolleeId, config]) => [
@@ -67,34 +189,62 @@ export async function loadSinglePaneBootstrap(_role: AtlasRole): Promise<SingleP
 }
 
 export async function loadEnrollmentRequests(role: AtlasRole): Promise<EnrollmentRequestRecord[]> {
-  return getLocalEnrollmentRequests(role)
+  if (role !== 'navigator' || !hasSupabaseConfig || !supabase) return []
+  const rows = await fetchSinglePaneEnrollmentRequests(supabase)
+  return rows.map((row) => ({
+    id: row.id,
+    submittedAt: row.submittedAt,
+    status: row.status,
+    prospectiveEnrollee: row.prospectiveEnrollee,
+    email: row.email || undefined
+  }))
 }
 
-export async function loadRouteCandidates(activeZCodes: string[] = []): Promise<RouteCandidateRecord[]> {
-  return getLocalRouteCandidates(activeZCodes)
+export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteCandidateRecord[]> {
+  if (!enrollmentId || !hasSupabaseConfig || !supabase) return []
+  const rows = await fetchSinglePaneRouteCandidates(supabase, enrollmentId)
+  return rows.map((row) => ({
+    stationId: row.stationId,
+    partnerId: row.partnerId,
+    stationName: row.stationName,
+    score: row.score,
+    specializeHits: row.specializeHits,
+    conflictHits: row.conflictHits,
+    interfereHits: row.interfereHits,
+    matchedZCodes: row.matchedZCodes
+  }))
 }
 
 export async function loadCountyHeatmap(): Promise<CountyHeatPoint[]> {
-  return getLocalCountyHeatmap()
+  if (!hasSupabaseConfig || !supabase) return []
+  const rows = await fetchSinglePaneCountyHeatmap(supabase)
+  return rows.map((row) => ({
+    countyId: row.countyId,
+    countyName: row.countyName,
+    zGroup: row.zGroup,
+    activeCaseCount: row.activeCaseCount
+  }))
 }
 
 export async function loadAdminDataQuality(): Promise<AdminDataQualityMetric[]> {
-  return getLocalAdminDataQuality()
+  if (!hasSupabaseConfig || !supabase) return []
+  return fetchSinglePaneAdminMetrics(supabase)
 }
 
 export async function loadJourneyStationMarkers(enrollmentId?: string): Promise<JourneyStationMarker[]> {
   if (!enrollmentId) return []
-  const historyMarkers = loadLocalLogs()
-    .filter((log) => log.enrolleeId === enrollmentId && log.phase !== 'regulation')
-    .map((log, index) => ({
-      id: `station-marker-${log.id}`,
-      stationName: index === 0 ? 'partner station' : `partner station ${index + 1}`,
-      assignedAtIso: log.timestampIso,
-      phase: log.phase,
-      iconSlug: log.stationIcon,
-      markerType: 'history' as const
-    }))
-  const selectedAssignment = (await loadRouteAssignments())[enrollmentId]
+  const historyMarkers = hasSupabaseConfig && supabase
+    ? (await fetchEnrollmentStationMarkers(supabase, enrollmentId)).map((marker) => ({
+        id: marker.routePlanStopId,
+        stationName: marker.stationName,
+        assignedAtIso: marker.assignedAt,
+        phase: marker.status === 'completed' ? 'renewal' : marker.status === 'active' ? 'readiness' : 'regulation',
+        iconSlug: marker.iconSlug || undefined,
+        markerType: 'history' as const
+      }))
+    : []
+  const assignments = await loadRouteAssignments()
+  const selectedAssignment = assignments[enrollmentId] || Object.values(assignments).find((assignment) => assignment.enrolleeId === enrollmentId)
   if (!selectedAssignment) return historyMarkers
   return [
     ...historyMarkers,
@@ -109,11 +259,20 @@ export async function loadJourneyStationMarkers(enrollmentId?: string): Promise<
 }
 
 export async function loadPartnerRadialLoad(): Promise<DomainLoad | null> {
-  return getLocalPartnerRadialLoad()
+  const breakdown = await loadPartnerRadialLoadBreakdown()
+  if (!breakdown) return null
+  const maxTotal = Math.max(breakdown.habitatTotal, breakdown.workTotal, breakdown.socialNetworksTotal, 1)
+  return {
+    enrolleeId: breakdown.subjectId,
+    habitat: Math.round((breakdown.habitatTotal / maxTotal) * 100),
+    work: Math.round((breakdown.workTotal / maxTotal) * 100),
+    socialNetworks: Math.round((breakdown.socialNetworksTotal / maxTotal) * 100)
+  }
 }
 
 export async function loadPartnerRadialLoadBreakdown(): Promise<DomainLoadBreakdown | null> {
-  return getLocalPartnerRadialLoadBreakdown()
+  if (!hasSupabaseConfig || !supabase) return null
+  return fetchPartnerLoadBreakdown(supabase)
 }
 
 export {

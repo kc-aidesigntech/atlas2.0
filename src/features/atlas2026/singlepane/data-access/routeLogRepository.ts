@@ -1,5 +1,4 @@
 import type { RouteLogEvent } from '@/features/atlas2026/singlepane/types'
-import { getLocalBaseLogs } from '@/features/atlas2026/singlepane/data-access/localCsvData'
 
 const STORAGE_KEY = 'atlas2026.singlepane.logs.v3'
 
@@ -58,30 +57,17 @@ function loadPersistedRouteLogState(): PersistedRouteLogState {
 }
 
 export function loadLocalLogs(): RouteLogEvent[] {
-  const baseLogs = getLocalBaseLogs().map(normalizeLog)
   const { appendedLogs, overrides } = loadPersistedRouteLogState()
-  return [
-    ...baseLogs.map((log) => normalizeLog(overrides[log.id] ? { ...log, ...overrides[log.id] } : log)),
-    ...appendedLogs.map(normalizeLog)
-  ]
+  return [...appendedLogs.map((log) => normalizeLog(overrides[log.id] ? { ...log, ...overrides[log.id] } : log))]
 }
 
 function persistLocalLogs(logs: RouteLogEvent[]) {
   if (typeof window === 'undefined') return
-  const baseLogs = getLocalBaseLogs().map(normalizeLog)
-  const baseLogById = new Map(baseLogs.map((log) => [log.id, log]))
   const overrides: Record<string, RouteLogEvent> = {}
   const appendedLogs: RouteLogEvent[] = []
 
   for (const log of logs.map(normalizeLog)) {
-    const baseLog = baseLogById.get(log.id)
-    if (!baseLog) {
-      appendedLogs.push(log)
-      continue
-    }
-    if (!areLogsEqual(baseLog, log)) {
-      overrides[log.id] = log
-    }
+    appendedLogs.push(log)
   }
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ appendedLogs, overrides } satisfies PersistedRouteLogState))

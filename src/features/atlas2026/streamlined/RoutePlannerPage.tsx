@@ -15,9 +15,9 @@ interface RoutePlannerPageProps {
   selectedTemplateId: string
   onSelectTemplate: (templateId: string) => void
   previewStepsForBomIds: (bomItemIds: string[]) => RoutingStep[]
-  addBomItem: (payload: Omit<InstructionBomItem, 'id'>) => void
-  buildTemplateFromBom: (input: { name: string; description: string; targetPhase: JourneyPhase; bomItemIds: string[] }) => void
-  assignTemplate: (participantId: string, templateId: string) => void
+  addBomItem: (payload: Omit<InstructionBomItem, 'id'>) => void | Promise<void>
+  buildTemplateFromBom: (input: { name: string; description: string; targetPhase: JourneyPhase; bomItemIds: string[] }) => void | Promise<void>
+  assignTemplate: (participantId: string, templateId: string) => void | Promise<void>
 }
 
 export default function RoutePlannerPage({

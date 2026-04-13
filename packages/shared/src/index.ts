@@ -10,5 +10,6 @@ export * from "./atlas2026/routing";
 export * from "./atlas2026/zCodeColors";
 export * from "./supabase/contracts";
 export * from "./supabase/client";
+export * from "./supabase/atlasAppApi";
 export * from "./supabase/navigatorApi";
 export * from "./supabase/partnerServiceCapacityApi";

@@ -9,7 +9,7 @@ export function useRouteCandidates(selectedEnrollee: EnrolleeProfile | null) {
     let isMounted = true
 
     async function refreshRouteCandidates() {
-      const candidates = await loadRouteCandidates(selectedEnrollee?.zCodeTags || [])
+      const candidates = await loadRouteCandidates(selectedEnrollee?.enrollmentId)
       if (!isMounted) return
       setRouteCandidates(candidates)
     }

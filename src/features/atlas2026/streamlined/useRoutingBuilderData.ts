@@ -1,18 +1,43 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { AtlasJsonDataset, InstructionBomItem, JourneyPhase, RouteTemplate } from '@/features/atlas2026/data/contracts'
 import {
   assignTemplateToParticipant,
   buildStepsFromBomIds,
   createInstructionBomItem,
   loadDataset,
-  saveDataset,
   saveRouteTemplate
 } from '@/features/atlas2026/data/repository'
 
 export function useRoutingBuilderData() {
-  const [dataset, setDataset] = useState<AtlasJsonDataset>(() => loadDataset())
+  const [dataset, setDataset] = useState<AtlasJsonDataset>({
+    participants: [],
+    instructionBoms: [],
+    routingSteps: [],
+    routeTemplates: [],
+    journeyAssignments: []
+  })
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>(dataset.participants[0]?.id || '')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(dataset.routeTemplates[0]?.id || '')
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function hydrate() {
+      setIsLoading(true)
+      const nextDataset = await loadDataset()
+      if (!isMounted) return
+      setDataset(nextDataset)
+      setSelectedParticipantId((current) => current || nextDataset.participants[0]?.id || '')
+      setSelectedTemplateId((current) => current || nextDataset.routeTemplates[0]?.id || '')
+      setIsLoading(false)
+    }
+
+    hydrate()
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   const selectedParticipant = useMemo(
     () => dataset.participants.find((item) => item.id === selectedParticipantId) || null,
@@ -51,34 +76,41 @@ export function useRoutingBuilderData() {
   }, [dataset])
 
   function updateDataset(next: AtlasJsonDataset) {
-    const persisted = saveDataset(next)
-    setDataset(persisted)
-    return persisted
+    setDataset(next)
+    return next
   }
 
-  function addBomItem(payload: Omit<InstructionBomItem, 'id'>) {
-    const next = createInstructionBomItem(dataset, payload)
-    updateDataset(next)
+  async function addBomItem(payload: Omit<InstructionBomItem, 'id'>) {
+    const next = await createInstructionBomItem(payload)
+    updateDataset({ ...dataset, instructionBoms: [...dataset.instructionBoms, next] })
   }
 
   function previewStepsForBomIds(bomItemIds: string[]) {
     return buildStepsFromBomIds(dataset, bomItemIds)
   }
 
-  function createTemplate(payload: Omit<RouteTemplate, 'id'>) {
-    const result = saveRouteTemplate(dataset, payload)
-    const persisted = updateDataset(result.dataset)
-    setSelectedTemplateId(result.template.id)
-    return { ...result, dataset: persisted }
+  async function createTemplate(payload: Omit<RouteTemplate, 'id'>) {
+    const template = await saveRouteTemplate(payload)
+    const persisted = updateDataset({ ...dataset, routeTemplates: [...dataset.routeTemplates, template] })
+    setSelectedTemplateId(template.id)
+    return { template, dataset: persisted }
   }
 
-  function assignTemplate(participantId: string, templateId: string) {
-    const result = assignTemplateToParticipant(dataset, participantId, templateId)
-    const persisted = updateDataset(result.dataset)
-    return { ...result, dataset: persisted }
+  async function assignTemplate(participantId: string, templateId: string) {
+    const assignment = await assignTemplateToParticipant(dataset, participantId, templateId)
+    if (!assignment) return { assignment: null, dataset }
+    const nextParticipants = dataset.participants.map((participant) =>
+      participant.id === participantId ? { ...participant, activeJourneyId: assignment.id } : participant
+    )
+    const persisted = updateDataset({
+      ...dataset,
+      participants: nextParticipants,
+      journeyAssignments: [assignment, ...dataset.journeyAssignments]
+    })
+    return { assignment, dataset: persisted }
   }
 
-  function buildTemplateFromBom(input: { name: string; description: string; targetPhase: JourneyPhase; bomItemIds: string[] }) {
+  async function buildTemplateFromBom(input: { name: string; description: string; targetPhase: JourneyPhase; bomItemIds: string[] }) {
     const stepIds = previewStepsForBomIds(input.bomItemIds).map((step) => step.id)
     return createTemplate({
       name: input.name,
@@ -92,6 +124,7 @@ export function useRoutingBuilderData() {
 
   return {
     dataset,
+    isLoading,
     selectedParticipantId,
     setSelectedParticipantId,
     selectedParticipant,

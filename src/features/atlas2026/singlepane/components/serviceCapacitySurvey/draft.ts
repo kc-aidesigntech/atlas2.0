@@ -3,7 +3,8 @@ import { buildDefaultPartnerServiceCapacityAnswers } from '@/features/atlas2026/
 import type {
   PartnerServiceCapacityAnswer,
   PartnerServiceCapacityHeader,
-  PartnerServiceCapacitySubmissionRecord
+  PartnerServiceCapacitySubmissionRecord,
+  ZCodeSurveyPrompt
 } from '@/features/atlas2026/singlepane/types'
 
 export const SERVICE_CAPACITY_DRAFT_STORAGE_KEY = 'atlas2026.service-capacity.active-draft.v1'
@@ -18,6 +19,7 @@ export interface DraftState {
 export interface PersistedSurveyDraft {
   draftKey: string
   isSurveyStarted: boolean
+  persistedAtIso?: string
   header: PartnerServiceCapacityHeader
   answers: DraftAnswer[]
 }
@@ -70,11 +72,17 @@ export function persistSurveyDraft(draft: PersistedSurveyDraft | null) {
     window.localStorage.removeItem(SERVICE_CAPACITY_DRAFT_STORAGE_KEY)
     return
   }
-  window.localStorage.setItem(SERVICE_CAPACITY_DRAFT_STORAGE_KEY, JSON.stringify(draft))
+  window.localStorage.setItem(
+    SERVICE_CAPACITY_DRAFT_STORAGE_KEY,
+    JSON.stringify({
+      ...draft,
+      persistedAtIso: new Date().toISOString()
+    } satisfies PersistedSurveyDraft)
+  )
 }
 
-export function buildDraftAnswers(savedSubmission: PartnerServiceCapacitySubmissionRecord | null) {
-  const defaults = buildDefaultPartnerServiceCapacityAnswers().map((answer) => ({ ...answer, score: null as number | null }))
+export function buildDraftAnswers(savedSubmission: PartnerServiceCapacitySubmissionRecord | null, prompts: ZCodeSurveyPrompt[]) {
+  const defaults = buildDefaultPartnerServiceCapacityAnswers(prompts).map((answer) => ({ ...answer, score: null as number | null }))
   const answersByPromptId = new Map(savedSubmission?.answers.map((answer) => [answer.promptId, answer]) || [])
   return defaults.map((answer) => answersByPromptId.get(answer.promptId) || answer)
 }
@@ -94,4 +102,10 @@ export function formatDateTimeLabel(value: string | null | undefined) {
 
 export function getRecordSortTime(record: PartnerServiceCapacitySubmissionRecord) {
   return new Date(record.updatedAtIso || record.submittedAtIso).getTime()
+}
+
+export function getPersistedDraftSortTime(draft: PersistedSurveyDraft | null) {
+  if (!draft?.persistedAtIso) return 0
+  const timestamp = new Date(draft.persistedAtIso).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
 }

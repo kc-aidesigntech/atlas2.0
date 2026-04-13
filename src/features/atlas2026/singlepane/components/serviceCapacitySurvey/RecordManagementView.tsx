@@ -7,12 +7,24 @@ import { formatDateTimeLabel } from '@/features/atlas2026/singlepane/components/
 export function RecordManagementView({
   records,
   totalSurveyCardCount,
+  resumeDraftRecord,
+  resumeDraftPersistedAtLabel,
+  hasPersistedDraft,
+  isResolvingResumeDraft,
+  resumeDraftError,
   onCheckoutNewRecord,
+  onResumeDraft,
   onEditDraftRecord
 }: {
   records: PartnerServiceCapacitySubmissionRecord[]
   totalSurveyCardCount: number
+  resumeDraftRecord: PartnerServiceCapacitySubmissionRecord | null
+  resumeDraftPersistedAtLabel: string | null
+  hasPersistedDraft: boolean
+  isResolvingResumeDraft: boolean
+  resumeDraftError: string | null
   onCheckoutNewRecord: () => void
+  onResumeDraft: () => void
   onEditDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
 }) {
   return (
@@ -35,6 +47,47 @@ export function RecordManagementView({
       }
     >
       <div className="space-y-3">
+        {isResolvingResumeDraft || hasPersistedDraft || resumeDraftError ? (
+          <AtlasInsetCard className="rounded-[24px] border-white/20 bg-[#090909] px-4 py-4 md:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <small className="block text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+                  resume draft
+                </small>
+                {resumeDraftError ? (
+                  <div className="mt-1 text-[13px]" style={{ color: SP_COLORS.red }}>
+                    {resumeDraftError}
+                  </div>
+                ) : isResolvingResumeDraft ? (
+                  <div className="mt-1 text-[14px] text-white md:text-[15px]">Checking for your unfinished survey...</div>
+                ) : (
+                  <>
+                    <div className="mt-1 text-[16px] font-medium text-white md:text-[18px]">
+                      {resumeDraftRecord
+                        ? [resumeDraftRecord.header.firstName, resumeDraftRecord.header.lastName].filter(Boolean).join(' ') || 'unfinished survey'
+                        : 'unfinished survey'}
+                    </div>
+                    <small className="mt-1 block text-[12px] text-[var(--foreground-secondary)] md:text-[13px]">
+                      {resumeDraftRecord?.header.organizationName || 'Draft available in this browser'}
+                      {resumeDraftPersistedAtLabel ? ` · last updated ${resumeDraftPersistedAtLabel}` : ''}
+                    </small>
+                  </>
+                )}
+              </div>
+              {hasPersistedDraft && !resumeDraftError ? (
+                <button
+                  type="button"
+                  onClick={onResumeDraft}
+                  disabled={isResolvingResumeDraft}
+                  className="rounded-full border px-4 py-2 text-[13px] font-medium transition-[box-shadow,border-color] duration-150 ease-out hover:border-white/50 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 md:text-[14px]"
+                  style={{ borderColor: SP_COLORS.yellow, color: SP_COLORS.yellow }}
+                >
+                  resume draft
+                </button>
+              ) : null}
+            </div>
+          </AtlasInsetCard>
+        ) : null}
         {records.length ? (
           records.map((record) => {
             const updatedLabel = formatDateTimeLabel(record.updatedAtIso || record.submittedAtIso)

@@ -1,16 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { usesLightTextOnZCodeColor } from '@atlas/shared'
-import {
-  getScaleOption,
-  SERVICE_CAPACITY_SCALE
-} from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
+import { getScaleOption } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import type { ZCodeSurveyPrompt } from '@/features/atlas2026/singlepane/types'
+import type { PartnerServiceCapacityScaleOption, ZCodeSurveyPrompt } from '@/features/atlas2026/singlepane/types'
 
 const downArrowUrl = new URL('../../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png', import.meta.url).toString()
 
 export function BurdenCard({
   promptItem,
+  scale,
   score,
   accentColor,
   cardRef,
@@ -20,6 +18,7 @@ export function BurdenCard({
   onChange
 }: {
   promptItem: ZCodeSurveyPrompt
+  scale: PartnerServiceCapacityScaleOption[]
   score: number | null
   accentColor: string
   cardRef?: (element: HTMLDivElement | null) => void
@@ -29,13 +28,13 @@ export function BurdenCard({
   onChange: (score: number | null) => void
 }) {
   const effectiveScore = score ?? 5
-  const scaleState = getScaleOption(effectiveScore)
+  const scaleState = getScaleOption(scale, effectiveScore)
   const thumbPercent = ((effectiveScore - 1) / 8) * 100
   const badgeTextColor =
     accentColor === SP_COLORS.yellow || accentColor === SP_COLORS.green ? SP_COLORS.bg : SP_COLORS.white
   const tooltipHalfWidth = 110
   const tooltipLeft = `clamp(${tooltipHalfWidth}px, ${thumbPercent}%, calc(100% - ${tooltipHalfWidth}px))`
-  const sliderScaleColors = SERVICE_CAPACITY_SCALE.map((option) =>
+  const sliderScaleColors = scale.map((option) =>
     option.value <= 3 ? SP_COLORS.red : option.value <= 6 ? SP_COLORS.yellow : SP_COLORS.deepGreen
   )
   const localInputRef = useRef<HTMLInputElement | null>(null)
@@ -166,15 +165,17 @@ export function BurdenCard({
                 <div className="min-w-0 flex-1">
                   <div className={`relative h-6 overflow-visible ${score == null ? 'opacity-55' : ''}`}>
                     <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-[6px] -translate-y-1/2 rounded-full bg-white/50" />
-                    <div
-                      className="pointer-events-none absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full"
-                      style={{
-                        left: `${thumbPercent}%`,
-                        backgroundColor: '#f3f4f6',
-                        border: '1.5px solid rgba(255,255,255,0.85)',
-                        boxShadow: '0 0 0 1px rgba(0,0,0,0.18)'
-                      }}
-                    />
+                    {score == null ? null : (
+                      <div
+                        className="pointer-events-none absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                        style={{
+                          left: `${thumbPercent}%`,
+                          backgroundColor: '#f3f4f6',
+                          border: '1.5px solid rgba(255,255,255,0.85)',
+                          boxShadow: '0 0 0 1px rgba(0,0,0,0.18)'
+                        }}
+                      />
+                    )}
                     <input
                       type="range"
                       min={1}
@@ -187,7 +188,7 @@ export function BurdenCard({
                     />
                   </div>
                   <div className="relative mt-1.5 h-4 overflow-visible text-[10px] md:h-[18px] md:text-[11px]">
-                    {SERVICE_CAPACITY_SCALE.map((option, index) => (
+                    {scale.map((option, index) => (
                       <span
                         key={option.value}
                         className="absolute top-0 leading-none"
@@ -225,6 +226,11 @@ export function BurdenCard({
                   />
                 </label>
               </div>
+              {score == null ? (
+                <small className="mt-2 block text-[11px] text-[#8f8f8f] md:text-[12px]">
+                  Select a rating from 1 to 9 to capture this capability.
+                </small>
+              ) : null}
             </div>
           </div>
         </div>

@@ -118,10 +118,10 @@ export default function StreamlinedAtlasShell() {
             <Activity size={14} style={{ color: SUBWAY_COLORS.orange }} /> system load: focused
           </small>
           <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em]" style={{ color: SUBWAY_COLORS.steel }}>
-            <Globe size={14} style={{ color: SUBWAY_COLORS.blue }} /> json contracts active
+            <Globe size={14} style={{ color: SUBWAY_COLORS.blue }} /> supabase contracts active
           </small>
           <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em]" style={{ color: SUBWAY_COLORS.steel }}>
-            <Lock size={14} style={{ color: SUBWAY_COLORS.steel }} /> firestore bridge prepared
+            <Lock size={14} style={{ color: SUBWAY_COLORS.steel }} /> shared atlas schema linked
           </small>
           <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em]" style={{ color: SUBWAY_COLORS.steel }}>
             <Layout size={14} style={{ color: SUBWAY_COLORS.deepGreen }} /> regional yield: {currentYield}%

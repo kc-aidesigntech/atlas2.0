@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getApps, initializeApp } from 'firebase/app'
-import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from 'firebase/auth'
-import { collection, getFirestore, onSnapshot } from 'firebase/firestore'
+import { fetchLegacyAtlasSnapshot } from '@atlas/shared'
 import { evaluateParticipantForRoutes } from '@/core/atlas2026/intel-contract'
 import { createParticipantState, MEMORY_EVENT_TYPES, ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
 import { canRolePerform } from '@/core/atlas2026/policy'
-import { DEMO_CAPACITY_TOPOLOGY, DEMO_PARTICIPANTS } from './sample-data'
 import { generateRoutePlan } from '@/services/atlas2026/route-engine'
 import { buildMemoryView } from '@/services/atlas2026/memory-service'
 import { buildSituationalOverlay } from '@/services/atlas2026/situational-service'
@@ -27,6 +24,7 @@ import {
   updateRouteRecord
 } from '@/services/atlas2026/contract-gateway'
 import { buildRouteSteps, canTransitionStep, deriveRouteLifecycleFromSteps, STEP_STATUS } from '@/services/atlas2026/step-graph'
+import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 function normalizeParticipant(docId, raw) {
   return createParticipantState({
@@ -52,32 +50,13 @@ function normalizeCapacityNode(docId, raw) {
   }
 }
 
-function resolveFirebaseConfig() {
-  if (typeof window === 'undefined') return null
-  return (
-    window.__firebase_config || {
-      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId: import.meta.env.VITE_FIREBASE_APP_ID
-    }
-  )
-}
-
-function resolveAppId() {
-  if (typeof window === 'undefined') return import.meta.env.VITE_APP_ID || 'demo-app'
-  return window.__app_id || import.meta.env.VITE_APP_ID || 'demo-app'
-}
-
 function createOptimisticId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 export function useAtlasDecisioning() {
-  const [participants, setParticipants] = useState(DEMO_PARTICIPANTS)
-  const [capacityTopology, setCapacityTopology] = useState(DEMO_CAPACITY_TOPOLOGY)
+  const [participants, setParticipants] = useState([])
+  const [capacityTopology, setCapacityTopology] = useState([])
   const [routeRecords, setRouteRecords] = useState([])
   const [routeSteps, setRouteSteps] = useState([])
   const [memoryEvents, setMemoryEvents] = useState([])
@@ -117,332 +96,63 @@ export function useAtlasDecisioning() {
   }, [selectedParticipantId, selectedRole, selectedCountyId])
 
   useEffect(() => {
-    const firebaseConfig = resolveFirebaseConfig()
-    const hasConfig = firebaseConfig && firebaseConfig.projectId && firebaseConfig.apiKey
-
-    if (!hasConfig) {
+    if (!hasSupabaseConfig || !supabase) {
       setLoadingLiveData(false)
       setIsLiveData(false)
-      setLoadError('Firebase configuration not found; using demo topology.')
+      setLoadError('Supabase configuration not found.')
       return
     }
 
-    const app = getApps()[0] || initializeApp(firebaseConfig)
-    const auth = getAuth(app)
-    const db = getFirestore(app)
-    const appId = resolveAppId()
+    let isActive = true
 
-    let unsubscribeParticipants = null
-    let unsubscribeCapacity = null
-    let unsubscribeRoutes = null
-    let unsubscribeRouteSteps = null
-    let unsubscribeMemoryEvents = null
-    let unsubscribeOntology = null
-    let unsubscribeOntologyAudit = null
-    let unsubscribeRenewalRoles = null
-
-    const cleanupSnapshots = () => {
-      if (unsubscribeParticipants) unsubscribeParticipants()
-      if (unsubscribeCapacity) unsubscribeCapacity()
-      if (unsubscribeRoutes) unsubscribeRoutes()
-      if (unsubscribeRouteSteps) unsubscribeRouteSteps()
-      if (unsubscribeMemoryEvents) unsubscribeMemoryEvents()
-      if (unsubscribeOntology) unsubscribeOntology()
-      if (unsubscribeOntologyAudit) unsubscribeOntologyAudit()
-      if (unsubscribeRenewalRoles) unsubscribeRenewalRoles()
+    async function hydrateLegacyAtlas() {
+      setLoadingLiveData(true)
+      try {
+        const snapshot = await fetchLegacyAtlasSnapshot(supabase)
+        if (!isActive) return
+        const nextParticipants = snapshot.participants.map((participant) =>
+          normalizeParticipant(participant.participantId, participant)
+        )
+        setParticipants(nextParticipants)
+        setCapacityTopology(snapshot.capacityTopology.map((node) => normalizeCapacityNode(node.partnerId, node)))
+        setRouteRecords(snapshot.routeRecords)
+        setRouteSteps(snapshot.routeSteps.map((step) => ({ ...step, routeDocId: step.routeRecordId })))
+        setMemoryEvents(snapshot.memoryEvents)
+        setOntologyWeights(snapshot.ontologyWeights)
+        setOntologyAudit(snapshot.ontologyAudit)
+        setRenewalRoles(
+          snapshot.renewalRoles.map((record) => ({
+            id: record.id,
+            participantId: record.participantId,
+            roleName: record.roleLabel,
+            contributionDomain: record.payload?.contributionDomain || null,
+            status: record.payload?.status || null,
+            notes: record.payload?.notes || '',
+            assignedByRole: record.assignedByRole,
+            assignedByUserId: record.assignedByUserId,
+            updatedAt: record.updatedAt
+          }))
+        )
+        setDbContext({ db: supabase, appId: 'atlas', userId: 'supabase-web' })
+        setSelectedParticipantId((current) =>
+          nextParticipants.some((item) => item.participantId === current) ? current : nextParticipants[0]?.participantId || ''
+        )
+        setIsLiveData(nextParticipants.length > 0)
+        setLoadError(null)
+      } catch (error) {
+        if (!isActive) return
+        setLoadError(`Supabase bootstrap failed: ${error.message}`)
+        setIsLiveData(false)
+      } finally {
+        if (isActive) {
+          setLoadingLiveData(false)
+        }
+      }
     }
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      cleanupSnapshots()
-      setLoadingLiveData(true)
-
-      if (!user) {
-        try {
-          if (window.__initial_auth_token) {
-            await signInWithCustomToken(auth, window.__initial_auth_token)
-          } else {
-            await signInAnonymously(auth)
-          }
-        } catch (error) {
-          setLoadError(`Authentication failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-        return
-      }
-
-      const participantsPath = collection(db, `artifacts/${appId}/atlas2026/participants`)
-      const capacityPath = collection(db, `artifacts/${appId}/atlas2026/capacityTopology`)
-      const routesPath = collection(db, `artifacts/${appId}/atlas2026/routes`)
-      const routeStepsPath = collection(db, `artifacts/${appId}/atlas2026/routeSteps`)
-      const memoryEventsPath = collection(db, `artifacts/${appId}/atlas2026/memoryEvents`)
-      const ontologyPath = collection(db, `artifacts/${appId}/atlas2026/ontology`)
-      const ontologyAuditPath = collection(db, `artifacts/${appId}/atlas2026/ontologyAudit`)
-      const renewalRolesPath = collection(db, `artifacts/${appId}/atlas2026/renewalRoles`)
-      let participantsReady = false
-      let capacityReady = false
-      let routesReady = false
-      let routeStepsReady = false
-      let memoryReady = false
-      let ontologyReady = false
-      let ontologyAuditReady = false
-      let renewalRolesReady = false
-      setDbContext({ db, appId, userId: user.uid })
-
-      unsubscribeParticipants = onSnapshot(
-        participantsPath,
-        (snapshot) => {
-          const nextParticipants = snapshot.docs.map((item) => normalizeParticipant(item.id, item.data()))
-          if (nextParticipants.length > 0) {
-            setParticipants(nextParticipants)
-            setSelectedParticipantId((current) =>
-              nextParticipants.some((item) => item.participantId === current) ? current : nextParticipants[0].participantId
-            )
-          }
-          participantsReady = true
-          if (
-            participantsReady &&
-            capacityReady &&
-            routesReady &&
-            routeStepsReady &&
-            memoryReady &&
-            ontologyReady &&
-            ontologyAuditReady &&
-            renewalRolesReady
-          ) {
-            setIsLiveData((current) => current || snapshot.size > 0)
-            setLoadError(null)
-            setLoadingLiveData(false)
-          }
-        },
-        (error) => {
-          setLoadError(`Participants subscription failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-      )
-
-      unsubscribeCapacity = onSnapshot(
-        capacityPath,
-        (snapshot) => {
-          const nextCapacity = snapshot.docs.map((item) => normalizeCapacityNode(item.id, item.data()))
-          if (nextCapacity.length > 0) {
-            setCapacityTopology(nextCapacity)
-          }
-          capacityReady = true
-          if (
-            participantsReady &&
-            capacityReady &&
-            routesReady &&
-            routeStepsReady &&
-            memoryReady &&
-            ontologyReady &&
-            ontologyAuditReady &&
-            renewalRolesReady
-          ) {
-            setIsLiveData(snapshot.size > 0)
-            setLoadError(null)
-            setLoadingLiveData(false)
-          }
-        },
-        (error) => {
-          setLoadError(`Capacity subscription failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-      )
-
-      unsubscribeRoutes = onSnapshot(
-        routesPath,
-        (snapshot) => {
-          setRouteRecords(
-            snapshot.docs.map((item) => ({
-              id: item.id,
-              ...item.data()
-            }))
-          )
-          routesReady = true
-          if (
-            participantsReady &&
-            capacityReady &&
-            routesReady &&
-            routeStepsReady &&
-            memoryReady &&
-            ontologyReady &&
-            ontologyAuditReady &&
-            renewalRolesReady
-          ) {
-            setIsLiveData(snapshot.size > 0)
-            setLoadError(null)
-            setLoadingLiveData(false)
-          }
-        },
-        (error) => {
-          setLoadError(`Routes subscription failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-      )
-
-      unsubscribeRouteSteps = onSnapshot(
-        routeStepsPath,
-        (snapshot) => {
-          setRouteSteps(
-            snapshot.docs.map((item) => ({
-              id: item.id,
-              ...item.data()
-            }))
-          )
-          routeStepsReady = true
-          if (
-            participantsReady &&
-            capacityReady &&
-            routesReady &&
-            routeStepsReady &&
-            memoryReady &&
-            ontologyReady &&
-            ontologyAuditReady &&
-            renewalRolesReady
-          ) {
-            setIsLiveData(snapshot.size > 0)
-            setLoadError(null)
-            setLoadingLiveData(false)
-          }
-        },
-        (error) => {
-          setLoadError(`Route steps subscription failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-      )
-
-      unsubscribeMemoryEvents = onSnapshot(
-        memoryEventsPath,
-        (snapshot) => {
-          setMemoryEvents(
-            snapshot.docs.map((item) => ({
-              id: item.id,
-              ...item.data()
-            }))
-          )
-          memoryReady = true
-          if (
-            participantsReady &&
-            capacityReady &&
-            routesReady &&
-            routeStepsReady &&
-            memoryReady &&
-            ontologyReady &&
-            ontologyAuditReady &&
-            renewalRolesReady
-          ) {
-            setIsLiveData(snapshot.size > 0)
-            setLoadError(null)
-            setLoadingLiveData(false)
-          }
-        },
-        (error) => {
-          setLoadError(`Memory events subscription failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-      )
-
-      unsubscribeOntology = onSnapshot(
-        ontologyPath,
-        (snapshot) => {
-          const weightsDoc = snapshot.docs.find((doc) => doc.id === 'weights')
-          if (weightsDoc) {
-            setOntologyWeights((current) => ({
-              ...current,
-              ...weightsDoc.data()
-            }))
-          }
-          ontologyReady = true
-          if (
-            participantsReady &&
-            capacityReady &&
-            routesReady &&
-            routeStepsReady &&
-            memoryReady &&
-            ontologyReady &&
-            ontologyAuditReady &&
-            renewalRolesReady
-          ) {
-            setIsLiveData(snapshot.size > 0)
-            setLoadError(null)
-            setLoadingLiveData(false)
-          }
-        },
-        (error) => {
-          setLoadError(`Ontology subscription failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-      )
-
-      unsubscribeOntologyAudit = onSnapshot(
-        ontologyAuditPath,
-        (snapshot) => {
-          setOntologyAudit(
-            snapshot.docs
-              .map((item) => ({ id: item.id, ...item.data() }))
-              .sort((a, b) => (b?.updatedAt?.seconds ?? 0) - (a?.updatedAt?.seconds ?? 0))
-          )
-          ontologyAuditReady = true
-          if (
-            participantsReady &&
-            capacityReady &&
-            routesReady &&
-            routeStepsReady &&
-            memoryReady &&
-            ontologyReady &&
-            ontologyAuditReady &&
-            renewalRolesReady
-          ) {
-            setIsLiveData(snapshot.size > 0)
-            setLoadError(null)
-            setLoadingLiveData(false)
-          }
-        },
-        (error) => {
-          setLoadError(`Ontology audit subscription failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-      )
-
-      unsubscribeRenewalRoles = onSnapshot(
-        renewalRolesPath,
-        (snapshot) => {
-          setRenewalRoles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
-          renewalRolesReady = true
-          if (
-            participantsReady &&
-            capacityReady &&
-            routesReady &&
-            routeStepsReady &&
-            memoryReady &&
-            ontologyReady &&
-            ontologyAuditReady &&
-            renewalRolesReady
-          ) {
-            setIsLiveData(snapshot.size > 0)
-            setLoadError(null)
-            setLoadingLiveData(false)
-          }
-        },
-        (error) => {
-          setLoadError(`Renewal roles subscription failed: ${error.message}`)
-          setIsLiveData(false)
-          setLoadingLiveData(false)
-        }
-      )
-    })
-
+    hydrateLegacyAtlas()
     return () => {
-      cleanupSnapshots()
-      unsubscribeAuth()
+      isActive = false
     }
   }, [])
 

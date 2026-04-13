@@ -1,17 +1,16 @@
 import {
+  type AtlasJsonDataset,
   type EnrollmentStationMarker,
+  fetchRouteBuilderDataset,
   fetchEnrollmentStationMarkers,
   fetchNavigatorAssignedEnrollees,
   getJourneySteps,
   getSelectedJourney,
   getSelectedParticipant,
-  loadSeededAtlasDataset,
 } from "@atlas/shared";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
-import { supabase } from "../../src/lib/supabase";
-
-const dataset = loadSeededAtlasDataset();
+import { hasMobileSupabaseConfig, supabase } from "../../src/lib/supabase";
 
 interface MobileParticipantCard {
   id: string;
@@ -22,19 +21,15 @@ interface MobileParticipantCard {
 }
 
 export default function MobileNavigationScreen() {
-  const seededCards = useMemo<MobileParticipantCard[]>(
-    () =>
-      dataset.participants.map((participant) => ({
-        id: participant.id,
-        name: participant.name,
-        subtitle: `${participant.county} • ${Math.round(participant.readinessScore * 100)}% readiness`,
-        phaseLabel: participant.currentPhase,
-        enrollmentId: null,
-      })),
-    [],
-  );
-  const [participantCards, setParticipantCards] = useState(seededCards);
-  const [selectedParticipantId, setSelectedParticipantId] = useState(seededCards[0]?.id || "");
+  const [dataset, setDataset] = useState<AtlasJsonDataset>({
+    participants: [],
+    instructionBoms: [],
+    routingSteps: [],
+    routeTemplates: [],
+    journeyAssignments: [],
+  });
+  const [participantCards, setParticipantCards] = useState<MobileParticipantCard[]>([]);
+  const [selectedParticipantId, setSelectedParticipantId] = useState("");
   const [liveMarkers, setLiveMarkers] = useState<EnrollmentStationMarker[]>([]);
   const [useLiveData, setUseLiveData] = useState(false);
   const [liveLoadError, setLiveLoadError] = useState<string | null>(null);
@@ -58,20 +53,38 @@ export default function MobileNavigationScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    async function loadLiveParticipants() {
-      if (!supabase) return;
+    async function hydrate() {
+      if (!supabase || !hasMobileSupabaseConfig) {
+        setLiveLoadError("Supabase configuration not found.");
+        return;
+      }
       try {
-        const assignedEnrollees = await fetchNavigatorAssignedEnrollees(supabase);
-        if (cancelled || assignedEnrollees.length === 0) return;
-        const liveCards: MobileParticipantCard[] = assignedEnrollees.map((enrollee) => ({
-          id: enrollee.enrolleeId,
-          name: enrollee.enrolleeName,
-          subtitle: enrollee.caseId ? `case ${enrollee.caseId}` : "active enrollment",
-          phaseLabel: enrollee.currentPhase,
-          enrollmentId: enrollee.enrollmentId,
+        const sharedDataset = await fetchRouteBuilderDataset(supabase);
+        if (cancelled) return;
+        setDataset(sharedDataset);
+
+        const fallbackCards: MobileParticipantCard[] = sharedDataset.participants.map((participant) => ({
+          id: participant.id,
+          name: participant.name,
+          subtitle: `${participant.county} • ${Math.round(participant.readinessScore * 100)}% readiness`,
+          phaseLabel: participant.currentPhase,
+          enrollmentId: participant.id,
         }));
-        setParticipantCards(liveCards);
-        setSelectedParticipantId(liveCards[0]?.id || "");
+
+        const assignedEnrollees = await fetchNavigatorAssignedEnrollees(supabase);
+        if (cancelled) return;
+        const nextCards =
+          assignedEnrollees.length > 0
+            ? assignedEnrollees.map((enrollee) => ({
+                id: enrollee.enrolleeId,
+                name: enrollee.enrolleeName,
+                subtitle: enrollee.caseId ? `case ${enrollee.caseId}` : "active enrollment",
+                phaseLabel: enrollee.currentPhase,
+                enrollmentId: enrollee.enrollmentId,
+              }))
+            : fallbackCards;
+        setParticipantCards(nextCards);
+        setSelectedParticipantId(nextCards[0]?.id || "");
         setUseLiveData(true);
         setLiveLoadError(null);
       } catch (error) {
@@ -80,7 +93,7 @@ export default function MobileNavigationScreen() {
         setLiveLoadError(error instanceof Error ? error.message : "unable to load live data");
       }
     }
-    loadLiveParticipants();
+    hydrate();
     return () => {
       cancelled = true;
     };
@@ -119,7 +132,7 @@ export default function MobileNavigationScreen() {
             participant context
           </Text>
           <Text style={{ color: useLiveData ? "#7de08e" : "#a7a9ac", fontSize: 12, marginTop: 8 }}>
-            source: {useLiveData ? "supabase live" : "seeded shared dataset"}
+            source: {useLiveData ? "supabase live" : "no live dataset"}
           </Text>
           {liveLoadError ? <Text style={{ color: "#ff7373", fontSize: 12 }}>{liveLoadError}</Text> : null}
           <View style={{ gap: 8, marginTop: 10 }}>
