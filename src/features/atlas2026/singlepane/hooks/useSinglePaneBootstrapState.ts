@@ -141,7 +141,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
           intakeFormsByEnrolleeId: savedIntakes,
           routeAssignmentsByEnrolleeId: savedRouteAssignments,
           navigatorCompetencyAssessments: savedNavigatorAssessments,
-          selectedEnrolleeId: current.selectedEnrolleeId || data.enrollees?.[0]?.id || ''
+          selectedEnrolleeId: data.enrollees?.[0]?.id || ''
         }))
       } catch (error) {
         console.warn('Failed to bootstrap single pane state.', error)

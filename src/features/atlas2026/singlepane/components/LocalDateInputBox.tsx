@@ -8,6 +8,8 @@ interface LocalDateInputBoxProps {
   onChange: (nextValue: string) => void
   onSave: () => void
   onCancel: () => void
+  onDelete?: (() => void) | null
+  deleteLabel?: string
 }
 
 export default function LocalDateInputBox({
@@ -16,7 +18,9 @@ export default function LocalDateInputBox({
   error = null,
   onChange,
   onSave,
-  onCancel
+  onCancel,
+  onDelete = null,
+  deleteLabel = 'delete'
 }: LocalDateInputBoxProps) {
   return (
     <div
@@ -39,6 +43,16 @@ export default function LocalDateInputBox({
         </small>
       ) : null}
       <div className="mt-3 flex items-center justify-end gap-2">
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="rounded-full border px-3 py-1 text-[11px]"
+            style={{ borderColor: `${SP_COLORS.red}90`, color: SP_COLORS.red }}
+          >
+            {deleteLabel}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onCancel}

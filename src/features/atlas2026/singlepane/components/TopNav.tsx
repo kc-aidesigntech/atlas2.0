@@ -24,6 +24,9 @@ export default function TopNav({
   onSelectEnrollee,
   onOpenAccountSettings
 }: TopNavProps) {
+  const firstMenu = roleConfig.topMenus[0] || ''
+  const showEnrolleeSelector = role !== 'navigator' && firstMenu === 'assigned enrollees' && enrollees.length > 0
+
   return (
     <header className="border-b bg-black" style={{ borderColor: '#ffffff70' }}>
       <div className="flex h-[44px] items-center justify-between border-b px-5" style={{ borderColor: '#ffffff45' }}>
@@ -45,19 +48,31 @@ export default function TopNav({
       <div className="overflow-x-auto px-4 py-2 text-white">
         <div className="flex min-w-max items-center gap-6 text-white">
           <div className="flex items-center gap-2 pl-2">
-          <small className="text-[15px] font-medium text-white">{roleConfig.topMenus[0]} ▼</small>
-          <select
-            value={selectedEnrolleeId}
-            onChange={(event) => onSelectEnrollee(event.target.value)}
-            className="border-none bg-transparent text-[15px] font-medium text-white"
-            style={{ textTransform: 'none' }}
-          >
-            {enrollees.map((enrollee) => (
-              <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">
-                {enrollee.fullName}
-              </option>
-            ))}
-          </select>
+            {showEnrolleeSelector ? (
+              <>
+                <small className="text-[15px] font-medium text-white">{firstMenu} ▼</small>
+                <select
+                  value={selectedEnrolleeId}
+                  onChange={(event) => onSelectEnrollee(event.target.value)}
+                  className="border-none bg-transparent text-[15px] font-medium text-white"
+                  style={{ textTransform: 'none' }}
+                >
+                  {enrollees.map((enrollee) => (
+                    <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">
+                      {enrollee.fullName}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <button
+                className="whitespace-nowrap text-[15px] font-medium text-white"
+                onClick={() => onMenuSelect(firstMenu)}
+                style={{ textDecoration: activeMenu === firstMenu ? 'underline' : 'none' }}
+              >
+                {firstMenu}
+              </button>
+            )}
           </div>
 
           {roleConfig.topMenus.slice(1).map((menu) => (

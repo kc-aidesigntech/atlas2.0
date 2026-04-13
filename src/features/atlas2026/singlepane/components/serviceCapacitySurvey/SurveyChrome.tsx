@@ -56,6 +56,7 @@ export function BurdenCard({
 }) {
   const numericInputRef = useRef<HTMLInputElement | null>(null)
   const previousScoreRef = useRef<number | null>(score)
+  const shouldRefocusInputRef = useRef(false)
   const [isPulsing, setIsPulsing] = useState(false)
   const effectiveScore = typeof score === 'number' && score >= 1 && score <= 9 ? score : 5
   const scaleState = typeof score === 'number' && score >= 1 && score <= 9 ? getScaleOption(scale, effectiveScore) : null
@@ -86,9 +87,58 @@ export function BurdenCard({
     return undefined
   }, [score])
 
+  useEffect(() => {
+    if (notEncountered) {
+      shouldRefocusInputRef.current = false
+      return
+    }
+
+    const shouldAutoFocus =
+      shouldRefocusInputRef.current ||
+      (typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches)
+
+    if (!shouldAutoFocus) return
+
+    shouldRefocusInputRef.current = false
+    requestAnimationFrame(() => {
+      const input = numericInputRef.current
+      if (!input) return
+      input.focus()
+      input.select()
+    })
+  }, [currentIndex, notEncountered])
+
   function handleSelectScore(nextScore: number) {
     onNotEncounteredChange(false)
     onChange(nextScore)
+  }
+
+  function focusNumericEntry() {
+    if (notEncountered) return
+    const input = numericInputRef.current
+    if (!input) return
+    input.focus()
+    input.select()
+  }
+
+  function handleCardClick(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement
+    if (target.closest('button, input, label, a')) return
+    focusNumericEntry()
+  }
+
+  function advanceToNextPrompt() {
+    if (!hasNext || !canAdvance) return
+    shouldRefocusInputRef.current = true
+    onNextNavigate()
+  }
+
+  function handleNumericInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!hasNext || !canAdvance) return
+    if (event.key === 'Enter' || event.key === 'Tab' || event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault()
+      advanceToNextPrompt()
+    }
   }
 
   function handleNumberInputChange(nextValue: string) {
@@ -107,6 +157,7 @@ export function BurdenCard({
         compact ? 'flex h-full min-h-0 flex-col px-3 py-3 md:px-4 md:py-4' : 'px-4 py-4 md:px-5 md:py-5'
       }`}
       style={{ borderColor: '#ffffff30', borderWidth: '1.5px', backgroundColor: '#050505' }}
+      onClick={handleCardClick}
     >
       <div className={`flex flex-wrap items-start justify-between gap-3 border-b ${compact ? 'pb-2.5' : 'pb-4'}`} style={{ borderColor: '#ffffff20' }}>
         <div className="min-w-0 flex-1">
@@ -229,7 +280,9 @@ export function BurdenCard({
               value={score ?? ''}
               onChange={(event) => handleNumberInputChange(event.target.value)}
               onFocus={(event) => event.currentTarget.select()}
+              onKeyDown={handleNumericInputKeyDown}
               inputMode="numeric"
+              enterKeyHint={hasNext ? 'next' : 'done'}
               className={`rounded-[8px] border bg-black px-2 py-1 text-center text-white disabled:cursor-not-allowed disabled:opacity-45 ${
                 compact ? 'w-[66px] text-[14px]' : 'w-[72px] text-[15px]'
               }`}
@@ -282,7 +335,7 @@ export function BurdenCard({
             </button>
             <button
               type="button"
-              onClick={onNextNavigate}
+              onClick={advanceToNextPrompt}
               disabled={!canAdvance}
               className={`atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center gap-2 rounded-[10px] border font-medium ${
                 compact ? 'px-3.5 py-1.5 text-[12px] md:text-[13px]' : 'px-4 py-2 text-[13px] md:text-[14px]'
@@ -295,7 +348,7 @@ export function BurdenCard({
               } as React.CSSProperties}
             >
               <span>next</span>
-              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] rotate-90 opacity-90" />
+              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] rotate-180 opacity-90" />
             </button>
           </div>
         ) : (

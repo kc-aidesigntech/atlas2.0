@@ -14,6 +14,7 @@ import ZCodeTaskPane from '@/features/atlas2026/singlepane/components/ZCodeTaskP
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type { JourneyStationMarker, StabilizationPhase } from '@/features/atlas2026/singlepane/types'
 import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePaneData'
+import arrowGlyphIcon from '../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
 
 export default function SinglePaneApp() {
   const {
@@ -38,6 +39,7 @@ export default function SinglePaneApp() {
     journeyStationMarkers,
     selectedRouteAssignment,
     appendRouteLog,
+    deleteRouteLog,
     updateRouteLogTimelinePosition,
     updateRouteLogDate,
     updateTimelineStartDate,
@@ -56,7 +58,7 @@ export default function SinglePaneApp() {
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [lastContentMenu, setLastContentMenu] = React.useState('assigned enrollees')
-  const actionMenus = selectedRoleConfig.actionMenus?.length ? selectedRoleConfig.actionMenus : ['route planning']
+  const actionMenus = selectedRoleConfig.actionMenus || []
   const standaloneSurveyUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '/service-capacity-survey'
     return new URL('service-capacity-survey', `${window.location.origin}${import.meta.env.BASE_URL}`).toString()
@@ -92,11 +94,14 @@ export default function SinglePaneApp() {
     )
   }, [isRoutePlanningOpen, routeCandidates, selectedRouteAssignment])
 
-  const activeAction = actionMenus[0] || 'route planning'
+  const activeAction = actionMenus[0] || ''
+  const isPartnerRole = role === 'partner'
   const isAdminSection = role === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
   const isServiceCapacitySection = role === 'partner' && activeMenu === 'service capacity'
-  const isReady = Boolean(selectedEnrollee && timelineConfig)
+  const isReady = isPartnerRole ? Boolean(selectedLoad) : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
+  const journeyPhase = React.useMemo(() => deriveJourneyPhase(selectedLogs, 'regulation'), [selectedLogs])
+  const showRoutePlanningQuickAction = journeyPhase === 'readiness'
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
     : selectedRouteAssignment?.stationName || null
@@ -110,6 +115,9 @@ export default function SinglePaneApp() {
     }))
     return [...journeyStationMarkers, ...suggestedMarkers]
   }, [journeyStationMarkers, routeCandidates, timelineConfig?.planStartIso])
+  const partnerStationBadgeCodes = React.useMemo(() => {
+    return derivePartnerBadgeCodes(selectedLoadBreakdown)
+  }, [selectedLoadBreakdown])
 
   function handleMenuSelect(menu: string) {
     if (role === 'partner' && menu === 'service capacity') {
@@ -185,19 +193,21 @@ export default function SinglePaneApp() {
             onRoleChange={setRole}
             onSave={saveAccountSettings}
           />
-          <RoutePlanningOverlay
-            isOpen={isRoutePlanningOpen}
-            enrollee={selectedEnrollee}
-            routeCandidates={routeCandidates}
-            selectedCandidateId={selectedRouteCandidateId}
-            onSelectCandidate={setSelectedRouteCandidateId}
-            assignedCandidateId={selectedRouteAssignment?.stationId || null}
-            onCommitCandidate={(candidate) => saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs))}
-            enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
-            hasRecordedIntake={hasSavedIntake}
-            suggestedPhase={getNextSuggestedPhase(selectedLogs)}
-            onClose={closeRoutePlanning}
-          />
+          {!isPartnerRole ? (
+            <RoutePlanningOverlay
+              isOpen={isRoutePlanningOpen}
+              enrollee={selectedEnrollee}
+              routeCandidates={routeCandidates}
+              selectedCandidateId={selectedRouteCandidateId}
+              onSelectCandidate={setSelectedRouteCandidateId}
+              assignedCandidateId={selectedRouteAssignment?.stationId || null}
+              onCommitCandidate={(candidate) => saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs))}
+              enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
+              hasRecordedIntake={hasSavedIntake}
+              suggestedPhase={getNextSuggestedPhase(selectedLogs)}
+              onClose={closeRoutePlanning}
+            />
+          ) : null}
           <RadialLoadTableOverlay
             isOpen={isLoadTableOpen}
             load={selectedLoad}
@@ -210,24 +220,71 @@ export default function SinglePaneApp() {
               <LoadingShell />
             ) : (
               <>
-                <div
-                  className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
-                  style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
-                >
-                  <div className="min-w-0 flex-1 basis-[520px]">
-                    <ProfilePanel
-                      enrollee={selectedEnrollee}
-                      onSelectZCode={setActiveZCode}
-                      enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
-                    />
+                {isPartnerRole ? (
+                  <div
+                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+                    style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+                  >
+                    <div className="min-w-0 flex-1 basis-[520px] rounded-[26px] border p-4" style={{ borderColor: '#ffffff35' }}>
+                      <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+                        my station
+                      </small>
+                      <div className="mt-1 text-[26px] font-medium text-white">
+                        {accountSettings.organization?.trim() || '[My Station]'}
+                      </div>
+                      <small className="mt-2 block text-[14px] text-white">Address: not configured</small>
+                      <small className="mt-1 block text-[14px] text-white">C: ###-###-####</small>
+                      <small className="mt-1 block text-[14px] text-white">E: {accountSettings.email || 'not configured'}</small>
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          className="rounded-full border px-4 py-1 text-[13px] text-white"
+                          style={{ borderColor: '#ffffff40' }}
+                        >
+                          refer
+                        </button>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        {partnerStationBadgeCodes.map((code, index) => (
+                          <span
+                            key={`${code}-${index}`}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[28px] font-bold"
+                            style={{
+                              backgroundColor: index % 3 === 1 ? SP_COLORS.red : index % 3 === 2 ? SP_COLORS.blue : SP_COLORS.yellow,
+                              color: '#000000'
+                            }}
+                          >
+                            {code}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
+                      <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
+                    </div>
                   </div>
-                  <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
-                    <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
+                ) : (
+                  <div
+                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+                    style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+                  >
+                    <div className="min-w-0 flex-1 basis-[520px]">
+                      <ProfilePanel
+                        enrollee={selectedEnrollee}
+                        onSelectZCode={setActiveZCode}
+                        enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
+                      />
+                    </div>
+                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
+                      <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex min-h-[46px] items-center justify-center">
-                  <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
+                  {!showRoutePlanningQuickAction && actionMenus.length > 0 ? (
+                    <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
+                  ) : null}
                 </div>
 
                 {isAdminSection ? (
@@ -240,7 +297,26 @@ export default function SinglePaneApp() {
                       onSaveIntake={saveEnrolleeIntake}
                     />
                   </div>
-                ) : isServiceCapacitySection ? null : (
+                ) : isServiceCapacitySection ? null : isPartnerRole ? (
+                  <>
+                    <div className="mt-3 rounded-[22px] border px-5 py-5" style={{ borderColor: '#ffffff30', backgroundColor: '#020202' }}>
+                      <div className="mx-auto flex max-w-[760px] items-center justify-center gap-3">
+                        <div className="h-[3px] flex-1 rounded-full" style={{ backgroundColor: SP_COLORS.red }} />
+                        <img src={arrowGlyphIcon} alt="" aria-hidden className="h-8 w-8 -rotate-90 opacity-85" />
+                        <div className="h-[3px] flex-1 rounded-full" style={{ backgroundColor: SP_COLORS.yellow }} />
+                        <img src={arrowGlyphIcon} alt="" aria-hidden className="h-8 w-8 -rotate-90 opacity-85" />
+                        <div className="h-[3px] flex-1 rounded-full" style={{ backgroundColor: SP_COLORS.deepGreen }} />
+                      </div>
+                    </div>
+                    <ContextPanels
+                      role={role}
+                      activeMenu={activeMenu}
+                      enrollmentRequests={enrollmentRequests}
+                      countyHeatmap={countyHeatmap}
+                      supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                    />
+                  </>
+                ) : (
                   <>
                     <div className="hidden min-h-[220px] flex-1 items-center pt-1 md:flex">
                       <StripMapTimeline
@@ -248,6 +324,12 @@ export default function SinglePaneApp() {
                         timelineConfig={timelineConfig}
                         stationMarkers={previewStationMarkers}
                         highlightedStationName={highlightedStationName}
+                        showRoutePlanningQuickAction={showRoutePlanningQuickAction}
+                        onRoutePlanningClick={() => {
+                          setActiveMenu('route planning')
+                          setIsRoutePlanningOpen(true)
+                        }}
+                        onEventDelete={deleteRouteLog}
                         onEventPositionChange={updateRouteLogTimelinePosition}
                         onEventDateChange={updateRouteLogDate}
                         onStartDateChange={updateTimelineStartDate}
@@ -259,6 +341,12 @@ export default function SinglePaneApp() {
                         timelineConfig={timelineConfig}
                         stationMarkers={previewStationMarkers}
                         highlightedStationName={highlightedStationName}
+                        showRoutePlanningQuickAction={showRoutePlanningQuickAction}
+                        onRoutePlanningClick={() => {
+                          setActiveMenu('route planning')
+                          setIsRoutePlanningOpen(true)
+                        }}
+                        onEventDelete={deleteRouteLog}
                         onEventDateChange={updateRouteLogDate}
                         onStartDateChange={updateTimelineStartDate}
                       />
@@ -328,4 +416,9 @@ function formatDateLabel(dateValue: string) {
 function toCompetencyScore(rawCount: number, specializeCount: number) {
   const baseline = Math.min(10, Math.max(1, 4 + specializeCount + Math.round(rawCount / 2)))
   return baseline
+}
+
+function deriveJourneyPhase(logs: { phase: StabilizationPhase }[], fallback: StabilizationPhase): StabilizationPhase {
+  if (!logs.length) return fallback
+  return logs[logs.length - 1]?.phase || fallback
 }

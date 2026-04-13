@@ -80,7 +80,7 @@ function createEmptyBootstrap(logs = loadLocalLogs()): SinglePaneBootstrapData {
   }
 }
 
-export async function loadSinglePaneBootstrap(_role: AtlasRole): Promise<SinglePaneBootstrapData> {
+export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePaneBootstrapData> {
   const logs = loadLocalLogs()
   const intakeOverrides = await loadEnrolleeIntakes()
 
@@ -88,14 +88,7 @@ export async function loadSinglePaneBootstrap(_role: AtlasRole): Promise<SingleP
     return createEmptyBootstrap(logs)
   }
 
-  const [profiles, loadRows, breakdownRows, roleNavigation, timelineDefaults] = await Promise.all([
-    withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
-    withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), []),
-    withOptionalSupabaseFallback(
-      'singlepane.enrolleeDomainLoadBreakdown',
-      () => fetchSinglePaneEnrolleeDomainLoadBreakdown(supabase),
-      []
-    ),
+  const [roleNavigation, timelineDefaults] = await Promise.all([
     withOptionalSupabaseFallback('singlepane.roleNavigation', () => fetchAppRoleNavigation(supabase, 'singlepane'), []),
     withOptionalSupabaseFallback(
       'singlepane.timelineDefaults',
@@ -103,6 +96,19 @@ export async function loadSinglePaneBootstrap(_role: AtlasRole): Promise<SingleP
       createDefaultTimelineConfig()
     )
   ])
+
+  const shouldLoadEnrolleeDomain = role !== 'partner'
+  const [profiles, loadRows, breakdownRows] = shouldLoadEnrolleeDomain
+    ? await Promise.all([
+        withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
+        withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), []),
+        withOptionalSupabaseFallback(
+          'singlepane.enrolleeDomainLoadBreakdown',
+          () => fetchSinglePaneEnrolleeDomainLoadBreakdown(supabase),
+          []
+        )
+      ])
+    : [[], [], []]
 
   const bootstrapEnrollees = profiles.map((profile) => ({
     id: profile.enrolleeId,

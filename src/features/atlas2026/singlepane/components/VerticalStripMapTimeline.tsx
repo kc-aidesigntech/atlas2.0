@@ -8,6 +8,9 @@ interface VerticalStripMapTimelineProps {
   timelineConfig: TimelineConfig
   stationMarkers?: JourneyStationMarker[]
   highlightedStationName?: string | null
+  showRoutePlanningQuickAction?: boolean
+  onRoutePlanningClick?: () => void
+  onEventDelete?: (logId: string) => void
   onStartDateChange?: (nextStartIso: string) => void
   onEventDateChange?: (logId: string, nextTimestampIso: string) => void
 }
@@ -79,6 +82,9 @@ export default function VerticalStripMapTimeline({
   timelineConfig,
   stationMarkers = [],
   highlightedStationName = null,
+  showRoutePlanningQuickAction = false,
+  onRoutePlanningClick,
+  onEventDelete,
   onStartDateChange,
   onEventDateChange
 }: VerticalStripMapTimelineProps) {
@@ -98,6 +104,27 @@ export default function VerticalStripMapTimeline({
     [events]
   )
   const suggestedMarkers = useMemo(() => stationMarkers.filter((marker) => marker.markerType === 'suggested'), [stationMarkers])
+  const phaseSegments = useMemo(() => {
+    const definition = [
+      { phase: 'regulation' as const, defaultOffset: 0, label: 'regulation' },
+      { phase: 'readiness' as const, defaultOffset: 2, label: 'readiness' },
+      { phase: 'renewal' as const, defaultOffset: 4, label: 'renewal' }
+    ]
+    return definition.map((entry, index) => {
+      const configuredGate = timelineConfig.gates.find((gate) => gate.phase === entry.phase)
+      const nextConfigured = definition[index + 1]
+        ? timelineConfig.gates.find((gate) => gate.phase === definition[index + 1].phase)
+        : null
+      const startOffset = configuredGate?.monthOffset ?? entry.defaultOffset
+      const endOffset = nextConfigured?.monthOffset ?? timelineConfig.durationMonths
+      return {
+        phase: entry.phase,
+        label: configuredGate?.label || entry.label,
+        startOffset,
+        endOffset
+      }
+    })
+  }, [timelineConfig.durationMonths, timelineConfig.gates])
 
   function handleStartDateClick() {
     if (!onStartDateChange) return
@@ -160,6 +187,23 @@ export default function VerticalStripMapTimeline({
       >
         start: {formatDateLabel(timelineConfig.planStartIso)}
       </button>
+      {showRoutePlanningQuickAction ? (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={onRoutePlanningClick}
+            className="relative rounded-full border px-4 pb-2 pt-2 text-[11px] uppercase tracking-[0.1em]"
+            style={{ borderColor: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' }}
+          >
+            <span
+              aria-hidden
+              className="absolute left-2.5 right-2.5 top-1 block h-[1px]"
+              style={{ backgroundColor: SP_COLORS.white }}
+            />
+            route planning
+          </button>
+        </div>
+      ) : null}
 
       {dateEditor?.kind === 'start' ? (
         <div className="mt-3">
@@ -181,19 +225,17 @@ export default function VerticalStripMapTimeline({
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {timelineConfig.gates.slice(0, -1).map((gate, index) => {
-          const nextGate = timelineConfig.gates[index + 1]
-          if (!nextGate) return null
+        {phaseSegments.map((segment) => {
           return (
             <div
-              key={gate.id}
+              key={segment.phase}
               className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px]"
               style={{ borderColor: '#ffffff35', color: SP_COLORS.white }}
             >
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PHASE_COLORS[gate.phase] }} />
-              <span>{gate.label}</span>
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PHASE_COLORS[segment.phase] }} />
+              <span style={{ color: PHASE_COLORS[segment.phase] }}>{segment.label}</span>
               <span style={{ color: SP_COLORS.muted }}>
-                {formatPhaseRange(timelineConfig.planStartIso, gate.monthOffset, nextGate.monthOffset)}
+                {formatPhaseRange(timelineConfig.planStartIso, segment.startOffset, segment.endOffset)}
               </span>
             </div>
           )
@@ -259,6 +301,16 @@ export default function VerticalStripMapTimeline({
                         setDateEditor(null)
                         setDateEditorError(null)
                       }}
+                      onDelete={
+                        typeof dateEditor.logId === 'string' && onEventDelete
+                          ? () => {
+                              onEventDelete(dateEditor.logId)
+                              setDateEditor(null)
+                              setDateEditorError(null)
+                            }
+                          : null
+                      }
+                      deleteLabel="delete entry"
                     />
                   </div>
                 ) : null}

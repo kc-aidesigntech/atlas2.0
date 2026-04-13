@@ -90,7 +90,7 @@ function buildFallbackTimelineConfig(planStartIso: string): TimelineConfig {
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [role, setRole] = useState<AtlasRole>(initialRole)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
-  const [activeMenu, setActiveMenu] = useState<string>('assigned enrollees')
+  const [activeMenu, setActiveMenu] = useState<string>('route planning')
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const {
     state: {
@@ -323,6 +323,14 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     })
   }
 
+  function deleteRouteLog(logId: string) {
+    setLogs((current) => {
+      const nextLogs = current.filter((log) => log.id !== logId)
+      persistRouteLogs(nextLogs)
+      return nextLogs
+    })
+  }
+
   function updateTimelineStartDate(nextStartIso: string) {
     if (!selectedIntake) return
     saveEnrolleeIntake({
@@ -506,6 +514,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     navigatorCompetencyAssessments,
     selectedRouteAssignment,
     appendRouteLog,
+    deleteRouteLog,
     updateRouteLogTimelinePosition,
     updateRouteLogDate,
     updateTimelineStartDate,
