@@ -1,4 +1,5 @@
 import type {
+  PartnerIdentifierRecord,
   PartnerServiceCapacityAnswer,
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
@@ -108,7 +109,14 @@ export interface RouteCandidateRecord {
   matchedZCodes: string[]
 }
 
-export type { PartnerServiceCapacityAnswer, PartnerServiceCapacityHeader, PartnerServiceCapacitySubmissionInput, PartnerServiceCapacitySubmissionRecord, PartnerSurveyRespondentRole }
+export type {
+  PartnerIdentifierRecord,
+  PartnerServiceCapacityAnswer,
+  PartnerServiceCapacityHeader,
+  PartnerServiceCapacitySubmissionInput,
+  PartnerServiceCapacitySubmissionRecord,
+  PartnerSurveyRespondentRole
+}
 
 export interface PartnerServiceCapacityScaleOption {
   value: number

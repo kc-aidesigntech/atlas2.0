@@ -9,6 +9,7 @@ import type {
   EnrolleeProfile,
   EnrollmentRequestRecord,
   JourneyStationMarker,
+  PartnerIdentifierRecord,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
   NavigatorCompetencyAssessmentRecord,
@@ -20,6 +21,7 @@ import {
   getPartnerServiceCapacitySubmissionByDraftKey,
   getLatestPartnerServiceCapacitySubmission,
   listPartnerServiceCapacitySubmissions,
+  searchPartnerIdentifierRecords,
   savePartnerServiceCapacitySubmission
 } from '@atlas/shared'
 import {
@@ -30,6 +32,7 @@ import {
   getLocalPartnerRadialLoad,
   getLocalPartnerRadialLoadBreakdown,
   getLocalRouteCandidates,
+  searchLocalPartnerIdentifierRecords,
   getLocalSinglePaneBootstrap,
   type SinglePaneBootstrapData
 } from '@/features/atlas2026/singlepane/data-access/localCsvData'
@@ -479,6 +482,21 @@ export async function loadPartnerServiceCapacitySurveyHistory(
     supabase,
     organizationNameNormalized
   )
+}
+
+export async function searchPartnerIdentifierRecordMatches(
+  firstName: string,
+  lastName: string
+): Promise<PartnerIdentifierRecord[]> {
+  const trimmedFirstName = firstName.trim()
+  const trimmedLastName = lastName.trim()
+  if (!trimmedFirstName || !trimmedLastName) return []
+
+  if (!hasSupabaseConfig || !supabase) {
+    return searchLocalPartnerIdentifierRecords(trimmedFirstName, trimmedLastName)
+  }
+
+  return searchPartnerIdentifierRecords(supabase, trimmedFirstName, trimmedLastName)
 }
 
 export async function savePartnerServiceCapacitySurvey(

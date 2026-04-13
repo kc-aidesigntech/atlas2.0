@@ -10,6 +10,7 @@ import type {
   EnrollmentRequestRecord,
   EnrolleeProfile,
   JourneyStationMarker,
+  PartnerIdentifierRecord,
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
@@ -35,6 +36,7 @@ import {
   loadPartnerRadialLoad,
   loadPartnerRadialLoadBreakdown,
   loadPartnerServiceCapacitySurveyHistory,
+  searchPartnerIdentifierRecordMatches,
   loadRouteAssignments,
   loadRouteCandidates,
   loadSinglePaneBootstrap,
@@ -232,12 +234,13 @@ export function useSinglePaneData() {
     return {
       firstName: splitName.firstName,
       lastName: splitName.lastName,
+      email: accountSettings.email || '',
       organizationName: accountSettings.organization || '',
       jobTitle: '',
       respondentRoles: role === 'administrator' ? ['administrator'] : ['direct_service_provider'],
       otherRoleText: ''
     }
-  }, [accountSettings.fullName, accountSettings.organization, role])
+  }, [accountSettings.email, accountSettings.fullName, accountSettings.organization, role])
 
   const supervisorNavigatorCompetency = useMemo<SupervisorNavigatorCompetencySummary[]>(() => {
     const navigatorNames = Array.from(new Set(enrollees.map((enrollee) => enrollee.assignedNavigator).filter(Boolean)))
@@ -514,6 +517,7 @@ export function useSinglePaneData() {
       const nextAccountSettings = {
         ...accountSettings,
         fullName: `${input.header.firstName} ${input.header.lastName}`.trim() || accountSettings.fullName,
+        email: input.header.email || accountSettings.email,
         organization: input.header.organizationName
       }
       setAccountSettings(nextAccountSettings)
@@ -536,6 +540,10 @@ export function useSinglePaneData() {
     const saved = await persistNavigatorCompetencyAssessment(input)
     setNavigatorCompetencyAssessments((current) => [saved, ...current])
     return saved
+  }
+
+  async function searchPartnerIdentifierMatches(firstName: string, lastName: string): Promise<PartnerIdentifierRecord[]> {
+    return searchPartnerIdentifierRecordMatches(firstName, lastName)
   }
 
   return {
@@ -562,6 +570,7 @@ export function useSinglePaneData() {
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
+    searchPartnerIdentifierMatches,
     supervisorNavigatorCompetency,
     navigatorCompetencyAssessments,
     selectedRouteAssignment,

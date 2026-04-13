@@ -9,6 +9,7 @@ import {
 } from '../data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '../theme'
 import type {
+  PartnerIdentifierRecord,
   PartnerServiceCapacityAnswer,
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
@@ -20,11 +21,24 @@ import type {
 const downArrowUrl = new URL('../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png', import.meta.url).toString()
 
 interface ServiceCapacitySurveyPanelProps {
-  savedSubmission: PartnerServiceCapacitySubmissionRecord | null
+  submissionHistory: PartnerServiceCapacitySubmissionRecord[]
   defaultHeader: PartnerServiceCapacityHeader
   isSaving: boolean
   saveError: string | null
+  onSearchPartnerIdentifiers: (firstName: string, lastName: string) => Promise<PartnerIdentifierRecord[]>
   onSubmit: (payload: PartnerServiceCapacitySubmissionInput) => Promise<PartnerServiceCapacitySubmissionRecord | void> | PartnerServiceCapacitySubmissionRecord | void
+}
+
+interface ServiceCapacitySurveyFormProps {
+  initialSubmission: PartnerServiceCapacitySubmissionRecord | null
+  latestSavedSubmission: PartnerServiceCapacitySubmissionRecord | null
+  defaultHeader: PartnerServiceCapacityHeader
+  isSaving: boolean
+  saveError: string | null
+  onSearchPartnerIdentifiers: (firstName: string, lastName: string) => Promise<PartnerIdentifierRecord[]>
+  onSubmit: (payload: PartnerServiceCapacitySubmissionInput) => Promise<PartnerServiceCapacitySubmissionRecord | void> | PartnerServiceCapacitySubmissionRecord | void
+  onBackToRecords: () => void
+  onCheckoutNewRecord: () => void
 }
 
 const ROLE_OPTIONS: Array<{ value: PartnerSurveyRespondentRole; label: string }> = [
@@ -39,6 +53,7 @@ function createBlankHeader(): PartnerServiceCapacityHeader {
   return {
     firstName: '',
     lastName: '',
+    email: '',
     organizationName: '',
     jobTitle: '',
     respondentRoles: [],
@@ -54,6 +69,7 @@ function hasMeaningfulDraftContent(header: PartnerServiceCapacityHeader, answers
   return (
     Boolean(header.firstName.trim()) ||
     Boolean(header.lastName.trim()) ||
+    Boolean(header.email.trim()) ||
     Boolean(header.organizationName.trim()) ||
     Boolean(header.jobTitle.trim()) ||
     header.respondentRoles.length > 0 ||
@@ -90,6 +106,7 @@ interface DraftState {
 }
 
 type DraftAnswer = Omit<PartnerServiceCapacityAnswer, 'score'> & { score: number | null }
+type PanelView = 'history' | 'survey'
 
 interface SectionProgress {
   parentCode: string
@@ -107,24 +124,129 @@ interface PersistedSurveyDraft {
   answers: DraftAnswer[]
 }
 
+const TOTAL_SURVEY_CARD_COUNT = SERVICE_CAPACITY_SURVEY_SECTIONS.reduce((count, section) => count + section.prompts.length, 0)
+
+function buildDraftAnswers(savedSubmission: PartnerServiceCapacitySubmissionRecord | null) {
+  const defaults = buildDefaultPartnerServiceCapacityAnswers().map((answer) => ({ ...answer, score: null as number | null }))
+  const answersByPromptId = new Map(savedSubmission?.answers.map((answer) => [answer.promptId, answer]) || [])
+  return defaults.map((answer) => answersByPromptId.get(answer.promptId) || answer)
+}
+
+function formatDateTimeLabel(value: string | null | undefined) {
+  if (!value) return null
+  const date = new Date(value)
+  if (!Number.isFinite(date.getTime())) return value
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(date)
+}
+
+function getRecordSortTime(record: PartnerServiceCapacitySubmissionRecord) {
+  return new Date(record.updatedAtIso || record.submittedAtIso).getTime()
+}
+
 export default function ServiceCapacitySurveyPanel({
-  savedSubmission,
+  submissionHistory,
   defaultHeader,
   isSaving,
   saveError,
+  onSearchPartnerIdentifiers,
   onSubmit
 }: ServiceCapacitySurveyPanelProps) {
-  const blankHeader = useMemo(createBlankHeader, [])
+  const sortedSubmissionHistory = useMemo(
+    () => submissionHistory.slice().sort((left, right) => getRecordSortTime(right) - getRecordSortTime(left)),
+    [submissionHistory]
+  )
+  const [activeView, setActiveView] = useState<PanelView>('history')
+  const [surveySessionKey, setSurveySessionKey] = useState(0)
+  const [initialSubmission, setInitialSubmission] = useState<PartnerServiceCapacitySubmissionRecord | null>(null)
+  const [latestSavedSubmission, setLatestSavedSubmission] = useState<PartnerServiceCapacitySubmissionRecord | null>(null)
+
+  useEffect(() => {
+    setLatestSavedSubmission((current) => {
+      if (!current) return current
+      return (
+        sortedSubmissionHistory.find((record) => record.draftKey === current.draftKey || record.id === current.id) ||
+        current
+      )
+    })
+  }, [sortedSubmissionHistory])
+
+  function handleCheckoutNewRecord() {
+    persistSurveyDraft(null)
+    setInitialSubmission(null)
+    setLatestSavedSubmission(null)
+    setSurveySessionKey((current) => current + 1)
+    setActiveView('survey')
+  }
+
+  function handleEditDraftRecord(record: PartnerServiceCapacitySubmissionRecord) {
+    persistSurveyDraft(null)
+    setInitialSubmission(record)
+    setLatestSavedSubmission(record)
+    setSurveySessionKey((current) => current + 1)
+    setActiveView('survey')
+  }
+
+  async function handleSubmit(payload: PartnerServiceCapacitySubmissionInput) {
+    const savedRecord = await onSubmit(payload)
+    if (savedRecord) {
+      setLatestSavedSubmission(savedRecord)
+    }
+    return savedRecord
+  }
+
+  return activeView === 'history' ? (
+    <RecordManagementView
+      records={sortedSubmissionHistory}
+      onCheckoutNewRecord={handleCheckoutNewRecord}
+      onEditDraftRecord={handleEditDraftRecord}
+    />
+  ) : (
+    <ServiceCapacitySurveyForm
+      key={surveySessionKey}
+      initialSubmission={initialSubmission}
+      latestSavedSubmission={latestSavedSubmission}
+      defaultHeader={defaultHeader}
+      isSaving={isSaving}
+      saveError={saveError}
+      onSearchPartnerIdentifiers={onSearchPartnerIdentifiers}
+      onSubmit={handleSubmit}
+      onBackToRecords={() => setActiveView('history')}
+      onCheckoutNewRecord={handleCheckoutNewRecord}
+    />
+  )
+}
+
+function ServiceCapacitySurveyForm({
+  initialSubmission,
+  latestSavedSubmission,
+  defaultHeader,
+  isSaving,
+  saveError,
+  onSearchPartnerIdentifiers,
+  onSubmit,
+  onBackToRecords,
+  onCheckoutNewRecord
+}: ServiceCapacitySurveyFormProps) {
   const persistedLocalDraft = useMemo(() => loadPersistedSurveyDraft(), [])
   const [draft, setDraft] = useState<DraftState>(() => ({
-    header: persistedLocalDraft?.header || blankHeader,
-    answers: persistedLocalDraft?.answers || buildDefaultPartnerServiceCapacityAnswers().map((answer) => ({ ...answer, score: null }))
+    header: persistedLocalDraft?.header || initialSubmission?.header || { ...createBlankHeader(), ...defaultHeader },
+    answers: persistedLocalDraft?.answers || buildDraftAnswers(initialSubmission)
   }))
-  const [draftKey, setDraftKey] = useState(() => persistedLocalDraft?.draftKey || createDraftKey())
-  const [isSurveyStarted, setIsSurveyStarted] = useState(() => persistedLocalDraft?.isSurveyStarted || false)
+  const [draftKey, setDraftKey] = useState(() => persistedLocalDraft?.draftKey || initialSubmission?.draftKey || createDraftKey())
+  const [isSurveyStarted, setIsSurveyStarted] = useState(() => persistedLocalDraft?.isSurveyStarted || Boolean(initialSubmission))
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
+  const [partnerIdentifierMatches, setPartnerIdentifierMatches] = useState<PartnerIdentifierRecord[]>([])
+  const [partnerIdentifierError, setPartnerIdentifierError] = useState<string | null>(null)
+  const [isSearchingPartnerIdentifiers, setIsSearchingPartnerIdentifiers] = useState(false)
+  const [selectedPartnerIdentifierId, setSelectedPartnerIdentifierId] = useState<string | null>(null)
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [currentRecordId, setCurrentRecordId] = useState<string | null>(savedSubmission?.id || null)
+  const [currentRecordId, setCurrentRecordId] = useState<string | null>(initialSubmission?.id || null)
   const numericInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
@@ -141,25 +263,40 @@ export default function ServiceCapacitySurveyPanel({
   }, [onSubmit])
 
   useEffect(() => {
-    const defaults = buildDefaultPartnerServiceCapacityAnswers().map((answer) => ({ ...answer, score: null as number | null }))
-    const answersByPromptId = new Map(savedSubmission?.answers.map((answer) => [answer.promptId, answer]) || [])
-    hasAutoFocusedFirstName.current = false
-    hasAutoFocusedFirstCard.current = false
-    const localDraft = loadPersistedSurveyDraft()
-    const nextHeader = localDraft?.header || savedSubmission?.header || blankHeader
-    const nextAnswers = localDraft?.answers || defaults.map((answer) => answersByPromptId.get(answer.promptId) || answer)
-    const nextDraftKey = localDraft?.draftKey || savedSubmission?.draftKey || createDraftKey()
-    const nextStarted = localDraft?.isSurveyStarted || false
-    setDraftKey(nextDraftKey)
-    setIsSurveyStarted(nextStarted)
-    setCurrentRecordId(savedSubmission?.id || null)
-    setDraft({
-      header: nextHeader,
-      answers: nextAnswers
-    })
-    lastAutosavedSnapshotRef.current = ''
-    hasPendingAutosaveRef.current = false
-  }, [blankHeader, savedSubmission])
+    const trimmedFirstName = draft.header.firstName.trim()
+    const trimmedLastName = draft.header.lastName.trim()
+    if (!trimmedFirstName || !trimmedLastName || selectedPartnerIdentifierId) {
+      setPartnerIdentifierMatches([])
+      setPartnerIdentifierError(null)
+      setIsSearchingPartnerIdentifiers(false)
+      return
+    }
+
+    let isActive = true
+    const timeoutId = window.setTimeout(() => {
+      setIsSearchingPartnerIdentifiers(true)
+      onSearchPartnerIdentifiers(trimmedFirstName, trimmedLastName)
+        .then((matches) => {
+          if (!isActive) return
+          setPartnerIdentifierMatches(matches)
+          setPartnerIdentifierError(null)
+        })
+        .catch((error) => {
+          if (!isActive) return
+          setPartnerIdentifierMatches([])
+          setPartnerIdentifierError(error instanceof Error ? error.message : 'Unable to search partner identifiers.')
+        })
+        .finally(() => {
+          if (!isActive) return
+          setIsSearchingPartnerIdentifiers(false)
+        })
+    }, 250)
+
+    return () => {
+      isActive = false
+      window.clearTimeout(timeoutId)
+    }
+  }, [draft.header.firstName, draft.header.lastName, onSearchPartnerIdentifiers, selectedPartnerIdentifierId])
 
   const answersByPromptId = useMemo(() => new Map(draft.answers.map((answer) => [answer.promptId, answer])), [draft.answers])
   const orderedPromptIds = useMemo(
@@ -214,6 +351,9 @@ export default function ServiceCapacitySurveyPanel({
 
   function updateHeader<K extends keyof PartnerServiceCapacityHeader>(key: K, value: PartnerServiceCapacityHeader[K]) {
     hasPendingAutosaveRef.current = true
+    if (key === 'firstName' || key === 'lastName' || key === 'email' || key === 'organizationName') {
+      setSelectedPartnerIdentifierId(null)
+    }
     setDraft((current) => ({
       ...current,
       header: {
@@ -222,6 +362,23 @@ export default function ServiceCapacitySurveyPanel({
       }
     }))
     setValidationMessage(null)
+  }
+
+  function applyPartnerIdentifierMatch(match: PartnerIdentifierRecord) {
+    hasPendingAutosaveRef.current = true
+    setSelectedPartnerIdentifierId(match.partnerId)
+    setPartnerIdentifierMatches([])
+    setPartnerIdentifierError(null)
+    setDraft((current) => ({
+      ...current,
+      header: {
+        ...current.header,
+        firstName: match.firstName,
+        lastName: match.lastName,
+        email: match.email,
+        organizationName: match.organizationName
+      }
+    }))
   }
 
   function toggleRole(role: PartnerSurveyRespondentRole) {
@@ -408,6 +565,7 @@ export default function ServiceCapacitySurveyPanel({
         ...draft.header,
         firstName: trimmedFirstName,
         lastName: trimmedLastName,
+        email: draft.header.email.trim(),
         organizationName: trimmedOrganization,
         jobTitle: draft.header.jobTitle.trim(),
         otherRoleText: draft.header.otherRoleText.trim()
@@ -420,15 +578,7 @@ export default function ServiceCapacitySurveyPanel({
     setAutosaveState('saved')
   }
 
-  const lastSavedLabel = savedSubmission?.submittedAtIso
-    ? new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit'
-      }).format(new Date(savedSubmission.submittedAtIso))
-    : null
+  const lastSavedLabel = formatDateTimeLabel(latestSavedSubmission?.updatedAtIso || latestSavedSubmission?.submittedAtIso)
 
   return (
     <div className="w-full rounded-[30px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: '#020202' }}>
@@ -443,6 +593,26 @@ export default function ServiceCapacitySurveyPanel({
           </small>
         </div>
         <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={onBackToRecords}
+              className="rounded-full border px-3 py-1.5 text-[12px] md:text-[13px]"
+              style={{ borderColor: '#ffffff32', color: SP_COLORS.white }}
+            >
+              record history
+            </button>
+            <button
+              type="button"
+              onClick={onCheckoutNewRecord}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border text-[24px] font-light"
+              style={{ borderColor: SP_COLORS.yellow, color: SP_COLORS.yellow }}
+              aria-label="Check out a new blank survey record"
+              title="Check out a new blank survey record"
+            >
+              +
+            </button>
+          </div>
           {lastSavedLabel ? (
             <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
               last saved {lastSavedLabel}
@@ -488,6 +658,58 @@ export default function ServiceCapacitySurveyPanel({
                     onChange={(value) => updateHeader('lastName', value)}
                   />
                 </div>
+                {draft.header.firstName.trim() && draft.header.lastName.trim() ? (
+                  <div className="mt-3 rounded-[18px] border px-3 py-3" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <small className="text-[11px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+                        existing identifier records
+                      </small>
+                      <small className="text-[11px]" style={{ color: SP_COLORS.muted }}>
+                        {isSearchingPartnerIdentifiers ? 'searching...' : selectedPartnerIdentifierId ? 'linked' : `${partnerIdentifierMatches.length} found`}
+                      </small>
+                    </div>
+                    {partnerIdentifierError ? (
+                      <small className="mt-2 block text-[12px]" style={{ color: SP_COLORS.red }}>
+                        {partnerIdentifierError}
+                      </small>
+                    ) : null}
+                    {!selectedPartnerIdentifierId && partnerIdentifierMatches.length ? (
+                      <div className="mt-3 space-y-2">
+                        <small className="block text-[12px] text-[#bdbdbd]">
+                          Choose an existing partner identifier if this person already exists in the partners tab.
+                        </small>
+                        {partnerIdentifierMatches.map((match) => (
+                          <button
+                            key={match.partnerId}
+                            type="button"
+                            onClick={() => applyPartnerIdentifierMatch(match)}
+                            className="flex w-full items-start justify-between gap-3 rounded-[16px] border px-3 py-2 text-left transition-[border-color,background-color] duration-150 ease-out hover:border-white/40 hover:bg-white/5"
+                            style={{ borderColor: '#ffffff20' }}
+                          >
+                            <div>
+                              <div className="text-[13px] text-white md:text-[14px]">
+                                {match.firstName} {match.lastName}
+                              </div>
+                              <small className="block text-[12px] text-[#bdbdbd]">{match.organizationName}</small>
+                            </div>
+                            <small className="max-w-[220px] text-right text-[11px] text-[#9f9f9f] md:text-[12px]">{match.email || 'no email on file'}</small>
+                          </button>
+                        ))}
+                      </div>
+                    ) : selectedPartnerIdentifierId ? (
+                      <small className="mt-2 block text-[12px] text-[#bdbdbd]">
+                        Existing partner identifier selected. Editing the name, email, or organization will clear the match.
+                      </small>
+                    ) : !isSearchingPartnerIdentifiers ? (
+                      <small className="mt-2 block text-[12px] text-[#8f8f8f]">
+                        No existing identifier records match this name.
+                      </small>
+                    ) : null}
+                  </div>
+                ) : null}
+              </Field>
+              <Field label="Your Email Address">
+                <Input value={draft.header.email} placeholder="email address" onChange={(value) => updateHeader('email', value)} />
               </Field>
               <Field label="The Name of Your Organization*" requiredHint="This field is required.">
                 <Input
@@ -632,6 +854,129 @@ export default function ServiceCapacitySurveyPanel({
           </div>
         </>
       ) : null}
+    </div>
+  )
+}
+
+function RecordManagementView({
+  records,
+  onCheckoutNewRecord,
+  onEditDraftRecord
+}: {
+  records: PartnerServiceCapacitySubmissionRecord[]
+  onCheckoutNewRecord: () => void
+  onEditDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
+}) {
+  return (
+    <div className="w-full rounded-[30px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: '#020202' }}>
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style={{ borderColor: '#ffffff20' }}>
+        <div className="max-w-[760px]">
+          <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
+            partner service capacity
+          </small>
+          <h3 className="mt-1 text-[28px] font-medium text-white md:text-[34px]">Record management</h3>
+          <small className="block text-[14px] text-[#bdbdbd] md:text-[17px]">
+            Review service-capacity submission history in read-only mode, then check out a new blank survey record when you are ready to reassess.
+          </small>
+        </div>
+        <button
+          type="button"
+          onClick={onCheckoutNewRecord}
+          className="inline-flex h-12 w-12 items-center justify-center rounded-full border text-[28px] font-light transition-[box-shadow,border-color] duration-150 ease-out hover:border-white/50 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_18px_rgba(255,255,255,0.1)]"
+          style={{ borderColor: SP_COLORS.yellow, color: SP_COLORS.yellow }}
+          aria-label="Conduct a new service capacity survey"
+          title="Conduct a new service capacity survey"
+        >
+          +
+        </button>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {records.length ? (
+          records.map((record) => {
+            const updatedLabel = formatDateTimeLabel(record.updatedAtIso || record.submittedAtIso)
+            const completedLabel = formatDateTimeLabel(record.completedAtIso)
+            const respondentName = [record.header.firstName, record.header.lastName].filter(Boolean).join(' ').trim() || 'respondent not recorded'
+            return (
+              <article
+                key={record.id}
+                className="rounded-[24px] border px-4 py-4 md:px-5"
+                style={{ borderColor: '#ffffff25', backgroundColor: '#060606' }}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3" style={{ borderColor: '#ffffff12' }}>
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {record.status === 'draft' ? (
+                        <button
+                          type="button"
+                          onClick={() => onEditDraftRecord(record)}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border transition-[box-shadow,border-color,background-color] duration-150 ease-out hover:border-white/50 hover:bg-white/5 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_14px_rgba(255,255,255,0.08)]"
+                          style={{ borderColor: '#ffffff2f', color: SP_COLORS.white }}
+                          aria-label={`Edit draft record ${record.id}`}
+                          title="Edit draft"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-3.5 w-3.5 fill-none stroke-current" strokeWidth="1.8">
+                            <path d="M4 20h4l10-10-4-4L4 16v4Z" />
+                            <path d="m12 6 4 4" />
+                          </svg>
+                        </button>
+                      ) : null}
+                      <StatusPill status={record.status} />
+                      <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+                        {formatDateTimeLabel(record.completedAtIso || record.updatedAtIso || record.submittedAtIso) || 'timestamp unavailable'}
+                      </small>
+                    </div>
+                    <div className="text-[18px] font-medium text-white md:text-[20px]">{respondentName}</div>
+                  </div>
+                  <small className="font-mono text-[11px] lowercase md:text-[12px]" style={{ color: SP_COLORS.muted }}>
+                    record id {record.id}
+                  </small>
+                </div>
+
+                <div className="mt-3 grid gap-3 text-[13px] md:grid-cols-4 md:text-[14px]">
+                  <ReadOnlyMetric label="organization" value={record.header.organizationName || 'not recorded'} />
+                  <ReadOnlyMetric label="updated" value={updatedLabel || 'not recorded'} />
+                  <ReadOnlyMetric label="completed" value={completedLabel || 'not completed'} />
+                  <ReadOnlyMetric label="ratings captured" value={`${record.answers.length} / ${TOTAL_SURVEY_CARD_COUNT}`} />
+                </div>
+              </article>
+            )
+          })
+        ) : (
+          <div className="rounded-[24px] border px-4 py-6 text-center md:px-5" style={{ borderColor: '#ffffff25', backgroundColor: '#060606' }}>
+            <div className="text-[18px] font-medium text-white md:text-[20px]">No service-capacity records yet</div>
+            <small className="mt-2 block text-[13px] text-[#bdbdbd] md:text-[15px]">
+              Use the + action to check out the first blank survey record for this partner.
+            </small>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function StatusPill({ status }: { status: PartnerServiceCapacitySubmissionRecord['status'] }) {
+  const isCompleted = status === 'completed'
+  return (
+    <span
+      className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] md:text-[12px]"
+      style={{
+        borderColor: isCompleted ? `${SP_COLORS.deepGreen}90` : `${SP_COLORS.yellow}90`,
+        color: isCompleted ? SP_COLORS.deepGreen : SP_COLORS.yellow
+      }}
+    >
+      {status}
+    </span>
+  )
+}
+
+function ReadOnlyMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[18px] border px-3 py-2" style={{ borderColor: '#ffffff18' }}>
+      <small className="block text-[11px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+        {label}
+      </small>
+      <div className="mt-1 text-white">{value}</div>
     </div>
   )
 }

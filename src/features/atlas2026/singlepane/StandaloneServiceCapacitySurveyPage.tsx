@@ -11,6 +11,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
+    searchPartnerIdentifierMatches,
     savePartnerServiceCapacitySurvey
   } = useSinglePaneData()
 
@@ -39,6 +40,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
           defaultHeader={partnerServiceCapacityDefaultHeader}
           isSaving={isSavingPartnerServiceCapacitySurvey}
           saveError={partnerServiceCapacitySurveyError}
+          onSearchPartnerIdentifiers={searchPartnerIdentifierMatches}
           onSubmit={savePartnerServiceCapacitySurvey}
         />
       </main>

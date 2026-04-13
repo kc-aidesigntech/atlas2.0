@@ -8,6 +8,7 @@ export type PartnerServiceCapacitySubmissionStatus = "draft" | "completed";
 export interface PartnerServiceCapacityHeader {
   firstName: string;
   lastName: string;
+  email: string;
   organizationName: string;
   jobTitle: string;
   respondentRoles: PartnerSurveyRespondentRole[];
@@ -45,6 +46,14 @@ export interface PartnerServiceCapacitySubmissionRecord
   completedAtIso: string | null;
 }
 
+export interface PartnerIdentifierRecord {
+  partnerId: string;
+  firstName: string;
+  lastName: string;
+  organizationName: string;
+  email: string;
+}
+
 export interface AtlasDatabase {
   atlas: {
     Tables: {
@@ -53,16 +62,25 @@ export interface AtlasDatabase {
           id: string;
           organization_name: string;
           organization_name_normalized: string;
+          primary_contact_first_name: string | null;
+          primary_contact_last_name: string | null;
+          primary_contact_email: string | null;
           updated_at: string;
         };
         Insert: {
           organization_name: string;
           organization_name_normalized: string;
+          primary_contact_first_name?: string | null;
+          primary_contact_last_name?: string | null;
+          primary_contact_email?: string | null;
           updated_at?: string;
         };
         Update: Partial<{
           organization_name: string;
           organization_name_normalized: string;
+          primary_contact_first_name: string | null;
+          primary_contact_last_name: string | null;
+          primary_contact_email: string | null;
           updated_at: string;
         }>;
       };
@@ -77,6 +95,7 @@ export interface AtlasDatabase {
           organization_name_normalized: string | null;
           respondent_first_name: string | null;
           respondent_last_name: string | null;
+          respondent_email: string | null;
           job_title: string | null;
           respondent_roles: PartnerSurveyRespondentRole[];
           other_role_text: string | null;
@@ -94,6 +113,7 @@ export interface AtlasDatabase {
           organization_name_normalized?: string | null;
           respondent_first_name?: string | null;
           respondent_last_name?: string | null;
+          respondent_email?: string | null;
           job_title?: string | null;
           respondent_roles?: PartnerSurveyRespondentRole[];
           other_role_text?: string | null;
@@ -109,6 +129,7 @@ export interface AtlasDatabase {
           organization_name_normalized: string | null;
           respondent_first_name: string | null;
           respondent_last_name: string | null;
+          respondent_email: string | null;
           job_title: string | null;
           respondent_roles: PartnerSurveyRespondentRole[];
           other_role_text: string | null;
@@ -256,6 +277,15 @@ export interface AtlasDatabase {
           assessment_count: number;
           last_assessed_at: string | null;
           weighted_rolling_average: number | null;
+        };
+      };
+      v_partner_identifier_records: {
+        Row: {
+          partner_id: string;
+          first_name: string | null;
+          last_name: string | null;
+          organization_name: string;
+          email: string | null;
         };
       };
     };

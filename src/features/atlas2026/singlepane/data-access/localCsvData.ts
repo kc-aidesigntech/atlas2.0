@@ -6,6 +6,7 @@ import type {
   DomainLoad,
   EnrollmentRequestRecord,
   EnrolleeProfile,
+  PartnerIdentifierRecord,
   RoleMenuConfig,
   RouteCandidateRecord,
   RouteLogEvent,
@@ -20,6 +21,7 @@ import countiesCsv from '../../../../../sample-data/relational-csv-archive1/coun
 import kolbiAvatarUrl from '../../../../../assets/Kolbi Christianson-lt.png'
 import peopleCsv from '../../../../../sample-data/relational-csv-archive1/people.csv?raw'
 import contactCsv from '../../../../../sample-data/relational-csv-archive1/people-contactinfo.csv?raw'
+import peopleRoleAssignmentsCsv from '../../../../../sample-data/relational-csv-archive1/people-role-assignments.csv?raw'
 import progressConditionsCsv from '../../../../../sample-data/relational-csv-archive1/progress-conditions.csv?raw'
 import referralsCsv from '../../../../../sample-data/relational-csv-archive1/referrals.csv?raw'
 import rolesCsv from '../../../../../sample-data/relational-csv-archive1/roles.csv?raw'
@@ -42,6 +44,7 @@ interface LocalSinglePaneDataset {
   adminMetrics: AdminDataQualityMetric[]
   partnerLoad: DomainLoad | null
   partnerLoadBreakdown: DomainLoadBreakdown | null
+  partnerIdentifierRecords: PartnerIdentifierRecord[]
   surveyCapabilitiesByOrganization: Map<
     string,
     {
@@ -270,6 +273,7 @@ function getLocalDataset(): LocalSinglePaneDataset {
 
   const people = parseCsv(peopleCsv)
   const contacts = parseCsv(contactCsv)
+  const peopleRoleAssignments = parseCsv(peopleRoleAssignmentsCsv)
   const progressConditions = parseCsv(progressConditionsCsv)
   const referrals = parseCsv(referralsCsv)
   const roles = parseCsv(rolesCsv)
@@ -286,6 +290,7 @@ function getLocalDataset(): LocalSinglePaneDataset {
   )
   const progressById = new Map(progressConditions.map((row) => [row.progress_condition_id, row]))
   const stationById = new Map(stations.map((row) => [row.partner_station_id, row]))
+  const roleKeyById = new Map(roles.map((row) => [row.role_id, row.role_key]))
   const countyById = new Map(counties.map((row) => [row.county_id, row]))
   const zCodeById = new Map(zCodes.map((row) => [row.z_code_id, row]))
   const navigatorName = people.find((row) => row.external_ref === 'staff-001')?.display_name || 'atlas navigator'
@@ -331,6 +336,28 @@ function getLocalDataset(): LocalSinglePaneDataset {
         zCodeTags
       }
     })
+
+  const partnerIdentifierRecords = peopleRoleAssignments
+    .filter((assignment) => roleKeyById.get(assignment.role_id) === 'partner')
+    .map((assignment) => {
+      const person = peopleById.get(assignment.person_id)
+      const station = stationById.get(assignment.partner_station_id)
+      if (!person || !station) return null
+      return {
+        partnerId: assignment.partner_station_id || assignment.person_id,
+        firstName: person.first_name || '',
+        lastName: person.last_name || '',
+        organizationName: station.station_name || '',
+        email: primaryEmailByPersonId.get(assignment.person_id) || ''
+      } satisfies PartnerIdentifierRecord
+    })
+    .filter((record): record is PartnerIdentifierRecord => Boolean(record))
+    .sort(
+      (left, right) =>
+        left.lastName.localeCompare(right.lastName) ||
+        left.firstName.localeCompare(right.firstName) ||
+        left.organizationName.localeCompare(right.organizationName)
+    )
 
   const personIdByEnrolleeId = new Map(enrollees.map((enrollee) => [enrollee.id, people.find((person) => person.external_ref === enrollee.id)?.person_id || '']))
 
@@ -562,6 +589,7 @@ function getLocalDataset(): LocalSinglePaneDataset {
     adminMetrics,
     partnerLoad,
     partnerLoadBreakdown,
+    partnerIdentifierRecords,
     surveyCapabilitiesByOrganization
   }
 
@@ -613,6 +641,20 @@ export function getLocalPartnerRadialLoad() {
 
 export function getLocalPartnerRadialLoadBreakdown() {
   return getLocalDataset().partnerLoadBreakdown
+}
+
+export function searchLocalPartnerIdentifierRecords(firstName: string, lastName: string): PartnerIdentifierRecord[] {
+  const trimmedFirstName = firstName.trim().toLowerCase()
+  const trimmedLastName = lastName.trim().toLowerCase()
+  if (!trimmedFirstName || !trimmedLastName) return []
+
+  return getLocalDataset().partnerIdentifierRecords
+    .filter(
+      (record) =>
+        record.firstName.toLowerCase().startsWith(trimmedFirstName) &&
+        record.lastName.toLowerCase().startsWith(trimmedLastName)
+    )
+    .slice(0, 8)
 }
 
 export function getLocalRouteCandidates(activeZCodes: string[] = []): RouteCandidateRecord[] {

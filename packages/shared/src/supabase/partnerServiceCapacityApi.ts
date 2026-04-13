@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AtlasDatabase,
+  PartnerIdentifierRecord,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
   PartnerServiceCapacitySubmissionStatus,
@@ -61,6 +62,7 @@ function mapSubmissionRow(
     header: {
       firstName: submission.respondent_first_name || "",
       lastName: submission.respondent_last_name || "",
+      email: (submission as { respondent_email?: string | null }).respondent_email || "",
       organizationName: submission.organization_name || "",
       jobTitle: submission.job_title || "",
       respondentRoles:
@@ -79,21 +81,46 @@ function mapSubmissionRow(
   };
 }
 
+function mapPartnerIdentifierRow(
+  row: AtlasDatabase["atlas"]["Views"]["v_partner_identifier_records"]["Row"],
+): PartnerIdentifierRecord {
+  return {
+    partnerId: row.partner_id,
+    firstName: row.first_name || "",
+    lastName: row.last_name || "",
+    organizationName: row.organization_name,
+    email: row.email || "",
+  };
+}
+
 async function ensurePartnerRecord(
   client: SupabaseClient<AtlasDatabase>,
-  organizationName: string,
+  header: PartnerServiceCapacitySubmissionInput["header"],
 ) {
+  const organizationName = header.organizationName.trim();
   const organizationNameNormalized = normalizeOrganizationName(organizationName);
+  const { data: existingPartner, error: existingPartnerError } = await client
+    .schema("atlas")
+    .from("partners")
+    .select("id")
+    .eq("organization_name_normalized", organizationNameNormalized)
+    .limit(1);
+
+  if (existingPartnerError) throw existingPartnerError;
+  if (existingPartner?.[0]) return existingPartner[0];
+
   const { data, error } = await client
     .schema("atlas")
     .from("partners")
-    .upsert(
+    .insert(
       {
-        organization_name: organizationName.trim(),
+        organization_name: organizationName,
         organization_name_normalized: organizationNameNormalized,
+        primary_contact_first_name: header.firstName.trim() || null,
+        primary_contact_last_name: header.lastName.trim() || null,
+        primary_contact_email: header.email.trim() || null,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "organization_name_normalized" },
     )
     .select("id")
     .single();
@@ -200,6 +227,28 @@ export async function listPartnerServiceCapacitySubmissions(
   return submissions.map((submission) => mapSubmissionRow(submission, answersBySubmissionId.get(submission.id) || []));
 }
 
+export async function searchPartnerIdentifierRecords(
+  client: SupabaseClient<AtlasDatabase>,
+  firstName: string,
+  lastName: string,
+) {
+  const trimmedFirstName = firstName.trim();
+  const trimmedLastName = lastName.trim();
+  if (!trimmedFirstName || !trimmedLastName) return [];
+
+  const { data, error } = await client
+    .schema("atlas")
+    .from("v_partner_identifier_records")
+    .select("*")
+    .ilike("first_name", `${trimmedFirstName}%`)
+    .ilike("last_name", `${trimmedLastName}%`)
+    .order("organization_name", { ascending: true })
+    .limit(8);
+
+  if (error) throw error;
+  return (data || []).map(mapPartnerIdentifierRow);
+}
+
 export async function savePartnerServiceCapacitySubmission(
   client: SupabaseClient<AtlasDatabase>,
   input: PartnerServiceCapacitySubmissionInput,
@@ -208,7 +257,7 @@ export async function savePartnerServiceCapacitySubmission(
   const status: PartnerServiceCapacitySubmissionStatus = input.status || "draft";
   const organizationName = input.header.organizationName.trim();
   const normalized = organizationName ? normalizeOrganizationName(organizationName) : null;
-  const partner = organizationName ? await ensurePartnerRecord(client, organizationName) : null;
+  const partner = organizationName ? await ensurePartnerRecord(client, input.header) : null;
   let submission:
     | AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_submissions"]["Row"]
     | null = null;
@@ -227,6 +276,7 @@ export async function savePartnerServiceCapacitySubmission(
           organization_name_normalized: normalized,
           respondent_first_name: input.header.firstName.trim() || null,
           respondent_last_name: input.header.lastName.trim() || null,
+          respondent_email: input.header.email.trim() || null,
           job_title: input.header.jobTitle.trim() || null,
           respondent_roles: input.header.respondentRoles,
           other_role_text: input.header.otherRoleText.trim() || null,
@@ -259,6 +309,7 @@ export async function savePartnerServiceCapacitySubmission(
       organization_name_normalized: normalized,
       respondent_first_name: input.header.firstName.trim(),
       respondent_last_name: input.header.lastName.trim(),
+      respondent_email: input.header.email.trim() || null,
       job_title: input.header.jobTitle.trim() || null,
       respondent_roles: input.header.respondentRoles,
       other_role_text: input.header.otherRoleText.trim() || null,
