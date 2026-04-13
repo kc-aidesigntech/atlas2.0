@@ -3,6 +3,8 @@ export type PartnerSurveyRespondentRole =
   | "direct_service_provider"
   | "other";
 
+export type PartnerServiceCapacitySubmissionStatus = "draft" | "completed";
+
 export interface PartnerServiceCapacityHeader {
   firstName: string;
   lastName: string;
@@ -26,15 +28,21 @@ export interface PartnerServiceCapacitySubmissionInput {
   header: PartnerServiceCapacityHeader;
   answers: PartnerServiceCapacityAnswer[];
   formVersion: string;
+  draftKey?: string;
+  status?: PartnerServiceCapacitySubmissionStatus;
+  completedAtIso?: string | null;
 }
 
 export interface PartnerServiceCapacitySubmissionRecord
   extends PartnerServiceCapacitySubmissionInput {
   id: string;
   partnerId: string | null;
-  organizationNameNormalized: string;
+  organizationNameNormalized: string | null;
   submittedAtIso: string;
   updatedAtIso: string;
+  draftKey: string;
+  status: PartnerServiceCapacitySubmissionStatus;
+  completedAtIso: string | null;
 }
 
 export interface AtlasDatabase {
@@ -61,11 +69,14 @@ export interface AtlasDatabase {
       partner_service_capacity_submissions: {
         Row: {
           id: string;
+          draft_key: string;
+          status: PartnerServiceCapacitySubmissionStatus;
+          completed_at: string | null;
           partner_id: string | null;
-          organization_name: string;
-          organization_name_normalized: string;
-          respondent_first_name: string;
-          respondent_last_name: string;
+          organization_name: string | null;
+          organization_name_normalized: string | null;
+          respondent_first_name: string | null;
+          respondent_last_name: string | null;
           job_title: string | null;
           respondent_roles: PartnerSurveyRespondentRole[];
           other_role_text: string | null;
@@ -75,23 +86,29 @@ export interface AtlasDatabase {
           raw_payload: PartnerServiceCapacitySubmissionInput | null;
         };
         Insert: {
+          draft_key?: string;
+          status?: PartnerServiceCapacitySubmissionStatus;
+          completed_at?: string | null;
           partner_id?: string | null;
-          organization_name: string;
-          organization_name_normalized: string;
-          respondent_first_name: string;
-          respondent_last_name: string;
+          organization_name?: string | null;
+          organization_name_normalized?: string | null;
+          respondent_first_name?: string | null;
+          respondent_last_name?: string | null;
           job_title?: string | null;
-          respondent_roles: PartnerSurveyRespondentRole[];
+          respondent_roles?: PartnerSurveyRespondentRole[];
           other_role_text?: string | null;
           form_version: string;
           raw_payload?: PartnerServiceCapacitySubmissionInput;
         };
         Update: Partial<{
+          draft_key: string;
+          status: PartnerServiceCapacitySubmissionStatus;
+          completed_at: string | null;
           partner_id: string | null;
-          organization_name: string;
-          organization_name_normalized: string;
-          respondent_first_name: string;
-          respondent_last_name: string;
+          organization_name: string | null;
+          organization_name_normalized: string | null;
+          respondent_first_name: string | null;
+          respondent_last_name: string | null;
           job_title: string | null;
           respondent_roles: PartnerSurveyRespondentRole[];
           other_role_text: string | null;

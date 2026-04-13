@@ -34,7 +34,7 @@ import {
   loadJourneyStationMarkers,
   loadPartnerRadialLoad,
   loadPartnerRadialLoadBreakdown,
-  loadPartnerServiceCapacitySurvey,
+  loadPartnerServiceCapacitySurveyHistory,
   loadRouteAssignments,
   loadRouteCandidates,
   loadSinglePaneBootstrap,
@@ -95,7 +95,7 @@ export function useSinglePaneData() {
   const [partnerLoadBreakdown, setPartnerLoadBreakdown] = useState<DomainLoadBreakdown | null>(null)
   const [journeyStationMarkers, setJourneyStationMarkers] = useState<JourneyStationMarker[]>([])
   const [routeAssignmentsByEnrolleeId, setRouteAssignmentsByEnrolleeId] = useState<Record<string, RouteAssignmentRecord>>({})
-  const [partnerServiceCapacitySurvey, setPartnerServiceCapacitySurvey] = useState<PartnerServiceCapacitySubmissionRecord | null>(null)
+  const [partnerServiceCapacitySurveyHistory, setPartnerServiceCapacitySurveyHistory] = useState<PartnerServiceCapacitySubmissionRecord[]>([])
   const [navigatorCompetencyAssessments, setNavigatorCompetencyAssessments] = useState<NavigatorCompetencyAssessmentRecord[]>([])
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [partnerServiceCapacitySurveyError, setPartnerServiceCapacitySurveyError] = useState<string | null>(null)
@@ -315,20 +315,20 @@ export function useSinglePaneData() {
     async function hydratePartnerServiceCapacitySurvey() {
       if (role !== 'partner') {
         if (isMounted) {
-          setPartnerServiceCapacitySurvey(null)
+          setPartnerServiceCapacitySurveyHistory([])
           setPartnerServiceCapacitySurveyError(null)
         }
         return
       }
       const organizationName = accountSettings.organization?.trim()
       if (!organizationName) {
-        if (isMounted) setPartnerServiceCapacitySurvey(null)
+        if (isMounted) setPartnerServiceCapacitySurveyHistory([])
         return
       }
       try {
-        const savedSurvey = await loadPartnerServiceCapacitySurvey(organizationName)
+        const savedSurveyHistory = await loadPartnerServiceCapacitySurveyHistory(organizationName)
         if (!isMounted) return
-        setPartnerServiceCapacitySurvey(savedSurvey)
+        setPartnerServiceCapacitySurveyHistory(savedSurveyHistory)
         setPartnerServiceCapacitySurveyError(null)
       } catch (error) {
         if (!isMounted) return
@@ -504,7 +504,13 @@ export function useSinglePaneData() {
     setPartnerServiceCapacitySurveyError(null)
     try {
       const saved = await persistPartnerServiceCapacitySurvey(input)
-      setPartnerServiceCapacitySurvey(saved)
+      setPartnerServiceCapacitySurveyHistory((current) => {
+        const nextHistory = current.filter((record) => record.draftKey !== saved.draftKey && record.id !== saved.id)
+        return [saved, ...nextHistory].sort(
+          (left, right) =>
+            new Date(right.updatedAtIso || right.submittedAtIso).getTime() - new Date(left.updatedAtIso || left.submittedAtIso).getTime()
+        )
+      })
       const nextAccountSettings = {
         ...accountSettings,
         fullName: `${input.header.firstName} ${input.header.lastName}`.trim() || accountSettings.fullName,
@@ -512,6 +518,7 @@ export function useSinglePaneData() {
       }
       setAccountSettings(nextAccountSettings)
       persistAccountSettings(nextAccountSettings)
+      return saved
     } catch (error) {
       setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to save service capacity survey.')
       throw error
@@ -551,7 +558,7 @@ export function useSinglePaneData() {
     countyHeatmap,
     adminMetrics,
     journeyStationMarkers,
-    partnerServiceCapacitySurvey,
+    partnerServiceCapacitySurveyHistory,
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,

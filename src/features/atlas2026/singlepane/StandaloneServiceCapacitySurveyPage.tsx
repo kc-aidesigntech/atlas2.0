@@ -7,7 +7,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
   const {
     role,
     setRole,
-    partnerServiceCapacitySurvey,
+    partnerServiceCapacitySurveyHistory,
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
@@ -35,7 +35,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
     >
       <main className="mx-auto w-full max-w-[1240px]">
         <ServiceCapacitySurveyPanel
-          savedSubmission={partnerServiceCapacitySurvey}
+          submissionHistory={partnerServiceCapacitySurveyHistory}
           defaultHeader={partnerServiceCapacityDefaultHeader}
           isSaving={isSavingPartnerServiceCapacitySurvey}
           saveError={partnerServiceCapacitySurveyError}

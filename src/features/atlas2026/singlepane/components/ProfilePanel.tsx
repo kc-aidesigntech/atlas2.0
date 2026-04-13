@@ -1,4 +1,5 @@
 import React from 'react'
+import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import type { EnrolleeProfile } from '../types'
 import { SP_COLORS } from '../theme'
 
@@ -6,19 +7,6 @@ interface ProfilePanelProps {
   enrollee: EnrolleeProfile
   onSelectZCode?: (zCode: string) => void
   enrollmentStartLabel?: string
-}
-
-const TAG_COLORS_BY_GROUP: Record<string, string> = {
-  '55': SP_COLORS.yellow,
-  '56': SP_COLORS.orange,
-  '57': SP_COLORS.red,
-  '59': SP_COLORS.deepGreen,
-  '60': SP_COLORS.blue,
-  '62': SP_COLORS.purple,
-  '63': SP_COLORS.brown,
-  '64': SP_COLORS.green,
-  '65': SP_COLORS.steel,
-  '75': SP_COLORS.white
 }
 
 function getInitials(fullName: string) {
@@ -67,9 +55,8 @@ export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartL
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-[10px]">
           {enrollee.zCodeTags.map((tag, index) => {
-            const group = tag.replace(/^z/i, '').slice(0, 2)
-            const bgColor = TAG_COLORS_BY_GROUP[group] || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]
-            const useLightText = [SP_COLORS.blue, SP_COLORS.purple, SP_COLORS.deepGreen, SP_COLORS.red].includes(bgColor)
+            const bgColor = getZCodeParentColor(tag) || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]
+            const useLightText = usesLightTextOnZCodeColor(bgColor)
             return (
               <span
                 key={tag}

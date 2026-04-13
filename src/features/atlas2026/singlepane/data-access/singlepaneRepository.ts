@@ -17,7 +17,9 @@ import type {
   RouteLogEvent
 } from '@/features/atlas2026/singlepane/types'
 import {
+  getPartnerServiceCapacitySubmissionByDraftKey,
   getLatestPartnerServiceCapacitySubmission,
+  listPartnerServiceCapacitySubmissions,
   savePartnerServiceCapacitySubmission
 } from '@atlas/shared'
 import {
@@ -45,7 +47,7 @@ interface PersistedRouteLogState {
   overrides: Record<string, RouteLogEvent>
 }
 
-type PersistedPartnerServiceCapacityState = Record<string, PartnerServiceCapacitySubmissionRecord>
+type PersistedPartnerServiceCapacityState = PartnerServiceCapacitySubmissionRecord[]
 
 function normalizeLog(log: RouteLogEvent): RouteLogEvent {
   return {
@@ -216,21 +218,44 @@ function normalizeOrganizationName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
+function sortPartnerServiceCapacityRecords(records: PartnerServiceCapacitySubmissionRecord[]) {
+  return records
+    .slice()
+    .sort((left, right) => new Date(right.updatedAtIso || right.submittedAtIso).getTime() - new Date(left.updatedAtIso || left.submittedAtIso).getTime())
+}
+
 function loadPartnerServiceCapacityState(): PersistedPartnerServiceCapacityState {
-  if (typeof window === 'undefined') return {}
+  if (typeof window === 'undefined') return []
   const raw = window.localStorage.getItem(PARTNER_SERVICE_CAPACITY_SURVEY_KEY)
-  if (!raw) return {}
+  if (!raw) return []
   try {
-    const parsed = JSON.parse(raw) as PersistedPartnerServiceCapacityState
-    return parsed && typeof parsed === 'object' ? parsed : {}
+    const parsed = JSON.parse(raw) as PersistedPartnerServiceCapacityState | Record<string, PartnerServiceCapacitySubmissionRecord>
+    if (Array.isArray(parsed)) {
+      return sortPartnerServiceCapacityRecords(parsed)
+    }
+    if (parsed && typeof parsed === 'object') {
+      const dedupedRecords = new Map<string, PartnerServiceCapacitySubmissionRecord>()
+      Object.values(parsed).forEach((record) => {
+        if (!record) return
+        dedupedRecords.set(record.draftKey || record.id, record)
+      })
+      return sortPartnerServiceCapacityRecords(Array.from(dedupedRecords.values()))
+    }
+    return []
   } catch {
-    return {}
+    return []
   }
 }
 
 function persistPartnerServiceCapacityState(state: PersistedPartnerServiceCapacityState) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(PARTNER_SERVICE_CAPACITY_SURVEY_KEY, JSON.stringify(state))
+}
+
+function persistPartnerServiceCapacityRecord(record: PartnerServiceCapacitySubmissionRecord) {
+  const currentRecords = loadPartnerServiceCapacityState()
+  const nextRecords = currentRecords.filter((currentRecord) => currentRecord.draftKey !== record.draftKey && currentRecord.id !== record.id)
+  persistPartnerServiceCapacityState(sortPartnerServiceCapacityRecords([record, ...nextRecords]))
 }
 
 function loadNavigatorAssessmentState(): NavigatorCompetencyAssessmentRecord[] {
@@ -253,8 +278,11 @@ function persistNavigatorAssessmentState(records: NavigatorCompetencyAssessmentR
 function toSubmissionRecord(input: PartnerServiceCapacitySubmissionInput, partnerId: string | null, submittedAtIso: string, id: string) {
   return {
     id,
+    draftKey: input.draftKey || id,
+    status: input.status || 'draft',
+    completedAtIso: input.completedAtIso || null,
     partnerId,
-    organizationNameNormalized: normalizeOrganizationName(input.header.organizationName),
+    organizationNameNormalized: input.header.organizationName ? normalizeOrganizationName(input.header.organizationName) : null,
     submittedAtIso,
     updatedAtIso: submittedAtIso,
     formVersion: input.formVersion,
@@ -406,15 +434,48 @@ export async function saveRouteAssignment(assignment: RouteAssignmentRecord): Pr
   return assignment
 }
 
-export async function loadPartnerServiceCapacitySurvey(organizationName: string): Promise<PartnerServiceCapacitySubmissionRecord | null> {
+export async function loadPartnerServiceCapacitySurvey(
+  organizationName: string,
+  draftKey?: string
+): Promise<PartnerServiceCapacitySubmissionRecord | null> {
   const organizationNameNormalized = normalizeOrganizationName(organizationName)
-  if (!organizationNameNormalized) return null
+  const trimmedDraftKey = draftKey?.trim()
+  if (!organizationNameNormalized && !trimmedDraftKey) return null
 
   if (!hasSupabaseConfig || !supabase) {
-    return loadPartnerServiceCapacityState()[organizationNameNormalized] || null
+    const localRecords = loadPartnerServiceCapacityState()
+    if (trimmedDraftKey) {
+      const draftRecord = localRecords.find((record) => record.draftKey === trimmedDraftKey)
+      if (draftRecord) return draftRecord
+    }
+    if (!organizationNameNormalized) return null
+    return localRecords.find((record) => record.organizationNameNormalized === organizationNameNormalized) || null
   }
 
+  if (trimmedDraftKey) {
+    const draftRecord = await getPartnerServiceCapacitySubmissionByDraftKey(supabase, trimmedDraftKey)
+    if (draftRecord) return draftRecord
+  }
+
+  if (!organizationNameNormalized) return null
+
   return getLatestPartnerServiceCapacitySubmission(
+    supabase,
+    organizationNameNormalized
+  )
+}
+
+export async function loadPartnerServiceCapacitySurveyHistory(
+  organizationName: string
+): Promise<PartnerServiceCapacitySubmissionRecord[]> {
+  const organizationNameNormalized = normalizeOrganizationName(organizationName)
+  if (!organizationNameNormalized) return []
+
+  if (!hasSupabaseConfig || !supabase) {
+    return loadPartnerServiceCapacityState().filter((record) => record.organizationNameNormalized === organizationNameNormalized)
+  }
+
+  return listPartnerServiceCapacitySubmissions(
     supabase,
     organizationNameNormalized
   )
@@ -429,11 +490,7 @@ export async function savePartnerServiceCapacitySurvey(
 
   if (!hasSupabaseConfig || !supabase) {
     const nextRecord = toSubmissionRecord(input, null, submittedAtIso, fallbackId)
-    const nextState = {
-      ...loadPartnerServiceCapacityState(),
-      [organizationNameNormalized]: nextRecord
-    }
-    persistPartnerServiceCapacityState(nextState)
+    persistPartnerServiceCapacityRecord(nextRecord)
     return nextRecord
   }
 
@@ -455,7 +512,7 @@ export async function savePartnerServiceCapacitySurvey(
   if (zCodeLookupError) throw zCodeLookupError
   const zCodeIdByCode = new Map((zCodeRows || []).map((row) => [row.z_code, row.id]))
 
-  if (partnerId) {
+  if (persistedRecord.status === 'completed' && partnerId) {
     const burdenRows = normalizedAnswers
       .map((answer) => {
         const zCodeId = zCodeIdByCode.get(answer.normalizedZCode)
@@ -516,6 +573,7 @@ export async function savePartnerServiceCapacitySurvey(
     }
   }
 
+  persistPartnerServiceCapacityRecord(persistedRecord)
   return persistedRecord
 }
 

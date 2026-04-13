@@ -5,6 +5,7 @@ export type AtlasPlatform = (typeof atlasPlatforms)[number];
 
 export * from "./atlas2026/contracts";
 export * from "./atlas2026/routing";
+export * from "./atlas2026/zCodeColors";
 export * from "./supabase/contracts";
 export * from "./supabase/client";
 export * from "./supabase/navigatorApi";
