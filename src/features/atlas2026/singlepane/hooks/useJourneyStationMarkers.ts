@@ -13,7 +13,7 @@ export function useJourneyStationMarkers(
     let isMounted = true
 
     async function hydrateStationMarkers() {
-      const markers = await loadJourneyStationMarkers(selectedEnrollee?.enrollmentId || selectedEnrollee?.id)
+      const markers = await loadJourneyStationMarkers(selectedEnrollee?.enrollmentId, selectedEnrollee?.id)
       if (!isMounted) return
 
       if (markers.length) {

@@ -6,10 +6,12 @@ import type {
   DomainLoadBreakdown,
   EnrollmentRequestRecord,
   JourneyStationMarker,
+  PartnerStationProfile,
   RouteCandidateRecord
 } from '@/features/atlas2026/singlepane/types'
 import {
   fetchAppRoleNavigation,
+  fetchNavigatorAssignedEnrollees,
   fetchPartnerLoadBreakdown,
   fetchSinglePaneAdminMetrics,
   fetchSinglePaneCountyHeatmap,
@@ -27,9 +29,11 @@ import {
   loadAccountSettings,
   loadEnrolleeIntakes,
   loadRouteAssignments,
+  loadTimelineConfigs,
   saveAccountSettings,
   saveEnrolleeIntake,
-  saveRouteAssignment
+  saveRouteAssignment,
+  saveTimelineConfig
 } from '@/features/atlas2026/singlepane/data-access/localStateRepository'
 import {
   appendRouteLog,
@@ -48,6 +52,11 @@ import {
   searchPartnerIdentifierRecordMatches
 } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import {
+  buildDefaultTimelineGates,
+  DEFAULT_TIMELINE_DURATION_MONTHS,
+  DEFAULT_TIMELINE_MAX_DURATION_MONTHS
+} from '@/features/atlas2026/singlepane/timelineConfigUtils'
 
 export interface SinglePaneBootstrapData {
   enrollees: import('@/features/atlas2026/singlepane/types').EnrolleeProfile[]
@@ -62,13 +71,13 @@ export interface SinglePaneBootstrapData {
 function createDefaultTimelineConfig() {
   return {
     planStartIso: new Date().toISOString(),
-    durationMonths: 9,
-    maxDurationMonths: 12,
-    gates: []
+    durationMonths: DEFAULT_TIMELINE_DURATION_MONTHS,
+    maxDurationMonths: DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
+    gates: buildDefaultTimelineGates(DEFAULT_TIMELINE_DURATION_MONTHS)
   }
 }
 
-function createEmptyBootstrap(logs = loadLocalLogs()): SinglePaneBootstrapData {
+function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]): SinglePaneBootstrapData {
   return {
     enrollees: [],
     loads: [],
@@ -81,8 +90,9 @@ function createEmptyBootstrap(logs = loadLocalLogs()): SinglePaneBootstrapData {
 }
 
 export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePaneBootstrapData> {
-  const logs = loadLocalLogs()
+  const logs = await loadLocalLogs()
   const intakeOverrides = await loadEnrolleeIntakes()
+  const timelineOverrides = await loadTimelineConfigs()
 
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) {
     return createEmptyBootstrap(logs)
@@ -98,7 +108,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   ])
 
   const shouldLoadEnrolleeDomain = role !== 'partner'
-  const [profiles, loadRows, breakdownRows] = shouldLoadEnrolleeDomain
+  const [profiles, loadRows, breakdownRows, navigatorAssignedEnrollees] = shouldLoadEnrolleeDomain
     ? await Promise.all([
         withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
         withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), []),
@@ -106,11 +116,29 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
           'singlepane.enrolleeDomainLoadBreakdown',
           () => fetchSinglePaneEnrolleeDomainLoadBreakdown(supabase),
           []
-        )
+        ),
+        role === 'navigator'
+          ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
+          : Promise.resolve([])
       ])
-    : [[], [], []]
+    : [[], [], [], []]
 
-  const bootstrapEnrollees = profiles.map((profile) => ({
+  const navigatorEnrollmentIds =
+    role === 'navigator' ? new Set(navigatorAssignedEnrollees.map((record) => record.enrollmentId)) : null
+  const visibleProfiles =
+    navigatorEnrollmentIds && navigatorEnrollmentIds.size
+      ? profiles.filter((profile) => navigatorEnrollmentIds.has(profile.enrollmentId))
+      : profiles
+  const visibleLoadRows =
+    navigatorEnrollmentIds && navigatorEnrollmentIds.size
+      ? loadRows.filter((row) => navigatorEnrollmentIds.has(row.enrollmentId))
+      : loadRows
+  const visibleBreakdownRows =
+    navigatorEnrollmentIds && navigatorEnrollmentIds.size
+      ? breakdownRows.filter((row) => navigatorEnrollmentIds.has(row.enrollmentId))
+      : breakdownRows
+
+  const bootstrapEnrollees = visibleProfiles.map((profile) => ({
     id: profile.enrolleeId,
     enrollmentId: profile.enrollmentId,
     fullName: profile.fullName,
@@ -128,16 +156,16 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     actionMenus: item.actionMenus
   }))
 
-  const loads = loadRows.map((row) => ({
-    enrolleeId: profiles.find((profile) => profile.enrollmentId === row.enrollmentId)?.enrolleeId || row.enrollmentId,
+  const loads = visibleLoadRows.map((row) => ({
+    enrolleeId: visibleProfiles.find((profile) => profile.enrollmentId === row.enrollmentId)?.enrolleeId || row.enrollmentId,
     habitat: row.habitat,
     work: row.work,
     socialNetworks: row.socialNetworks
   }))
 
   const loadBreakdownsByEnrolleeId = Object.fromEntries(
-    profiles.map((profile) => {
-      const rows = breakdownRows
+    visibleProfiles.map((profile) => {
+      const rows = visibleBreakdownRows
         .filter((row) => row.enrollmentId === profile.enrollmentId)
         .map((row) => ({
           id: `${profile.enrolleeId}:${row.zCodeGroup}`,
@@ -182,7 +210,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     roleConfigs,
     timelineConfig: baseTimelineConfig,
     timelineConfigsByEnrolleeId: Object.fromEntries(
-      profiles.map((profile) => [
+      visibleProfiles.map((profile) => [
         profile.enrolleeId,
         {
           ...baseTimelineConfig,
@@ -203,11 +231,22 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     ])
   )
   const firstEnrolleeId = enrollees[0]?.id || ''
+  const mergedTimelineConfigs = Object.fromEntries(
+    enrollees.map((enrollee) => {
+      const persistedTimelineConfig =
+        timelineOverrides[`enrollment:${enrollee.enrollmentId}`] ||
+        timelineOverrides[`enrollee:${enrollee.id}`] ||
+        timelineOverrides[enrollee.id] ||
+        timelineConfigsByEnrolleeId[enrollee.id] ||
+        bootstrap.timelineConfig
+      return [enrollee.id, persistedTimelineConfig]
+    })
+  )
   return {
     ...bootstrap,
     enrollees,
-    timelineConfigsByEnrolleeId,
-    timelineConfig: timelineConfigsByEnrolleeId[firstEnrolleeId] || bootstrap.timelineConfig,
+    timelineConfigsByEnrolleeId: mergedTimelineConfigs,
+    timelineConfig: mergedTimelineConfigs[firstEnrolleeId] || bootstrap.timelineConfig,
     logs
   }
 }
@@ -226,15 +265,19 @@ export async function loadEnrollmentRequests(role: AtlasRole): Promise<Enrollmen
 
 export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteCandidateRecord[]> {
   if (!enrollmentId || !hasSupabaseConfig || !supabase) return []
-  const rows = await fetchSinglePaneRouteCandidates(supabase, enrollmentId)
+  const rows = await withOptionalSupabaseFallback(
+    `singlepane.routeCandidates:${enrollmentId}`,
+    () => fetchSinglePaneRouteCandidates(supabase, enrollmentId),
+    []
+  )
   return rows.map((row) => ({
     stationId: row.stationId,
     partnerId: row.partnerId,
     stationName: row.stationName,
     score: row.score,
-    specializeHits: row.specializeHits,
-    conflictHits: row.conflictHits,
-    interfereHits: row.interfereHits,
+    matchedZCodeCount: row.matchedZCodeCount,
+    needUnitsMatched: row.needUnitsMatched,
+    partnerBurdenTotal: row.partnerBurdenTotal,
     matchedZCodes: row.matchedZCodes
   }))
 }
@@ -255,10 +298,14 @@ export async function loadAdminDataQuality(): Promise<AdminDataQualityMetric[]> 
   return withOptionalSupabaseFallback('singlepane.adminMetrics', () => fetchSinglePaneAdminMetrics(supabase), [])
 }
 
-export async function loadJourneyStationMarkers(enrollmentId?: string): Promise<JourneyStationMarker[]> {
+export async function loadJourneyStationMarkers(enrollmentId?: string, enrolleeId?: string): Promise<JourneyStationMarker[]> {
   if (!enrollmentId) return []
   const historyMarkers = hasSupabaseConfig && supabase
-    ? (await fetchEnrollmentStationMarkers(supabase, enrollmentId)).map((marker) => ({
+    ? (await withOptionalSupabaseFallback(
+        `singlepane.stationMarkers:${enrollmentId}`,
+        () => fetchEnrollmentStationMarkers(supabase, enrollmentId),
+        []
+      )).map((marker) => ({
         id: marker.routePlanStopId,
         stationName: marker.stationName,
         assignedAtIso: marker.assignedAt,
@@ -268,7 +315,10 @@ export async function loadJourneyStationMarkers(enrollmentId?: string): Promise<
       }))
     : []
   const assignments = await loadRouteAssignments()
-  const selectedAssignment = assignments[enrollmentId] || Object.values(assignments).find((assignment) => assignment.enrolleeId === enrollmentId)
+  const selectedAssignment =
+    (enrolleeId ? assignments[enrolleeId] : null) ||
+    assignments[enrollmentId] ||
+    Object.values(assignments).find((assignment) => assignment.enrolleeId === (enrolleeId || enrollmentId))
   if (!selectedAssignment) return historyMarkers
   return [
     ...historyMarkers,
@@ -299,6 +349,65 @@ export async function loadPartnerRadialLoadBreakdown(): Promise<DomainLoadBreakd
   return withOptionalSupabaseFallback('singlepane.partnerLoadBreakdown', () => fetchPartnerLoadBreakdown(supabase), null)
 }
 
+function normalizeOrganizationName(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+export async function loadPartnerStationProfile(organizationName: string): Promise<PartnerStationProfile | null> {
+  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return null
+  const normalized = normalizeOrganizationName(organizationName)
+  if (!normalized) return null
+
+  const data = await withOptionalSupabaseFallback(
+    `singlepane.partnerStationProfile:${normalized}`,
+    async () => {
+      const { data: rows, error } = await (supabase as any)
+        .schema('atlas')
+        .from('partners')
+        .select(
+          `
+          id,
+          organization_name,
+          primary_contact_first_name,
+          primary_contact_last_name,
+          primary_contact_email,
+          partner_stations(
+            id,
+            station_name,
+            capacity_total,
+            capacity_available,
+            counties(county_name)
+          )
+        `
+        )
+        .eq('organization_name_normalized', normalized)
+        .limit(1)
+      if (error) throw error
+      return rows || []
+    },
+    []
+  )
+
+  const partner = data?.[0]
+  if (!partner) return null
+  const station = Array.isArray(partner.partner_stations) ? partner.partner_stations[0] : partner.partner_stations
+  const stationCounty = station?.counties
+  const countyName = Array.isArray(stationCounty) ? stationCounty[0]?.county_name || null : stationCounty?.county_name || null
+
+  return {
+    partnerId: partner.id,
+    organizationName: partner.organization_name,
+    stationId: station?.id || null,
+    stationName: station?.station_name || null,
+    countyName,
+    primaryContactFirstName: partner.primary_contact_first_name || null,
+    primaryContactLastName: partner.primary_contact_last_name || null,
+    primaryContactEmail: partner.primary_contact_email || null,
+    capacityTotal: typeof station?.capacity_total === 'number' ? station.capacity_total : null,
+    capacityAvailable: typeof station?.capacity_available === 'number' ? station.capacity_available : null
+  }
+}
+
 export {
   appendRouteLog,
   loadAccountSettings,
@@ -313,6 +422,7 @@ export {
   saveNavigatorCompetencyAssessment,
   savePartnerServiceCapacitySurvey,
   saveRouteAssignment,
+  saveTimelineConfig,
   saveRouteLogs,
   searchPartnerIdentifierRecordMatches
 }

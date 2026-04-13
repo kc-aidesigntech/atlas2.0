@@ -1,4 +1,5 @@
 import React from 'react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '../theme'
 
 interface LocalDateInputBoxProps {
@@ -44,31 +45,28 @@ export default function LocalDateInputBox({
       ) : null}
       <div className="mt-3 flex items-center justify-end gap-2">
         {onDelete ? (
-          <button
-            type="button"
+          <AtlasTextButton
             onClick={onDelete}
-            className="rounded-full border px-3 py-1 text-[11px]"
-            style={{ borderColor: `${SP_COLORS.red}90`, color: SP_COLORS.red }}
+            className="px-3 py-1 text-[11px]"
+            style={{ ['--button-border-color' as const]: `${SP_COLORS.red}90`, color: SP_COLORS.red } as React.CSSProperties}
           >
             {deleteLabel}
-          </button>
+          </AtlasTextButton>
         ) : null}
-        <button
-          type="button"
+        <AtlasTextButton
           onClick={onCancel}
-          className="rounded-full border px-3 py-1 text-[11px] text-white"
-          style={{ borderColor: '#ffffff30' }}
+          className="px-3 py-1 text-[11px] text-white"
+          style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
         >
           cancel
-        </button>
-        <button
-          type="button"
+        </AtlasTextButton>
+        <AtlasTextButton
           onClick={onSave}
-          className="rounded-full border px-3 py-1 text-[11px]"
-          style={{ borderColor: `${SP_COLORS.yellow}90`, color: SP_COLORS.yellow }}
+          className="px-3 py-1 text-[11px]"
+          style={{ ['--button-border-color' as const]: `${SP_COLORS.yellow}90`, color: SP_COLORS.yellow } as React.CSSProperties}
         >
           save
-        </button>
+        </AtlasTextButton>
       </div>
     </div>
   )

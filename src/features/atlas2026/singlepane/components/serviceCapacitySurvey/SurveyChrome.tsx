@@ -3,6 +3,7 @@ import { usesLightTextOnZCodeColor } from '@atlas/shared'
 import { getScaleOption } from '../../data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '../../theme'
 import type { PartnerServiceCapacityScaleOption, ZCodeSurveyPrompt } from '../../types'
+import { AtlasTextButton, AtlasTextLink } from '../../../components/AtlasPrimitives'
 
 const arrowIconUrl = new URL(
   '../../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
@@ -68,12 +69,6 @@ export function BurdenCard({
     if (option.value <= 6) return SP_COLORS.yellow
     return SP_COLORS.deepGreen
   }), [scale])
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-1',hypothesisId:'H4',location:'SurveyChrome.tsx:67',message:'burden card navigation state',data:{promptId:promptItem.id,zCode:promptItem.zCode,score,notEncountered,hasPrevious,hasNext,canAdvance,canResume,compact:Boolean(compact),currentIndex,totalCount},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [canAdvance, canResume, compact, currentIndex, hasNext, hasPrevious, notEncountered, promptItem.id, promptItem.zCode, score, totalCount])
 
   useEffect(() => {
     const previousScore = previousScoreRef.current
@@ -194,8 +189,7 @@ export function BurdenCard({
           <small className="text-[12px] uppercase tracking-[0.12em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
             assign a burden score
           </small>
-          <button
-            type="button"
+          <AtlasTextButton
             onClick={() => {
               const nextValue = !notEncountered
               onNotEncounteredChange(nextValue)
@@ -203,7 +197,7 @@ export function BurdenCard({
                 requestAnimationFrame(() => numericInputRef.current?.focus())
               }
             }}
-            className={`atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border transition-[border-color,background-color,color,box-shadow] duration-150 ease-out ${
+            className={`transition-[border-color,background-color,color,box-shadow] duration-150 ease-out ${
               compact ? 'px-2.5 py-1 text-[11px] md:text-[12px]' : 'px-3 py-1.5 text-[12px] md:text-[13px]'
             }`}
             style={{
@@ -214,7 +208,7 @@ export function BurdenCard({
             } as React.CSSProperties}
           >
             not encountered in our work
-          </button>
+          </AtlasTextButton>
         </div>
 
         <div className={`${compact ? 'mt-3.5' : 'mt-4'} ${notEncountered ? 'opacity-45' : ''}`}>
@@ -242,12 +236,11 @@ export function BurdenCard({
               const isSelected = !notEncountered && option.value === score
               const selectedColor = sliderScaleColors[index]
               return (
-                <button
+                <AtlasTextButton
                   key={option.value}
-                  type="button"
                   disabled={notEncountered}
                   onClick={() => handleSelectScore(option.value)}
-                  className={`atlas-sign-button [--button-line-inset:8px] [--button-radius:11px] rounded-[11px] border px-0 font-semibold transition-[transform,box-shadow,border-color,background-color,color] duration-150 ease-out ${
+                  className={`px-0 font-semibold transition-[transform,box-shadow,border-color,background-color,color] duration-150 ease-out ${
                     compact ? 'mx-[2px] py-1.5 text-[12px] md:mx-[3px] md:py-[7px] md:text-[14px]' : 'mx-[3px] py-2 text-[13px] md:mx-[4px] md:text-[15px]'
                   } ${
                     isSelected && isPulsing ? 'animate-pulse' : ''
@@ -261,7 +254,7 @@ export function BurdenCard({
                   } as React.CSSProperties}
                 >
                   {option.value}
-                </button>
+                </AtlasTextButton>
               )
             })}
           </div>
@@ -300,11 +293,10 @@ export function BurdenCard({
       </div>
 
       <div className={`${compact ? 'mt-3 shrink-0 border-t border-white/10 pt-3' : 'mt-5'} flex items-center justify-between gap-3`}>
-        <button
-          type="button"
+        <AtlasTextButton
           onClick={onPreviousNavigate}
           disabled={!hasPrevious}
-          className={`atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center gap-2 rounded-[10px] border lowercase ${
+          className={`inline-flex items-center gap-2 lowercase ${
             compact ? 'px-3 py-1.5 text-[12px] md:text-[13px]' : 'px-3 py-1.5 text-[12px] md:text-[13px]'
           }`}
           style={{
@@ -315,14 +307,13 @@ export function BurdenCard({
         >
           <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] -rotate-90 opacity-90" />
           back
-        </button>
+        </AtlasTextButton>
         {hasNext ? (
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <AtlasTextButton
               onClick={onResumeNavigate}
               disabled={!canResume}
-              className={`atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center gap-2 rounded-[10px] border font-medium ${
+              className={`inline-flex items-center gap-2 font-medium ${
                 compact ? 'px-3.5 py-1.5 text-[12px] md:text-[13px]' : 'px-4 py-2 text-[13px] md:text-[14px]'
               }`}
               style={{
@@ -332,12 +323,11 @@ export function BurdenCard({
               } as React.CSSProperties}
             >
               <span>resume</span>
-            </button>
-            <button
-              type="button"
+            </AtlasTextButton>
+            <AtlasTextButton
               onClick={advanceToNextPrompt}
               disabled={!canAdvance}
-              className={`atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center gap-2 rounded-[10px] border font-medium ${
+              className={`inline-flex items-center gap-2 font-medium ${
                 compact ? 'px-3.5 py-1.5 text-[12px] md:text-[13px]' : 'px-4 py-2 text-[13px] md:text-[14px]'
               }`}
               style={{
@@ -349,7 +339,7 @@ export function BurdenCard({
             >
               <span>next</span>
               <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] rotate-180 opacity-90" />
-            </button>
+            </AtlasTextButton>
           </div>
         ) : (
           <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
@@ -384,12 +374,6 @@ export function SurveyProgressHeader({
 }) {
   const ratio = totalCount ? completedCount / totalCount : 0
   const useLightText = usesLightTextOnZCodeColor(accentColor)
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-1',hypothesisId:'H5',location:'SurveyChrome.tsx:309',message:'survey progress header state',data:{currentIndex,totalCount,completedCount,parentCode,pinToViewport,sectionCount:sectionProgress.length,ratio},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [completedCount, currentIndex, parentCode, pinToViewport, ratio, sectionProgress.length, totalCount])
 
   return (
     <div
@@ -573,22 +557,21 @@ export function BlockingSupportOverlay({
         </p>
         <p className="mt-3 text-[12px] text-[#8f8f8f] md:text-[13px]">{message}</p>
         <div className="mt-5 flex flex-wrap justify-center gap-3">
-          <a
+          <AtlasTextLink
             href={supportHref}
-            className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center justify-center rounded-[10px] border px-5 py-2 text-[13px] font-medium text-white md:text-[14px]"
+            className="inline-flex items-center justify-center px-5 py-2 text-[13px] font-medium text-white md:text-[14px]"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           >
             email {supportEmail}
-          </a>
+          </AtlasTextLink>
           {canDismiss && onDismiss ? (
-            <button
-              type="button"
+            <AtlasTextButton
               onClick={onDismiss}
-              className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center justify-center rounded-[10px] border px-5 py-2 text-[13px] font-medium text-white md:text-[14px]"
+              className="inline-flex items-center justify-center px-5 py-2 text-[13px] font-medium text-white md:text-[14px]"
               style={{ ['--button-border-color' as const]: '#ffffff35' } as React.CSSProperties}
             >
               {dismissLabel}
-            </button>
+            </AtlasTextButton>
           ) : null}
         </div>
       </div>

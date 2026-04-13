@@ -1,10 +1,12 @@
 import React from 'react'
 import AdminDataControlPanel from '@/features/atlas2026/admin/AdminDataControlPanel'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import AccountSettingsPanel from '@/features/atlas2026/singlepane/components/AccountSettingsPanel'
 import ContextPanels from '@/features/atlas2026/singlepane/components/ContextPanels'
 import ProfilePanel from '@/features/atlas2026/singlepane/components/ProfilePanel'
 import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLoadChart'
 import RadialLoadTableOverlay from '@/features/atlas2026/singlepane/components/RadialLoadTableOverlay'
+import RegulationTestsOverlay from '@/features/atlas2026/singlepane/components/RegulationTestsOverlay'
 import RoleMenus from '@/features/atlas2026/singlepane/components/RoleMenus'
 import RoutePlanningOverlay from '@/features/atlas2026/singlepane/components/RoutePlanningOverlay'
 import StripMapTimeline from '@/features/atlas2026/singlepane/components/StripMapTimeline'
@@ -14,7 +16,11 @@ import ZCodeTaskPane from '@/features/atlas2026/singlepane/components/ZCodeTaskP
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type { JourneyStationMarker, StabilizationPhase } from '@/features/atlas2026/singlepane/types'
 import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePaneData'
-import arrowGlyphIcon from '../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
+
+const PERSISTED_ACTION_LABELS = new Set([
+  'route planning',
+  'record navigator assessment'
+])
 
 export default function SinglePaneApp() {
   const {
@@ -43,22 +49,32 @@ export default function SinglePaneApp() {
     updateRouteLogTimelinePosition,
     updateRouteLogDate,
     updateTimelineStartDate,
+    updateTimelinePhaseDuration,
+    updateTimelineConfig,
     accountSettings,
+    partnerStationProfile,
     selectedIntake,
     hasSavedIntake,
     supervisorNavigatorCompetency,
+    regulationTestHistory,
+    isSavingRegulationTest,
+    regulationTestError,
     saveAccountSettings,
     saveEnrolleeIntake,
     saveRouteAssignment,
-    saveNavigatorCompetencyAssessment
+    saveNavigatorCompetencyAssessment,
+    saveNavigatorRegulationTest,
+    deleteNavigatorRegulationTestDraft
   } = useSinglePaneData()
   const [activeZCode, setActiveZCode] = React.useState<string | null>(null)
+  const [activeZCodeChildren, setActiveZCodeChildren] = React.useState<string[]>([])
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = React.useState(false)
   const [isRoutePlanningOpen, setIsRoutePlanningOpen] = React.useState(false)
+  const [isRegulationTestsOpen, setIsRegulationTestsOpen] = React.useState(false)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [lastContentMenu, setLastContentMenu] = React.useState('assigned enrollees')
-  const actionMenus = selectedRoleConfig.actionMenus || []
+  const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const standaloneSurveyUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '/service-capacity-survey'
     return new URL('service-capacity-survey', `${window.location.origin}${import.meta.env.BASE_URL}`).toString()
@@ -98,7 +114,7 @@ export default function SinglePaneApp() {
   const isPartnerRole = role === 'partner'
   const isAdminSection = role === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
   const isServiceCapacitySection = role === 'partner' && activeMenu === 'service capacity'
-  const isReady = isPartnerRole ? Boolean(selectedLoad) : Boolean(selectedEnrollee && timelineConfig)
+  const isReady = isPartnerRole ? true : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const journeyPhase = React.useMemo(() => deriveJourneyPhase(selectedLogs, 'regulation'), [selectedLogs])
   const showRoutePlanningQuickAction = journeyPhase === 'readiness'
@@ -115,9 +131,13 @@ export default function SinglePaneApp() {
     }))
     return [...journeyStationMarkers, ...suggestedMarkers]
   }, [journeyStationMarkers, routeCandidates, timelineConfig?.planStartIso])
-  const partnerStationBadgeCodes = React.useMemo(() => {
-    return derivePartnerBadgeCodes(selectedLoadBreakdown)
-  }, [selectedLoadBreakdown])
+  const partnerStationBadgeCodes = React.useMemo(() => derivePartnerBadgeCodes(selectedLoadBreakdown), [selectedLoadBreakdown])
+  const partnerContactName = React.useMemo(() => {
+    const firstName = partnerStationProfile?.primaryContactFirstName?.trim() || ''
+    const lastName = partnerStationProfile?.primaryContactLastName?.trim() || ''
+    const combined = `${firstName} ${lastName}`.trim()
+    return combined || accountSettings.fullName || 'not configured'
+  }, [accountSettings.fullName, partnerStationProfile?.primaryContactFirstName, partnerStationProfile?.primaryContactLastName])
 
   function handleMenuSelect(menu: string) {
     if (role === 'partner' && menu === 'service capacity') {
@@ -133,6 +153,9 @@ export default function SinglePaneApp() {
   }
 
   function handlePrimaryAction(label: string) {
+    if (!PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase())) {
+      return
+    }
     if (label.trim().toLowerCase() === 'route planning') {
       setActiveMenu('route planning')
       setIsRoutePlanningOpen(true)
@@ -214,7 +237,24 @@ export default function SinglePaneApp() {
             breakdown={selectedLoadBreakdown}
             onClose={() => setIsLoadTableOpen(false)}
           />
-          <ZCodeTaskPane zCode={activeZCode} onClose={() => setActiveZCode(null)} />
+          <RegulationTestsOverlay
+            isOpen={isRegulationTestsOpen}
+            enrollee={selectedEnrollee}
+            isSaving={isSavingRegulationTest}
+            saveError={regulationTestError}
+            history={regulationTestHistory}
+            onClose={() => setIsRegulationTestsOpen(false)}
+            onSave={saveNavigatorRegulationTest}
+            onDeleteDraft={deleteNavigatorRegulationTestDraft}
+          />
+          <ZCodeTaskPane
+            zCode={activeZCode}
+            childCodes={activeZCodeChildren}
+            onClose={() => {
+              setActiveZCode(null)
+              setActiveZCodeChildren([])
+            }}
+          />
           <div className="flex min-h-full flex-col gap-[10px]">
             {isLoading || !isReady ? (
               <LoadingShell />
@@ -230,19 +270,27 @@ export default function SinglePaneApp() {
                         my station
                       </small>
                       <div className="mt-1 text-[26px] font-medium text-white">
-                        {accountSettings.organization?.trim() || '[My Station]'}
+                        {partnerStationProfile?.stationName || accountSettings.organization?.trim() || '[My Station]'}
                       </div>
-                      <small className="mt-2 block text-[14px] text-white">Address: not configured</small>
-                      <small className="mt-1 block text-[14px] text-white">C: ###-###-####</small>
-                      <small className="mt-1 block text-[14px] text-white">E: {accountSettings.email || 'not configured'}</small>
+                      <small className="mt-2 block text-[14px] text-white">
+                        Org: {partnerStationProfile?.organizationName || accountSettings.organization || 'not configured'}
+                      </small>
+                      <small className="mt-1 block text-[14px] text-white">
+                        County: {partnerStationProfile?.countyName || 'not configured'}
+                      </small>
+                      <small className="mt-1 block text-[14px] text-white">Contact: {partnerContactName}</small>
+                      <small className="mt-1 block text-[14px] text-white">
+                        E: {partnerStationProfile?.primaryContactEmail || accountSettings.email || 'not configured'}
+                      </small>
                       <div className="mt-3">
-                        <button
-                          type="button"
-                          className="rounded-full border px-4 py-1 text-[13px] text-white"
-                          style={{ borderColor: '#ffffff40' }}
+                        <AtlasTextButton
+                          disabled
+                          className="px-4 py-1 text-[13px] text-white"
+                          style={{ ['--button-border-color' as const]: '#ffffff40', opacity: 0.5 } as React.CSSProperties}
+                          title="Referral action disabled until explicit persistence contract is defined."
                         >
                           refer
-                        </button>
+                        </AtlasTextButton>
                       </div>
                       <div className="mt-4 flex flex-wrap items-center gap-2">
                         {partnerStationBadgeCodes.map((code, index) => (
@@ -271,7 +319,10 @@ export default function SinglePaneApp() {
                     <div className="min-w-0 flex-1 basis-[520px]">
                       <ProfilePanel
                         enrollee={selectedEnrollee}
-                        onSelectZCode={setActiveZCode}
+                        onSelectZCode={(selection) => {
+                          setActiveZCode(selection.parentCode)
+                          setActiveZCodeChildren(selection.childCodes)
+                        }}
                         enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
                       />
                     </div>
@@ -281,8 +332,28 @@ export default function SinglePaneApp() {
                   </div>
                 )}
 
-                <div className="flex min-h-[46px] items-center justify-center">
-                  {!showRoutePlanningQuickAction && actionMenus.length > 0 ? (
+                <div className="flex items-center justify-center py-1">
+                  {role === 'navigator' ? (
+                    <div className="flex w-full flex-wrap items-center justify-center gap-2">
+                      <AtlasTextButton
+                        onClick={() => {
+                          setActiveMenu('route planning')
+                          setIsRoutePlanningOpen(true)
+                        }}
+                        className="relative px-5 pb-2 pt-2 text-[12px] uppercase tracking-[0.12em]"
+                        style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' } as React.CSSProperties}
+                      >
+                        route planning
+                      </AtlasTextButton>
+                      <AtlasTextButton
+                        onClick={() => setIsRegulationTestsOpen(true)}
+                        className="relative px-5 pb-2 pt-2 text-[12px] uppercase tracking-[0.12em]"
+                        style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' } as React.CSSProperties}
+                      >
+                        regulation tests
+                      </AtlasTextButton>
+                    </div>
+                  ) : !showRoutePlanningQuickAction && actionMenus.length > 0 ? (
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
                   ) : null}
                 </div>
@@ -299,15 +370,37 @@ export default function SinglePaneApp() {
                   </div>
                 ) : isServiceCapacitySection ? null : isPartnerRole ? (
                   <>
-                    <div className="mt-3 rounded-[22px] border px-5 py-5" style={{ borderColor: '#ffffff30', backgroundColor: '#020202' }}>
-                      <div className="mx-auto flex max-w-[760px] items-center justify-center gap-3">
-                        <div className="h-[3px] flex-1 rounded-full" style={{ backgroundColor: SP_COLORS.red }} />
-                        <img src={arrowGlyphIcon} alt="" aria-hidden className="h-8 w-8 -rotate-90 opacity-85" />
-                        <div className="h-[3px] flex-1 rounded-full" style={{ backgroundColor: SP_COLORS.yellow }} />
-                        <img src={arrowGlyphIcon} alt="" aria-hidden className="h-8 w-8 -rotate-90 opacity-85" />
-                        <div className="h-[3px] flex-1 rounded-full" style={{ backgroundColor: SP_COLORS.deepGreen }} />
+                    {timelineConfig ? (
+                      <>
+                        <div className="hidden min-h-[220px] flex-1 items-center pt-1 md:flex">
+                          <StripMapTimeline
+                            events={selectedLogs}
+                            timelineConfig={timelineConfig}
+                            stationMarkers={previewStationMarkers}
+                            highlightedStationName={highlightedStationName}
+                            onEventDelete={deleteRouteLog}
+                            onEventPositionChange={updateRouteLogTimelinePosition}
+                            onEventDateChange={updateRouteLogDate}
+                            onStartDateChange={updateTimelineStartDate}
+                          />
+                        </div>
+                        <div className="flex min-h-[220px] flex-1 items-start pt-1 md:hidden">
+                          <VerticalStripMapTimeline
+                            events={selectedLogs}
+                            timelineConfig={timelineConfig}
+                            stationMarkers={previewStationMarkers}
+                            highlightedStationName={highlightedStationName}
+                            onEventDelete={deleteRouteLog}
+                            onEventDateChange={updateRouteLogDate}
+                            onStartDateChange={updateTimelineStartDate}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-3 rounded-[18px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff28', color: SP_COLORS.muted }}>
+                        Timeline configuration is not available yet.
                       </div>
-                    </div>
+                    )}
                     <ContextPanels
                       role={role}
                       activeMenu={activeMenu}
@@ -333,6 +426,8 @@ export default function SinglePaneApp() {
                         onEventPositionChange={updateRouteLogTimelinePosition}
                         onEventDateChange={updateRouteLogDate}
                         onStartDateChange={updateTimelineStartDate}
+                        onExtendPhaseDuration={updateTimelinePhaseDuration}
+                        onTimelineConfigChange={updateTimelineConfig}
                       />
                     </div>
                     <div className="flex min-h-[220px] flex-1 items-start pt-1 md:hidden">
@@ -349,6 +444,8 @@ export default function SinglePaneApp() {
                         onEventDelete={deleteRouteLog}
                         onEventDateChange={updateRouteLogDate}
                         onStartDateChange={updateTimelineStartDate}
+                        onExtendPhaseDuration={updateTimelinePhaseDuration}
+                        onTimelineConfigChange={updateTimelineConfig}
                       />
                     </div>
                     <ContextPanels
@@ -421,4 +518,13 @@ function toCompetencyScore(rawCount: number, specializeCount: number) {
 function deriveJourneyPhase(logs: { phase: StabilizationPhase }[], fallback: StabilizationPhase): StabilizationPhase {
   if (!logs.length) return fallback
   return logs[logs.length - 1]?.phase || fallback
+}
+
+function derivePartnerBadgeCodes(loadBreakdown: { rows: { zCodeGroup: string }[] } | null) {
+  const parsed = (loadBreakdown?.rows || [])
+    .flatMap((row) => row.zCodeGroup.match(/\d+/g) || [])
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+  const unique = Array.from(new Set(parsed))
+  return unique.length ? unique.slice(0, 3) : ['56', '55', '57']
 }

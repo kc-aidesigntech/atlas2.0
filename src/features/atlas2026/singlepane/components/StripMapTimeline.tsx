@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { Group } from '@visx/group'
 import { LinePath } from '@visx/shape'
 import { scaleTime } from 'd3-scale'
 import LocalDateInputBox from './LocalDateInputBox'
+import StripMapControlOverlay from './StripMapControlOverlay'
 import type { JourneyStationMarker, RouteLogEvent, StabilizationPhase, TimelineConfig } from '../types'
+import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
 import milestoneArrowIcon from '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
 
@@ -18,6 +21,8 @@ interface StripMapTimelineProps {
   onEventPositionChange?: (logId: string, timelinePositionRatio: number | null) => void
   onEventDateChange?: (logId: string, nextTimestampIso: string) => void
   onStartDateChange?: (nextStartIso: string) => void
+  onExtendPhaseDuration?: (phase: StabilizationPhase) => void
+  onTimelineConfigChange?: (nextConfig: TimelineConfig) => void
 }
 
 interface PositionedEvent {
@@ -123,7 +128,9 @@ export default function StripMapTimeline({
   onEventDelete,
   onEventPositionChange,
   onEventDateChange,
-  onStartDateChange
+  onStartDateChange,
+  onExtendPhaseDuration,
+  onTimelineConfigChange
 }: StripMapTimelineProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -132,6 +139,7 @@ export default function StripMapTimeline({
   const [dragState, setDragState] = useState<{ eventId: string; ratio: number; hasMoved: boolean } | null>(null)
   const [dateEditor, setDateEditor] = useState<DateEditorState | null>(null)
   const [dateEditorError, setDateEditorError] = useState<string | null>(null)
+  const [isControlOverlayOpen, setIsControlOverlayOpen] = useState(false)
   const height = 580
   const baselineY = 338
   const marginX = 90
@@ -141,6 +149,7 @@ export default function StripMapTimeline({
   const editorHeight = 148
   const editorOffsetX = 20
   const editorOffsetY = 14
+  const phaseLabelY = baselineY + 76
 
   useEffect(() => {
     const node = wrapperRef.current
@@ -165,10 +174,12 @@ export default function StripMapTimeline({
     return Number.isFinite(parsed.getTime()) ? parsed : new Date()
   }, [timelineConfig.planStartIso])
 
+  const normalizedTimelineConfig = useMemo(() => normalizeTimelineConfig(timelineConfig), [timelineConfig])
+
   const safePlanEnd = useMemo(() => {
-    const safeDuration = Math.min(timelineConfig.maxDurationMonths || 12, Math.max(1, timelineConfig.durationMonths || 6))
+    const safeDuration = normalizedTimelineConfig.durationMonths
     return addMonths(safePlanStart, safeDuration)
-  }, [safePlanStart, timelineConfig.durationMonths, timelineConfig.maxDurationMonths])
+  }, [normalizedTimelineConfig.durationMonths, safePlanStart])
 
   const timeScale = useMemo(() => {
     return scaleTime().domain([safePlanStart, safePlanEnd]).range([marginX, width - marginX])
@@ -185,40 +196,22 @@ export default function StripMapTimeline({
   const suggestedMarkers = useMemo(() => stationMarkers.filter((marker) => marker.markerType === 'suggested'), [stationMarkers])
 
   const readinessSegment = useMemo(() => {
-    const readinessIndex = timelineConfig.gates.findIndex((gate) => gate.phase === 'readiness')
-    const readinessGate = readinessIndex >= 0 ? timelineConfig.gates[readinessIndex] : null
-    const nextGate = readinessIndex >= 0 ? timelineConfig.gates[readinessIndex + 1] : null
+    const readinessIndex = normalizedTimelineConfig.gates.findIndex((gate) => gate.phase === 'readiness')
+    const readinessGate = readinessIndex >= 0 ? normalizedTimelineConfig.gates[readinessIndex] : null
+    const nextGate = readinessIndex >= 0 ? normalizedTimelineConfig.gates[readinessIndex + 1] : null
     if (!readinessGate || !nextGate) return null
     return {
       xStart: Number(timeScale(addMonths(safePlanStart, readinessGate.monthOffset || 0))),
       xEnd: Number(timeScale(addMonths(safePlanStart, nextGate.monthOffset || 0)))
     }
-  }, [safePlanStart, timeScale, timelineConfig.gates])
+  }, [normalizedTimelineConfig.gates, safePlanStart, timeScale])
 
   const phaseSegments = useMemo(() => {
-    const definition = [
-      { phase: 'regulation' as const, defaultOffset: 0, label: 'regulation' },
-      { phase: 'readiness' as const, defaultOffset: 2, label: 'readiness' },
-      { phase: 'renewal' as const, defaultOffset: 4, label: 'renewal' }
-    ]
-    return definition.map((entry, index) => {
-      const configuredGate = timelineConfig.gates.find((gate) => gate.phase === entry.phase)
-      const nextConfigured = definition[index + 1]
-        ? timelineConfig.gates.find((gate) => gate.phase === definition[index + 1].phase)
-        : null
-      const startOffset = configuredGate?.monthOffset ?? entry.defaultOffset
-      const endOffset = nextConfigured?.monthOffset ?? timelineConfig.durationMonths
-      return {
-        phase: entry.phase,
-        label: configuredGate?.label || entry.label,
-        startOffset,
-        endOffset
-      }
-    })
-  }, [timelineConfig.durationMonths, timelineConfig.gates])
+    return buildTimelinePhaseSegments(normalizedTimelineConfig)
+  }, [normalizedTimelineConfig])
 
   const incrementMarkers = useMemo(() => {
-    const configuredMilestones = timelineConfig.durationMonths > 6 ? [60, 120, 180, 240, 300, 360] : [60, 120, 180]
+    const configuredMilestones = normalizedTimelineConfig.durationMonths > 6 ? [60, 120, 180, 240, 300, 360] : [60, 120, 180]
     return configuredMilestones
       .map((dayOffset) => {
         const incrementDate = addDays(safePlanStart, dayOffset)
@@ -230,7 +223,7 @@ export default function StripMapTimeline({
         }
       })
       .filter((marker) => marker.incrementDate.getTime() < safePlanEnd.getTime())
-  }, [safePlanEnd, safePlanStart, timeScale, timelineConfig.durationMonths])
+  }, [normalizedTimelineConfig.durationMonths, safePlanEnd, safePlanStart, timeScale])
 
   function getEventX(event: RouteLogEvent, index: number) {
     if (typeof event.timelinePositionRatio === 'number' && Number.isFinite(event.timelinePositionRatio)) {
@@ -294,16 +287,8 @@ export default function StripMapTimeline({
   }
 
   function openStartDateEditor() {
-    if (!onStartDateChange) return
-    setDateEditorError(null)
-    setDateEditor({
-      kind: 'start',
-      anchorX: marginX,
-      anchorY: baselineY + 22,
-      label: 'timeline start date',
-      value: formatDateInputValue(timelineConfig.planStartIso),
-      currentIso: timelineConfig.planStartIso
-    })
+    if (!onTimelineConfigChange && !onStartDateChange) return
+    setIsControlOverlayOpen(true)
   }
 
   function openEventDateEditor(eventRecord: RouteLogEvent, x: number, y: number) {
@@ -421,21 +406,27 @@ export default function StripMapTimeline({
           />
         </div>
       ) : null}
+      <StripMapControlOverlay
+        isOpen={isControlOverlayOpen}
+        timelineConfig={normalizedTimelineConfig}
+        onClose={() => setIsControlOverlayOpen(false)}
+        onSave={(nextConfig) => {
+          onTimelineConfigChange?.(nextConfig)
+          if (!onTimelineConfigChange && onStartDateChange && nextConfig.planStartIso !== normalizedTimelineConfig.planStartIso) {
+            onStartDateChange(nextConfig.planStartIso)
+          }
+          setIsControlOverlayOpen(false)
+        }}
+      />
       {showRoutePlanningQuickAction ? (
         <div className="absolute right-4 top-4 z-20">
-          <button
-            type="button"
+          <AtlasTextButton
             onClick={onRoutePlanningClick}
-            className="relative rounded-full border px-5 pb-2 pt-2 text-[12px] uppercase tracking-[0.12em]"
-            style={{ borderColor: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' }}
+            className="px-5 pb-2 pt-2 text-[12px] uppercase tracking-[0.12em]"
+            style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' } as React.CSSProperties}
           >
-            <span
-              aria-hidden
-              className="absolute left-3 right-3 top-1 block h-[1px]"
-              style={{ backgroundColor: SP_COLORS.white }}
-            />
             route planning
-          </button>
+          </AtlasTextButton>
         </div>
       ) : null}
       <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
@@ -444,8 +435,8 @@ export default function StripMapTimeline({
 
           {/* phase corridor segments driven by dynamic gates */}
           {phaseSegments.map((segment) => {
-            const startDate = addMonths(new Date(timelineConfig.planStartIso), segment.startOffset || 0)
-            const endDate = addMonths(new Date(timelineConfig.planStartIso), segment.endOffset || 0)
+            const startDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.startOffset || 0)
+            const endDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.endOffset || 0)
             const xStart = Number(timeScale(startDate))
             const xEnd = Number(timeScale(endDate))
             return (
@@ -461,7 +452,7 @@ export default function StripMapTimeline({
                 />
                 <text
                   x={(xStart + xEnd) / 2}
-                  y={baselineY + 52}
+                  y={phaseLabelY}
                   textAnchor="middle"
                   fill={PHASE_COLORS[segment.phase]}
                   fontFamily="Helvetica, Arial, sans-serif"
@@ -469,6 +460,26 @@ export default function StripMapTimeline({
                 >
                   {segment.label}
                 </text>
+                {onExtendPhaseDuration ? (
+                  <g
+                    transform={`translate(${Math.min(width - 34, Math.max(34, xStart + 22))}, ${baselineY - 54})`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => onExtendPhaseDuration(segment.phase)}
+                  >
+                    <title>{`extend ${segment.label} by 30 days`}</title>
+                    <rect x="-24" y="-11" width="48" height="22" rx="11" fill="#040404" stroke={PHASE_COLORS[segment.phase]} strokeWidth="1.1" />
+                    <text
+                      y="4"
+                      textAnchor="middle"
+                      fill={PHASE_COLORS[segment.phase]}
+                      fontFamily="Helvetica, Arial, sans-serif"
+                      fontSize="12"
+                      fontWeight={700}
+                    >
+                      +30d
+                    </text>
+                  </g>
+                ) : null}
               </g>
             )
           })}
@@ -478,13 +489,13 @@ export default function StripMapTimeline({
             style={{ cursor: onStartDateChange ? 'pointer' : 'default' }}
             onClick={openStartDateEditor}
           >
-            <title>{`${formatDateLabel(timelineConfig.planStartIso)}${onStartDateChange ? ' - click to edit' : ''}`}</title>
+            <title>{`${formatDateLabel(normalizedTimelineConfig.planStartIso)}${onStartDateChange ? ' - click to edit' : ''}`}</title>
             <circle r="10.5" fill="#000000" stroke={SP_COLORS.white} strokeWidth="2.2" />
             <text x="-10" y="36" fill={SP_COLORS.white} fontFamily="Helvetica, Arial, sans-serif" fontSize="18" fontWeight={700}>
               start
             </text>
             <text x="-10" y="58" fill={SP_COLORS.yellow} fontFamily="Helvetica, Arial, sans-serif" fontSize="18">
-              {formatDateLabel(timelineConfig.planStartIso)}
+              {formatDateLabel(normalizedTimelineConfig.planStartIso)}
             </text>
           </g>
 

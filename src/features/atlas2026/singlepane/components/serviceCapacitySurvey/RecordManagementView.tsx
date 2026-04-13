@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { Trash2 } from 'lucide-react'
-import { AtlasInsetCard, AtlasPanel, AtlasPlusButton, AtlasStatusPill } from '../../../components/AtlasPrimitives'
+import { AtlasIconButton, AtlasInsetCard, AtlasPanel, AtlasPlusButton, AtlasStatusPill, AtlasTextButton } from '../../../components/AtlasPrimitives'
 import { SP_COLORS } from '../../theme'
 import type { PartnerServiceCapacitySubmissionRecord } from '../../types'
 import { formatDateTimeLabel } from './draft'
@@ -30,12 +30,6 @@ export function RecordManagementView({
   onEditDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
   onDeleteDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
 }) {
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-1',hypothesisId:'H3',location:'RecordManagementView.tsx:33',message:'record management render state',data:{recordCount:records.length,hasPersistedDraft,isResolvingResumeDraft,resumeDraftError:resumeDraftError??null,resumeDraftRecordId:resumeDraftRecord?.id??null,resumeDraftPersistedAtLabel:resumeDraftPersistedAtLabel??null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [hasPersistedDraft, isResolvingResumeDraft, records.length, resumeDraftError, resumeDraftPersistedAtLabel, resumeDraftRecord?.id])
-
   return (
     <AtlasPanel
       kicker="partner service capacity"
@@ -78,15 +72,14 @@ export function RecordManagementView({
                 )}
               </div>
               {hasPersistedDraft && !resumeDraftError ? (
-                <button
-                  type="button"
+                <AtlasTextButton
                   onClick={onResumeDraft}
                   disabled={isResolvingResumeDraft}
-                  className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border px-4 py-2 text-[13px] font-medium transition-[box-shadow,border-color] duration-150 ease-out hover:border-white/50 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 md:text-[14px]"
+                  className="px-4 py-2 text-[13px] font-medium md:text-[14px]"
                   style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
                 >
                   resume draft
-                </button>
+                </AtlasTextButton>
               ) : null}
             </div>
           </AtlasInsetCard>
@@ -103,10 +96,9 @@ export function RecordManagementView({
                     <div className="flex flex-wrap items-center gap-2">
                       {record.status === 'draft' ? (
                         <>
-                          <button
-                            type="button"
+                          <AtlasIconButton
                             onClick={() => onEditDraftRecord(record)}
-                            className="atlas-sign-button atlas-sign-button-icon [--button-line-inset:5px] [--button-radius:8px] inline-flex h-7 w-7 items-center justify-center rounded-[8px] border transition-[box-shadow,border-color,background-color] duration-150 ease-out hover:border-white/50 hover:bg-white/5 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_14px_rgba(255,255,255,0.08)]"
+                            className="h-7 w-7"
                             style={{ ['--button-border-color' as const]: '#ffffff2f', color: SP_COLORS.white } as React.CSSProperties}
                             aria-label={`Edit draft record ${record.id}`}
                             title="Edit draft"
@@ -115,17 +107,16 @@ export function RecordManagementView({
                               <path d="M4 20h4l10-10-4-4L4 16v4Z" />
                               <path d="m12 6 4 4" />
                             </svg>
-                          </button>
-                          <button
-                            type="button"
+                          </AtlasIconButton>
+                          <AtlasIconButton
                             onClick={() => onDeleteDraftRecord(record)}
-                            className="atlas-sign-button atlas-sign-button-icon [--button-line-inset:5px] [--button-radius:8px] inline-flex h-7 w-7 items-center justify-center rounded-[8px] border transition-[box-shadow,border-color,background-color] duration-150 ease-out hover:border-red-400/70 hover:bg-red-500/10 hover:shadow-[0_0_0_1px_rgba(238,53,46,0.18),0_0_14px_rgba(238,53,46,0.08)]"
+                            className="h-7 w-7"
                             style={{ ['--button-border-color' as const]: '#ffffff2f', color: SP_COLORS.red } as React.CSSProperties}
                             aria-label={`Delete draft record ${record.id}`}
                             title="Delete draft"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          </AtlasIconButton>
                         </>
                       ) : null}
                       <StatusPill status={record.status} />

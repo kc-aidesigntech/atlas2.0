@@ -1,4 +1,5 @@
 import React from 'react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { EnrolleeProfile, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
@@ -46,14 +47,13 @@ export default function RoutePlanningOverlay({
               Matching partners by current Z-code pressure profile: {enrollee.zCodeTags.join(', ') || 'none assigned'}
             </small>
           </div>
-          <button
-            type="button"
+          <AtlasTextButton
             onClick={onClose}
-            className="rounded-full border px-3 py-1 text-[12px] text-white"
-            style={{ borderColor: SP_COLORS.white }}
+            className="px-3 py-1 text-[12px] text-white"
+            style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           >
             close
-          </button>
+          </AtlasTextButton>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[0.58fr_1fr_0.78fr]">
@@ -119,7 +119,7 @@ export default function RoutePlanningOverlay({
                           </small>
                           <div className="text-[15px] font-medium text-white">{candidate.stationName}</div>
                           <small className="text-[12px] text-[#bdbdbd]">
-                            matched specialties: {candidate.matchedZCodes.join(', ') || 'none'}
+                            weighted Z-code match: {candidate.matchedZCodes.join(', ') || 'none'}
                           </small>
                           {isAssigned ? (
                             <small className="mt-1 block text-[11px]" style={{ color: SP_COLORS.deepGreen }}>
@@ -128,24 +128,23 @@ export default function RoutePlanningOverlay({
                           ) : null}
                         </div>
                         <div className="flex items-center gap-2">
-                          <small className="text-[12px] text-white">score {candidate.score.toFixed(1)}</small>
-                          <button
-                            type="button"
+                          <small className="text-[12px] text-white">score {formatMetricValue(candidate.score)}</small>
+                          <AtlasTextButton
                             onClick={() => onSelectCandidate(candidate.stationId)}
-                            className="rounded-full border px-3 py-1 text-[11px] text-white"
+                            className="px-3 py-1 text-[11px] text-white"
                             style={{
-                              borderColor: isSelected ? SP_COLORS.yellow : '#ffffff35',
+                              ['--button-border-color' as const]: isSelected ? SP_COLORS.yellow : '#ffffff35',
                               color: isSelected ? SP_COLORS.yellow : SP_COLORS.white
-                            }}
+                            } as React.CSSProperties}
                           >
                             {isSelected ? 'focused' : 'focus'}
-                          </button>
+                          </AtlasTextButton>
                         </div>
                       </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        <MetricChip label="specialties" value={candidate.specializeHits} color={SP_COLORS.deepGreen} />
-                        <MetricChip label="conflicts" value={candidate.conflictHits} color={SP_COLORS.orange} />
-                        <MetricChip label="interference" value={candidate.interfereHits} color={SP_COLORS.red} />
+                        <MetricChip label="matched z-codes" value={candidate.matchedZCodeCount} color={SP_COLORS.deepGreen} />
+                        <MetricChip label="need units" value={candidate.needUnitsMatched} color={SP_COLORS.yellow} />
+                        <MetricChip label="partner burden" value={candidate.partnerBurdenTotal} color={SP_COLORS.orange} />
                       </div>
                     </div>
                   )
@@ -181,14 +180,13 @@ export default function RoutePlanningOverlay({
                     </li>
                   </ul>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
+                    <AtlasTextButton
                       onClick={() => onCommitCandidate(selectedCandidate)}
-                      className="rounded-full border px-4 py-2 text-[12px] font-medium text-white"
-                      style={{ borderColor: SP_COLORS.yellow, color: SP_COLORS.yellow }}
+                      className="px-4 py-2 text-[12px] font-medium text-white"
+                      style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
                     >
                       {selectedCandidate.stationId === assignedCandidateId ? 'saved to route context' : 'save to route context'}
-                    </button>
+                    </AtlasTextButton>
                   </div>
                 </div>
 
@@ -202,7 +200,7 @@ export default function RoutePlanningOverlay({
                         </span>
                       ))
                     ) : (
-                      <span className="text-[12px] text-[#bdbdbd]">No specialty match captured yet.</span>
+                      <span className="text-[12px] text-[#bdbdbd]">No completed burden-score match is captured yet.</span>
                     )}
                   </div>
                 </div>
@@ -231,14 +229,12 @@ function MetricChip({ label, value, color }: { label: string; value: number; col
 }
 
 function buildReasonLine(candidate: RouteCandidateRecord) {
-  if (candidate.specializeHits > 0 && candidate.conflictHits === 0 && candidate.interfereHits === 0) {
-    return `Clear specialty match across ${candidate.specializeHits} active Z-code group${candidate.specializeHits === 1 ? '' : 's'} with no recorded interference.`
+  if (candidate.matchedZCodeCount > 0) {
+    return `Weighted rank combines ${candidate.matchedZCodeCount} matched Z-code${candidate.matchedZCodeCount === 1 ? '' : 's'} across ${candidate.needUnitsMatched} enrollee need unit${candidate.needUnitsMatched === 1 ? '' : 's'} and ${formatMetricValue(candidate.partnerBurdenTotal)} partner burden point${candidate.partnerBurdenTotal === 1 ? '' : 's'}.`
   }
-  if (candidate.conflictHits > 0) {
-    return `Strong specialty coverage is present, but ${candidate.conflictHits} overlap${candidate.conflictHits === 1 ? '' : 's'} include both specialize and interfere signals.`
-  }
-  if (candidate.interfereHits > 0) {
-    return `This option still carries ${candidate.interfereHits} interference signal${candidate.interfereHits === 1 ? '' : 's'}, so it is ranked more cautiously.`
-  }
-  return 'This partner remains in view, but the current match is weaker than the leading options.'
+  return 'This partner remains in view, but no completed burden-score match is currently available for the enrollee Z-codes driving this route.'
+}
+
+function formatMetricValue(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }

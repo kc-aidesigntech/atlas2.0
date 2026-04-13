@@ -5,8 +5,13 @@ import { SP_COLORS } from '../theme'
 
 interface ProfilePanelProps {
   enrollee: EnrolleeProfile
-  onSelectZCode?: (zCode: string) => void
+  onSelectZCode?: (selection: { parentCode: string; childCodes: string[] }) => void
   enrollmentStartLabel?: string
+}
+
+interface ParentZCodeGroup {
+  parentCode: string
+  childCodes: string[]
 }
 
 function getInitials(fullName: string) {
@@ -31,9 +36,42 @@ function createFallbackAvatar(fullName: string) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
+function normalizeZCode(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.toLowerCase().startsWith('z') ? trimmed.toLowerCase() : `z${trimmed.toLowerCase()}`
+}
+
+function getParentZCode(value: string) {
+  const normalized = normalizeZCode(value)
+  if (!normalized) return null
+  const group = normalized.match(/^z(\d{2})/)
+  if (!group) return null
+  return `z${group[1]}`
+}
+
+function buildParentZCodeGroups(tags: string[]): ParentZCodeGroup[] {
+  const grouped = new Map<string, string[]>()
+  for (const tag of tags) {
+    const normalized = normalizeZCode(tag)
+    const parentCode = getParentZCode(tag)
+    if (!normalized || !parentCode) continue
+    if (!grouped.has(parentCode)) {
+      grouped.set(parentCode, [normalized])
+      continue
+    }
+    const existing = grouped.get(parentCode)!
+    if (!existing.includes(normalized)) {
+      existing.push(normalized)
+    }
+  }
+  return Array.from(grouped.entries()).map(([parentCode, childCodes]) => ({ parentCode, childCodes }))
+}
+
 export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartLabel }: ProfilePanelProps) {
   const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatar(enrollee.fullName), [enrollee.fullName])
   const avatarSrc = enrollee.avatarUrl || fallbackAvatarSrc
+  const parentGroups = React.useMemo(() => buildParentZCodeGroups(enrollee.zCodeTags), [enrollee.zCodeTags])
 
   return (
     <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
@@ -54,19 +92,24 @@ export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartL
           />
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-[10px]">
-          {enrollee.zCodeTags.map((tag, index) => {
-            const bgColor = getZCodeParentColor(tag) || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]
+          {parentGroups.map((group, index) => {
+            const bgColor = getZCodeParentColor(group.parentCode) || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]
             const useLightText = usesLightTextOnZCodeColor(bgColor)
             return (
               <span
-                key={tag}
+                key={group.parentCode}
                 className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[30px] font-bold ${
                   useLightText ? 'text-white' : 'text-black'
                 }`}
                 style={{ backgroundColor: bgColor }}
-                onClick={() => onSelectZCode?.(tag)}
+                onClick={() =>
+                  onSelectZCode?.({
+                    parentCode: group.parentCode,
+                    childCodes: group.childCodes
+                  })
+                }
               >
-                {tag.replace(/^z/i, '')}
+                {group.parentCode.replace(/^z/i, '')}
               </span>
             )
           })}

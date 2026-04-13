@@ -122,22 +122,74 @@ export function AtlasPlusButton({
   className?: string
 }) {
   return (
-    <button
-      type="button"
+    <AtlasIconButton
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
       title={title ?? label}
-      className={cn(
-        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-10 w-10 items-center justify-center rounded-[10px] border text-[24px] font-light transition-[box-shadow,border-color,opacity] duration-150 ease-out hover:border-white/50 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60',
-        className
-      )}
+      className={cn('h-10 w-10 text-[24px] font-light', className)}
       style={{ ['--button-border-color' as const]: 'var(--atlas-signal-yellow)', color: 'var(--atlas-signal-yellow)' } as React.CSSProperties}
     >
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.9" strokeLinecap="round">
         <path d="M12 5v14" />
         <path d="M5 12h14" />
       </svg>
-    </button>
+    </AtlasIconButton>
   )
 }
+
+export const AtlasTextButton = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(function AtlasTextButton(
+  { className, children, type = 'button', ...props },
+  ref
+) {
+  return (
+    <button
+      ref={ref}
+      type={type}
+      {...props}
+      className={cn(
+        'atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
+        className
+      )}
+    >
+      {children}
+    </button>
+  )
+})
+
+export const AtlasIconButton = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(function AtlasIconButton(
+  { className, children, type = 'button', ...props },
+  ref
+) {
+  return (
+    <button
+      ref={ref}
+      type={type}
+      {...props}
+      className={cn(
+        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-8 w-8 items-center justify-center rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
+        className
+      )}
+    >
+      {children}
+    </button>
+  )
+})
+
+export const AtlasTextLink = React.forwardRef<HTMLAnchorElement, React.AnchorHTMLAttributes<HTMLAnchorElement>>(function AtlasTextLink(
+  { className, children, ...props },
+  ref
+) {
+  return (
+    <a
+      ref={ref}
+      {...props}
+      className={cn(
+        'atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)]',
+        className
+      )}
+    >
+      {children}
+    </a>
+  )
+})

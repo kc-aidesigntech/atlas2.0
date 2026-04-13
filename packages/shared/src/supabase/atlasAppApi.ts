@@ -84,9 +84,9 @@ export interface RouteCandidateDetailsRecord {
   partnerId: string;
   stationName: string;
   score: number;
-  specializeHits: number;
-  conflictHits: number;
-  interfereHits: number;
+  matchedZCodeCount: number;
+  needUnitsMatched: number;
+  partnerBurdenTotal: number;
   matchedZCodes: string[];
 }
 
@@ -472,9 +472,9 @@ export async function fetchSinglePaneRouteCandidates(
       partnerId: row.partner_id,
       stationName: row.station_name,
       score: Number(row.score || 0),
-      specializeHits: Number(row.specialize_hits || 0),
-      conflictHits: Number(row.conflict_hits || 0),
-      interfereHits: Number(row.interfere_hits || 0),
+      matchedZCodeCount: Number(row.matched_z_code_count || 0),
+      needUnitsMatched: Number(row.need_units_matched || 0),
+      partnerBurdenTotal: Number(row.partner_burden_total || 0),
       matchedZCodes: asStringArray(row.matched_z_codes),
     }),
   );

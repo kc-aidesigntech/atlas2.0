@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AccountSettings, AtlasRole } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
@@ -64,14 +65,13 @@ export default function AccountSettingsPanel({
               Switch roles, define operator basics, and keep core access controls in one place.
             </small>
           </div>
-          <button
-            type="button"
+          <AtlasTextButton
             onClick={onClose}
-            className="rounded-full border px-3 py-1 text-[12px] text-white"
-            style={{ borderColor: SP_COLORS.white }}
+            className="px-3 py-1 text-[12px] text-white"
+            style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           >
             close
-          </button>
+          </AtlasTextButton>
         </div>
 
         <div className="space-y-4">
@@ -149,22 +149,20 @@ export default function AccountSettingsPanel({
         </div>
 
         <div className="mt-auto flex items-center justify-end gap-3 pt-5">
-          <button
-            type="button"
+          <AtlasTextButton
             onClick={onClose}
-            className="rounded-full border px-5 py-2 text-[13px] font-medium text-white"
-            style={{ borderColor: '#ffffff30' }}
+            className="px-5 py-2 text-[13px] font-medium text-white"
+            style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
           >
             cancel
-          </button>
-          <button
-            type="button"
+          </AtlasTextButton>
+          <AtlasTextButton
             onClick={handleSave}
-            className="rounded-full border px-5 py-2 text-[13px] font-medium text-white"
-            style={{ borderColor: SP_COLORS.white }}
+            className="px-5 py-2 text-[13px] font-medium text-white"
+            style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           >
             save account settings
-          </button>
+          </AtlasTextButton>
         </div>
       </div>
     </div>

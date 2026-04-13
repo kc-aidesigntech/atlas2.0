@@ -10,6 +10,7 @@ import type {
   EnrolleeProfile,
   EnrollmentRequestRecord,
   NavigatorCompetencyAssessmentRecord,
+  PartnerStationProfile,
   RoleMenuConfig,
   RouteAssignmentRecord,
   RouteLogEvent,
@@ -23,6 +24,7 @@ import {
   loadEnrollmentRequests,
   loadNavigatorCompetencyAssessments,
   loadPartnerRadialLoadBreakdown,
+  loadPartnerStationProfile,
   loadRouteAssignments,
   loadSinglePaneBootstrap
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
@@ -42,6 +44,7 @@ export interface SinglePaneBootstrapState {
   partnerLoad: DomainLoad | null
   partnerLoadBreakdown: DomainLoadBreakdown | null
   accountSettings: AccountSettings
+  partnerStationProfile: PartnerStationProfile | null
   intakeFormsByEnrolleeId: Record<string, EnrolleeIntakeRecord>
   routeAssignmentsByEnrolleeId: Record<string, RouteAssignmentRecord>
   navigatorCompetencyAssessments: NavigatorCompetencyAssessmentRecord[]
@@ -82,6 +85,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
     partnerLoad: null,
     partnerLoadBreakdown: null,
     accountSettings: DEFAULT_ACCOUNT_SETTINGS,
+    partnerStationProfile: null,
     intakeFormsByEnrolleeId: {},
     routeAssignmentsByEnrolleeId: {},
     navigatorCompetencyAssessments: [],
@@ -121,6 +125,8 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
         if (!isMounted) return
 
         const partnerViewLoad = derivePartnerRadialLoad(partnerViewLoadBreakdown)
+        const stationProfile = await loadPartnerStationProfile(nextAccountSettings.organization)
+        if (!isMounted) return
 
         setState((current) => ({
           ...current,
@@ -138,6 +144,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
           partnerLoad: partnerViewLoad,
           partnerLoadBreakdown: partnerViewLoadBreakdown,
           accountSettings: nextAccountSettings,
+          partnerStationProfile: stationProfile,
           intakeFormsByEnrolleeId: savedIntakes,
           routeAssignmentsByEnrolleeId: savedRouteAssignments,
           navigatorCompetencyAssessments: savedNavigatorAssessments,

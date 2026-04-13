@@ -103,9 +103,9 @@ export interface RouteCandidateRecord {
   partnerId: string
   stationName: string
   score: number
-  specializeHits: number
-  conflictHits: number
-  interfereHits: number
+  matchedZCodeCount: number
+  needUnitsMatched: number
+  partnerBurdenTotal: number
   matchedZCodes: string[]
 }
 
@@ -180,6 +180,19 @@ export interface AccountSettings {
   enabledRoles: AtlasRole[]
 }
 
+export interface PartnerStationProfile {
+  partnerId: string
+  organizationName: string
+  stationId: string | null
+  stationName: string | null
+  countyName: string | null
+  primaryContactFirstName: string | null
+  primaryContactLastName: string | null
+  primaryContactEmail: string | null
+  capacityTotal: number | null
+  capacityAvailable: number | null
+}
+
 export interface EnrolleeIntakeRecord {
   enrolleeId: string
   fullName: string
@@ -220,4 +233,49 @@ export interface SupervisorNavigatorCompetencySummary {
   assessmentCount: number
   weightedRollingAverage: number
   lastAssessmentAtIso: string | null
+}
+
+export type RegulationTestType = 'mh_sca' | 'svs'
+export type RegulationTestSubmissionStatus = 'draft' | 'completed'
+
+export interface RegulationTestPrompt {
+  id: string
+  label: string
+  description: string
+}
+
+export interface RegulationTestAnswer {
+  promptId: string
+  promptLabel: string
+  responseValue: number | null
+}
+
+export interface RegulationTestSubmissionRecord {
+  id: string
+  draftKey: string
+  enrolleeId: string
+  enrollmentId: string | null
+  testType: RegulationTestType
+  status: RegulationTestSubmissionStatus
+  submittedAtIso: string
+  updatedAtIso: string
+  enrolleeName: string
+  enrolleeCaseId: string
+  enrolleeEmail: string
+  score: number | null
+  passThreshold: number
+  passed: boolean | null
+  answers: RegulationTestAnswer[]
+}
+
+export interface RegulationTestSubmissionInput {
+  draftKey?: string
+  enrolleeId: string
+  enrollmentId?: string | null
+  testType: RegulationTestType
+  status: RegulationTestSubmissionStatus
+  enrolleeName: string
+  enrolleeCaseId: string
+  enrolleeEmail: string
+  answers: RegulationTestAnswer[]
 }

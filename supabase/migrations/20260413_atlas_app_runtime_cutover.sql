@@ -449,12 +449,13 @@ values
     'timeline_defaults',
     '2026-v1',
     '{
-      "durationMonths": 9,
+      "durationMonths": 6,
       "maxDurationMonths": 12,
       "gates": [
         { "id": "gate-regulation", "label": "regulation", "phase": "regulation", "monthOffset": 0 },
-        { "id": "gate-readiness", "label": "readiness", "phase": "readiness", "monthOffset": 3 },
-        { "id": "gate-renewal", "label": "renewal", "phase": "renewal", "monthOffset": 6 }
+        { "id": "gate-readiness", "label": "readiness", "phase": "readiness", "monthOffset": 2 },
+        { "id": "gate-renewal", "label": "renewal", "phase": "renewal", "monthOffset": 4 },
+        { "id": "gate-plan-end", "label": "plan end", "phase": "renewal", "monthOffset": 6 }
       ]
     }'::jsonb
   ),

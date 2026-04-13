@@ -1,5 +1,6 @@
 import React from 'react'
 import { Menu } from 'lucide-react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AtlasRole, EnrolleeProfile, RoleMenuConfig } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
@@ -25,7 +26,7 @@ export default function TopNav({
   onOpenAccountSettings
 }: TopNavProps) {
   const firstMenu = roleConfig.topMenus[0] || ''
-  const showEnrolleeSelector = role !== 'navigator' && firstMenu === 'assigned enrollees' && enrollees.length > 0
+  const showEnrolleeSelector = firstMenu === 'assigned enrollees' && enrollees.length > 0
 
   return (
     <header className="border-b bg-black" style={{ borderColor: '#ffffff70' }}>
@@ -34,15 +35,14 @@ export default function TopNav({
           <small className="text-[15px] font-medium tracking-[0.08em] text-white">ATLAS</small>
           <small className="text-[11px] uppercase tracking-[0.16em] text-[#b9b9b9]">{role}</small>
         </div>
-        <button
-          type="button"
+        <AtlasTextButton
           onClick={onOpenAccountSettings}
-          className="inline-flex items-center gap-2 rounded-full border px-4 py-1 text-[13px] text-white"
-          style={{ borderColor: SP_COLORS.border, backgroundColor: '#000000' }}
+          className="inline-flex items-center gap-2 px-4 py-1 text-[13px] text-white"
+          style={{ ['--button-border-color' as const]: SP_COLORS.border, backgroundColor: '#000000' } as React.CSSProperties}
         >
           <span>Account Settings</span>
           <Menu size={18} color={SP_COLORS.white} />
-        </button>
+        </AtlasTextButton>
       </div>
 
       <div className="overflow-x-auto px-4 py-2 text-white">

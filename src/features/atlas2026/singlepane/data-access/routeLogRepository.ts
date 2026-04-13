@@ -1,11 +1,11 @@
 import type { RouteLogEvent } from '@/features/atlas2026/singlepane/types'
+import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
+import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 
-const STORAGE_KEY = 'atlas2026.singlepane.logs.v3'
-
-interface PersistedRouteLogState {
-  appendedLogs: RouteLogEvent[]
-  overrides: Record<string, RouteLogEvent>
-}
+const ROUTE_LOG_CONFIG_KEY = 'route_logs'
+const CONFIG_SURFACE = 'singlepane'
+const CONFIG_VERSION = 'runtime-v1'
+const LOCAL_ROUTE_LOG_STORAGE_KEY = 'atlas2026.singlepane.logs.v4'
 
 function normalizeLog(log: RouteLogEvent): RouteLogEvent {
   return {
@@ -21,66 +21,78 @@ function normalizeLog(log: RouteLogEvent): RouteLogEvent {
   }
 }
 
-function areLogsEqual(left: RouteLogEvent, right: RouteLogEvent) {
-  return (
-    left.id === right.id &&
-    left.enrolleeId === right.enrolleeId &&
-    left.label === right.label &&
-    left.timestampIso === right.timestampIso &&
-    left.status === right.status &&
-    left.phase === right.phase &&
-    left.milestoneType === right.milestoneType &&
-    left.stationIcon === right.stationIcon &&
-    left.timelinePositionRatio === right.timelinePositionRatio &&
-    left.domainsRelieved.join('|') === right.domainsRelieved.join('|')
-  )
-}
-
-function loadPersistedRouteLogState(): PersistedRouteLogState {
-  if (typeof window === 'undefined') return { appendedLogs: [], overrides: {} }
-  const raw = window.localStorage.getItem(STORAGE_KEY)
-  if (!raw) return { appendedLogs: [], overrides: {} }
-  try {
-    const parsed = JSON.parse(raw) as PersistedRouteLogState
-    return {
-      appendedLogs: Array.isArray(parsed?.appendedLogs) ? parsed.appendedLogs.map(normalizeLog) : [],
-      overrides:
-        parsed?.overrides && typeof parsed.overrides === 'object'
-          ? Object.fromEntries(
-              Object.entries(parsed.overrides).map(([key, value]) => [key, normalizeLog(value as RouteLogEvent)])
-            )
-          : {}
-    }
-  } catch {
-    return { appendedLogs: [], overrides: {} }
+async function persistRouteLogsToSupabase(logs: RouteLogEvent[]) {
+  const payload = logs.map(normalizeLog)
+  persistLocalLogs(payload)
+  if (!hasSupabaseConfig || !supabase) {
+    return
+  }
+  const { error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .upsert(
+      {
+        surface: CONFIG_SURFACE,
+        config_key: ROUTE_LOG_CONFIG_KEY,
+        version: CONFIG_VERSION,
+        payload
+      },
+      { onConflict: 'surface,config_key,version' }
+    )
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return
+    throw error
   }
 }
 
-export function loadLocalLogs(): RouteLogEvent[] {
-  const { appendedLogs, overrides } = loadPersistedRouteLogState()
-  return [...appendedLogs.map((log) => normalizeLog(overrides[log.id] ? { ...log, ...overrides[log.id] } : log))]
-}
-
-function persistLocalLogs(logs: RouteLogEvent[]) {
-  if (typeof window === 'undefined') return
-  const overrides: Record<string, RouteLogEvent> = {}
-  const appendedLogs: RouteLogEvent[] = []
-
-  for (const log of logs.map(normalizeLog)) {
-    appendedLogs.push(log)
+export async function loadLocalLogs(): Promise<RouteLogEvent[]> {
+  if (!hasSupabaseConfig || !supabase) return loadLocalLogsFromStorage()
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .select('payload')
+    .eq('surface', CONFIG_SURFACE)
+    .eq('config_key', ROUTE_LOG_CONFIG_KEY)
+    .eq('version', CONFIG_VERSION)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return loadLocalLogsFromStorage()
+    throw error
   }
-
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ appendedLogs, overrides } satisfies PersistedRouteLogState))
+  const payload = data?.[0]?.payload
+  if (!Array.isArray(payload)) return []
+  const normalized = payload.map((item) => normalizeLog(item as RouteLogEvent))
+  persistLocalLogs(normalized)
+  return normalized
 }
 
 export async function appendRouteLog(logs: RouteLogEvent[], nextLog: RouteLogEvent) {
   const finalLogs = [...logs, nextLog].map(normalizeLog)
-  persistLocalLogs(finalLogs)
+  await persistRouteLogsToSupabase(finalLogs)
   return finalLogs
 }
 
 export async function saveRouteLogs(logs: RouteLogEvent[]) {
   const finalLogs = logs.map(normalizeLog)
-  persistLocalLogs(finalLogs)
+  await persistRouteLogsToSupabase(finalLogs)
   return finalLogs
+}
+
+function loadLocalLogsFromStorage(): RouteLogEvent[] {
+  if (typeof window === 'undefined') return []
+  const raw = window.localStorage.getItem(LOCAL_ROUTE_LOG_STORAGE_KEY)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as RouteLogEvent[]
+    if (!Array.isArray(parsed)) return []
+    return parsed.map(normalizeLog)
+  } catch {
+    return []
+  }
+}
+
+function persistLocalLogs(logs: RouteLogEvent[]) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LOCAL_ROUTE_LOG_STORAGE_KEY, JSON.stringify(logs.map(normalizeLog)))
 }

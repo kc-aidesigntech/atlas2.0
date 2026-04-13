@@ -17,6 +17,8 @@ import type {
   NavigatorCompetencyAssessmentRecord,
   SupervisorNavigatorCompetencySummary,
   RoleMenuConfig,
+  RegulationTestSubmissionInput,
+  RegulationTestSubmissionRecord,
   RouteAssignmentRecord,
   RouteCandidateRecord,
   RouteLogEvent,
@@ -30,11 +32,13 @@ import {
   loadAdminDataQuality,
   loadCountyHeatmap,
   loadEnrollmentRequests,
+  loadPartnerStationProfile,
   searchPartnerIdentifierRecordMatches,
   saveAccountSettings as persistAccountSettings,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
   saveRouteAssignment as persistRouteAssignment,
+  saveTimelineConfig as persistTimelineConfig,
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
@@ -42,6 +46,18 @@ import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/
 import { usePartnerServiceCapacityHistory } from '@/features/atlas2026/singlepane/hooks/usePartnerServiceCapacityHistory'
 import { useRouteCandidates } from '@/features/atlas2026/singlepane/hooks/useRouteCandidates'
 import { useSinglePaneBootstrapState } from '@/features/atlas2026/singlepane/hooks/useSinglePaneBootstrapState'
+import {
+  buildDefaultTimelineGates,
+  DEFAULT_TIMELINE_DURATION_MONTHS,
+  DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
+  extendTimelinePhaseByMonth,
+  normalizeTimelineConfig
+} from '@/features/atlas2026/singlepane/timelineConfigUtils'
+import {
+  deleteRegulationTestDraft,
+  loadRegulationTestHistory,
+  saveRegulationTestSubmission
+} from '@/features/atlas2026/singlepane/data-access/regulationTestsRepository'
 
 const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'route planning': ['housing', 'work'],
@@ -76,14 +92,9 @@ function splitFullName(value: string) {
 function buildFallbackTimelineConfig(planStartIso: string): TimelineConfig {
   return {
     planStartIso,
-    durationMonths: 6,
-    maxDurationMonths: 12,
-    gates: [
-      { id: 'gate-regulation-start', label: 'regulation', phase: 'regulation', monthOffset: 0 },
-      { id: 'gate-readiness-start', label: 'readiness', phase: 'readiness', monthOffset: 2 },
-      { id: 'gate-renewal-start', label: 'renewal', phase: 'renewal', monthOffset: 4 },
-      { id: 'gate-plan-end', label: 'plan end', phase: 'renewal', monthOffset: 6 }
-    ]
+    durationMonths: DEFAULT_TIMELINE_DURATION_MONTHS,
+    maxDurationMonths: DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
+    gates: buildDefaultTimelineGates(DEFAULT_TIMELINE_DURATION_MONTHS)
   }
 }
 
@@ -92,6 +103,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
   const [activeMenu, setActiveMenu] = useState<string>('route planning')
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
+  const [regulationTestHistory, setRegulationTestHistory] = useState<RegulationTestSubmissionRecord[]>([])
+  const [isSavingRegulationTest, setIsSavingRegulationTest] = useState(false)
+  const [regulationTestError, setRegulationTestError] = useState<string | null>(null)
   const {
     state: {
       isLoading,
@@ -108,6 +122,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       partnerLoad,
       partnerLoadBreakdown,
       accountSettings,
+      partnerStationProfile,
       intakeFormsByEnrolleeId,
       routeAssignmentsByEnrolleeId,
       navigatorCompetencyAssessments
@@ -137,7 +152,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   )
 
   const selectedTimelineConfig = useMemo(
-    () => (selectedEnrollee ? timelineConfigsByEnrolleeId[selectedEnrollee.id] || timelineConfig : timelineConfig),
+    () => {
+      const activeTimelineConfig = selectedEnrollee ? timelineConfigsByEnrolleeId[selectedEnrollee.id] || timelineConfig : timelineConfig
+      return activeTimelineConfig ? normalizeTimelineConfig(activeTimelineConfig) : null
+    },
     [selectedEnrollee, timelineConfig, timelineConfigsByEnrolleeId]
   )
 
@@ -176,7 +194,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [activeMenu, selectedRoleConfig])
 
   useEffect(() => {
-    if (!selectedEnrolleeId && enrollees[0]?.id) {
+    if (!enrollees[0]?.id) return
+    if (!selectedEnrolleeId || !enrollees.some((enrollee) => enrollee.id === selectedEnrolleeId)) {
       setSelectedEnrolleeId(enrollees[0].id)
     }
   }, [enrollees, selectedEnrolleeId])
@@ -243,10 +262,29 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   } = usePartnerServiceCapacityHistory(role, accountSettings.organization)
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-2',hypothesisId:'H7',location:'useSinglePaneData.ts:230',message:'single pane survey state inputs',data:{role,accountOrganization:accountSettings.organization?.trim()??'',historyCount:partnerServiceCapacitySurveyHistory.length,historyError:partnerServiceCapacitySurveyError??null,defaultHeaderOrganization:partnerServiceCapacityDefaultHeader.organizationName},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [accountSettings.organization, partnerServiceCapacityDefaultHeader.organizationName, partnerServiceCapacitySurveyError, partnerServiceCapacitySurveyHistory.length, role])
+    if (role !== 'navigator' || !selectedEnrollee?.id) {
+      setRegulationTestHistory([])
+      setRegulationTestError(null)
+      return
+    }
+    let isMounted = true
+    Promise.all([
+      loadRegulationTestHistory(selectedEnrollee.id, 'mh_sca'),
+      loadRegulationTestHistory(selectedEnrollee.id, 'svs')
+    ])
+      .then(([mhsca, svs]) => {
+        if (!isMounted) return
+        setRegulationTestHistory([...mhsca, ...svs])
+        setRegulationTestError(null)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setRegulationTestError(error instanceof Error ? error.message : 'Unable to load regulation test history.')
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [role, selectedEnrollee?.id])
 
   function setLogs(nextLogs: RouteLogEvent[] | ((current: RouteLogEvent[]) => RouteLogEvent[])) {
     setBootstrapState((current) => ({
@@ -303,6 +341,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           : log
       )
       persistRouteLogs(nextLogs)
+        .catch((error) => console.warn('Failed to persist route log timeline position.', error))
       return nextLogs
     })
   }
@@ -319,6 +358,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           : log
       )
       persistRouteLogs(nextLogs)
+        .catch((error) => console.warn('Failed to persist route log date override.', error))
       return nextLogs
     })
   }
@@ -327,30 +367,69 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setLogs((current) => {
       const nextLogs = current.filter((log) => log.id !== logId)
       persistRouteLogs(nextLogs)
+        .catch((error) => console.warn('Failed to persist route log deletion.', error))
       return nextLogs
     })
   }
 
   function updateTimelineStartDate(nextStartIso: string) {
-    if (!selectedIntake) return
-    saveEnrolleeIntake({
-      ...selectedIntake,
-      enrollmentStartIso: nextStartIso
+    if (!selectedTimelineConfig) return
+    updateTimelineConfig({
+      ...selectedTimelineConfig,
+      planStartIso: nextStartIso
     })
   }
 
-  function saveAccountSettings(nextSettings: AccountSettings) {
+  function updateTimelinePhaseDuration(phase: StabilizationPhase) {
+    if (!selectedTimelineConfig) return
+    updateTimelineConfig(extendTimelinePhaseByMonth(selectedTimelineConfig, phase))
+  }
+
+  function updateTimelineConfig(nextConfig: TimelineConfig) {
+    if (!selectedEnrollee) return
+    const normalizedTimelineConfig = normalizeTimelineConfig(nextConfig)
+    setBootstrapState((current) => ({
+      ...current,
+      timelineConfig: normalizedTimelineConfig,
+      timelineConfigsByEnrolleeId: {
+        ...current.timelineConfigsByEnrolleeId,
+        [selectedEnrollee.id]: normalizedTimelineConfig
+      }
+    }))
+    if (selectedIntake && selectedIntake.enrollmentStartIso !== normalizedTimelineConfig.planStartIso) {
+      saveEnrolleeIntake({
+        ...selectedIntake,
+        enrollmentStartIso: normalizedTimelineConfig.planStartIso
+      })
+    }
+    persistTimelineConfig(
+      {
+        enrolleeId: selectedEnrollee.id,
+        enrollmentId: selectedEnrollee.enrollmentId
+      },
+      normalizedTimelineConfig
+    ).catch((error) =>
+      console.warn('Failed to persist enrollee timeline config.', error)
+    )
+  }
+
+  async function saveAccountSettings(nextSettings: AccountSettings) {
     const enabledRoles = nextSettings.enabledRoles.length ? nextSettings.enabledRoles : [role]
     const finalSettings = { ...nextSettings, enabledRoles }
-    persistAccountSettings(finalSettings).then((saved) => {
+    try {
+      const saved = await persistAccountSettings(finalSettings)
+      const stationProfile = await loadPartnerStationProfile(saved.organization)
       setBootstrapState((current) => ({
         ...current,
-        accountSettings: saved
+        accountSettings: saved,
+        partnerStationProfile: stationProfile
       }))
       if (!saved.enabledRoles.includes(role)) {
         setRole(saved.enabledRoles[0] || 'navigator')
       }
-    })
+    } catch (error) {
+      console.warn('Failed to save account settings.', error)
+    }
   }
 
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
@@ -481,6 +560,43 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return saved
   }
 
+  async function saveNavigatorRegulationTest(input: RegulationTestSubmissionInput) {
+    setIsSavingRegulationTest(true)
+    setRegulationTestError(null)
+    try {
+      const saved = await saveRegulationTestSubmission(input)
+      setRegulationTestHistory((current) => {
+        const next = current.filter((record) => record.id !== saved.id && record.draftKey !== saved.draftKey)
+        return [saved, ...next].sort((left, right) => new Date(right.updatedAtIso).getTime() - new Date(left.updatedAtIso).getTime())
+      })
+      return saved
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save regulation test.'
+      setRegulationTestError(message)
+      throw error
+    } finally {
+      setIsSavingRegulationTest(false)
+    }
+  }
+
+  async function deleteNavigatorRegulationTestDraft(submissionId: string) {
+    setIsSavingRegulationTest(true)
+    setRegulationTestError(null)
+    try {
+      const deleted = await deleteRegulationTestDraft(submissionId)
+      if (!deleted) return
+      setRegulationTestHistory((current) =>
+        current.filter((record) => record.id !== deleted.id && record.draftKey !== deleted.draftKey)
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to delete regulation test draft.'
+      setRegulationTestError(message)
+      throw error
+    } finally {
+      setIsSavingRegulationTest(false)
+    }
+  }
+
   async function searchPartnerIdentifierMatches(firstName: string, lastName: string): Promise<PartnerIdentifierRecord[]> {
     return searchPartnerIdentifierRecordMatches(firstName, lastName)
   }
@@ -509,6 +625,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
+    regulationTestHistory,
+    isSavingRegulationTest,
+    regulationTestError,
     searchPartnerIdentifierMatches,
     supervisorNavigatorCompetency,
     navigatorCompetencyAssessments,
@@ -518,7 +637,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     updateRouteLogTimelinePosition,
     updateRouteLogDate,
     updateTimelineStartDate,
+    updateTimelinePhaseDuration,
+    updateTimelineConfig,
     accountSettings,
+    partnerStationProfile,
     selectedIntake,
     hasSavedIntake,
     saveAccountSettings,
@@ -526,6 +648,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     saveRouteAssignment,
     savePartnerServiceCapacitySurvey,
     deletePartnerServiceCapacityDraft,
-    saveNavigatorCompetencyAssessment
+    saveNavigatorCompetencyAssessment,
+    saveNavigatorRegulationTest,
+    deleteNavigatorRegulationTestDraft
   }
 }

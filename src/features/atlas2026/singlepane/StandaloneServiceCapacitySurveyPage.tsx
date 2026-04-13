@@ -17,13 +17,10 @@ export default function StandaloneServiceCapacitySurveyPage() {
   } = useSinglePaneData('partner')
 
   React.useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-2',hypothesisId:'H7',location:'StandaloneServiceCapacitySurveyPage.tsx:19',message:'standalone survey role guard',data:{role,historyCount:partnerServiceCapacitySurveyHistory.length,isSaving:isSavingPartnerServiceCapacitySurvey,saveError:partnerServiceCapacitySurveyError??null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (role !== 'partner') {
       setRole('partner')
     }
-  }, [isSavingPartnerServiceCapacitySurvey, partnerServiceCapacitySurveyError, partnerServiceCapacitySurveyHistory.length, role, setRole])
+  }, [role, setRole])
 
   React.useEffect(() => {
     const previousTitle = document.title

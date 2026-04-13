@@ -1,4 +1,5 @@
 import React from 'react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
 interface RoleMenusProps {
@@ -18,18 +19,17 @@ export default function RoleMenus({ labels, label, activeLabel, onAction }: Role
         {safeLabels.map((nextLabel) => {
           const isActive = nextLabel === currentActiveLabel
           return (
-            <button
+            <AtlasTextButton
               key={nextLabel}
-              type="button"
               onClick={() => onAction(nextLabel)}
-              className="rounded-full border px-5 py-[5px] text-[15px] font-medium text-white transition-colors"
+              className="px-5 py-[5px] text-[15px] font-medium text-white transition-colors"
               style={{
-                borderColor: isActive ? SP_COLORS.white : SP_COLORS.border,
+                ['--button-border-color' as const]: isActive ? SP_COLORS.white : SP_COLORS.border,
                 backgroundColor: isActive ? '#111111' : 'transparent'
-              }}
+              } as React.CSSProperties}
             >
               {nextLabel}
-            </button>
+            </AtlasTextButton>
           )
         })}
       </div>

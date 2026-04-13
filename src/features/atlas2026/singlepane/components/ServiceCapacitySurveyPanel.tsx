@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getZCodeParentColor } from '@atlas/shared'
-import { AtlasPlusButton } from '../../components/AtlasPrimitives'
+import { AtlasPlusButton, AtlasTextButton } from '../../components/AtlasPrimitives'
 import {
   SERVICE_CAPACITY_FORM_VERSION,
   flattenSurveyPrompts
@@ -122,21 +122,6 @@ function describeBlockingSaveIssue(message: string) {
     }
   }
 
-  if (
-    normalizedMessage.includes('127.0.0.1') ||
-    normalizedMessage.includes('localhost') ||
-    normalizedMessage.includes('private network')
-  ) {
-    return {
-      title: 'A local debug request was blocked',
-      detail:
-        'The app tried to send a development-only logging request to a local machine address, which browsers block on hosted deployments.',
-      guidance:
-        'This can be ignored for now because it does not affect normal survey interaction or saved data.',
-      canDismiss: true
-    }
-  }
-
   return {
     title: 'Unable to save this survey',
     detail: message,
@@ -173,12 +158,6 @@ export default function ServiceCapacitySurveyPanel({
     resumeDraftError,
     resumeDraftUpdatedAtIso
   } = usePartnerServiceCapacityDraftResolver(defaultHeader.organizationName, sortedSubmissionHistory, draftResolutionKey)
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-1',hypothesisId:'H3',location:'ServiceCapacitySurveyPanel.tsx:134',message:'survey panel view state',data:{activeView,submissionHistoryCount:sortedSubmissionHistory.length,hasPersistedDraft:Boolean(persistedDraft),resumeDraftRecordId:resumeDraftRecord?.id??null,resumeDraftError:resumeDraftError??null,isResolvingResumeDraft,saveError:saveError??null,isSaving},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [activeView, isResolvingResumeDraft, isSaving, persistedDraft, resumeDraftError, resumeDraftRecord?.id, saveError, sortedSubmissionHistory.length])
 
   useEffect(() => {
     setLatestSavedSubmission((current) => {
@@ -459,9 +438,6 @@ function ServiceCapacitySurveyForm({
       if (!visiblePromptEntries.length) return 0
       return Math.max(0, Math.min(current, visiblePromptEntries.length - 1))
     })
-    // #region agent log
-    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-1',hypothesisId:'H2',location:'ServiceCapacitySurveyPanel.tsx:417',message:'visible prompt set changed',data:{visiblePromptCount:visiblePromptEntries.length,currentPromptIndex,lastAnsweredPromptIndex,firstVisiblePromptId:visiblePromptEntries[0]?.prompt.id??null,lastVisiblePromptId:visiblePromptEntries[visiblePromptEntries.length-1]?.prompt.id??null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }, [visiblePromptEntries])
 
   useEffect(() => {
@@ -524,12 +500,6 @@ function ServiceCapacitySurveyForm({
   }, [isSurveyComplete, surveyStarted])
 
   const useImmersiveSurveyLayout = isSurveyImmersed && !isMobileViewport
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-1',hypothesisId:'H1',location:'ServiceCapacitySurveyPanel.tsx:471',message:'survey form derived state',data:{draftKey,currentRecordId,isSaving,saveError:saveError??null,blockingSaveError:blockingSaveError??null,autosaveState,surveyStarted,isSurveyImmersed,isMobileViewport,useImmersiveSurveyLayout,visiblePromptCount:visiblePromptEntries.length,completedCount,currentPromptIndex,currentPromptId:currentPromptEntry?.prompt.id??null,lastAnsweredPromptIndex,canResumePrompt,isSurveyComplete},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [autosaveState, blockingSaveError, canResumePrompt, completedCount, currentPromptEntry?.prompt.id, currentPromptIndex, currentRecordId, draftKey, isMobileViewport, isSaving, isSurveyComplete, isSurveyImmersed, lastAnsweredPromptIndex, saveError, surveyStarted, useImmersiveSurveyLayout, visiblePromptEntries.length])
 
   function updateHeader<K extends keyof PartnerServiceCapacityHeader>(key: K, value: PartnerServiceCapacityHeader[K]) {
     hasPendingAutosaveRef.current = true
@@ -639,9 +609,6 @@ function ServiceCapacitySurveyForm({
         .catch((error) => {
           setAutosaveState('error')
           setBlockingSaveError(getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR))
-          // #region agent log
-          fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-1',hypothesisId:'H1',location:'ServiceCapacitySurveyPanel.tsx:592',message:'draft autosave failed',data:{draftKey,currentRecordId,error:getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR),answeredCount:answeredAnswers.length},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
         })
     }, 500)
 
@@ -689,9 +656,6 @@ function ServiceCapacitySurveyForm({
     } catch (error) {
       setAutosaveState('error')
       setBlockingSaveError(getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR))
-      // #region agent log
-      fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-1',hypothesisId:'H1',location:'ServiceCapacitySurveyPanel.tsx:638',message:'completed submit failed',data:{draftKey,currentRecordId,error:getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR),completedAnswersCount:completedAnswers.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       return
     }
     if (completedRecord?.id) setCurrentRecordId(completedRecord.id)
@@ -753,15 +717,14 @@ function ServiceCapacitySurveyForm({
         </div>
         <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
           <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
-            <button
-              type="button"
+            <AtlasTextButton
               onClick={onBackToRecords}
-              className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center gap-2 rounded-[10px] border px-3 py-1.5 text-[12px] md:text-[13px]"
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-[12px] md:text-[13px]"
               style={{ ['--button-border-color' as const]: '#ffffff32', color: SP_COLORS.white } as React.CSSProperties}
             >
               <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] -rotate-90 opacity-90" />
               <span>back to list</span>
-            </button>
+            </AtlasTextButton>
             <AtlasPlusButton
               onClick={onCheckoutNewRecord}
               label="Check out a new blank survey record"
@@ -834,11 +797,10 @@ function ServiceCapacitySurveyForm({
                           Choose an existing partner identifier if this person already exists in the partners tab.
                         </small>
                         {partnerIdentifierMatches.map((match) => (
-                          <button
+                          <AtlasTextButton
                             key={match.partnerId}
-                            type="button"
                             onClick={() => applyPartnerIdentifierMatch(match)}
-                            className="atlas-sign-button [--button-line-inset:8px] [--button-radius:11px] flex w-full items-start justify-between gap-3 rounded-[11px] border px-3 py-2 text-left transition-[border-color,background-color] duration-150 ease-out hover:border-white/40 hover:bg-white/5"
+                            className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left transition-[border-color,background-color] duration-150 ease-out hover:border-white/40 hover:bg-white/5"
                             style={{ ['--button-border-color' as const]: '#ffffff20' } as React.CSSProperties}
                           >
                             <div>
@@ -848,7 +810,7 @@ function ServiceCapacitySurveyForm({
                               <small className="block text-[12px] text-[#bdbdbd]">{match.organizationName}</small>
                             </div>
                             <small className="max-w-[220px] text-right text-[11px] text-[#9f9f9f] md:text-[12px]">{match.email || 'no email on file'}</small>
-                          </button>
+                          </AtlasTextButton>
                         ))}
                       </div>
                     ) : selectedPartnerIdentifierId ? (
@@ -883,18 +845,17 @@ function ServiceCapacitySurveyForm({
                   {ROLE_OPTIONS.map((option) => {
                     const isSelected = draft.header.respondentRoles.includes(option.value)
                     return (
-                      <button
+                      <AtlasTextButton
                         key={option.value}
-                        type="button"
                         onClick={() => toggleRole(option.value)}
-                        className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border px-3 py-1.5 text-[12px] md:text-[13px]"
+                        className="px-3 py-1.5 text-[12px] md:text-[13px]"
                         style={{
                           ['--button-border-color' as const]: isSelected ? SP_COLORS.yellow : '#ffffff30',
                           color: isSelected ? SP_COLORS.yellow : SP_COLORS.white
                         } as React.CSSProperties}
                       >
                         {option.label}
-                      </button>
+                      </AtlasTextButton>
                     )
                   })}
                 </div>
@@ -955,19 +916,19 @@ function ServiceCapacitySurveyForm({
             The question-by-question flow keeps the current clarity, scale language, and autosave behavior, but only shows one active item at a time.
           </small>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              type="button"
+            <AtlasTextButton
               onClick={handleStartSurvey}
               disabled={Boolean(respondentValidationMessage) || !visiblePromptEntries.length}
-              className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border px-5 py-2 text-[13px] font-medium md:text-[14px]"
+              className="inline-flex items-center gap-2 px-5 py-2 text-[13px] font-medium md:text-[14px]"
               style={{
                 ['--button-border-color' as const]: SP_COLORS.yellow,
                 color: SP_COLORS.yellow,
                 opacity: !respondentValidationMessage && visiblePromptEntries.length ? 1 : 0.45
               } as React.CSSProperties}
             >
-              {'start the survey ->'}
-            </button>
+              <span>start the survey</span>
+              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] rotate-180 opacity-90" />
+            </AtlasTextButton>
             {respondentValidationMessage ? (
               <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
                 Complete the required details first.
@@ -1045,12 +1006,11 @@ function ServiceCapacitySurveyForm({
               </div>
               {useImmersiveSurveyLayout && isSurveyComplete ? (
                 <div className="flex shrink-0 justify-end border-t border-white/10 pt-3">
-                  <button
+                  <AtlasTextButton
                     ref={completeSubmissionButtonRef}
-                    type="button"
                     onClick={handleSubmit}
                     disabled={isSaving}
-                    className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border px-5 py-2 text-[13px] font-medium md:text-[14px]"
+                    className="px-5 py-2 text-[13px] font-medium md:text-[14px]"
                     style={{
                       ['--button-border-color' as const]: SP_COLORS.yellow,
                       color: SP_COLORS.yellow,
@@ -1058,7 +1018,7 @@ function ServiceCapacitySurveyForm({
                     } as React.CSSProperties}
                   >
                     {isSaving ? 'completing submission...' : 'complete submission'}
-                  </button>
+                  </AtlasTextButton>
                 </div>
               ) : null}
             </div>
@@ -1072,12 +1032,11 @@ function ServiceCapacitySurveyForm({
 
       {!useImmersiveSurveyLayout && isSurveyComplete ? (
         <div className="mt-5 flex justify-end">
-          <button
+          <AtlasTextButton
             ref={completeSubmissionButtonRef}
-            type="button"
             onClick={handleSubmit}
             disabled={isSaving}
-            className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border px-5 py-2 text-[13px] font-medium md:text-[14px]"
+            className="px-5 py-2 text-[13px] font-medium md:text-[14px]"
             style={{
               ['--button-border-color' as const]: SP_COLORS.yellow,
               color: SP_COLORS.yellow,
@@ -1085,7 +1044,7 @@ function ServiceCapacitySurveyForm({
             } as React.CSSProperties}
           >
             {isSaving ? 'completing submission...' : 'complete submission'}
-          </button>
+          </AtlasTextButton>
         </div>
       ) : null}
     </div>

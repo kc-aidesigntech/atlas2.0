@@ -17,6 +17,6 @@
   {
     "role": "administrator",
     "topMenus": ["assigned enrollees", "system operations", "route planning", "governance", "county commons"],
-    "actionMenus": ["set policy threshold", "approve route template", "audit event logs"]
+    "actionMenus": []
   }
 ]

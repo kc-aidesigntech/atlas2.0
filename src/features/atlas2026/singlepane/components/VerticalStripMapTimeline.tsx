@@ -1,6 +1,9 @@
 import React, { useMemo } from 'react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import LocalDateInputBox from './LocalDateInputBox'
+import StripMapControlOverlay from './StripMapControlOverlay'
 import type { JourneyStationMarker, RouteLogEvent, RouteLogStatus, StabilizationPhase, TimelineConfig, ZDomain } from '../types'
+import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
 
 interface VerticalStripMapTimelineProps {
@@ -13,6 +16,8 @@ interface VerticalStripMapTimelineProps {
   onEventDelete?: (logId: string) => void
   onStartDateChange?: (nextStartIso: string) => void
   onEventDateChange?: (logId: string, nextTimestampIso: string) => void
+  onExtendPhaseDuration?: (phase: StabilizationPhase) => void
+  onTimelineConfigChange?: (nextConfig: TimelineConfig) => void
 }
 
 const STATUS_COLORS: Record<RouteLogStatus, string> = {
@@ -86,7 +91,9 @@ export default function VerticalStripMapTimeline({
   onRoutePlanningClick,
   onEventDelete,
   onStartDateChange,
-  onEventDateChange
+  onEventDateChange,
+  onExtendPhaseDuration,
+  onTimelineConfigChange
 }: VerticalStripMapTimelineProps) {
   const [dateEditor, setDateEditor] = React.useState<
     | {
@@ -99,42 +106,20 @@ export default function VerticalStripMapTimeline({
     | null
   >(null)
   const [dateEditorError, setDateEditorError] = React.useState<string | null>(null)
+  const [isControlOverlayOpen, setIsControlOverlayOpen] = React.useState(false)
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => new Date(a.timestampIso).getTime() - new Date(b.timestampIso).getTime()),
     [events]
   )
   const suggestedMarkers = useMemo(() => stationMarkers.filter((marker) => marker.markerType === 'suggested'), [stationMarkers])
+  const normalizedTimelineConfig = useMemo(() => normalizeTimelineConfig(timelineConfig), [timelineConfig])
   const phaseSegments = useMemo(() => {
-    const definition = [
-      { phase: 'regulation' as const, defaultOffset: 0, label: 'regulation' },
-      { phase: 'readiness' as const, defaultOffset: 2, label: 'readiness' },
-      { phase: 'renewal' as const, defaultOffset: 4, label: 'renewal' }
-    ]
-    return definition.map((entry, index) => {
-      const configuredGate = timelineConfig.gates.find((gate) => gate.phase === entry.phase)
-      const nextConfigured = definition[index + 1]
-        ? timelineConfig.gates.find((gate) => gate.phase === definition[index + 1].phase)
-        : null
-      const startOffset = configuredGate?.monthOffset ?? entry.defaultOffset
-      const endOffset = nextConfigured?.monthOffset ?? timelineConfig.durationMonths
-      return {
-        phase: entry.phase,
-        label: configuredGate?.label || entry.label,
-        startOffset,
-        endOffset
-      }
-    })
-  }, [timelineConfig.durationMonths, timelineConfig.gates])
+    return buildTimelinePhaseSegments(normalizedTimelineConfig)
+  }, [normalizedTimelineConfig])
 
   function handleStartDateClick() {
-    if (!onStartDateChange) return
-    setDateEditor({
-      kind: 'start',
-      value: formatDateInputValue(timelineConfig.planStartIso),
-      label: 'timeline start date',
-      currentIso: timelineConfig.planStartIso
-    })
-    setDateEditorError(null)
+    if (!onTimelineConfigChange && !onStartDateChange) return
+    setIsControlOverlayOpen(true)
   }
 
   function handleEventDateClick(event: RouteLogEvent) {
@@ -175,54 +160,41 @@ export default function VerticalStripMapTimeline({
           </small>
         </div>
         <small className="text-[11px]" style={{ color: SP_COLORS.muted }}>
-          {timelineConfig.durationMonths}-month plan
+          {normalizedTimelineConfig.durationMonths * 30}-day plan
         </small>
       </div>
 
-      <button
-        type="button"
+      <AtlasTextButton
         onClick={handleStartDateClick}
-        className="mt-3 inline-flex rounded-full border px-3 py-1 text-[11px]"
-        style={{ borderColor: `${SP_COLORS.yellow}80`, color: SP_COLORS.yellow }}
+        className="mt-3 inline-flex px-3 py-1 text-[11px]"
+        style={{ ['--button-border-color' as const]: `${SP_COLORS.yellow}80`, color: SP_COLORS.yellow } as React.CSSProperties}
       >
-        start: {formatDateLabel(timelineConfig.planStartIso)}
-      </button>
+        start: {formatDateLabel(normalizedTimelineConfig.planStartIso)}
+      </AtlasTextButton>
       {showRoutePlanningQuickAction ? (
         <div className="mt-3">
-          <button
-            type="button"
+          <AtlasTextButton
             onClick={onRoutePlanningClick}
-            className="relative rounded-full border px-4 pb-2 pt-2 text-[11px] uppercase tracking-[0.1em]"
-            style={{ borderColor: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' }}
+            className="px-4 pb-2 pt-2 text-[11px] uppercase tracking-[0.1em]"
+            style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' } as React.CSSProperties}
           >
-            <span
-              aria-hidden
-              className="absolute left-2.5 right-2.5 top-1 block h-[1px]"
-              style={{ backgroundColor: SP_COLORS.white }}
-            />
             route planning
-          </button>
+          </AtlasTextButton>
         </div>
       ) : null}
 
-      {dateEditor?.kind === 'start' ? (
-        <div className="mt-3">
-          <LocalDateInputBox
-            label={dateEditor.label}
-            value={dateEditor.value}
-            error={dateEditorError}
-            onChange={(nextValue) => {
-              setDateEditor((current) => (current ? { ...current, value: nextValue } : current))
-              setDateEditorError(null)
-            }}
-            onSave={commitDateEditor}
-            onCancel={() => {
-              setDateEditor(null)
-              setDateEditorError(null)
-            }}
-          />
-        </div>
-      ) : null}
+      <StripMapControlOverlay
+        isOpen={isControlOverlayOpen}
+        timelineConfig={normalizedTimelineConfig}
+        onClose={() => setIsControlOverlayOpen(false)}
+        onSave={(nextConfig) => {
+          onTimelineConfigChange?.(nextConfig)
+          if (!onTimelineConfigChange && onStartDateChange && nextConfig.planStartIso !== normalizedTimelineConfig.planStartIso) {
+            onStartDateChange(nextConfig.planStartIso)
+          }
+          setIsControlOverlayOpen(false)
+        }}
+      />
 
       <div className="mt-4 flex flex-wrap gap-2">
         {phaseSegments.map((segment) => {
@@ -235,8 +207,17 @@ export default function VerticalStripMapTimeline({
               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PHASE_COLORS[segment.phase] }} />
               <span style={{ color: PHASE_COLORS[segment.phase] }}>{segment.label}</span>
               <span style={{ color: SP_COLORS.muted }}>
-                {formatPhaseRange(timelineConfig.planStartIso, segment.startOffset, segment.endOffset)}
+                {formatPhaseRange(normalizedTimelineConfig.planStartIso, segment.startOffset, segment.endOffset)}
               </span>
+              {onExtendPhaseDuration ? (
+                <AtlasTextButton
+                  onClick={() => onExtendPhaseDuration(segment.phase)}
+                  className="px-2 py-0.5 text-[10px] font-medium"
+                  style={{ ['--button-border-color' as const]: PHASE_COLORS[segment.phase], color: PHASE_COLORS[segment.phase] } as React.CSSProperties}
+                >
+                  +30d
+                </AtlasTextButton>
+              ) : null}
             </div>
           )
         })}

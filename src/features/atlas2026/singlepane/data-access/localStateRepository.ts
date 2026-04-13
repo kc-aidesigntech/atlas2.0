@@ -3,12 +3,22 @@ import type {
   AtlasRole,
   EnrolleeIntakeRecord,
   EnrolleeProfile,
-  RouteAssignmentRecord
+  RouteAssignmentRecord,
+  TimelineConfig
 } from '@/features/atlas2026/singlepane/types'
+import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
+import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 
-const ACCOUNT_SETTINGS_KEY = 'atlas2026.singlepane.account-settings.v1'
-const ENROLLEE_INTAKES_KEY = 'atlas2026.singlepane.enrollee-intakes.v1'
-const ROUTE_ASSIGNMENTS_KEY = 'atlas2026.singlepane.route-assignments.v1'
+const SETTINGS_CONFIG_KEY = 'account_settings'
+const ENROLLEE_INTAKE_CONFIG_KEY_PREFIX = 'enrollee_intake:'
+const ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX = 'route_assignment:'
+const TIMELINE_CONFIG_KEY_PREFIX = 'timeline_config:'
+const CONFIG_SURFACE = 'singlepane'
+const CONFIG_VERSION = 'runtime-v1'
+const LOCAL_ACCOUNT_SETTINGS_KEY = 'atlas2026.singlepane.account-settings.v2'
+const LOCAL_ENROLLEE_INTAKES_KEY = 'atlas2026.singlepane.enrollee-intakes.v2'
+const LOCAL_ROUTE_ASSIGNMENTS_KEY = 'atlas2026.singlepane.route-assignments.v2'
+const LOCAL_TIMELINE_CONFIGS_KEY = 'atlas2026.singlepane.timeline-configs.v1'
 
 function getDefaultAccountSettings(): AccountSettings {
   return {
@@ -19,34 +29,37 @@ function getDefaultAccountSettings(): AccountSettings {
   }
 }
 
-function loadAccountSettingsState(): AccountSettings {
+function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | null | undefined) {
+  const enabledRoles = Array.isArray(payload?.enabledRoles)
+    ? payload!.enabledRoles.filter((role): role is AtlasRole => ['navigator', 'partner', 'supervisor', 'administrator'].includes(String(role)))
+    : getDefaultAccountSettings().enabledRoles
+  return {
+    fullName: payload?.fullName || getDefaultAccountSettings().fullName,
+    email: payload?.email || getDefaultAccountSettings().email,
+    organization: payload?.organization || getDefaultAccountSettings().organization,
+    enabledRoles: enabledRoles.length ? enabledRoles : getDefaultAccountSettings().enabledRoles
+  } satisfies AccountSettings
+}
+
+function loadLocalAccountSettingsState(): AccountSettings {
   if (typeof window === 'undefined') return getDefaultAccountSettings()
-  const raw = window.localStorage.getItem(ACCOUNT_SETTINGS_KEY)
+  const raw = window.localStorage.getItem(LOCAL_ACCOUNT_SETTINGS_KEY)
   if (!raw) return getDefaultAccountSettings()
   try {
-    const parsed = JSON.parse(raw) as Partial<AccountSettings>
-    const enabledRoles = Array.isArray(parsed.enabledRoles)
-      ? parsed.enabledRoles.filter((role): role is AtlasRole => ['navigator', 'partner', 'supervisor', 'administrator'].includes(String(role)))
-      : getDefaultAccountSettings().enabledRoles
-    return {
-      fullName: parsed.fullName || getDefaultAccountSettings().fullName,
-      email: parsed.email || getDefaultAccountSettings().email,
-      organization: parsed.organization || getDefaultAccountSettings().organization,
-      enabledRoles: enabledRoles.length ? enabledRoles : getDefaultAccountSettings().enabledRoles
-    }
+    return normalizeAccountSettingsPayload(JSON.parse(raw) as Partial<AccountSettings>)
   } catch {
     return getDefaultAccountSettings()
   }
 }
 
-function persistAccountSettingsState(settings: AccountSettings) {
+function persistLocalAccountSettingsState(settings: AccountSettings) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(ACCOUNT_SETTINGS_KEY, JSON.stringify(settings))
+  window.localStorage.setItem(LOCAL_ACCOUNT_SETTINGS_KEY, JSON.stringify(settings))
 }
 
-function loadEnrolleeIntakeState(): Record<string, EnrolleeIntakeRecord> {
+function loadLocalEnrolleeIntakeState(): Record<string, EnrolleeIntakeRecord> {
   if (typeof window === 'undefined') return {}
-  const raw = window.localStorage.getItem(ENROLLEE_INTAKES_KEY)
+  const raw = window.localStorage.getItem(LOCAL_ENROLLEE_INTAKES_KEY)
   if (!raw) return {}
   try {
     const parsed = JSON.parse(raw) as Record<string, EnrolleeIntakeRecord>
@@ -57,14 +70,14 @@ function loadEnrolleeIntakeState(): Record<string, EnrolleeIntakeRecord> {
   }
 }
 
-function persistEnrolleeIntakeState(intakes: Record<string, EnrolleeIntakeRecord>) {
+function persistLocalEnrolleeIntakeState(state: Record<string, EnrolleeIntakeRecord>) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(ENROLLEE_INTAKES_KEY, JSON.stringify(intakes))
+  window.localStorage.setItem(LOCAL_ENROLLEE_INTAKES_KEY, JSON.stringify(state))
 }
 
-function loadRouteAssignmentState(): Record<string, RouteAssignmentRecord> {
+function loadLocalRouteAssignmentState(): Record<string, RouteAssignmentRecord> {
   if (typeof window === 'undefined') return {}
-  const raw = window.localStorage.getItem(ROUTE_ASSIGNMENTS_KEY)
+  const raw = window.localStorage.getItem(LOCAL_ROUTE_ASSIGNMENTS_KEY)
   if (!raw) return {}
   try {
     const parsed = JSON.parse(raw) as Record<string, RouteAssignmentRecord>
@@ -75,9 +88,27 @@ function loadRouteAssignmentState(): Record<string, RouteAssignmentRecord> {
   }
 }
 
-function persistRouteAssignmentState(assignments: Record<string, RouteAssignmentRecord>) {
+function persistLocalRouteAssignmentState(state: Record<string, RouteAssignmentRecord>) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(ROUTE_ASSIGNMENTS_KEY, JSON.stringify(assignments))
+  window.localStorage.setItem(LOCAL_ROUTE_ASSIGNMENTS_KEY, JSON.stringify(state))
+}
+
+function loadLocalTimelineConfigState(): Record<string, TimelineConfig> {
+  if (typeof window === 'undefined') return {}
+  const raw = window.localStorage.getItem(LOCAL_TIMELINE_CONFIGS_KEY)
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as Record<string, TimelineConfig>
+    if (!parsed || typeof parsed !== 'object') return {}
+    return parsed
+  } catch {
+    return {}
+  }
+}
+
+function persistLocalTimelineConfigState(state: Record<string, TimelineConfig>) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LOCAL_TIMELINE_CONFIGS_KEY, JSON.stringify(state))
 }
 
 export function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrides: Record<string, EnrolleeIntakeRecord>) {
@@ -97,36 +128,229 @@ export function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrid
 }
 
 export async function loadAccountSettings(): Promise<AccountSettings> {
-  return loadAccountSettingsState()
+  if (!hasSupabaseConfig || !supabase) return loadLocalAccountSettingsState()
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .select('payload')
+    .eq('surface', CONFIG_SURFACE)
+    .eq('config_key', SETTINGS_CONFIG_KEY)
+    .eq('version', CONFIG_VERSION)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return loadLocalAccountSettingsState()
+    throw error
+  }
+  const payload = (data?.[0]?.payload || null) as Partial<AccountSettings> | null
+  const normalized = normalizeAccountSettingsPayload(payload)
+  persistLocalAccountSettingsState(normalized)
+  return normalized
 }
 
 export async function saveAccountSettings(settings: AccountSettings): Promise<AccountSettings> {
-  persistAccountSettingsState(settings)
-  return settings
+  const normalized = normalizeAccountSettingsPayload(settings)
+  persistLocalAccountSettingsState(normalized)
+  if (!hasSupabaseConfig || !supabase) {
+    return normalized
+  }
+  const { error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .upsert(
+      {
+        surface: CONFIG_SURFACE,
+        config_key: SETTINGS_CONFIG_KEY,
+        version: CONFIG_VERSION,
+        payload: normalized
+      },
+      { onConflict: 'surface,config_key,version' }
+    )
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return normalized
+    throw error
+  }
+  return normalized
 }
 
 export async function loadEnrolleeIntakes(): Promise<Record<string, EnrolleeIntakeRecord>> {
-  return loadEnrolleeIntakeState()
+  if (!hasSupabaseConfig || !supabase) return loadLocalEnrolleeIntakeState()
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .select('config_key,payload')
+    .eq('surface', CONFIG_SURFACE)
+    .eq('version', CONFIG_VERSION)
+    .like('config_key', `${ENROLLEE_INTAKE_CONFIG_KEY_PREFIX}%`)
+
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return loadLocalEnrolleeIntakeState()
+    throw error
+  }
+  const normalized = Object.fromEntries(
+    (data || [])
+      .map((row: { config_key?: string; payload?: unknown }) => {
+        const key = row.config_key?.replace(ENROLLEE_INTAKE_CONFIG_KEY_PREFIX, '')
+        const payload = row.payload as EnrolleeIntakeRecord | null
+        if (!key || !payload) return null
+        return [key, payload] as const
+      })
+      .filter((entry): entry is readonly [string, EnrolleeIntakeRecord] => Boolean(entry))
+  )
+  persistLocalEnrolleeIntakeState(normalized)
+  return normalized
 }
 
 export async function saveEnrolleeIntake(intake: EnrolleeIntakeRecord): Promise<EnrolleeIntakeRecord> {
-  const nextState = {
-    ...loadEnrolleeIntakeState(),
+  persistLocalEnrolleeIntakeState({
+    ...loadLocalEnrolleeIntakeState(),
     [intake.enrolleeId]: intake
+  })
+  if (!hasSupabaseConfig || !supabase) {
+    return intake
   }
-  persistEnrolleeIntakeState(nextState)
+  const { error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .upsert(
+      {
+        surface: CONFIG_SURFACE,
+        config_key: `${ENROLLEE_INTAKE_CONFIG_KEY_PREFIX}${intake.enrolleeId}`,
+        version: CONFIG_VERSION,
+        payload: intake
+      },
+      { onConflict: 'surface,config_key,version' }
+    )
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return intake
+    throw error
+  }
   return intake
 }
 
 export async function loadRouteAssignments(): Promise<Record<string, RouteAssignmentRecord>> {
-  return loadRouteAssignmentState()
+  if (!hasSupabaseConfig || !supabase) return loadLocalRouteAssignmentState()
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .select('config_key,payload')
+    .eq('surface', CONFIG_SURFACE)
+    .eq('version', CONFIG_VERSION)
+    .like('config_key', `${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}%`)
+
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return loadLocalRouteAssignmentState()
+    throw error
+  }
+  const normalized = Object.fromEntries(
+    (data || [])
+      .map((row: { config_key?: string; payload?: unknown }) => {
+        const key = row.config_key?.replace(ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX, '')
+        const payload = row.payload as RouteAssignmentRecord | null
+        if (!key || !payload) return null
+        return [key, payload] as const
+      })
+      .filter((entry): entry is readonly [string, RouteAssignmentRecord] => Boolean(entry))
+  )
+  persistLocalRouteAssignmentState(normalized)
+  return normalized
 }
 
 export async function saveRouteAssignment(assignment: RouteAssignmentRecord): Promise<RouteAssignmentRecord> {
-  const nextState = {
-    ...loadRouteAssignmentState(),
+  persistLocalRouteAssignmentState({
+    ...loadLocalRouteAssignmentState(),
     [assignment.enrolleeId]: assignment
+  })
+  if (!hasSupabaseConfig || !supabase) {
+    return assignment
   }
-  persistRouteAssignmentState(nextState)
+  const { error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .upsert(
+      {
+        surface: CONFIG_SURFACE,
+        config_key: `${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}${assignment.enrolleeId}`,
+        version: CONFIG_VERSION,
+        payload: assignment
+      },
+      { onConflict: 'surface,config_key,version' }
+    )
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return assignment
+    throw error
+  }
   return assignment
+}
+
+export async function loadTimelineConfigs(): Promise<Record<string, TimelineConfig>> {
+  if (!hasSupabaseConfig || !supabase) return loadLocalTimelineConfigState()
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .select('config_key,payload')
+    .eq('surface', CONFIG_SURFACE)
+    .eq('version', CONFIG_VERSION)
+    .like('config_key', `${TIMELINE_CONFIG_KEY_PREFIX}%`)
+
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return loadLocalTimelineConfigState()
+    throw error
+  }
+  const normalized = Object.fromEntries(
+    (data || [])
+      .map((row: { config_key?: string; payload?: unknown }) => {
+        const key = row.config_key?.replace(TIMELINE_CONFIG_KEY_PREFIX, '')
+        const payload = row.payload as TimelineConfig | null
+        if (!key || !payload) return null
+        return [key, payload] as const
+      })
+      .filter((entry): entry is readonly [string, TimelineConfig] => Boolean(entry))
+  )
+  persistLocalTimelineConfigState(normalized)
+  return normalized
+}
+
+function buildTimelineConfigKeys(enrolleeId: string, enrollmentId?: string | null) {
+  const keys = [`enrollee:${enrolleeId}`]
+  if (enrollmentId?.trim()) {
+    keys.unshift(`enrollment:${enrollmentId.trim()}`)
+  }
+  return keys
+}
+
+export async function saveTimelineConfig(
+  ids: { enrolleeId: string; enrollmentId?: string | null },
+  config: TimelineConfig
+): Promise<TimelineConfig> {
+  const keys = buildTimelineConfigKeys(ids.enrolleeId, ids.enrollmentId)
+  const nextLocalState = {
+    ...loadLocalTimelineConfigState()
+  }
+  for (const key of keys) {
+    nextLocalState[key] = config
+  }
+  persistLocalTimelineConfigState(nextLocalState)
+  if (!hasSupabaseConfig || !supabase) return config
+
+  for (const key of keys) {
+    const { error } = await (supabase as any)
+      .schema('atlas')
+      .from('app_config_documents')
+      .upsert(
+        {
+          surface: CONFIG_SURFACE,
+          config_key: `${TIMELINE_CONFIG_KEY_PREFIX}${key}`,
+          version: CONFIG_VERSION,
+          payload: config
+        },
+        { onConflict: 'surface,config_key,version' }
+      )
+    if (error) {
+      if (isOptionalSupabaseDataError(error)) return config
+      throw error
+    }
+  }
+  return config
 }
