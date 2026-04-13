@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getZCodeParentColor } from '@atlas/shared'
-import arrowIconUrl from '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
 import { AtlasPlusButton } from '../../components/AtlasPrimitives'
 import {
   SERVICE_CAPACITY_FORM_VERSION,
@@ -75,6 +74,10 @@ const ROLE_OPTIONS: Array<{ value: PartnerSurveyRespondentRole; label: string }>
   { value: 'other', label: 'Other' }
 ]
 type PanelView = 'history' | 'survey'
+const arrowIconUrl = new URL(
+  '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
+  import.meta.url
+).href
 const SUPPORT_EMAIL = 'support@transitionalcare.net'
 const SERVICE_CAPACITY_SAVE_ERROR = 'Unable to save service capacity survey.'
 
@@ -103,6 +106,43 @@ function isAnswerComplete(answer: DraftAnswer | PartnerServiceCapacityAnswer | u
 
 function getErrorMessage(error: unknown, fallbackMessage: string) {
   return error instanceof Error && error.message.trim() ? error.message : fallbackMessage
+}
+
+function describeBlockingSaveIssue(message: string) {
+  const normalizedMessage = message.toLowerCase()
+
+  if (normalizedMessage.includes('supabase is required')) {
+    return {
+      title: 'Survey saving is not configured here',
+      detail:
+        'This deployment does not currently have the Supabase connection needed to persist partner service capacity survey records.',
+      guidance:
+        'You can ignore this for now and continue reviewing the survey, but any draft or submit action on this screen will not be saved.',
+      canDismiss: true
+    }
+  }
+
+  if (
+    normalizedMessage.includes('127.0.0.1') ||
+    normalizedMessage.includes('localhost') ||
+    normalizedMessage.includes('private network')
+  ) {
+    return {
+      title: 'A local debug request was blocked',
+      detail:
+        'The app tried to send a development-only logging request to a local machine address, which browsers block on hosted deployments.',
+      guidance:
+        'This can be ignored for now because it does not affect normal survey interaction or saved data.',
+      canDismiss: true
+    }
+  }
+
+  return {
+    title: 'Unable to save this survey',
+    detail: message,
+    guidance: 'This save failed. You can continue reviewing the page, but the most recent changes may not persist.',
+    canDismiss: true
+  }
 }
 
 export default function ServiceCapacitySurveyPanel({
@@ -275,6 +315,7 @@ function ServiceCapacitySurveyForm({
   const [selectedPartnerIdentifierId, setSelectedPartnerIdentifierId] = useState<string | null>(null)
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [blockingSaveError, setBlockingSaveError] = useState<string | null>(saveError)
+  const [dismissedBlockingSaveError, setDismissedBlockingSaveError] = useState<string | null>(null)
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(initialSubmission?.id ?? null)
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0)
   const [surveyStarted, setSurveyStarted] = useState(
@@ -299,6 +340,12 @@ function ServiceCapacitySurveyForm({
 
   useEffect(() => {
     setBlockingSaveError(saveError)
+  }, [saveError])
+
+  useEffect(() => {
+    if (!saveError) {
+      setDismissedBlockingSaveError(null)
+    }
   }, [saveError])
 
   useEffect(() => {
@@ -677,11 +724,22 @@ function ServiceCapacitySurveyForm({
 
   const lastSavedLabel = formatDateTimeLabel(latestSavedSubmission?.updatedAtIso || latestSavedSubmission?.submittedAtIso)
   const effectiveBlockingSaveError = blockingSaveError ?? saveError
+  const blockingIssue = effectiveBlockingSaveError ? describeBlockingSaveIssue(effectiveBlockingSaveError) : null
+  const visibleBlockingSaveError =
+    effectiveBlockingSaveError && dismissedBlockingSaveError !== effectiveBlockingSaveError ? effectiveBlockingSaveError : null
 
   return (
     <div className="relative w-full rounded-[21px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: '#020202' }}>
-      {effectiveBlockingSaveError ? (
-        <BlockingSupportOverlay message={effectiveBlockingSaveError} supportEmail={SUPPORT_EMAIL} />
+      {visibleBlockingSaveError && blockingIssue ? (
+        <BlockingSupportOverlay
+          message={visibleBlockingSaveError}
+          title={blockingIssue.title}
+          detail={blockingIssue.detail}
+          guidance={blockingIssue.guidance}
+          supportEmail={SUPPORT_EMAIL}
+          canDismiss={blockingIssue.canDismiss}
+          onDismiss={() => setDismissedBlockingSaveError(visibleBlockingSaveError)}
+        />
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style={{ borderColor: '#ffffff20' }}>
         <div className="max-w-[720px]">

@@ -3,7 +3,11 @@ import { usesLightTextOnZCodeColor } from '@atlas/shared'
 import { getScaleOption } from '../../data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '../../theme'
 import type { PartnerServiceCapacityScaleOption, ZCodeSurveyPrompt } from '../../types'
-import arrowIconUrl from '../../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
+
+const arrowIconUrl = new URL(
+  '../../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
+  import.meta.url
+).href
 
 export interface SurveySectionProgressItem {
   parentCode: string
@@ -479,10 +483,22 @@ export function Input({
 
 export function BlockingSupportOverlay({
   message,
-  supportEmail
+  supportEmail,
+  title,
+  detail,
+  guidance,
+  onDismiss,
+  dismissLabel = 'continue for now',
+  canDismiss = false
 }: {
   message: string
   supportEmail: string
+  title?: string
+  detail?: string
+  guidance?: string
+  onDismiss?: () => void
+  dismissLabel?: string
+  canDismiss?: boolean
 }) {
   const supportHref = `mailto:${supportEmail}?subject=${encodeURIComponent('ATLAS service capacity survey support request')}`
 
@@ -495,12 +511,15 @@ export function BlockingSupportOverlay({
         <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[13px]" style={{ color: SP_COLORS.red }}>
           save error
         </small>
-        <h4 className="mt-2 text-[22px] font-medium text-white md:text-[28px]">Unable to save this survey</h4>
-        <p className="mt-3 text-[14px] text-[#d2d2d2] md:text-[16px]">{message}</p>
+        <h4 className="mt-2 text-[22px] font-medium text-white md:text-[28px]">
+          {title || 'Unable to save this survey'}
+        </h4>
+        <p className="mt-3 text-[14px] text-[#d2d2d2] md:text-[16px]">{detail || message}</p>
         <p className="mt-3 text-[13px] text-[#b3b3b3] md:text-[14px]">
-          This issue blocks progress until support reviews the failed save.
+          {guidance || 'This issue blocks progress until support reviews the failed save.'}
         </p>
-        <div className="mt-5 flex justify-center">
+        <p className="mt-3 text-[12px] text-[#8f8f8f] md:text-[13px]">{message}</p>
+        <div className="mt-5 flex flex-wrap justify-center gap-3">
           <a
             href={supportHref}
             className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center justify-center rounded-[10px] border px-5 py-2 text-[13px] font-medium text-white md:text-[14px]"
@@ -508,6 +527,16 @@ export function BlockingSupportOverlay({
           >
             email {supportEmail}
           </a>
+          {canDismiss && onDismiss ? (
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] inline-flex items-center justify-center rounded-[10px] border px-5 py-2 text-[13px] font-medium text-white md:text-[14px]"
+              style={{ ['--button-border-color' as const]: '#ffffff35' } as React.CSSProperties}
+            >
+              {dismissLabel}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
