@@ -22,7 +22,6 @@ import {
   loadEnrolleeIntakes,
   loadEnrollmentRequests,
   loadNavigatorCompetencyAssessments,
-  loadPartnerRadialLoad,
   loadPartnerRadialLoadBreakdown,
   loadRouteAssignments,
   loadSinglePaneBootstrap
@@ -56,6 +55,17 @@ const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
 }
 
+function derivePartnerRadialLoad(breakdown: DomainLoadBreakdown | null): DomainLoad | null {
+  if (!breakdown) return null
+  const maxTotal = Math.max(breakdown.habitatTotal, breakdown.workTotal, breakdown.socialNetworksTotal, 1)
+  return {
+    enrolleeId: breakdown.subjectId,
+    habitat: Math.round((breakdown.habitatTotal / maxTotal) * 100),
+    work: Math.round((breakdown.workTotal / maxTotal) * 100),
+    socialNetworks: Math.round((breakdown.socialNetworksTotal / maxTotal) * 100)
+  }
+}
+
 export function useSinglePaneBootstrapState(role: AtlasRole) {
   const [state, setState] = useState<SinglePaneBootstrapState>({
     isLoading: true,
@@ -82,56 +92,65 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
     let isMounted = true
 
     async function bootstrap() {
-      if (isMounted) {
-        setState((current) => ({ ...current, isLoading: true }))
+      try {
+        if (isMounted) {
+          setState((current) => ({ ...current, isLoading: true }))
+        }
+
+        const data = await loadSinglePaneBootstrap(role)
+        const [
+          requests,
+          heatmap,
+          quality,
+          partnerViewLoadBreakdown,
+          nextAccountSettings,
+          savedIntakes,
+          savedRouteAssignments,
+          savedNavigatorAssessments
+        ] = await Promise.all([
+          loadEnrollmentRequests(role),
+          loadCountyHeatmap(),
+          loadAdminDataQuality(),
+          loadPartnerRadialLoadBreakdown(),
+          loadAccountSettings(),
+          loadEnrolleeIntakes(),
+          loadRouteAssignments(),
+          loadNavigatorCompetencyAssessments()
+        ])
+
+        if (!isMounted) return
+
+        const partnerViewLoad = derivePartnerRadialLoad(partnerViewLoadBreakdown)
+
+        setState((current) => ({
+          ...current,
+          isLoading: false,
+          enrollees: data.enrollees || [],
+          loads: data.loads || [],
+          loadBreakdownsByEnrolleeId: data.loadBreakdownsByEnrolleeId || {},
+          roleConfigs: data.roleConfigs || [],
+          timelineConfig: data.timelineConfig,
+          timelineConfigsByEnrolleeId: data.timelineConfigsByEnrolleeId || {},
+          logs: data.logs || [],
+          enrollmentRequests: requests,
+          countyHeatmap: heatmap,
+          adminMetrics: quality,
+          partnerLoad: partnerViewLoad,
+          partnerLoadBreakdown: partnerViewLoadBreakdown,
+          accountSettings: nextAccountSettings,
+          intakeFormsByEnrolleeId: savedIntakes,
+          routeAssignmentsByEnrolleeId: savedRouteAssignments,
+          navigatorCompetencyAssessments: savedNavigatorAssessments,
+          selectedEnrolleeId: current.selectedEnrolleeId || data.enrollees?.[0]?.id || ''
+        }))
+      } catch (error) {
+        console.warn('Failed to bootstrap single pane state.', error)
+        if (!isMounted) return
+        setState((current) => ({
+          ...current,
+          isLoading: false
+        }))
       }
-
-      const data = await loadSinglePaneBootstrap(role)
-      const [
-        requests,
-        heatmap,
-        quality,
-        partnerViewLoad,
-        partnerViewLoadBreakdown,
-        nextAccountSettings,
-        savedIntakes,
-        savedRouteAssignments,
-        savedNavigatorAssessments
-      ] = await Promise.all([
-        loadEnrollmentRequests(role),
-        loadCountyHeatmap(),
-        loadAdminDataQuality(),
-        loadPartnerRadialLoad(),
-        loadPartnerRadialLoadBreakdown(),
-        loadAccountSettings(),
-        loadEnrolleeIntakes(),
-        loadRouteAssignments(),
-        loadNavigatorCompetencyAssessments()
-      ])
-
-      if (!isMounted) return
-
-      setState((current) => ({
-        ...current,
-        isLoading: false,
-        enrollees: data.enrollees || [],
-        loads: data.loads || [],
-        loadBreakdownsByEnrolleeId: data.loadBreakdownsByEnrolleeId || {},
-        roleConfigs: data.roleConfigs || [],
-        timelineConfig: data.timelineConfig,
-        timelineConfigsByEnrolleeId: data.timelineConfigsByEnrolleeId || {},
-        logs: data.logs || [],
-        enrollmentRequests: requests,
-        countyHeatmap: heatmap,
-        adminMetrics: quality,
-        partnerLoad: partnerViewLoad,
-        partnerLoadBreakdown: partnerViewLoadBreakdown,
-        accountSettings: nextAccountSettings,
-        intakeFormsByEnrolleeId: savedIntakes,
-        routeAssignmentsByEnrolleeId: savedRouteAssignments,
-        navigatorCompetencyAssessments: savedNavigatorAssessments,
-        selectedEnrolleeId: current.selectedEnrolleeId || data.enrollees?.[0]?.id || ''
-      }))
     }
 
     bootstrap()

@@ -10,6 +10,8 @@ const config = {
 }
 
 export const hasSupabaseConfig = hasConfig(config)
+export const isSinglePaneSupabaseBootstrapEnabled =
+  !import.meta.env.DEV || import.meta.env.VITE_ENABLE_SINGLEPANE_SUPABASE_BOOTSTRAP === 'true'
 
 export const supabase = createAtlasSupabaseClient(config, {
   auth: {

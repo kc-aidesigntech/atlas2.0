@@ -1,6 +1,7 @@
 import { fetchSinglePaneSurveyDefinition } from '@atlas/shared'
 import { useEffect, useState } from 'react'
 import type { PartnerServiceCapacityScaleOption, ZCodeSurveySection } from '@/features/atlas2026/singlepane/types'
+import { isOptionalSupabaseDataError, withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 export function useServiceCapacitySurveyCatalog() {
@@ -21,10 +22,21 @@ export function useServiceCapacitySurveyCatalog() {
       }
 
       try {
-        const definition = await fetchSinglePaneSurveyDefinition(supabase)
+        const definition = await withOptionalSupabaseFallback(
+          'singlepane.serviceCapacitySurveyDefinition',
+          () => fetchSinglePaneSurveyDefinition(supabase),
+          { scale: [], sections: [] }
+        )
         if (!isMounted) return
         setScale(definition.scale)
         setSections(definition.sections)
+      } catch (error) {
+        if (!isOptionalSupabaseDataError(error)) {
+          console.warn('Failed to load service capacity survey definition.', error)
+        }
+        if (!isMounted) return
+        setScale([])
+        setSections([])
       } finally {
         if (isMounted) {
           setIsLoading(false)

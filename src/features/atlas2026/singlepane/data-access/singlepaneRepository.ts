@@ -21,7 +21,7 @@ import {
   fetchSinglePaneTimelineConfig
 } from '@atlas/shared'
 import { fetchEnrollmentStationMarkers } from '@atlas/shared'
-import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
+import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 import {
   applyIntakeOverrides,
   loadAccountSettings,
@@ -46,6 +46,7 @@ import {
   savePartnerServiceCapacitySurvey,
   searchPartnerIdentifierRecordMatches
 } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
+import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 
 export interface SinglePaneBootstrapData {
   enrollees: import('@/features/atlas2026/singlepane/types').EnrolleeProfile[]
@@ -57,33 +58,49 @@ export interface SinglePaneBootstrapData {
   logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]
 }
 
+function createDefaultTimelineConfig() {
+  return {
+    planStartIso: new Date().toISOString(),
+    durationMonths: 9,
+    maxDurationMonths: 12,
+    gates: []
+  }
+}
+
+function createEmptyBootstrap(logs = loadLocalLogs()): SinglePaneBootstrapData {
+  return {
+    enrollees: [],
+    loads: [],
+    loadBreakdownsByEnrolleeId: {},
+    roleConfigs: [],
+    timelineConfig: createDefaultTimelineConfig(),
+    timelineConfigsByEnrolleeId: {},
+    logs
+  }
+}
+
 export async function loadSinglePaneBootstrap(_role: AtlasRole): Promise<SinglePaneBootstrapData> {
   const logs = loadLocalLogs()
   const intakeOverrides = await loadEnrolleeIntakes()
 
-  if (!hasSupabaseConfig || !supabase) {
-    return {
-      enrollees: [],
-      loads: [],
-      loadBreakdownsByEnrolleeId: {},
-      roleConfigs: [],
-      timelineConfig: {
-        planStartIso: new Date().toISOString(),
-        durationMonths: 9,
-        maxDurationMonths: 12,
-        gates: []
-      },
-      timelineConfigsByEnrolleeId: {},
-      logs
-    }
+  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) {
+    return createEmptyBootstrap(logs)
   }
 
   const [profiles, loadRows, breakdownRows, roleNavigation, timelineDefaults] = await Promise.all([
-    fetchSinglePaneEnrolleeProfiles(supabase),
-    fetchSinglePaneEnrolleeDomainLoads(supabase),
-    fetchSinglePaneEnrolleeDomainLoadBreakdown(supabase),
-    fetchAppRoleNavigation(supabase, 'singlepane'),
-    fetchSinglePaneTimelineConfig(supabase)
+    withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
+    withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), []),
+    withOptionalSupabaseFallback(
+      'singlepane.enrolleeDomainLoadBreakdown',
+      () => fetchSinglePaneEnrolleeDomainLoadBreakdown(supabase),
+      []
+    ),
+    withOptionalSupabaseFallback('singlepane.roleNavigation', () => fetchAppRoleNavigation(supabase, 'singlepane'), []),
+    withOptionalSupabaseFallback(
+      'singlepane.timelineDefaults',
+      () => fetchSinglePaneTimelineConfig(supabase),
+      createDefaultTimelineConfig()
+    )
   ])
 
   const bootstrapEnrollees = profiles.map((profile) => ({
@@ -189,8 +206,8 @@ export async function loadSinglePaneBootstrap(_role: AtlasRole): Promise<SingleP
 }
 
 export async function loadEnrollmentRequests(role: AtlasRole): Promise<EnrollmentRequestRecord[]> {
-  if (role !== 'navigator' || !hasSupabaseConfig || !supabase) return []
-  const rows = await fetchSinglePaneEnrollmentRequests(supabase)
+  if (role !== 'navigator' || !hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
+  const rows = await withOptionalSupabaseFallback('singlepane.enrollmentRequests', () => fetchSinglePaneEnrollmentRequests(supabase), [])
   return rows.map((row) => ({
     id: row.id,
     submittedAt: row.submittedAt,
@@ -216,8 +233,8 @@ export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteC
 }
 
 export async function loadCountyHeatmap(): Promise<CountyHeatPoint[]> {
-  if (!hasSupabaseConfig || !supabase) return []
-  const rows = await fetchSinglePaneCountyHeatmap(supabase)
+  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
+  const rows = await withOptionalSupabaseFallback('singlepane.countyHeatmap', () => fetchSinglePaneCountyHeatmap(supabase), [])
   return rows.map((row) => ({
     countyId: row.countyId,
     countyName: row.countyName,
@@ -227,8 +244,8 @@ export async function loadCountyHeatmap(): Promise<CountyHeatPoint[]> {
 }
 
 export async function loadAdminDataQuality(): Promise<AdminDataQualityMetric[]> {
-  if (!hasSupabaseConfig || !supabase) return []
-  return fetchSinglePaneAdminMetrics(supabase)
+  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
+  return withOptionalSupabaseFallback('singlepane.adminMetrics', () => fetchSinglePaneAdminMetrics(supabase), [])
 }
 
 export async function loadJourneyStationMarkers(enrollmentId?: string): Promise<JourneyStationMarker[]> {
@@ -271,8 +288,8 @@ export async function loadPartnerRadialLoad(): Promise<DomainLoad | null> {
 }
 
 export async function loadPartnerRadialLoadBreakdown(): Promise<DomainLoadBreakdown | null> {
-  if (!hasSupabaseConfig || !supabase) return null
-  return fetchPartnerLoadBreakdown(supabase)
+  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return null
+  return withOptionalSupabaseFallback('singlepane.partnerLoadBreakdown', () => fetchPartnerLoadBreakdown(supabase), null)
 }
 
 export {
