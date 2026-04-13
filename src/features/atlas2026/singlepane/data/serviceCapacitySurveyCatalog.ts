@@ -5,7 +5,7 @@ import type {
   ZCodeSurveySection
 } from '@/features/atlas2026/singlepane/types'
 
-export const SERVICE_CAPACITY_FORM_VERSION = '2026-z-burden-v1'
+export const SERVICE_CAPACITY_FORM_VERSION = '2026-z-burden-v2'
 export function flattenSurveyPrompts(sections: ZCodeSurveySection[]) {
   return sections.flatMap((section) => section.prompts)
 }
@@ -18,7 +18,8 @@ export function buildDefaultPartnerServiceCapacityAnswers(prompts: ZCodeSurveyPr
     normalizedZCode: item.normalizedZCode,
     title: item.title,
     description: item.description,
-    score: 5
+    score: null,
+    notEncountered: false
   }))
 }
 

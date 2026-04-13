@@ -32,6 +32,7 @@ export function derivePartnerCapabilityRelation(score: number) {
 export function aggregatePartnerSurveyAnswersByNormalizedZCode(input: PartnerServiceCapacitySubmissionInput) {
   const grouped = new Map<string, PartnerServiceCapacitySubmissionInput["answers"][number]>();
   input.answers.forEach((answer) => {
+    if (answer.notEncountered || typeof answer.score !== "number") return;
     const existing = grouped.get(answer.normalizedZCode);
     if (!existing || answer.score > existing.score) {
       grouped.set(answer.normalizedZCode, answer);

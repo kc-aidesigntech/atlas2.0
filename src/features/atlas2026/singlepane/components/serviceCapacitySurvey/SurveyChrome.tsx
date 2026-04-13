@@ -1,60 +1,67 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { usesLightTextOnZCodeColor } from '@atlas/shared'
 import { getScaleOption } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type { PartnerServiceCapacityScaleOption, ZCodeSurveyPrompt } from '@/features/atlas2026/singlepane/types'
 
-const downArrowUrl = new URL('../../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png', import.meta.url).toString()
-
 export function BurdenCard({
   promptItem,
   scale,
   score,
+  notEncountered,
   accentColor,
-  cardRef,
-  inputRef,
-  onTabNavigate,
-  onArrowNavigate,
-  onChange
+  currentIndex,
+  totalCount,
+  hasPrevious,
+  hasNext,
+  canAdvance,
+  onPreviousNavigate,
+  onNextNavigate,
+  onChange,
+  onNotEncounteredChange
 }: {
   promptItem: ZCodeSurveyPrompt
   scale: PartnerServiceCapacityScaleOption[]
   score: number | null
+  notEncountered: boolean
   accentColor: string
-  cardRef?: (element: HTMLDivElement | null) => void
-  inputRef?: (element: HTMLInputElement | null) => void
-  onTabNavigate: (direction: 1 | -1) => boolean
-  onArrowNavigate: () => boolean
+  currentIndex: number
+  totalCount: number
+  hasPrevious: boolean
+  hasNext: boolean
+  canAdvance: boolean
+  onPreviousNavigate: () => void
+  onNextNavigate: () => void
   onChange: (score: number | null) => void
+  onNotEncounteredChange: (value: boolean) => void
 }) {
+  const numericInputRef = useRef<HTMLInputElement | null>(null)
+  const previousScoreRef = useRef<number | null>(score)
+  const [isPulsing, setIsPulsing] = useState(false)
   const effectiveScore = score ?? 5
-  const scaleState = getScaleOption(scale, effectiveScore)
-  const thumbPercent = ((effectiveScore - 1) / 8) * 100
+  const scaleState = typeof score === 'number' ? getScaleOption(scale, effectiveScore) : null
   const badgeTextColor =
     accentColor === SP_COLORS.yellow || accentColor === SP_COLORS.green ? SP_COLORS.bg : SP_COLORS.white
-  const tooltipHalfWidth = 110
-  const tooltipLeft = `clamp(${tooltipHalfWidth}px, ${thumbPercent}%, calc(100% - ${tooltipHalfWidth}px))`
-  const sliderScaleColors = scale.map((option) =>
-    option.value <= 3 ? SP_COLORS.red : option.value <= 6 ? SP_COLORS.yellow : SP_COLORS.deepGreen
-  )
-  const localInputRef = useRef<HTMLInputElement | null>(null)
-  const tooltipRef = useRef<HTMLDivElement | null>(null)
-  const [tooltipHeight, setTooltipHeight] = useState(0)
-  const tooltipReservedHeight = score == null ? 0 : Math.max(tooltipHeight, 62)
-
-  const setNumericInputRef = React.useCallback(
-    (element: HTMLInputElement | null) => {
-      localInputRef.current = element
-      inputRef?.(element)
-    },
-    [inputRef]
+  const sliderScaleColors = useMemo(
+    () => scale.map((option) => (option.value <= 3 ? SP_COLORS.red : option.value <= 6 ? SP_COLORS.yellow : SP_COLORS.deepGreen)),
+    [scale]
   )
 
-  function focusNumericInput() {
-    const target = localInputRef.current
-    if (!target) return
-    target.focus()
-    target.select()
+  useEffect(() => {
+    const previousScore = previousScoreRef.current
+    if (typeof score === 'number' && score !== previousScore) {
+      setIsPulsing(true)
+      const timeoutId = window.setTimeout(() => setIsPulsing(false), 420)
+      previousScoreRef.current = score
+      return () => window.clearTimeout(timeoutId)
+    }
+    previousScoreRef.current = score
+    return undefined
+  }, [score])
+
+  function handleSelectScore(nextScore: number) {
+    onNotEncounteredChange(false)
+    onChange(nextScore)
   }
 
   function handleNumberInputChange(nextValue: string) {
@@ -64,314 +71,207 @@ export function BurdenCard({
     }
     const parsed = Number(nextValue)
     if (!Number.isFinite(parsed)) return
-    onChange(Math.max(1, Math.min(9, Math.round(parsed))))
+    handleSelectScore(Math.max(1, Math.min(9, Math.round(parsed))))
   }
-
-  function handleCardClick(event: React.MouseEvent<HTMLDivElement>) {
-    const target = event.target
-    if (!(target instanceof HTMLElement)) {
-      focusNumericInput()
-      return
-    }
-
-    if (target.closest('button, input, label')) return
-    focusNumericInput()
-  }
-
-  useEffect(() => {
-    if (score == null) {
-      setTooltipHeight(0)
-      return
-    }
-
-    const tooltip = tooltipRef.current
-    if (!tooltip) return
-
-    const updateHeight = () => {
-      setTooltipHeight(tooltip.offsetHeight)
-    }
-
-    updateHeight()
-
-    if (typeof ResizeObserver === 'undefined') return
-
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(tooltip)
-    return () => observer.disconnect()
-  }, [score, scaleState.description, scaleState.label])
 
   return (
-    <div
-      ref={cardRef}
-      onClick={handleCardClick}
-      className="relative scroll-mt-5 rounded-[22px] border px-4 pb-3 pt-3 transition-[box-shadow,border-color] duration-150 ease-out hover:border-white/40 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_24px_rgba(255,255,255,0.08)] focus-within:border-white/50 focus-within:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_28px_rgba(255,255,255,0.1)] active:border-white/45 active:shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_0_26px_rgba(255,255,255,0.09)] md:px-5 md:pb-3.5 md:scroll-mt-6"
-      style={{ borderColor: '#ffffff30', borderWidth: '1.5px', backgroundColor: '#050505' }}
-    >
-      <div
-        className="flex items-start justify-between gap-3 border-b pb-3 md:gap-4 md:pb-3.5"
-        style={{ borderColor: '#ffffff40', borderBottomWidth: '1.5px' }}
-      >
-        <div className="min-w-0 flex flex-1 items-baseline gap-3 md:gap-4">
-          <div className="w-[88px] shrink-0 text-[14px] font-medium leading-none text-white md:w-[104px] md:text-[16px]">
-            {promptItem.zCode}
-          </div>
-          <div className="min-w-0 flex-1 pr-2 text-[13px] leading-tight text-[#d6d6d6] md:text-[15px]">
-            {promptItem.description}
+    <div className="rounded-[24px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff30', borderWidth: '1.5px', backgroundColor: '#050505' }}>
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-4" style={{ borderColor: '#ffffff20' }}>
+        <div className="min-w-0 flex-1">
+          <small className="block text-[12px] uppercase tracking-[0.14em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+            question {currentIndex + 1} of {totalCount}
+          </small>
+          <div className="mt-2 flex flex-wrap items-start gap-3 md:gap-4">
+            <div className="text-[16px] font-medium leading-none text-white md:text-[18px]">{promptItem.zCode}</div>
+            <div className="max-w-[820px] text-[15px] leading-snug text-[#d6d6d6] md:text-[18px]">{promptItem.description}</div>
           </div>
         </div>
-        <div className="flex shrink-0 items-start">
-          <div
-            className="flex h-10 w-10 items-center justify-center rounded-full text-[24px] font-bold leading-none md:h-11 md:w-11 md:text-[30px]"
+        <div
+          className={`flex h-12 min-w-[56px] items-center justify-center rounded-full px-3 text-[18px] font-bold leading-none md:h-14 md:min-w-[64px] md:text-[22px] ${
+            isPulsing ? 'animate-pulse' : ''
+          }`}
+          style={{
+            backgroundColor: notEncountered ? '#1b1b1b' : accentColor,
+            color: notEncountered ? SP_COLORS.muted : badgeTextColor,
+            opacity: score == null && !notEncountered ? 0.4 : 1,
+            boxShadow: isPulsing ? `0 0 0 1px ${accentColor}, 0 0 24px ${accentColor}44` : 'none'
+          }}
+        >
+          {notEncountered ? 'n/a' : score ?? '--'}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-[22px] border px-3 py-3 md:px-4 md:py-4" style={{ borderColor: '#ffffff22', backgroundColor: '#020202' }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <small className="text-[12px] uppercase tracking-[0.12em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+            assign a burden score
+          </small>
+          <button
+            type="button"
+            onClick={() => {
+              const nextValue = !notEncountered
+              onNotEncounteredChange(nextValue)
+              if (nextValue) {
+                onChange(null)
+              } else {
+                requestAnimationFrame(() => numericInputRef.current?.focus())
+              }
+            }}
+            className="rounded-full border px-3 py-1.5 text-[12px] transition-[border-color,background-color,color] duration-150 ease-out md:text-[13px]"
             style={{
-              backgroundColor: accentColor,
-              color: badgeTextColor,
-              opacity: score == null ? 0.35 : 1
+              borderColor: notEncountered ? SP_COLORS.green : '#ffffff2c',
+              backgroundColor: notEncountered ? '#0f2117' : 'transparent',
+              color: notEncountered ? SP_COLORS.green : SP_COLORS.muted
             }}
           >
-            {score ?? ''}
+            not encountered in our work
+          </button>
+        </div>
+
+        <div className={`mt-4 ${notEncountered ? 'opacity-45' : ''}`}>
+          <input
+            type="range"
+            min={1}
+            max={9}
+            step={1}
+            disabled={notEncountered}
+            value={effectiveScore}
+            onChange={(event) => handleSelectScore(Number(event.target.value))}
+            className="w-full accent-white disabled:cursor-not-allowed"
+          />
+          <div className="mt-3 grid grid-cols-9 gap-1.5">
+            {scale.map((option, index) => {
+              const isSelected = !notEncountered && option.value === score
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  disabled={notEncountered}
+                  onClick={() => handleSelectScore(option.value)}
+                  className={`rounded-[16px] border px-0 py-2 text-[13px] font-semibold transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out md:text-[15px] ${
+                    isSelected && isPulsing ? 'animate-pulse' : ''
+                  }`}
+                  style={{
+                    borderColor: isSelected ? accentColor : '#ffffff22',
+                    backgroundColor: isSelected ? `${accentColor}18` : '#050505',
+                    color: sliderScaleColors[index],
+                    boxShadow: isSelected ? `0 0 0 1px ${accentColor}, 0 0 16px ${accentColor}22` : 'none',
+                    transform: isSelected ? 'translateY(-1px)' : 'none'
+                  }}
+                >
+                  {option.value}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
+            <span>value</span>
+            <input
+              ref={numericInputRef}
+              type="number"
+              min={1}
+              max={9}
+              step={1}
+              disabled={notEncountered}
+              value={score ?? ''}
+              onChange={(event) => handleNumberInputChange(event.target.value)}
+              onFocus={(event) => event.currentTarget.select()}
+              inputMode="numeric"
+              className="w-[72px] rounded-xl border bg-black px-2 py-1 text-center text-[15px] text-white disabled:cursor-not-allowed disabled:opacity-45"
+              style={{ borderColor: '#ffffff30' }}
+            />
+          </label>
+          <div className="min-h-[20px] flex-1 text-[12px] md:text-[14px]" style={{ color: scaleState ? SP_COLORS.white : SP_COLORS.muted }}>
+            {notEncountered ? 'This item is marked as not encountered and will be stored without a score.' : scaleState ? `${scaleState.value} - ${scaleState.label}: ${scaleState.description}` : 'Select a value from 1 to 9 by dragging, clicking, or typing.'}
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 pt-3 sm:flex-row sm:items-start md:gap-4 md:pt-3.5">
-        <div className="hidden w-[88px] shrink-0 sm:block md:w-[104px]" />
-        <div className="min-w-0 flex-1">
-          <div
-            className="relative transition-[padding-top] duration-200 ease-out md:duration-300"
-            style={{ paddingTop: score == null ? 0 : tooltipReservedHeight + 8 }}
-          >
-            {score == null ? null : (
-              <div
-                ref={tooltipRef}
-                className="pointer-events-none absolute top-0 z-10 w-[220px] max-w-[calc(100%-8px)] -translate-x-1/2 rounded-[16px] border px-3 py-2 transition-[left,opacity] duration-200 ease-out md:duration-300"
-                style={{
-                  left: tooltipLeft,
-                  borderColor: '#ffffff25',
-                  backgroundColor: '#080808'
-                }}
-              >
-                <small className="block text-[11px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
-                  {scaleState.value} - {scaleState.label}
-                </small>
-                <small className="block text-[11px] text-white md:text-[13px]">{scaleState.description}</small>
-              </div>
-            )}
-
-            <div
-              className="rounded-[20px] border px-3 py-2.5 md:px-3.5 md:py-3"
-              style={{ borderColor: '#ffffff26', borderWidth: '1.5px', backgroundColor: '#020202' }}
-            >
-              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start">
-                <div className="min-w-0 flex-1">
-                  <div className={`relative h-6 overflow-visible ${score == null ? 'opacity-55' : ''}`}>
-                    <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-[6px] -translate-y-1/2 rounded-full bg-white/50" />
-                    {score == null ? null : (
-                      <div
-                        className="pointer-events-none absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full"
-                        style={{
-                          left: `${thumbPercent}%`,
-                          backgroundColor: '#f3f4f6',
-                          border: '1.5px solid rgba(255,255,255,0.85)',
-                          boxShadow: '0 0 0 1px rgba(0,0,0,0.18)'
-                        }}
-                      />
-                    )}
-                    <input
-                      type="range"
-                      min={1}
-                      max={9}
-                      step={1}
-                      value={effectiveScore}
-                      onChange={(event) => onChange(Number(event.target.value))}
-                      tabIndex={-1}
-                      className="absolute inset-0 h-6 w-full cursor-pointer opacity-0"
-                    />
-                  </div>
-                  <div className="relative mt-1.5 h-4 overflow-visible text-[10px] md:h-[18px] md:text-[11px]">
-                    {scale.map((option, index) => (
-                      <span
-                        key={option.value}
-                        className="absolute top-0 leading-none"
-                        style={{
-                          left: `${((option.value - 1) / 8) * 100}%`,
-                          transform: 'translateX(-50%)',
-                          color: sliderScaleColors[index]
-                        }}
-                      >
-                        {option.value}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <label className="ml-2 flex items-center gap-2 text-[12px] sm:ml-3 sm:pt-0.5 md:text-[14px]" style={{ color: SP_COLORS.muted }}>
-                  <span>value</span>
-                  <input
-                    ref={setNumericInputRef}
-                    type="number"
-                    min={1}
-                    max={9}
-                    step={1}
-                    value={score ?? ''}
-                    onChange={(event) => handleNumberInputChange(event.target.value)}
-                    onFocus={(event) => event.currentTarget.select()}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'Tab') return
-                      if (onTabNavigate(event.shiftKey ? -1 : 1)) {
-                        event.preventDefault()
-                      }
-                    }}
-                    inputMode="numeric"
-                    className="w-[64px] rounded-xl border bg-black px-2 py-1 text-center text-[14px] text-white md:text-[15px]"
-                    style={{ borderColor: '#ffffff30' }}
-                  />
-                </label>
-              </div>
-              {score == null ? (
-                <small className="mt-2 block text-[11px] text-[#8f8f8f] md:text-[12px]">
-                  Select a rating from 1 to 9 to capture this capability.
-                </small>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <div className="relative z-10 flex shrink-0 self-end flex-col items-center gap-2 pt-1 sm:self-start sm:pl-2">
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onPreviousNavigate}
+          disabled={!hasPrevious}
+          className="rounded-full border px-3 py-1.5 text-[12px] lowercase md:text-[13px]"
+          style={{ borderColor: '#ffffff24', color: SP_COLORS.muted, opacity: hasPrevious ? 1 : 0.35 }}
+        >
+          back
+        </button>
+        {hasNext ? (
           <button
             type="button"
-            onClick={onArrowNavigate}
-            className="rounded-full p-1 transition-[box-shadow,opacity,background-color] duration-150 ease-out hover:bg-white/5 hover:opacity-100 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_18px_rgba(255,255,255,0.12)] focus:outline-none focus:ring-2 focus:ring-white/40 focus:bg-white/5 focus:shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_0_18px_rgba(255,255,255,0.12)] active:bg-white/5 active:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_16px_rgba(255,255,255,0.1)]"
-            aria-label={`Jump to next card after ${promptItem.zCode}`}
+            onClick={onNextNavigate}
+            disabled={!canAdvance}
+            className="rounded-full border px-4 py-2 text-[13px] font-medium md:text-[14px]"
+            style={{
+              borderColor: SP_COLORS.yellow,
+              color: SP_COLORS.yellow,
+              opacity: canAdvance ? 1 : 0.45,
+              boxShadow: canAdvance ? '0 0 18px rgba(252,192,26,0.12)' : 'none'
+            }}
           >
-            <img
-              src={downArrowUrl}
-              alt=""
-              aria-hidden="true"
-              className="h-16 w-7 rotate-180 object-contain opacity-70 md:h-20 md:w-8"
-            />
+            {'next ->'}
           </button>
-        </div>
+        ) : (
+          <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+            final question
+          </small>
+        )}
       </div>
     </div>
   )
 }
 
 export function SurveyProgressHeader({
-  sectionProgress,
-  onSelectSection
+  currentIndex,
+  totalCount,
+  completedCount,
+  parentCode,
+  parentTheme,
+  accentColor
 }: {
-  sectionProgress: Array<{
-    parentCode: string
-    accentColor: string
-    total: number
-    completed: number
-    ratio: number
-  }>
-  onSelectSection: (parentCode: string) => void
-}) {
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
-  const [isPinned, setIsPinned] = useState(false)
-  const headerHeightClass = 'h-[86px] sm:h-[92px]'
-
-  useEffect(() => {
-    function updatePinnedState() {
-      const sentinel = sentinelRef.current
-      if (!sentinel) return
-      setIsPinned(sentinel.getBoundingClientRect().top <= 0)
-    }
-
-    updatePinnedState()
-    window.addEventListener('scroll', updatePinnedState, { passive: true })
-    window.addEventListener('resize', updatePinnedState)
-
-    return () => {
-      window.removeEventListener('scroll', updatePinnedState)
-      window.removeEventListener('resize', updatePinnedState)
-    }
-  }, [])
-
-  return (
-    <>
-      <div ref={sentinelRef} className="mt-6" aria-hidden="true" />
-      <div className={isPinned ? headerHeightClass : ''} aria-hidden="true" />
-      <div className={isPinned ? 'fixed left-0 right-0 top-0 z-[70]' : 'relative z-30'}>
-        <div
-          className={`w-full border-b bg-black/95 backdrop-blur-sm ${headerHeightClass}`}
-          style={{ borderColor: '#ffffff24' }}
-        >
-          <div className="mx-auto flex h-full w-full max-w-[1320px] items-center px-2 sm:px-3 md:px-6">
-            <div className="grid w-full grid-cols-9 items-start justify-items-center gap-1.5 sm:gap-2 md:gap-3">
-              {sectionProgress.map((section) => (
-                <button
-                  key={section.parentCode}
-                  type="button"
-                  onClick={() => onSelectSection(section.parentCode)}
-                  className="flex min-w-0 w-full flex-col items-center gap-1 rounded-[18px] px-0.5 py-1 transition-[box-shadow,background-color] duration-150 ease-out hover:bg-white/5 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.14)]"
-                >
-                  <ProgressCircle
-                    label={section.parentCode.replace(/^Z/i, '')}
-                    accentColor={section.accentColor}
-                    ratio={section.ratio}
-                    isComplete={section.completed === section.total}
-                  />
-                  <small className="text-[clamp(8px,1.9vw,11px)] tracking-[0.04em]" style={{ color: SP_COLORS.muted }}>
-                    {section.completed}/{section.total}
-                  </small>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  )
-}
-
-function ProgressCircle({
-  label,
-  accentColor,
-  ratio,
-  isComplete
-}: {
-  label: string
+  currentIndex: number
+  totalCount: number
+  completedCount: number
+  parentCode: string
+  parentTheme: string
   accentColor: string
-  ratio: number
-  isComplete: boolean
 }) {
-  const size = 54
-  const radius = 24
-  const circumference = 2 * Math.PI * radius
-  const dashOffset = circumference * (1 - Math.max(0, Math.min(1, ratio)))
+  const ratio = totalCount ? completedCount / totalCount : 0
   const useLightText = usesLightTextOnZCodeColor(accentColor)
 
   return (
-    <div className="relative h-[clamp(34px,6.1vw,54px)] w-[clamp(34px,6.1vw,54px)]">
-      <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="3" />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke={accentColor}
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={dashOffset}
+    <div className="sticky top-0 z-30 mt-5 rounded-[22px] border bg-black/92 px-4 py-3 backdrop-blur-sm md:px-5" style={{ borderColor: '#ffffff24' }}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <small className="block text-[12px] uppercase tracking-[0.12em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+            survey progress
+          </small>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span
+              className="rounded-full px-2.5 py-1 text-[12px] font-semibold md:text-[13px]"
+              style={{
+                backgroundColor: accentColor,
+                color: useLightText ? SP_COLORS.white : SP_COLORS.bg
+              }}
+            >
+              {parentCode}
+            </span>
+            <small className="text-[12px] text-[#d5d5d5] md:text-[13px]">{parentTheme}</small>
+          </div>
+        </div>
+        <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+          {Math.min(currentIndex + 1, totalCount)} of {totalCount} viewed | {completedCount} completed
+        </small>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full transition-[width] duration-200 ease-out"
+          style={{ width: `${Math.max(0, Math.min(100, ratio * 100))}%`, backgroundColor: accentColor }}
         />
-      </svg>
-      <div
-        className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[clamp(14px,3vw,22px)] font-bold leading-none ${
-          isComplete ? (useLightText ? 'text-white' : 'text-black') : ''
-        }`}
-        style={{
-          width: 'calc(100% - 10px)',
-          height: 'calc(100% - 10px)',
-          backgroundColor: isComplete ? accentColor : '#050505',
-          color: isComplete ? (useLightText ? SP_COLORS.white : SP_COLORS.bg) : accentColor,
-          border: `1.5px solid ${isComplete ? accentColor : '#ffffff26'}`
-        }}
-      >
-        {label}
       </div>
     </div>
   )

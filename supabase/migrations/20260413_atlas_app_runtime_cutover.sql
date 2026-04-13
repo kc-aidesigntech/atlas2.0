@@ -347,6 +347,9 @@ left join atlas.route_builder_journey_assignments rja
  and rja.status = 'active'
 where en.status = 'active';
 
+drop view if exists atlas.v_navigator_route_candidates;
+drop function if exists atlas.fn_rank_route_candidates(uuid);
+
 create or replace function atlas.fn_rank_route_candidates(p_enrollment_id uuid)
 returns table(
   station_id uuid,

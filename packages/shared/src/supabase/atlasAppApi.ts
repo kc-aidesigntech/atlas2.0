@@ -354,7 +354,7 @@ export async function fetchSinglePaneTimelineConfig(client: AnySupabaseClient) {
 
 export async function fetchSinglePaneSurveyDefinition(
   client: AnySupabaseClient,
-  version = "2026-z-burden-v1",
+  version = "2026-z-burden-v2",
 ) {
   const payload = await fetchConfigPayload(client, "singlepane", "service_capacity_survey", version);
   const record = asRecord(payload);
@@ -489,18 +489,22 @@ export async function fetchPartnerLoadBreakdown(client: AnySupabaseClient) {
   if (error) throw error;
 
   const rows = (data || []).map((row) => {
-    const rawGroup = String(row.category_key || "").trim().toUpperCase();
-    const normalizedGroup = rawGroup.startsWith("Z") ? rawGroup : `Z${rawGroup.replace(/^Z/i, "")}`;
-    const numericGroup = normalizedGroup.replace(/^Z/i, "");
+    const categoryKey = String(row.category_key || "").trim().toLowerCase();
     const mappedDomain =
-      ["55", "56", "57"].includes(numericGroup)
+      categoryKey === "work"
         ? "work"
-        : numericGroup === "59"
+        : categoryKey === "habitat"
           ? "habitat"
           : "socialNetworks";
+    const zCodeGroup =
+      mappedDomain === "work"
+        ? "Z55-Z57"
+        : mappedDomain === "habitat"
+          ? "Z58-Z59"
+          : "Z60-Z65";
     return {
-      id: `${row.station_id}:${normalizedGroup}`,
-      zCodeGroup: normalizedGroup,
+      id: `${row.station_id}:${categoryKey}`,
+      zCodeGroup,
       mappedDomain,
       rawCount: Number(row.z_code_count || 0),
     } as PartnerLoadBreakdownRecord["rows"][number];

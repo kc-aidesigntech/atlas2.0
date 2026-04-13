@@ -54,10 +54,11 @@ For the partner survey flow, apply these migrations in order:
 6. `supabase/migrations/20260411_supervisor_navigator_competency.sql`
 7. `supabase/migrations/20260412_partner_identifier_records.sql`
 8. `supabase/migrations/20260412_partner_service_capacity_drafts.sql`
+9. `supabase/migrations/20260414_zcode_master_alignment.sql`
 
 If you want the full root-shell runtime, also apply:
 
-9. `supabase/migrations/20260413_atlas_app_runtime_cutover.sql`
+10. `supabase/migrations/20260413_atlas_app_runtime_cutover.sql`
 
 ## Step 4: Apply Required Seeds
 

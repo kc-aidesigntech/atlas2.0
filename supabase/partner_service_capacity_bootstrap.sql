@@ -53,7 +53,12 @@ create table if not exists atlas.partner_service_capacity_answers (
   normalized_z_code text not null,
   title text not null,
   description text,
-  burden_score int not null check (burden_score between 1 and 9),
+  burden_score int,
+  not_encountered boolean not null default false,
+  check (
+    (not_encountered = true and burden_score is null) or
+    (not_encountered = false and burden_score between 1 and 9)
+  ),
   created_at timestamptz not null default now(),
   unique(submission_id, prompt_id)
 );

@@ -14,6 +14,7 @@ Apply migrations in this order for a new environment:
 4. `supabase/migrations/20260411_grant_delete_partner_service_capacity.sql`
 5. `supabase/migrations/20260411_authorization_foundation.sql`
 6. `supabase/migrations/20260411_supervisor_navigator_competency.sql`
+7. `supabase/migrations/20260414_zcode_master_alignment.sql`
 
 ## Domain Map
 
@@ -81,6 +82,11 @@ RLS is enabled and policy-managed on survey/capacity tables:
 - `atlas.partner_service_capacity_submissions`
 - `atlas.partner_service_capacity_answers`
 - `atlas.partner_z_code_burden_scores`
+
+`atlas.partner_service_capacity_answers` supports two intentional completion states:
+
+- `burden_score in 1..9` for rated answers
+- `not_encountered = true` with `burden_score = null` for items that are outside the organization's work
 
 Each action (`select`, `insert`, `update`, `delete`) allows access when either:
 

@@ -18,6 +18,7 @@ const TASK_LABELS: Record<string, string[]> = {
   z55: ['education stability check', 'literacy support referral'],
   z56: ['employment readiness touchpoint', 'job retention barrier check'],
   z57: ['workplace exposure follow-up', 'safety planning confirmation'],
+  z58: ['physical environment barrier check', 'basic services access review'],
   z59: ['housing stabilization checkpoint', 'resource access confirmation'],
   z60: ['social support activation', 'family network outreach'],
   z62: ['care coordination with trauma-informed provider', 'household stress buffer check'],

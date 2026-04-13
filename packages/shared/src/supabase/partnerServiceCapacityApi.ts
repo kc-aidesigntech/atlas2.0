@@ -74,6 +74,7 @@ function mapSubmissionRow(
       title: answer.title,
       description: answer.description || "",
       score: answer.burden_score,
+      notEncountered: Boolean(answer.not_encountered),
     })),
   };
 }
@@ -358,7 +359,8 @@ export async function savePartnerServiceCapacitySubmission(
     normalized_z_code: answer.normalizedZCode,
     title: answer.title,
     description: answer.description,
-    burden_score: answer.score,
+    burden_score: answer.notEncountered ? null : answer.score,
+    not_encountered: answer.notEncountered,
   }));
 
   if (!answerRows.length) {

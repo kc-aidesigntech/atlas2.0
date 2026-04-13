@@ -22,7 +22,8 @@ export interface PartnerServiceCapacityAnswer {
   normalizedZCode: string;
   title: string;
   description: string;
-  score: number;
+  score: number | null;
+  notEncountered: boolean;
 }
 
 export interface PartnerServiceCapacitySubmissionInput {
@@ -148,7 +149,8 @@ export interface AtlasDatabase {
           normalized_z_code: string;
           title: string;
           description: string | null;
-          burden_score: number;
+          burden_score: number | null;
+          not_encountered: boolean;
           created_at: string;
         };
         Insert: {
@@ -159,7 +161,8 @@ export interface AtlasDatabase {
           normalized_z_code: string;
           title: string;
           description?: string | null;
-          burden_score: number;
+          burden_score?: number | null;
+          not_encountered?: boolean;
         };
         Update: Partial<{
           prompt_id: string;
@@ -168,7 +171,8 @@ export interface AtlasDatabase {
           normalized_z_code: string;
           title: string;
           description: string | null;
-          burden_score: number;
+          burden_score: number | null;
+          not_encountered: boolean;
         }>;
       };
       z_codes: {

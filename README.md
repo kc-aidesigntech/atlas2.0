@@ -201,6 +201,7 @@ Apply in this sequence for a new Supabase environment:
 4. `supabase/migrations/20260411_grant_delete_partner_service_capacity.sql`
 5. `supabase/migrations/20260411_authorization_foundation.sql`
 6. `supabase/migrations/20260411_supervisor_navigator_competency.sql`
+7. `supabase/migrations/20260414_zcode_master_alignment.sql`
 
 ## Useful Scripts
 

@@ -9,7 +9,7 @@ import type {
 
 export const SERVICE_CAPACITY_DRAFT_STORAGE_KEY = 'atlas2026.service-capacity.active-draft.v1'
 
-export type DraftAnswer = Omit<PartnerServiceCapacityAnswer, 'score'> & { score: number | null }
+export type DraftAnswer = PartnerServiceCapacityAnswer
 
 export interface DraftState {
   header: PartnerServiceCapacityHeader
@@ -49,7 +49,7 @@ export function hasMeaningfulDraftContent(header: PartnerServiceCapacityHeader, 
     Boolean(header.jobTitle.trim()) ||
     header.respondentRoles.length > 0 ||
     Boolean(header.otherRoleText.trim()) ||
-    answers.some((answer) => typeof answer.score === 'number')
+    answers.some((answer) => typeof answer.score === 'number' || answer.notEncountered)
   )
 }
 
@@ -82,7 +82,7 @@ export function persistSurveyDraft(draft: PersistedSurveyDraft | null) {
 }
 
 export function buildDraftAnswers(savedSubmission: PartnerServiceCapacitySubmissionRecord | null, prompts: ZCodeSurveyPrompt[]) {
-  const defaults = buildDefaultPartnerServiceCapacityAnswers(prompts).map((answer) => ({ ...answer, score: null as number | null }))
+  const defaults = buildDefaultPartnerServiceCapacityAnswers(prompts)
   const answersByPromptId = new Map(savedSubmission?.answers.map((answer) => [answer.promptId, answer]) || [])
   return defaults.map((answer) => answersByPromptId.get(answer.promptId) || answer)
 }

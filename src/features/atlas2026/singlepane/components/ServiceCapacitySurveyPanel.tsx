@@ -29,6 +29,7 @@ import type {
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
   PartnerSurveyRespondentRole,
+  ZCodeSurveyPrompt,
   ZCodeSurveySection,
 } from '../types'
 
@@ -65,13 +66,9 @@ const ROLE_OPTIONS: Array<{ value: PartnerSurveyRespondentRole; label: string }>
 ]
 type PanelView = 'history' | 'survey'
 
-interface SectionProgress {
-  parentCode: string
-  theme: string
-  accentColor: string
-  total: number
-  completed: number
-  ratio: number
+interface VisiblePromptEntry {
+  section: ZCodeSurveySection
+  prompt: ZCodeSurveyPrompt
 }
 
 function getRespondentValidationMessage(header: PartnerServiceCapacityHeader) {
@@ -86,6 +83,10 @@ function getRespondentValidationMessage(header: PartnerServiceCapacityHeader) {
     return 'Add the role description for “Other” before submitting the survey.'
   }
   return null
+}
+
+function isAnswerComplete(answer: DraftAnswer | PartnerServiceCapacityAnswer | undefined) {
+  return Boolean(answer && (answer.notEncountered || typeof answer.score === 'number'))
 }
 
 export default function ServiceCapacitySurveyPanel({
@@ -240,12 +241,9 @@ function ServiceCapacitySurveyForm({
   const [selectedPartnerIdentifierId, setSelectedPartnerIdentifierId] = useState<string | null>(null)
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(initialSubmission?.id || null)
-  const numericInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
-  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
+  const [currentPromptIndex, setCurrentPromptIndex] = useState(0)
   const firstNameInputRef = useRef<HTMLInputElement | null>(null)
   const hasAutoFocusedFirstName = useRef(false)
-  const hasAutoFocusedFirstCard = useRef(false)
   const autosaveTimeoutRef = useRef<number | null>(null)
   const lastAutosavedSnapshotRef = useRef<string>('')
   const hasPendingAutosaveRef = useRef(false)
@@ -303,44 +301,31 @@ function ServiceCapacitySurveyForm({
   }, [draft.header.firstName, draft.header.lastName, onSearchPartnerIdentifiers, selectedPartnerIdentifierId])
 
   const answersByPromptId = useMemo(() => new Map(draft.answers.map((answer) => [answer.promptId, answer])), [draft.answers])
-  const orderedPromptIds = useMemo(
-    () => sections.flatMap((section) => section.prompts.map((promptItem) => promptItem.id)),
-    [sections]
-  )
-  const sectionProgress = useMemo<SectionProgress[]>(
-    () =>
-      sections.map((section) => {
-        const completed = section.prompts.reduce((count, promptItem) => {
-          const answer = answersByPromptId.get(promptItem.id)
-          return typeof answer?.score === 'number' ? count + 1 : count
-        }, 0)
-        const total = section.prompts.length
-        return {
-          parentCode: section.parentCode,
-          theme: section.theme,
-          accentColor: getZCodeParentColor(section.parentCode) || SP_COLORS.white,
-          total,
-          completed,
-          ratio: total ? completed / total : 0
+  const visiblePromptEntries = useMemo<VisiblePromptEntry[]>(() => {
+    const homelessnessAnswer = sections
+      .flatMap((section) => section.prompts)
+      .find((promptItem) => promptItem.normalizedZCode === 'Z59.0')
+    const hasRatedHomelessness =
+      typeof (homelessnessAnswer ? answersByPromptId.get(homelessnessAnswer.id)?.score : null) === 'number'
+
+    return sections.flatMap((section) =>
+      section.prompts.flatMap((promptItem) => {
+        if ((promptItem.normalizedZCode === 'Z59.01' || promptItem.normalizedZCode === 'Z59.02') && !hasRatedHomelessness) {
+          return []
         }
-      }),
-    [answersByPromptId, sections]
+        return [{ section, prompt: promptItem }]
+      })
+    )
+  }, [answersByPromptId, sections])
+  const completedCount = useMemo(
+    () => visiblePromptEntries.reduce((count, entry) => count + (isAnswerComplete(answersByPromptId.get(entry.prompt.id)) ? 1 : 0), 0),
+    [answersByPromptId, visiblePromptEntries]
   )
-  const completedCount = draft.answers.filter((answer) => typeof answer.score === 'number' && answer.score >= 1 && answer.score <= 9).length
   const respondentValidationMessage = getRespondentValidationMessage(draft.header)
-
-  useEffect(() => {
-    if (respondentValidationMessage || hasAutoFocusedFirstCard.current) return
-    const firstPromptId = orderedPromptIds[0]
-    const firstInput = firstPromptId ? numericInputRefs.current[firstPromptId] : null
-    if (!firstInput) return
-
-    hasAutoFocusedFirstCard.current = true
-    requestAnimationFrame(() => {
-      firstInput.focus()
-      firstInput.select()
-    })
-  }, [draft.answers, orderedPromptIds, respondentValidationMessage])
+  const currentPromptEntry = visiblePromptEntries[currentPromptIndex] || null
+  const currentPromptAnswer = currentPromptEntry ? answersByPromptId.get(currentPromptEntry.prompt.id) : null
+  const currentAccentColor = currentPromptEntry ? getZCodeParentColor(currentPromptEntry.section.parentCode) || SP_COLORS.white : SP_COLORS.white
+  const canAdvanceCurrentPrompt = isAnswerComplete(currentPromptAnswer || undefined)
 
   useEffect(() => {
     if (!respondentValidationMessage || hasAutoFocusedFirstName.current) return
@@ -353,6 +338,13 @@ function ServiceCapacitySurveyForm({
       firstInput.select()
     })
   }, [draft.header.firstName, respondentValidationMessage])
+
+  useEffect(() => {
+    setCurrentPromptIndex((current) => {
+      if (!visiblePromptEntries.length) return 0
+      return Math.max(0, Math.min(current, visiblePromptEntries.length - 1))
+    })
+  }, [visiblePromptEntries])
 
   function updateHeader<K extends keyof PartnerServiceCapacityHeader>(key: K, value: PartnerServiceCapacityHeader[K]) {
     hasPendingAutosaveRef.current = true
@@ -394,65 +386,24 @@ function ServiceCapacitySurveyForm({
     updateHeader('otherRoleText', '')
   }
 
-  function updateAnswer(promptId: string, score: number | null) {
+  function updateAnswer(promptId: string, updates: Partial<DraftAnswer>) {
     hasPendingAutosaveRef.current = true
     setDraft((current) => ({
       ...current,
-      answers: current.answers.map((answer) => (answer.promptId === promptId ? { ...answer, score } : answer))
+      answers: current.answers.map((answer) => {
+        if (answer.promptId === promptId) {
+          return { ...answer, ...updates }
+        }
+        if (
+          promptId === 'z59-0' &&
+          (answer.promptId === 'z59-01' || answer.promptId === 'z59-02') &&
+          (updates.notEncountered === true || ('score' in updates && typeof updates.score !== 'number'))
+        ) {
+          return { ...answer, score: null, notEncountered: false }
+        }
+        return answer
+      })
     }))
-  }
-
-  function focusAdjacentNumericInput(promptId: string, direction: 1 | -1) {
-    const currentIndex = orderedPromptIds.indexOf(promptId)
-    if (currentIndex === -1) return false
-
-    const nextPromptId = orderedPromptIds[currentIndex + direction]
-    if (!nextPromptId) return false
-
-    const nextInput = numericInputRefs.current[nextPromptId]
-    if (!nextInput) return false
-
-    nextInput.focus()
-    nextInput.select()
-    return true
-  }
-
-  function scrollToAdjacentCard(promptId: string, direction: 1 | -1) {
-    const currentIndex = orderedPromptIds.indexOf(promptId)
-    if (currentIndex === -1) return false
-
-    const nextPromptId = orderedPromptIds[currentIndex + direction]
-    if (!nextPromptId) return false
-
-    const nextCard = cardRefs.current[nextPromptId]
-    if (!nextCard) return false
-
-    const nextCardTop = window.scrollY + nextCard.getBoundingClientRect().top
-    window.scrollTo({
-      top: Math.max(0, nextCardTop - 20),
-      behavior: 'smooth'
-    })
-
-    const nextInput = numericInputRefs.current[nextPromptId]
-    if (nextInput) {
-      window.setTimeout(() => {
-        nextInput.focus()
-        nextInput.select()
-      }, 320)
-    }
-
-    return true
-  }
-
-  function scrollToSection(parentCode: string) {
-    const nextSection = sectionRefs.current[parentCode]
-    if (!nextSection) return
-
-    const sectionTop = window.scrollY + nextSection.getBoundingClientRect().top
-    window.scrollTo({
-      top: Math.max(0, sectionTop - 96),
-      behavior: 'smooth'
-    })
   }
 
   useEffect(() => {
@@ -470,7 +421,7 @@ function ServiceCapacitySurveyForm({
     }
     if (!hasPendingAutosaveRef.current) return
 
-    const answeredAnswers = draft.answers.filter((answer): answer is PartnerServiceCapacityAnswer => typeof answer.score === 'number')
+    const answeredAnswers = draft.answers.filter((answer) => answer.notEncountered || typeof answer.score === 'number')
     const payload: PartnerServiceCapacitySubmissionInput = {
       draftKey,
       status: 'draft',
@@ -518,15 +469,13 @@ function ServiceCapacitySurveyForm({
       setValidationMessage(respondentValidationMessage)
       return
     }
-    if (draft.answers.some((answer) => typeof answer.score !== 'number')) {
-      setValidationMessage('Complete every card rating before saving the survey.')
+    if (visiblePromptEntries.some((entry) => !isAnswerComplete(answersByPromptId.get(entry.prompt.id)))) {
+      setValidationMessage('Complete each visible question or mark it as not encountered before saving the survey.')
       return
     }
 
     setValidationMessage(null)
-    const completedAnswers = draft.answers.filter(
-      (answer): answer is DraftAnswer & PartnerServiceCapacityAnswer => typeof answer.score === 'number'
-    )
+    const completedAnswers = draft.answers.filter((answer) => answer.notEncountered || typeof answer.score === 'number')
     const completedRecord = await onSubmit({
       draftKey,
       status: 'completed',
@@ -547,6 +496,14 @@ function ServiceCapacitySurveyForm({
     persistSurveyDraft(null)
     setAutosaveState('saved')
     onCompleted(completedRecord || null)
+  }
+
+  function goToPreviousPrompt() {
+    setCurrentPromptIndex((current) => Math.max(0, current - 1))
+  }
+
+  function goToNextPrompt() {
+    setCurrentPromptIndex((current) => Math.min(visiblePromptEntries.length - 1, current + 1))
   }
 
   const lastSavedLabel = formatDateTimeLabel(latestSavedSubmission?.updatedAtIso || latestSavedSubmission?.submittedAtIso)
@@ -724,7 +681,7 @@ function ServiceCapacitySurveyForm({
               </Field>
             </div>
             <small className="mt-4 block text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
-              Complete the respondent details and rate each Z-code card below. Drafts save automatically as you move through the form.
+              Complete the respondent details and move through the survey one question at a time. Drafts save automatically as you go.
             </small>
           </section>
         </div>
@@ -741,7 +698,7 @@ function ServiceCapacitySurveyForm({
               </div>
             ))}
             <small className="pt-2 text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
-              {completedCount} of {draft.answers.length} cards currently rated.
+              {completedCount} of {visiblePromptEntries.length} visible questions completed.
             </small>
             {isLoadingCatalog ? (
               <small className="text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
@@ -758,56 +715,37 @@ function ServiceCapacitySurveyForm({
         </div>
       ) : null}
 
-      <SurveyProgressHeader sectionProgress={sectionProgress} onSelectSection={scrollToSection} />
+      {currentPromptEntry ? (
+        <>
+          <SurveyProgressHeader
+            currentIndex={currentPromptIndex}
+            totalCount={visiblePromptEntries.length}
+            completedCount={completedCount}
+            parentCode={currentPromptEntry.section.parentCode}
+            parentTheme={currentPromptEntry.section.theme}
+            accentColor={currentAccentColor}
+          />
 
-      <div className="mt-5 space-y-5">
-        {sections.map((section) => (
-          <section
-            key={section.parentCode}
-            ref={(element) => {
-              sectionRefs.current[section.parentCode] = element
-            }}
-            className="scroll-mt-28 rounded-[26px] border px-4 py-4 md:px-5"
-            style={{ borderColor: '#ffffff25' }}
-          >
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-2 border-b pb-3" style={{ borderColor: '#ffffff12' }}>
-              <div>
-                <small className="block text-[12px] uppercase tracking-[0.14em] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
-                  {section.parentCode}
-                </small>
-                <div className="text-[19px] font-medium text-white md:text-[23px]">{section.theme}</div>
-              </div>
-              <small className="text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
-                {section.prompts.length} cards
-              </small>
-            </div>
-            <div className="grid gap-3">
-              {section.prompts.map((promptItem) => {
-                const answer = answersByPromptId.get(promptItem.id)
-                if (!answer) return null
-                return (
-                  <BurdenCard
-                    key={promptItem.id}
-                    promptItem={promptItem}
-                    scale={scale}
-                    score={answer.score}
-                    accentColor={getZCodeParentColor(section.parentCode) || SP_COLORS.white}
-                    cardRef={(element) => {
-                      cardRefs.current[promptItem.id] = element
-                    }}
-                    inputRef={(element) => {
-                      numericInputRefs.current[promptItem.id] = element
-                    }}
-                    onTabNavigate={(direction) => focusAdjacentNumericInput(promptItem.id, direction)}
-                    onArrowNavigate={() => scrollToAdjacentCard(promptItem.id, 1)}
-                    onChange={(score) => updateAnswer(promptItem.id, score)}
-                  />
-                )
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
+          <div className="mt-5">
+            <BurdenCard
+              promptItem={currentPromptEntry.prompt}
+              scale={scale}
+              score={currentPromptAnswer?.score ?? null}
+              notEncountered={currentPromptAnswer?.notEncountered ?? false}
+              accentColor={currentAccentColor}
+              currentIndex={currentPromptIndex}
+              totalCount={visiblePromptEntries.length}
+              hasPrevious={currentPromptIndex > 0}
+              hasNext={currentPromptIndex < visiblePromptEntries.length - 1}
+              canAdvance={canAdvanceCurrentPrompt}
+              onPreviousNavigate={goToPreviousPrompt}
+              onNextNavigate={goToNextPrompt}
+              onChange={(score) => updateAnswer(currentPromptEntry.prompt.id, { score, notEncountered: false })}
+              onNotEncounteredChange={(value) => updateAnswer(currentPromptEntry.prompt.id, { notEncountered: value, score: value ? null : currentPromptAnswer?.score ?? null })}
+            />
+          </div>
+        </>
+      ) : null}
 
       <div className="mt-5 flex justify-end">
         <button
