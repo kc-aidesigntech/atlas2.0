@@ -13,6 +13,17 @@
     --text-base: 17px;
     --line-height-base: 1.65;
 
+    --atlas-signal-yellow: #fcc01a;
+    --atlas-signal-orange: #ff6319;
+    --atlas-signal-red: #ee352e;
+    --atlas-signal-deep-green: #00933c;
+    --atlas-signal-green: #6cbe45;
+    --atlas-signal-blue: #0039a6;
+    --atlas-signal-purple: #b933ad;
+    --atlas-signal-brown: #996633;
+    --atlas-signal-steel: #808183;
+    --atlas-signal-white: #ffffff;
+
     --surface-base: #000000;
     --surface-ink: #05060a;
     --surface-muted: #090d13;
@@ -33,8 +44,8 @@
     --border-strong: rgba(255, 255, 255, 0.22);
     --input-border: rgba(148, 163, 184, 0.2);
 
-    --accent-color: #ffd700;
-    --accent-muted: rgba(255, 214, 0, 0.28);
+    --accent-color: var(--atlas-signal-yellow);
+    --accent-muted: color-mix(in srgb, var(--atlas-signal-yellow) 28%, transparent);
   }
 
   .dark {

@@ -1,7 +1,7 @@
 import React from 'react'
 import AdminIntakeForm from '@/features/atlas2026/admin/AdminIntakeForm'
+import { AtlasInsetCard, AtlasPanel } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AdminDataQualityMetric, EnrolleeIntakeRecord, EnrolleeProfile } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
 interface AdminDataControlPanelProps {
   metrics: AdminDataQualityMetric[]
@@ -19,16 +19,14 @@ export default function AdminDataControlPanel({
   onSaveIntake
 }: AdminDataControlPanelProps) {
   return (
-    <div className="flex h-full w-full flex-col gap-3 rounded-2xl border p-4" style={{ borderColor: SP_COLORS.white }}>
-      <div>
-        <small className="block text-[13px] uppercase tracking-wide text-white">admin data operations</small>
-        <small className="text-[12px] text-[#bbbbbb]">
-          Record tools are intentionally isolated to this admin-only area. Intake drives the enrollee timeline start date.
-        </small>
-      </div>
-
+    <AtlasPanel
+      kicker="admin data operations"
+      description="Record tools are intentionally isolated to this admin-only area. Intake drives the enrollee timeline start date."
+      className="h-full w-full"
+      contentClassName="space-y-3"
+    >
       <div className="grid gap-3 md:grid-cols-2">
-        <section className="rounded-xl border p-3" style={{ borderColor: '#ffffff3a' }}>
+        <AtlasInsetCard>
           <small className="mb-2 block text-[12px] font-semibold text-white">data quality snapshot</small>
           <div className="space-y-1.5">
             {metrics.map((metric) => (
@@ -38,9 +36,9 @@ export default function AdminDataControlPanel({
               </div>
             ))}
           </div>
-        </section>
+        </AtlasInsetCard>
 
-        <section className="rounded-xl border p-3" style={{ borderColor: '#ffffff3a' }}>
+        <AtlasInsetCard>
           <small className="mb-2 block text-[12px] font-semibold text-white">ingestion + overrides</small>
           <ul className="space-y-1 text-[12px] text-[#dddddd]">
             <li>partner survey ingestion status</li>
@@ -48,10 +46,10 @@ export default function AdminDataControlPanel({
             <li>route ranking policy controls</li>
             <li>timeline month-window overrides (6..12)</li>
           </ul>
-        </section>
+        </AtlasInsetCard>
       </div>
 
-      <section className="rounded-xl border p-3" style={{ borderColor: '#ffffff3a' }}>
+      <AtlasInsetCard>
         <small className="mb-2 block text-[12px] font-semibold text-white">selected enrollee</small>
         <small className="text-[12px] text-[#d8d8d8]">
           {selectedEnrollee ? `${selectedEnrollee.fullName} | ${selectedEnrollee.caseId}` : 'no enrollee selected'}
@@ -59,9 +57,9 @@ export default function AdminDataControlPanel({
         <small className="mt-2 block text-[12px] text-[#bcbcbc]">
           Timeline start source: {hasRecordedIntake ? 'saved intake form' : 'not yet recorded by admin'}
         </small>
-      </section>
+      </AtlasInsetCard>
 
       <AdminIntakeForm intake={intake} onSave={onSaveIntake} />
-    </div>
+    </AtlasPanel>
   )
 }

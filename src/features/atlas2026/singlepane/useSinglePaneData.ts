@@ -27,19 +27,9 @@ import type {
 import {
   appendRouteLog as appendRouteLogRecord,
   loadAdminDataQuality,
-  loadAccountSettings,
   loadCountyHeatmap,
-  loadEnrolleeIntakes,
   loadEnrollmentRequests,
-  loadNavigatorCompetencyAssessments,
-  loadJourneyStationMarkers,
-  loadPartnerRadialLoad,
-  loadPartnerRadialLoadBreakdown,
-  loadPartnerServiceCapacitySurveyHistory,
   searchPartnerIdentifierRecordMatches,
-  loadRouteAssignments,
-  loadRouteCandidates,
-  loadSinglePaneBootstrap,
   saveAccountSettings as persistAccountSettings,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
@@ -47,6 +37,10 @@ import {
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
+import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/useJourneyStationMarkers'
+import { usePartnerServiceCapacityHistory } from '@/features/atlas2026/singlepane/hooks/usePartnerServiceCapacityHistory'
+import { useRouteCandidates } from '@/features/atlas2026/singlepane/hooks/useRouteCandidates'
+import { useSinglePaneBootstrapState } from '@/features/atlas2026/singlepane/hooks/useSinglePaneBootstrapState'
 
 const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'route planning': ['housing', 'work'],
@@ -82,78 +76,29 @@ export function useSinglePaneData() {
   const [role, setRole] = useState<AtlasRole>('navigator')
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
   const [activeMenu, setActiveMenu] = useState<string>('assigned enrollees')
-  const [enrollees, setEnrollees] = useState<EnrolleeProfile[]>([])
-  const [loads, setLoads] = useState<DomainLoad[]>([])
-  const [loadBreakdownsByEnrolleeId, setLoadBreakdownsByEnrolleeId] = useState<Record<string, DomainLoadBreakdown>>({})
-  const [roleConfigs, setRoleConfigs] = useState<RoleMenuConfig[]>([])
-  const [timelineConfig, setTimelineConfig] = useState<TimelineConfig | null>(null)
-  const [timelineConfigsByEnrolleeId, setTimelineConfigsByEnrolleeId] = useState<Record<string, TimelineConfig>>({})
-  const [logs, setLogs] = useState<RouteLogEvent[]>([])
-  const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequestRecord[]>([])
-  const [routeCandidates, setRouteCandidates] = useState<RouteCandidateRecord[]>([])
-  const [countyHeatmap, setCountyHeatmap] = useState<CountyHeatPoint[]>([])
-  const [adminMetrics, setAdminMetrics] = useState<AdminDataQualityMetric[]>([])
-  const [partnerLoad, setPartnerLoad] = useState<DomainLoad | null>(null)
-  const [partnerLoadBreakdown, setPartnerLoadBreakdown] = useState<DomainLoadBreakdown | null>(null)
-  const [journeyStationMarkers, setJourneyStationMarkers] = useState<JourneyStationMarker[]>([])
-  const [routeAssignmentsByEnrolleeId, setRouteAssignmentsByEnrolleeId] = useState<Record<string, RouteAssignmentRecord>>({})
-  const [partnerServiceCapacitySurveyHistory, setPartnerServiceCapacitySurveyHistory] = useState<PartnerServiceCapacitySubmissionRecord[]>([])
-  const [navigatorCompetencyAssessments, setNavigatorCompetencyAssessments] = useState<NavigatorCompetencyAssessmentRecord[]>([])
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
-  const [partnerServiceCapacitySurveyError, setPartnerServiceCapacitySurveyError] = useState<string | null>(null)
-  const [accountSettings, setAccountSettings] = useState<AccountSettings>({
-    fullName: 'atlas operator',
-    email: 'operator@atlas.local',
-    organization: 'atlas operations',
-    enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
-  })
-  const [intakeFormsByEnrolleeId, setIntakeFormsByEnrolleeId] = useState<Record<string, EnrolleeIntakeRecord>>({})
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    let isMounted = true
-    async function bootstrap() {
-      if (isMounted) {
-        setIsLoading(true)
-      }
-      const data = await loadSinglePaneBootstrap(role)
-      const [requests, heatmap, quality, partnerViewLoad, partnerViewLoadBreakdown, nextAccountSettings, savedIntakes, savedRouteAssignments, savedNavigatorAssessments] = await Promise.all([
-        loadEnrollmentRequests(role),
-        loadCountyHeatmap(),
-        loadAdminDataQuality(),
-        loadPartnerRadialLoad(),
-        loadPartnerRadialLoadBreakdown(),
-        loadAccountSettings(),
-        loadEnrolleeIntakes(),
-        loadRouteAssignments(),
-        loadNavigatorCompetencyAssessments()
-      ])
-
-      if (!isMounted) return
-      setEnrollees(data.enrollees || [])
-      setLoads(data.loads || [])
-      setLoadBreakdownsByEnrolleeId(data.loadBreakdownsByEnrolleeId || {})
-      setRoleConfigs(data.roleConfigs || [])
-      setTimelineConfig(data.timelineConfig)
-      setTimelineConfigsByEnrolleeId(data.timelineConfigsByEnrolleeId || {})
-      setLogs(data.logs || [])
-      setEnrollmentRequests(requests)
-      setCountyHeatmap(heatmap)
-      setAdminMetrics(quality)
-      setPartnerLoad(partnerViewLoad)
-      setPartnerLoadBreakdown(partnerViewLoadBreakdown)
-      setAccountSettings(nextAccountSettings)
-      setIntakeFormsByEnrolleeId(savedIntakes)
-      setRouteAssignmentsByEnrolleeId(savedRouteAssignments)
-      setNavigatorCompetencyAssessments(savedNavigatorAssessments)
-      setSelectedEnrolleeId((prev) => prev || data.enrollees?.[0]?.id || '')
-      setIsLoading(false)
-    }
-    bootstrap()
-    return () => {
-      isMounted = false
-    }
-  }, [role])
+  const {
+    state: {
+      isLoading,
+      enrollees,
+      loads,
+      loadBreakdownsByEnrolleeId,
+      roleConfigs,
+      timelineConfig,
+      timelineConfigsByEnrolleeId,
+      logs,
+      enrollmentRequests,
+      countyHeatmap,
+      adminMetrics,
+      partnerLoad,
+      partnerLoadBreakdown,
+      accountSettings,
+      intakeFormsByEnrolleeId,
+      routeAssignmentsByEnrolleeId,
+      navigatorCompetencyAssessments
+    },
+    setState: setBootstrapState
+  } = useSinglePaneBootstrapState(role)
 
   const selectedEnrollee = useMemo(
     () => enrollees.find((item) => item.id === selectedEnrolleeId) || enrollees[0] || null,
@@ -215,6 +160,12 @@ export function useSinglePaneData() {
     }
   }, [activeMenu, selectedRoleConfig])
 
+  useEffect(() => {
+    if (!selectedEnrolleeId && enrollees[0]?.id) {
+      setSelectedEnrolleeId(enrollees[0].id)
+    }
+  }, [enrollees, selectedEnrolleeId])
+
   const selectedLogs = useMemo(
     () =>
       logs
@@ -267,82 +218,21 @@ export function useSinglePaneData() {
     })
     return byNavigator
   }, [enrollees, navigatorCompetencyAssessments])
+  const routeCandidates = useRouteCandidates(selectedEnrollee)
+  const { journeyStationMarkers, setJourneyStationMarkers } = useJourneyStationMarkers(selectedEnrollee, selectedLogs, routeCandidates)
+  const {
+    partnerServiceCapacitySurveyHistory,
+    partnerServiceCapacitySurveyError,
+    setPartnerServiceCapacitySurveyHistory,
+    setPartnerServiceCapacitySurveyError
+  } = usePartnerServiceCapacityHistory(role, accountSettings.organization)
 
-  useEffect(() => {
-    let isMounted = true
-    async function refreshRouteCandidates() {
-      const candidates = await loadRouteCandidates(selectedEnrollee?.zCodeTags || [])
-      if (!isMounted) return
-      setRouteCandidates(candidates)
-    }
-    refreshRouteCandidates()
-    return () => {
-      isMounted = false
-    }
-  }, [selectedEnrollee])
-
-  useEffect(() => {
-    let isMounted = true
-    async function hydrateStationMarkers() {
-      const markers = await loadJourneyStationMarkers(selectedEnrollee?.enrollmentId || selectedEnrollee?.id)
-      if (!isMounted) return
-
-      if (markers.length) {
-        setJourneyStationMarkers(markers)
-        return
-      }
-
-      // Fallback when route_plan_stops are not yet provisioned for this enrollment.
-      const derived = selectedLogs
-        .filter((log) => log.phase !== 'regulation')
-        .map((log, index) => {
-          const candidate = routeCandidates[index % Math.max(routeCandidates.length, 1)]
-          return {
-            id: `station-marker-${log.id}`,
-            stationName: candidate?.stationName || 'partner station',
-            assignedAtIso: log.timestampIso,
-            phase: log.phase,
-            iconSlug: log.stationIcon
-          } as JourneyStationMarker
-        })
-      setJourneyStationMarkers(derived)
-    }
-    hydrateStationMarkers()
-    return () => {
-      isMounted = false
-    }
-  }, [routeCandidates, selectedEnrollee?.enrollmentId, selectedEnrollee?.id, selectedLogs])
-
-  useEffect(() => {
-    let isMounted = true
-    async function hydratePartnerServiceCapacitySurvey() {
-      if (role !== 'partner') {
-        if (isMounted) {
-          setPartnerServiceCapacitySurveyHistory([])
-          setPartnerServiceCapacitySurveyError(null)
-        }
-        return
-      }
-      const organizationName = accountSettings.organization?.trim()
-      if (!organizationName) {
-        if (isMounted) setPartnerServiceCapacitySurveyHistory([])
-        return
-      }
-      try {
-        const savedSurveyHistory = await loadPartnerServiceCapacitySurveyHistory(organizationName)
-        if (!isMounted) return
-        setPartnerServiceCapacitySurveyHistory(savedSurveyHistory)
-        setPartnerServiceCapacitySurveyError(null)
-      } catch (error) {
-        if (!isMounted) return
-        setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to load service capacity survey.')
-      }
-    }
-    hydratePartnerServiceCapacitySurvey()
-    return () => {
-      isMounted = false
-    }
-  }, [accountSettings.organization, role])
+  function setLogs(nextLogs: RouteLogEvent[] | ((current: RouteLogEvent[]) => RouteLogEvent[])) {
+    setBootstrapState((current) => ({
+      ...current,
+      logs: typeof nextLogs === 'function' ? nextLogs(current.logs) : nextLogs
+    }))
+  }
 
   function appendRouteLog(label: string) {
     if (!selectedEnrollee || !label.trim()) return
@@ -424,7 +314,10 @@ export function useSinglePaneData() {
     const enabledRoles = nextSettings.enabledRoles.length ? nextSettings.enabledRoles : [role]
     const finalSettings = { ...nextSettings, enabledRoles }
     persistAccountSettings(finalSettings).then((saved) => {
-      setAccountSettings(saved)
+      setBootstrapState((current) => ({
+        ...current,
+        accountSettings: saved
+      }))
       if (!saved.enabledRoles.includes(role)) {
         setRole(saved.enabledRoles[0] || 'navigator')
       }
@@ -433,12 +326,13 @@ export function useSinglePaneData() {
 
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
     persistEnrolleeIntake(nextIntake).then((saved) => {
-      setIntakeFormsByEnrolleeId((current) => ({
+      setBootstrapState((current) => ({
         ...current,
-        [saved.enrolleeId]: saved
-      }))
-      setEnrollees((current) =>
-        current.map((enrollee) =>
+        intakeFormsByEnrolleeId: {
+          ...current.intakeFormsByEnrolleeId,
+          [saved.enrolleeId]: saved
+        },
+        enrollees: current.enrollees.map((enrollee) =>
           enrollee.id === saved.enrolleeId
             ? {
                 ...enrollee,
@@ -450,23 +344,23 @@ export function useSinglePaneData() {
                 zCodeTags: saved.zCodeTags
               }
             : enrollee
-        )
-      )
-      setTimelineConfigsByEnrolleeId((current) => ({
-        ...current,
-        [saved.enrolleeId]: current[saved.enrolleeId]
-          ? { ...current[saved.enrolleeId], planStartIso: saved.enrollmentStartIso }
-          : {
-              planStartIso: saved.enrollmentStartIso,
-              durationMonths: 6,
-              maxDurationMonths: 12,
-              gates: [
-                { id: 'gate-regulation-start', label: 'regulation', phase: 'regulation', monthOffset: 0 },
-                { id: 'gate-readiness-start', label: 'readiness', phase: 'readiness', monthOffset: 2 },
-                { id: 'gate-renewal-start', label: 'renewal', phase: 'renewal', monthOffset: 4 },
-                { id: 'gate-plan-end', label: 'plan end', phase: 'renewal', monthOffset: 6 }
-              ]
-            }
+        ),
+        timelineConfigsByEnrolleeId: {
+          ...current.timelineConfigsByEnrolleeId,
+          [saved.enrolleeId]: current.timelineConfigsByEnrolleeId[saved.enrolleeId]
+            ? { ...current.timelineConfigsByEnrolleeId[saved.enrolleeId], planStartIso: saved.enrollmentStartIso }
+            : {
+                planStartIso: saved.enrollmentStartIso,
+                durationMonths: 6,
+                maxDurationMonths: 12,
+                gates: [
+                  { id: 'gate-regulation-start', label: 'regulation', phase: 'regulation', monthOffset: 0 },
+                  { id: 'gate-readiness-start', label: 'readiness', phase: 'readiness', monthOffset: 2 },
+                  { id: 'gate-renewal-start', label: 'renewal', phase: 'renewal', monthOffset: 4 },
+                  { id: 'gate-plan-end', label: 'plan end', phase: 'renewal', monthOffset: 6 }
+                ]
+              }
+        }
       }))
     })
   }
@@ -482,9 +376,12 @@ export function useSinglePaneData() {
       matchedZCodes: candidate.matchedZCodes
     }
     persistRouteAssignment(assignment).then((saved) => {
-      setRouteAssignmentsByEnrolleeId((current) => ({
+      setBootstrapState((current) => ({
         ...current,
-        [saved.enrolleeId]: saved
+        routeAssignmentsByEnrolleeId: {
+          ...current.routeAssignmentsByEnrolleeId,
+          [saved.enrolleeId]: saved
+        }
       }))
       setJourneyStationMarkers((current) => {
         const withoutSelected = current.filter((marker) => marker.markerType !== 'selected')
@@ -520,7 +417,10 @@ export function useSinglePaneData() {
         email: input.header.email || accountSettings.email,
         organization: input.header.organizationName
       }
-      setAccountSettings(nextAccountSettings)
+      setBootstrapState((current) => ({
+        ...current,
+        accountSettings: nextAccountSettings
+      }))
       persistAccountSettings(nextAccountSettings)
       return saved
     } catch (error) {
@@ -538,7 +438,10 @@ export function useSinglePaneData() {
     answers: NavigatorCompetencyAssessmentRecord['answers']
   }) {
     const saved = await persistNavigatorCompetencyAssessment(input)
-    setNavigatorCompetencyAssessments((current) => [saved, ...current])
+    setBootstrapState((current) => ({
+      ...current,
+      navigatorCompetencyAssessments: [saved, ...current.navigatorCompetencyAssessments]
+    }))
     return saved
   }
 

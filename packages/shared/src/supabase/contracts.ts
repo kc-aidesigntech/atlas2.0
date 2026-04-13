@@ -171,6 +171,75 @@ export interface AtlasDatabase {
           burden_score: number;
         }>;
       };
+      z_codes: {
+        Row: {
+          id: string;
+          z_code: string;
+        };
+        Insert: {
+          id?: string;
+          z_code: string;
+        };
+        Update: Partial<{
+          z_code: string;
+        }>;
+      };
+      partner_z_code_burden_scores: {
+        Row: {
+          id: string;
+          partner_id: string;
+          submission_id: string | null;
+          z_code_id: string;
+          z_code: string;
+          burden_score: number;
+          derived_relation_type: "specialize" | "interfere" | null;
+          strength: number;
+          updated_at: string;
+        };
+        Insert: {
+          partner_id: string;
+          submission_id?: string | null;
+          z_code_id: string;
+          z_code: string;
+          burden_score: number;
+          derived_relation_type?: "specialize" | "interfere" | null;
+          strength: number;
+          updated_at?: string;
+        };
+        Update: Partial<{
+          submission_id: string | null;
+          burden_score: number;
+          derived_relation_type: "specialize" | "interfere" | null;
+          strength: number;
+          updated_at: string;
+        }>;
+      };
+      partner_z_code_capabilities: {
+        Row: {
+          id: string;
+          partner_id: string;
+          z_code_id: string;
+          relation_type: "specialize" | "interfere";
+          strength: number;
+          source: string;
+          source_submitted_at: string | null;
+          is_active: boolean;
+        };
+        Insert: {
+          partner_id: string;
+          z_code_id: string;
+          relation_type: "specialize" | "interfere";
+          strength: number;
+          source: string;
+          source_submitted_at?: string | null;
+          is_active?: boolean;
+        };
+        Update: Partial<{
+          strength: number;
+          source_submitted_at: string | null;
+          is_active: boolean;
+        }>;
+      };
       supervisor_navigator_assignments: {
         Row: {
           id: string;

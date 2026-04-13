@@ -1,4 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  aggregatePartnerSurveyAnswersByNormalizedZCode,
+  createPartnerServiceCapacityDraftKey,
+  derivePartnerCapabilityRelation,
+  derivePartnerCapabilityStrength,
+  normalizeOrganizationName,
+} from "../atlas2026/partnerServiceCapacity";
 import type {
   AtlasDatabase,
   PartnerIdentifierRecord,
@@ -7,14 +14,6 @@ import type {
   PartnerServiceCapacitySubmissionStatus,
   PartnerSurveyRespondentRole,
 } from "./contracts";
-
-function normalizeOrganizationName(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function createDraftKey() {
-  return globalThis.crypto?.randomUUID?.() || `partner-survey-${Date.now().toString(36)}`;
-}
 
 let supportsDraftSubmissionSchema: boolean | null = null;
 
@@ -49,11 +48,9 @@ function mapSubmissionRow(
 ): PartnerServiceCapacitySubmissionRecord {
   return {
     id: submission.id,
-    draftKey: (submission as { draft_key?: string }).draft_key || submission.id,
-    status:
-      ((submission as { status?: PartnerServiceCapacitySubmissionStatus }).status as PartnerServiceCapacitySubmissionStatus) ||
-      "completed",
-    completedAtIso: (submission as { completed_at?: string | null }).completed_at || null,
+    draftKey: submission.draft_key || submission.id,
+    status: submission.status || "completed",
+    completedAtIso: submission.completed_at || null,
     partnerId: submission.partner_id || null,
     organizationNameNormalized: submission.organization_name_normalized || null,
     submittedAtIso: submission.submitted_at,
@@ -62,7 +59,7 @@ function mapSubmissionRow(
     header: {
       firstName: submission.respondent_first_name || "",
       lastName: submission.respondent_last_name || "",
-      email: (submission as { respondent_email?: string | null }).respondent_email || "",
+      email: submission.respondent_email || "",
       organizationName: submission.organization_name || "",
       jobTitle: submission.job_title || "",
       respondentRoles:
@@ -253,7 +250,7 @@ export async function savePartnerServiceCapacitySubmission(
   client: SupabaseClient<AtlasDatabase>,
   input: PartnerServiceCapacitySubmissionInput,
 ) {
-  const draftKey = input.draftKey?.trim() || createDraftKey();
+  const draftKey = input.draftKey?.trim() || createPartnerServiceCapacityDraftKey();
   const status: PartnerServiceCapacitySubmissionStatus = input.status || "draft";
   const organizationName = input.header.organizationName.trim();
   const normalized = organizationName ? normalizeOrganizationName(organizationName) : null;
@@ -367,7 +364,7 @@ export async function savePartnerServiceCapacitySubmission(
   if (!answerRows.length) {
     return {
       ...mapSubmissionRow(submission, []),
-      draftKey: (submission as { draft_key?: string }).draft_key || submission.id,
+      draftKey: submission.draft_key || submission.id,
       status,
       completedAtIso: status === "completed" ? input.completedAtIso || new Date().toISOString() : null,
     };
@@ -382,8 +379,106 @@ export async function savePartnerServiceCapacitySubmission(
   if (answersError) throw answersError;
   return {
     ...mapSubmissionRow(submission, answers || []),
-    draftKey: (submission as { draft_key?: string }).draft_key || submission.id,
+    draftKey: submission.draft_key || submission.id,
     status,
     completedAtIso: status === "completed" ? input.completedAtIso || new Date().toISOString() : null,
   };
+}
+
+export async function syncPartnerServiceCapacityDerivedTables(
+  client: SupabaseClient<AtlasDatabase>,
+  record: PartnerServiceCapacitySubmissionRecord,
+) {
+  if (record.status !== "completed" || !record.partnerId) {
+    return record;
+  }
+
+  const normalizedAnswers = aggregatePartnerSurveyAnswersByNormalizedZCode(record);
+  const normalizedZCodes = normalizedAnswers.map((answer) => answer.normalizedZCode);
+
+  if (!normalizedZCodes.length) {
+    return record;
+  }
+
+  const { data: zCodeRows, error: zCodeLookupError } = await client
+    .schema("atlas")
+    .from("z_codes")
+    .select("id, z_code")
+    .in("z_code", normalizedZCodes);
+
+  if (zCodeLookupError) throw zCodeLookupError;
+
+  const zCodeIdByCode = new Map((zCodeRows || []).map((row) => [row.z_code, row.id]));
+  const submittedAtIso = record.completedAtIso || record.updatedAtIso || record.submittedAtIso;
+
+  const burdenRows: AtlasDatabase["atlas"]["Tables"]["partner_z_code_burden_scores"]["Insert"][] = normalizedAnswers
+    .map((answer) => {
+      const zCodeId = zCodeIdByCode.get(answer.normalizedZCode);
+      if (!zCodeId) return null;
+      return {
+        partner_id: record.partnerId!,
+        submission_id: record.id,
+        z_code_id: zCodeId,
+        z_code: answer.normalizedZCode,
+        burden_score: answer.score,
+        derived_relation_type: derivePartnerCapabilityRelation(answer.score),
+        strength: derivePartnerCapabilityStrength(answer.score),
+        updated_at: submittedAtIso,
+      };
+    })
+    .filter(Boolean) as AtlasDatabase["atlas"]["Tables"]["partner_z_code_burden_scores"]["Insert"][];
+
+  if (burdenRows.length) {
+    const { error: burdenError } = await client
+      .schema("atlas")
+      .from("partner_z_code_burden_scores")
+      .upsert(burdenRows, { onConflict: "partner_id,z_code_id" });
+
+    if (burdenError) throw burdenError;
+  }
+
+  const capabilityRows: AtlasDatabase["atlas"]["Tables"]["partner_z_code_capabilities"]["Insert"][] = normalizedAnswers.flatMap((answer) => {
+    const zCodeId = zCodeIdByCode.get(answer.normalizedZCode);
+    if (!zCodeId) return [];
+    const strength = derivePartnerCapabilityStrength(answer.score);
+    return [
+      {
+        partner_id: record.partnerId!,
+        z_code_id: zCodeId,
+        relation_type: "specialize",
+        strength: answer.score >= 7 ? strength : 0,
+        source: "service_capacity_survey",
+        source_submitted_at: submittedAtIso,
+        is_active: answer.score >= 7,
+      },
+      {
+        partner_id: record.partnerId!,
+        z_code_id: zCodeId,
+        relation_type: "interfere",
+        strength: answer.score <= 3 ? strength : 0,
+        source: "service_capacity_survey",
+        source_submitted_at: submittedAtIso,
+        is_active: answer.score <= 3,
+      },
+    ];
+  });
+
+  if (capabilityRows.length) {
+    const { error: capabilityError } = await client
+      .schema("atlas")
+      .from("partner_z_code_capabilities")
+      .upsert(capabilityRows, { onConflict: "partner_id,z_code_id,relation_type,source" });
+
+    if (capabilityError) throw capabilityError;
+  }
+
+  return record;
+}
+
+export async function savePartnerServiceCapacityRecord(
+  client: SupabaseClient<AtlasDatabase>,
+  input: PartnerServiceCapacitySubmissionInput,
+) {
+  const record = await savePartnerServiceCapacitySubmission(client, input);
+  return syncPartnerServiceCapacityDerivedTables(client, record);
 }

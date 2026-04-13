@@ -17,6 +17,7 @@ import type {
   TimelineConfig,
   ZDomain
 } from '@/features/atlas2026/singlepane/types'
+import { normalizeOrganizationName } from '@atlas/shared'
 import countiesCsv from '../../../../../sample-data/relational-csv-archive1/counties.csv?raw'
 import kolbiAvatarUrl from '../../../../../assets/Kolbi Christianson-lt.png'
 import peopleCsv from '../../../../../sample-data/relational-csv-archive1/people.csv?raw'
@@ -160,10 +161,7 @@ function parseCsv(text: string): CsvRecord[] {
 }
 
 function normalizeSlug(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+  return normalizeOrganizationName(value)
 }
 
 function formatDate(dateValue: string) {
