@@ -266,5 +266,41 @@
     border: 1.5px solid rgba(255, 255, 255, 0.85);
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
   }
+
+  .atlas-sign-button {
+    position: relative;
+    overflow: hidden;
+    padding-top: calc(var(--button-radius, 10px) + 3px);
+    padding-bottom: calc(var(--button-radius, 10px) * 0.5);
+    border-color: var(--button-border-color, currentColor);
+  }
+
+  .atlas-sign-button::before {
+    content: "";
+    position: absolute;
+    left: var(--button-line-inset, 8px);
+    right: var(--button-line-inset, 8px);
+    top: calc(var(--button-radius, 10px) - 2px);
+    height: 1px;
+    background: var(--button-line-color, var(--button-border-color, currentColor));
+    opacity: var(--button-line-opacity, 1);
+    pointer-events: none;
+  }
+
+  .atlas-sign-button-icon {
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1;
+  }
+
+  .atlas-sign-button-icon::before {
+    content: none;
+  }
+
+  .atlas-sign-button-icon > svg,
+  .atlas-sign-button-icon > img {
+    display: block;
+    flex-shrink: 0;
+  }
 }
 

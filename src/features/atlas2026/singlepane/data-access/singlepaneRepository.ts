@@ -41,6 +41,7 @@ import {
   saveNavigatorCompetencyAssessment
 } from '@/features/atlas2026/singlepane/data-access/navigatorAssessmentRepository'
 import {
+  deletePartnerServiceCapacityDraftRecord,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
   savePartnerServiceCapacitySurvey,
@@ -299,6 +300,7 @@ export {
   loadNavigatorCompetencyAssessments,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
+  deletePartnerServiceCapacityDraftRecord,
   loadRouteAssignments,
   saveAccountSettings,
   saveEnrolleeIntake,

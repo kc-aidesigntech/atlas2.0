@@ -26,6 +26,7 @@ import type {
 } from '@/features/atlas2026/singlepane/types'
 import {
   appendRouteLog as appendRouteLogRecord,
+  deletePartnerServiceCapacityDraftRecord,
   loadAdminDataQuality,
   loadCountyHeatmap,
   loadEnrollmentRequests,
@@ -72,8 +73,22 @@ function splitFullName(value: string) {
   }
 }
 
-export function useSinglePaneData() {
-  const [role, setRole] = useState<AtlasRole>('navigator')
+function buildFallbackTimelineConfig(planStartIso: string): TimelineConfig {
+  return {
+    planStartIso,
+    durationMonths: 6,
+    maxDurationMonths: 12,
+    gates: [
+      { id: 'gate-regulation-start', label: 'regulation', phase: 'regulation', monthOffset: 0 },
+      { id: 'gate-readiness-start', label: 'readiness', phase: 'readiness', monthOffset: 2 },
+      { id: 'gate-renewal-start', label: 'renewal', phase: 'renewal', monthOffset: 4 },
+      { id: 'gate-plan-end', label: 'plan end', phase: 'renewal', monthOffset: 6 }
+    ]
+  }
+}
+
+export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
+  const [role, setRole] = useState<AtlasRole>(initialRole)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
   const [activeMenu, setActiveMenu] = useState<string>('assigned enrollees')
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
@@ -227,6 +242,12 @@ export function useSinglePaneData() {
     setPartnerServiceCapacitySurveyError
   } = usePartnerServiceCapacityHistory(role, accountSettings.organization)
 
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7549/ingest/0a2b055f-3c79-424f-9cff-1288c71c5ade',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'0b07da'},body:JSON.stringify({sessionId:'0b07da',runId:'service-capacity-debug-2',hypothesisId:'H7',location:'useSinglePaneData.ts:230',message:'single pane survey state inputs',data:{role,accountOrganization:accountSettings.organization?.trim()??'',historyCount:partnerServiceCapacitySurveyHistory.length,historyError:partnerServiceCapacitySurveyError??null,defaultHeaderOrganization:partnerServiceCapacityDefaultHeader.organizationName},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [accountSettings.organization, partnerServiceCapacityDefaultHeader.organizationName, partnerServiceCapacitySurveyError, partnerServiceCapacitySurveyHistory.length, role])
+
   function setLogs(nextLogs: RouteLogEvent[] | ((current: RouteLogEvent[]) => RouteLogEvent[])) {
     setBootstrapState((current) => ({
       ...current,
@@ -349,17 +370,7 @@ export function useSinglePaneData() {
           ...current.timelineConfigsByEnrolleeId,
           [saved.enrolleeId]: current.timelineConfigsByEnrolleeId[saved.enrolleeId]
             ? { ...current.timelineConfigsByEnrolleeId[saved.enrolleeId], planStartIso: saved.enrollmentStartIso }
-            : {
-                planStartIso: saved.enrollmentStartIso,
-                durationMonths: 6,
-                maxDurationMonths: 12,
-                gates: [
-                  { id: 'gate-regulation-start', label: 'regulation', phase: 'regulation', monthOffset: 0 },
-                  { id: 'gate-readiness-start', label: 'readiness', phase: 'readiness', monthOffset: 2 },
-                  { id: 'gate-renewal-start', label: 'renewal', phase: 'renewal', monthOffset: 4 },
-                  { id: 'gate-plan-end', label: 'plan end', phase: 'renewal', monthOffset: 6 }
-                ]
-              }
+            : buildFallbackTimelineConfig(saved.enrollmentStartIso)
         }
       }))
     })
@@ -431,6 +442,23 @@ export function useSinglePaneData() {
     }
   }
 
+  async function deletePartnerServiceCapacityDraft(submissionId: string) {
+    setIsSavingPartnerServiceCapacitySurvey(true)
+    setPartnerServiceCapacitySurveyError(null)
+    try {
+      const deleted = await deletePartnerServiceCapacityDraftRecord(submissionId)
+      setPartnerServiceCapacitySurveyHistory((current) =>
+        current.filter((record) => record.id !== deleted.id && record.draftKey !== deleted.draftKey)
+      )
+      return deleted
+    } catch (error) {
+      setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to delete service capacity draft.')
+      throw error
+    } finally {
+      setIsSavingPartnerServiceCapacitySurvey(false)
+    }
+  }
+
   async function saveNavigatorCompetencyAssessment(input: {
     navigatorName: string
     supervisorName: string
@@ -488,6 +516,7 @@ export function useSinglePaneData() {
     saveEnrolleeIntake,
     saveRouteAssignment,
     savePartnerServiceCapacitySurvey,
+    deletePartnerServiceCapacityDraft,
     saveNavigatorCompetencyAssessment
   }
 }

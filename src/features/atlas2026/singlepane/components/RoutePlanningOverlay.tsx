@@ -30,7 +30,7 @@ export default function RoutePlanningOverlay({
   onClose
 }: RoutePlanningOverlayProps) {
   if (!isOpen || !enrollee) return null
-  const selectedCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedCandidateId) || routeCandidates[0] || null
+  const selectedCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedCandidateId) ?? routeCandidates[0] ?? null
 
   return (
     <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/65 px-5 py-6 backdrop-blur-[2px]">
@@ -104,48 +104,52 @@ export default function RoutePlanningOverlay({
                   const isSelected = candidate.stationId === selectedCandidate?.stationId
                   const isAssigned = candidate.stationId === assignedCandidateId
                   return (
-                  <div
-                    key={candidate.stationId}
-                    className="rounded-[22px] border px-4 py-3 transition-colors"
-                    style={{
-                      borderColor: isSelected ? `${SP_COLORS.yellow}aa` : '#ffffff20',
-                      backgroundColor: isSelected ? '#0a0a0a' : '#050505'
-                    }}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: isSelected ? SP_COLORS.yellow : '#9f9f9f' }}>
-                          rank {index + 1}
-                        </small>
-                        <div className="text-[15px] font-medium text-white">{candidate.stationName}</div>
-                        <small className="text-[12px] text-[#bdbdbd]">
-                          matched specialties: {candidate.matchedZCodes.join(', ') || 'none'}
-                        </small>
-                        {isAssigned ? (
-                          <small className="mt-1 block text-[11px]" style={{ color: SP_COLORS.deepGreen }}>
-                            saved as current route assignment
+                    <div
+                      key={candidate.stationId}
+                      className="rounded-[22px] border px-4 py-3 transition-colors"
+                      style={{
+                        borderColor: isSelected ? `${SP_COLORS.yellow}aa` : '#ffffff20',
+                        backgroundColor: isSelected ? '#0a0a0a' : '#050505'
+                      }}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: isSelected ? SP_COLORS.yellow : '#9f9f9f' }}>
+                            rank {index + 1}
                           </small>
-                        ) : null}
+                          <div className="text-[15px] font-medium text-white">{candidate.stationName}</div>
+                          <small className="text-[12px] text-[#bdbdbd]">
+                            matched specialties: {candidate.matchedZCodes.join(', ') || 'none'}
+                          </small>
+                          {isAssigned ? (
+                            <small className="mt-1 block text-[11px]" style={{ color: SP_COLORS.deepGreen }}>
+                              saved as current route assignment
+                            </small>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <small className="text-[12px] text-white">score {candidate.score.toFixed(1)}</small>
+                          <button
+                            type="button"
+                            onClick={() => onSelectCandidate(candidate.stationId)}
+                            className="rounded-full border px-3 py-1 text-[11px] text-white"
+                            style={{
+                              borderColor: isSelected ? SP_COLORS.yellow : '#ffffff35',
+                              color: isSelected ? SP_COLORS.yellow : SP_COLORS.white
+                            }}
+                          >
+                            {isSelected ? 'focused' : 'focus'}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <small className="text-[12px] text-white">score {candidate.score.toFixed(1)}</small>
-                        <button
-                          type="button"
-                          onClick={() => onSelectCandidate(candidate.stationId)}
-                          className="rounded-full border px-3 py-1 text-[11px] text-white"
-                          style={{ borderColor: isSelected ? SP_COLORS.yellow : '#ffffff35', color: isSelected ? SP_COLORS.yellow : SP_COLORS.white }}
-                        >
-                          {isSelected ? 'focused' : 'focus'}
-                        </button>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        <MetricChip label="specialties" value={candidate.specializeHits} color={SP_COLORS.deepGreen} />
+                        <MetricChip label="conflicts" value={candidate.conflictHits} color={SP_COLORS.orange} />
+                        <MetricChip label="interference" value={candidate.interfereHits} color={SP_COLORS.red} />
                       </div>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      <MetricChip label="specialties" value={candidate.specializeHits} color={SP_COLORS.deepGreen} />
-                      <MetricChip label="conflicts" value={candidate.conflictHits} color={SP_COLORS.orange} />
-                      <MetricChip label="interference" value={candidate.interfereHits} color={SP_COLORS.red} />
-                    </div>
-                  </div>
-                )})
+                  )
+                })
               ) : (
                 <div className="rounded-[22px] border px-4 py-6 text-[13px] text-[#cfcfcf]" style={{ borderColor: '#ffffff20' }}>
                   No partner specialties currently match this enrollee's active Z-codes.

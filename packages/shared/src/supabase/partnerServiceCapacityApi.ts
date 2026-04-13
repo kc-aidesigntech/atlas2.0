@@ -16,6 +16,7 @@ import type {
 } from "./contracts";
 
 let supportsDraftSubmissionSchema: boolean | null = null;
+let supportsNotEncounteredAnswerSchema: boolean | null = null;
 
 function hasLegacyRequiredHeaderFields(input: PartnerServiceCapacitySubmissionInput) {
   return Boolean(
@@ -40,6 +41,30 @@ function shouldFallbackToLegacyDraftSchema(error: unknown) {
 
   return ["draft_key", "completed_at", "status", "on_conflict", "on conflict", "no unique", "column"]
     .some((token) => message.includes(token) || details.includes(token) || hint.includes(token));
+}
+
+function shouldFallbackToLegacyNotEncounteredAnswerSchema(error: unknown) {
+  const message =
+    typeof error === "object" && error && "message" in error ? String((error as { message?: string }).message || "").toLowerCase() : "";
+  const details =
+    typeof error === "object" && error && "details" in error ? String((error as { details?: string }).details || "").toLowerCase() : "";
+  const hint =
+    typeof error === "object" && error && "hint" in error ? String((error as { hint?: string }).hint || "").toLowerCase() : "";
+  const combined = `${message} ${details} ${hint}`;
+
+  return [
+    "not_encountered",
+    "burden_score",
+    "null value",
+    "violates not-null",
+    "violates check constraint",
+    "partner_service_capacity_answers_burden_score_check",
+    "column",
+  ].some((token) => combined.includes(token));
+}
+
+function getNotEncounteredMigrationRequiredMessage() {
+  return "This database is missing the survey answer schema needed for 'not encountered'. Apply `supabase/migrations/20260414_zcode_master_alignment.sql` before using that option.";
 }
 
 function mapSubmissionRow(
@@ -225,6 +250,43 @@ export async function listPartnerServiceCapacitySubmissions(
   return submissions.map((submission) => mapSubmissionRow(submission, answersBySubmissionId.get(submission.id) || []));
 }
 
+export async function deletePartnerServiceCapacityDraft(
+  client: SupabaseClient<AtlasDatabase>,
+  submissionId: string,
+) {
+  const trimmedSubmissionId = submissionId.trim();
+  if (!trimmedSubmissionId) {
+    throw new Error("A draft submission id is required.");
+  }
+
+  const { data: submission, error: fetchError } = await client
+    .schema("atlas")
+    .from("partner_service_capacity_submissions")
+    .select("id, draft_key, status")
+    .eq("id", trimmedSubmissionId)
+    .single();
+
+  if (fetchError) throw fetchError;
+  if (!submission) {
+    throw new Error("Draft record not found.");
+  }
+  if (submission.status !== "draft") {
+    throw new Error("Only draft service-capacity records can be deleted.");
+  }
+
+  const { error: deleteError } = await client
+    .schema("atlas")
+    .from("partner_service_capacity_submissions")
+    .delete()
+    .eq("id", trimmedSubmissionId);
+
+  if (deleteError) throw deleteError;
+  return {
+    id: submission.id,
+    draftKey: submission.draft_key || submission.id,
+  };
+}
+
 export async function searchPartnerIdentifierRecords(
   client: SupabaseClient<AtlasDatabase>,
   firstName: string,
@@ -372,13 +434,57 @@ export async function savePartnerServiceCapacitySubmission(
     };
   }
 
-  const { data: answers, error: answersError } = await client
-    .schema("atlas")
-    .from("partner_service_capacity_answers")
-    .insert(answerRows)
-    .select("*");
+  const insertAnswerRows = async (
+    rows: AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Insert"][],
+  ) =>
+    client
+      .schema("atlas")
+      .from("partner_service_capacity_answers")
+      .insert(rows)
+      .select("*");
 
-  if (answersError) throw answersError;
+  let answers:
+    | AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Row"][]
+    | null = null;
+
+  try {
+    if (supportsNotEncounteredAnswerSchema !== false) {
+      const { data, error } = await insertAnswerRows(answerRows);
+      if (error) throw error;
+      supportsNotEncounteredAnswerSchema = true;
+      answers = data;
+    }
+  } catch (error) {
+    if (shouldFallbackToLegacyNotEncounteredAnswerSchema(error)) {
+      supportsNotEncounteredAnswerSchema = false;
+    } else {
+      throw error;
+    }
+  }
+
+  if (!answers) {
+    if (input.answers.some((answer) => answer.notEncountered || typeof answer.score !== "number")) {
+      throw new Error(getNotEncounteredMigrationRequiredMessage());
+    }
+
+    const legacyAnswerRows: AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Insert"][] = input.answers.map(
+      (answer) => ({
+        submission_id: submission!.id,
+        prompt_id: answer.promptId,
+        parent_code: answer.parentCode,
+        z_code: answer.zCode,
+        normalized_z_code: answer.normalizedZCode,
+        title: answer.title,
+        description: answer.description,
+        burden_score: answer.score,
+      }),
+    );
+
+    const { data, error } = await insertAnswerRows(legacyAnswerRows);
+    if (error) throw error;
+    answers = data;
+  }
+
   return {
     ...mapSubmissionRow(submission, answers || []),
     draftKey: submission.draft_key || submission.id,

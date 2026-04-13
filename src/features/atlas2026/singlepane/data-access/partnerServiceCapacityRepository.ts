@@ -1,4 +1,5 @@
 import {
+  deletePartnerServiceCapacityDraft,
   normalizeOrganizationName,
   savePartnerServiceCapacityRecord,
   searchPartnerIdentifierRecords,
@@ -77,4 +78,14 @@ export async function savePartnerServiceCapacitySurvey(
       : await savePartnerServiceCapacitySubmission(supabase, input)
 
   return persistedRecord
+}
+
+export async function deletePartnerServiceCapacityDraftRecord(
+  submissionId: string
+): Promise<{ id: string; draftKey: string }> {
+  if (!hasSupabaseConfig || !supabase) {
+    throw new Error('Supabase is required to delete partner service capacity draft records.')
+  }
+
+  return deletePartnerServiceCapacityDraft(supabase, submissionId)
 }

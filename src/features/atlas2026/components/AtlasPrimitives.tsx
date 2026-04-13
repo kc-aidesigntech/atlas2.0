@@ -107,3 +107,37 @@ export function AtlasIconBadge({
     </div>
   )
 }
+
+export function AtlasPlusButton({
+  onClick,
+  label,
+  title,
+  disabled = false,
+  className
+}: {
+  onClick?: () => void
+  label: string
+  title?: string
+  disabled?: boolean
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={title ?? label}
+      className={cn(
+        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-10 w-10 items-center justify-center rounded-[10px] border text-[24px] font-light transition-[box-shadow,border-color,opacity] duration-150 ease-out hover:border-white/50 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.16),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60',
+        className
+      )}
+      style={{ ['--button-border-color' as const]: 'var(--atlas-signal-yellow)', color: 'var(--atlas-signal-yellow)' } as React.CSSProperties}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.9" strokeLinecap="round">
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+    </button>
+  )
+}
