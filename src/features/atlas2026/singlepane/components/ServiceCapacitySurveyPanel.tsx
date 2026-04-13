@@ -47,6 +47,12 @@ interface ServiceCapacitySurveyPanelProps {
   isSaving: boolean
   saveError: string | null
   onSearchPartnerIdentifiers: (firstName: string, lastName: string) => Promise<PartnerIdentifierRecord[]>
+  onEnsurePartnerIdentifier: (header: {
+    firstName: string
+    lastName: string
+    organizationName: string
+    email?: string | null
+  }) => Promise<PartnerIdentifierRecord>
   onSubmit: (payload: PartnerServiceCapacitySubmissionInput) => Promise<PartnerServiceCapacitySubmissionRecord | void> | PartnerServiceCapacitySubmissionRecord | void
   onDeleteDraft: (submissionId: string) => Promise<{ id: string; draftKey: string } | void> | { id: string; draftKey: string } | void
 }
@@ -62,6 +68,12 @@ interface ServiceCapacitySurveyFormProps {
   sections: ZCodeSurveySection[]
   isLoadingCatalog: boolean
   onSearchPartnerIdentifiers: (firstName: string, lastName: string) => Promise<PartnerIdentifierRecord[]>
+  onEnsurePartnerIdentifier: (header: {
+    firstName: string
+    lastName: string
+    organizationName: string
+    email?: string | null
+  }) => Promise<PartnerIdentifierRecord>
   onSubmit: (payload: PartnerServiceCapacitySubmissionInput) => Promise<PartnerServiceCapacitySubmissionRecord | void> | PartnerServiceCapacitySubmissionRecord | void
   onBackToRecords: () => void
   onCheckoutNewRecord: () => void
@@ -136,6 +148,7 @@ export default function ServiceCapacitySurveyPanel({
   isSaving,
   saveError,
   onSearchPartnerIdentifiers,
+  onEnsurePartnerIdentifier,
   onSubmit,
   onDeleteDraft
 }: ServiceCapacitySurveyPanelProps) {
@@ -257,6 +270,7 @@ export default function ServiceCapacitySurveyPanel({
       sections={sections}
       isLoadingCatalog={isLoadingCatalog}
       onSearchPartnerIdentifiers={onSearchPartnerIdentifiers}
+      onEnsurePartnerIdentifier={onEnsurePartnerIdentifier}
       onSubmit={handleSubmit}
       onBackToRecords={handleReturnToHistory}
       onCheckoutNewRecord={handleCheckoutNewRecord}
@@ -276,6 +290,7 @@ function ServiceCapacitySurveyForm({
   sections,
   isLoadingCatalog,
   onSearchPartnerIdentifiers,
+  onEnsurePartnerIdentifier,
   onSubmit,
   onBackToRecords,
   onCheckoutNewRecord,
@@ -291,6 +306,7 @@ function ServiceCapacitySurveyForm({
   const [partnerIdentifierMatches, setPartnerIdentifierMatches] = useState<PartnerIdentifierRecord[]>([])
   const [partnerIdentifierError, setPartnerIdentifierError] = useState<string | null>(null)
   const [isSearchingPartnerIdentifiers, setIsSearchingPartnerIdentifiers] = useState(false)
+  const [isEnsuringPartnerIdentifier, setIsEnsuringPartnerIdentifier] = useState(false)
   const [selectedPartnerIdentifierId, setSelectedPartnerIdentifierId] = useState<string | null>(null)
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [blockingSaveError, setBlockingSaveError] = useState<string | null>(saveError)
@@ -352,9 +368,31 @@ function ServiceCapacitySurveyForm({
     const timeoutId = window.setTimeout(() => {
       setIsSearchingPartnerIdentifiers(true)
       onSearchPartnerIdentifiers(trimmedFirstName, trimmedLastName)
-        .then((matches) => {
+        .then(async (matches) => {
           if (!isActive) return
-          setPartnerIdentifierMatches(matches)
+          if (matches.length) {
+            setPartnerIdentifierMatches(matches)
+            setPartnerIdentifierError(null)
+            return
+          }
+
+          const trimmedOrganizationName = draft.header.organizationName.trim()
+          if (!trimmedOrganizationName) {
+            setPartnerIdentifierMatches([])
+            setPartnerIdentifierError(null)
+            return
+          }
+
+          setIsEnsuringPartnerIdentifier(true)
+          const createdIdentifier = await onEnsurePartnerIdentifier({
+            firstName: trimmedFirstName,
+            lastName: trimmedLastName,
+            organizationName: trimmedOrganizationName,
+            email: draft.header.email.trim() || null
+          })
+          if (!isActive) return
+          setPartnerIdentifierMatches([createdIdentifier])
+          setSelectedPartnerIdentifierId(createdIdentifier.partnerId)
           setPartnerIdentifierError(null)
         })
         .catch((error) => {
@@ -365,6 +403,7 @@ function ServiceCapacitySurveyForm({
         .finally(() => {
           if (!isActive) return
           setIsSearchingPartnerIdentifiers(false)
+          setIsEnsuringPartnerIdentifier(false)
         })
     }, 250)
 
@@ -372,7 +411,15 @@ function ServiceCapacitySurveyForm({
       isActive = false
       window.clearTimeout(timeoutId)
     }
-  }, [draft.header.firstName, draft.header.lastName, onSearchPartnerIdentifiers, selectedPartnerIdentifierId])
+  }, [
+    draft.header.email,
+    draft.header.firstName,
+    draft.header.lastName,
+    draft.header.organizationName,
+    onEnsurePartnerIdentifier,
+    onSearchPartnerIdentifiers,
+    selectedPartnerIdentifierId
+  ])
 
   const answersByPromptId = useMemo(() => new Map(draft.answers.map((answer) => [answer.promptId, answer])), [draft.answers])
   const visiblePromptEntries = useMemo<VisiblePromptEntry[]>(() => {
@@ -693,7 +740,7 @@ function ServiceCapacitySurveyForm({
     effectiveBlockingSaveError && dismissedBlockingSaveError !== effectiveBlockingSaveError ? effectiveBlockingSaveError : null
 
   return (
-    <div className="relative w-full rounded-[21px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: '#020202' }}>
+    <div className="relative w-full rounded-[21px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: 'var(--surface-panel-soft)' }}>
       {visibleBlockingSaveError && blockingIssue ? (
         <BlockingSupportOverlay
           message={visibleBlockingSaveError}
@@ -777,13 +824,17 @@ function ServiceCapacitySurveyForm({
                   />
                 </div>
                 {draft.header.firstName.trim() && draft.header.lastName.trim() ? (
-                  <div className="mt-3 rounded-[12px] border px-3 py-3" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
+                  <div className="mt-3 rounded-[12px] border px-3 py-3" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <small className="text-[11px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
-                        existing identifier records
+                        checking our system
                       </small>
                       <small className="text-[11px]" style={{ color: SP_COLORS.muted }}>
-                        {isSearchingPartnerIdentifiers ? 'searching...' : selectedPartnerIdentifierId ? 'linked' : `${partnerIdentifierMatches.length} found`}
+                        {isSearchingPartnerIdentifiers || isEnsuringPartnerIdentifier
+                          ? 'checking...'
+                          : selectedPartnerIdentifierId
+                            ? 'linked'
+                            : `${partnerIdentifierMatches.length} found`}
                       </small>
                     </div>
                     {partnerIdentifierError ? (
@@ -817,9 +868,9 @@ function ServiceCapacitySurveyForm({
                       <small className="mt-2 block text-[12px] text-[#bdbdbd]">
                         Existing partner identifier selected. Editing the name, email, or organization will clear the match.
                       </small>
-                    ) : !isSearchingPartnerIdentifiers ? (
+                    ) : !isSearchingPartnerIdentifiers && !isEnsuringPartnerIdentifier ? (
                       <small className="mt-2 block text-[12px] text-[#8f8f8f]">
-                        No existing identifier records match this name.
+                        No match found. This person has been added to the system when organization info is present.
                       </small>
                     ) : null}
                   </div>
@@ -881,7 +932,7 @@ function ServiceCapacitySurveyForm({
           <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[14px]">scale guide</small>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {scale.map((option) => (
-              <div key={option.value} className="rounded-[12px] border px-3 py-2" style={{ borderColor: '#ffffff18', backgroundColor: '#060606' }}>
+              <div key={option.value} className="rounded-[12px] border px-3 py-2" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
                 <div className="text-[13px] font-medium md:text-[15px]" style={{ color: option.value >= 7 ? SP_COLORS.deepGreen : option.value <= 3 ? SP_COLORS.red : SP_COLORS.yellow }}>
                   {option.value} - {option.label}
                 </div>
@@ -907,7 +958,7 @@ function ServiceCapacitySurveyForm({
       ) : null}
 
       {!surveyStarted ? (
-        <div className="mt-5 rounded-[16px] border px-4 py-5 md:px-5" style={{ borderColor: '#ffffff25', backgroundColor: '#050505' }}>
+        <div className="mt-5 rounded-[16px] border px-4 py-5 md:px-5" style={{ borderColor: '#ffffff25', backgroundColor: 'var(--surface-panel-raised)' }}>
           <small className="block text-[12px] uppercase tracking-[0.12em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
             ready to begin
           </small>
@@ -971,13 +1022,13 @@ function ServiceCapacitySurveyForm({
                   className={`rounded-[14px] border transition-[padding,margin,font-size] duration-500 ease-out ${
                     useImmersiveSurveyLayout ? 'px-3 py-2.5 md:px-4' : 'px-4 py-3 md:px-5'
                   }`}
-                  style={{ borderColor: '#ffffff18', backgroundColor: '#040404' }}
+                  style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}
                 >
                   <small className="block text-[11px] uppercase tracking-[0.12em] md:text-[12px]" style={{ color: SP_COLORS.muted }}>
                     z-code burden questions
                   </small>
                   <div className={`mt-1 font-medium leading-snug text-white ${useImmersiveSurveyLayout ? 'text-[16px] md:text-[19px]' : 'text-[18px] md:text-[22px]'}`}>
-                    How well does your organization handle this in real practice?
+                    Is this handled as a core specialty or is it a burden to have to handle it?
                   </div>
                 </div>
               </div>

@@ -35,7 +35,7 @@ export function RecordManagementView({
       kicker="partner service capacity"
       title="Record management"
       description="Review service-capacity submission history in read-only mode, then check out a new blank survey record when you are ready to reassess."
-      className="rounded-[21px] bg-[#020202]"
+      className="rounded-[21px] bg-[var(--surface-panel-soft)]"
       actions={
         <AtlasPlusButton
           onClick={onCheckoutNewRecord}
@@ -90,7 +90,7 @@ export function RecordManagementView({
             const completedLabel = formatDateTimeLabel(record.completedAtIso)
             const respondentName = [record.header.firstName, record.header.lastName].filter(Boolean).join(' ').trim() || 'respondent not recorded'
             return (
-              <AtlasInsetCard key={record.id} className="rounded-[16px] border-white/15 bg-[#060606] px-4 py-4 md:px-5">
+              <AtlasInsetCard key={record.id} className="rounded-[16px] border-white/15 bg-[var(--surface-panel-raised)] px-4 py-4 md:px-5">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-3">
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -141,7 +141,7 @@ export function RecordManagementView({
             )
           })
         ) : (
-          <AtlasInsetCard className="rounded-[16px] border-white/15 bg-[#060606] px-4 py-6 text-center md:px-5">
+          <AtlasInsetCard className="rounded-[16px] border-white/15 bg-[var(--surface-panel-raised)] px-4 py-6 text-center md:px-5">
             <div className="text-[18px] font-medium text-white md:text-[20px]">No service-capacity records yet</div>
             <small className="mt-2 block text-[13px] text-[var(--foreground-secondary)] md:text-[15px]">
               Use the + action to check out the first blank survey record for this partner.

@@ -46,6 +46,7 @@ import {
 } from '@/features/atlas2026/singlepane/data-access/navigatorAssessmentRepository'
 import {
   deletePartnerServiceCapacityDraftRecord,
+  ensurePartnerIdentifierRecordForSurvey,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
   savePartnerServiceCapacitySurvey,
@@ -424,5 +425,6 @@ export {
   saveRouteAssignment,
   saveTimelineConfig,
   saveRouteLogs,
+  ensurePartnerIdentifierRecordForSurvey,
   searchPartnerIdentifierRecordMatches
 }

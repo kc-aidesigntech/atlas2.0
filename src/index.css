@@ -27,7 +27,11 @@
     --surface-base: #000000;
     --surface-ink: #05060a;
     --surface-muted: #090d13;
-    --surface-panel: #0f1319;
+    --surface-panel: #000000;
+    --surface-panel-soft: #111111;
+    --surface-panel-raised: #080808;
+    --surface-button: #000000;
+    --surface-button-strong: #000000;
     --surface-accent: rgba(255, 255, 255, 0.04);
     --surface-overlay: rgba(12, 18, 26, 0.9);
 
@@ -273,6 +277,7 @@
     padding-top: calc(var(--button-radius, 10px) + 3px);
     padding-bottom: calc(var(--button-radius, 10px) * 0.5);
     border-color: var(--button-border-color, currentColor);
+    background-color: var(--button-fill-color, var(--surface-button));
     transition:
       border-color 150ms ease-out,
       color 150ms ease-out,

@@ -12,6 +12,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
     searchPartnerIdentifierMatches,
+    ensurePartnerIdentifier,
     savePartnerServiceCapacitySurvey,
     deletePartnerServiceCapacityDraft
   } = useSinglePaneData('partner')
@@ -42,6 +43,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
           isSaving={isSavingPartnerServiceCapacitySurvey}
           saveError={partnerServiceCapacitySurveyError}
           onSearchPartnerIdentifiers={searchPartnerIdentifierMatches}
+          onEnsurePartnerIdentifier={ensurePartnerIdentifier}
           onSubmit={savePartnerServiceCapacitySurvey}
           onDeleteDraft={deletePartnerServiceCapacityDraft}
         />

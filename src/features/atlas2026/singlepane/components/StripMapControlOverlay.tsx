@@ -53,7 +53,7 @@ export default function StripMapControlOverlay({
     <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/70 px-4 py-5 backdrop-blur-[2px]">
       <div
         className="w-full max-w-[560px] rounded-[24px] border px-5 py-5 md:px-6 md:py-6"
-        style={{ borderColor: '#ffffff30', backgroundColor: '#020202' }}
+        style={{ borderColor: '#ffffff30', backgroundColor: 'var(--surface-panel-soft)' }}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -75,7 +75,7 @@ export default function StripMapControlOverlay({
         </div>
 
         <div className="mt-5 space-y-4">
-          <section className="rounded-[18px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
+          <section className="rounded-[18px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
             <small className="block text-[11px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
               start date
             </small>
@@ -92,12 +92,12 @@ export default function StripMapControlOverlay({
                   })
                 )
               }}
-              className="mt-3 w-full rounded-[11px] border bg-black px-3 py-2 text-[14px] text-white md:text-[16px]"
+              className="mt-3 w-full rounded-[11px] border bg-[var(--surface-panel-raised)] px-3 py-2 text-[14px] text-white md:text-[16px]"
               style={{ borderColor: '#ffffff30' }}
             />
           </section>
 
-          <section className="rounded-[18px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
+          <section className="rounded-[18px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
             <div className="flex items-center justify-between gap-3">
               <div>
                 <small className="block text-[11px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
@@ -124,7 +124,7 @@ export default function StripMapControlOverlay({
             </div>
           </section>
 
-          <section className="rounded-[18px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: '#050505' }}>
+          <section className="rounded-[18px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
             <small className="block text-[11px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
               phase lengths
             </small>
@@ -135,7 +135,7 @@ export default function StripMapControlOverlay({
                   <div
                     key={segment.phase}
                     className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border px-3 py-3"
-                    style={{ borderColor: '#ffffff14', backgroundColor: '#030303' }}
+                    style={{ borderColor: '#ffffff14', backgroundColor: 'var(--surface-panel-soft)' }}
                   >
                     <div className="min-w-0">
                       <small className="block text-[11px] uppercase tracking-[0.12em]" style={{ color: PHASE_COLORS[segment.phase] }}>

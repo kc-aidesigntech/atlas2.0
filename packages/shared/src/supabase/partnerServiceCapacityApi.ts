@@ -116,6 +116,25 @@ function mapPartnerIdentifierRow(
   };
 }
 
+function mapPartnerRowToIdentifier(
+  row: Pick<
+    AtlasDatabase["atlas"]["Tables"]["partners"]["Row"],
+    | "id"
+    | "organization_name"
+    | "primary_contact_first_name"
+    | "primary_contact_last_name"
+    | "primary_contact_email"
+  >,
+): PartnerIdentifierRecord {
+  return {
+    partnerId: row.id,
+    firstName: row.primary_contact_first_name || "",
+    lastName: row.primary_contact_last_name || "",
+    organizationName: row.organization_name,
+    email: row.primary_contact_email || "",
+  };
+}
+
 async function ensurePartnerRecord(
   client: SupabaseClient<AtlasDatabase>,
   header: PartnerServiceCapacitySubmissionInput["header"],
@@ -307,6 +326,71 @@ export async function searchPartnerIdentifierRecords(
 
   if (error) throw error;
   return (data || []).map(mapPartnerIdentifierRow);
+}
+
+export async function ensurePartnerIdentifierRecord(
+  client: SupabaseClient<AtlasDatabase>,
+  input: {
+    firstName: string;
+    lastName: string;
+    organizationName: string;
+    email?: string | null;
+  },
+) {
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const organizationName = input.organizationName.trim();
+  const email = input.email?.trim() || null;
+  const organizationNameNormalized = normalizeOrganizationName(organizationName);
+
+  if (!firstName || !lastName || !organizationName) {
+    throw new Error("first name, last name, and organization name are required.");
+  }
+
+  const { data: existingPartnerRows, error: existingPartnerError } = await client
+    .schema("atlas")
+    .from("partners")
+    .select("id, organization_name, primary_contact_first_name, primary_contact_last_name, primary_contact_email")
+    .eq("organization_name_normalized", organizationNameNormalized)
+    .limit(1);
+
+  if (existingPartnerError) throw existingPartnerError;
+
+  const existingPartner = existingPartnerRows?.[0];
+  if (existingPartner) {
+    const { data: updatedPartner, error: updateError } = await client
+      .schema("atlas")
+      .from("partners")
+      .update({
+        primary_contact_first_name: firstName,
+        primary_contact_last_name: lastName,
+        primary_contact_email: email,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existingPartner.id)
+      .select("id, organization_name, primary_contact_first_name, primary_contact_last_name, primary_contact_email")
+      .single();
+
+    if (updateError) throw updateError;
+    return mapPartnerRowToIdentifier(updatedPartner || existingPartner);
+  }
+
+  const { data: insertedPartner, error: insertError } = await client
+    .schema("atlas")
+    .from("partners")
+    .insert({
+      organization_name: organizationName,
+      organization_name_normalized: organizationNameNormalized,
+      primary_contact_first_name: firstName,
+      primary_contact_last_name: lastName,
+      primary_contact_email: email,
+      updated_at: new Date().toISOString(),
+    })
+    .select("id, organization_name, primary_contact_first_name, primary_contact_last_name, primary_contact_email")
+    .single();
+
+  if (insertError) throw insertError;
+  return mapPartnerRowToIdentifier(insertedPartner);
 }
 
 export async function savePartnerServiceCapacitySubmission(

@@ -151,7 +151,7 @@ export function BurdenCard({
       className={`rounded-[16px] border transition-[padding,border-radius,transform,height] duration-500 ease-out ${
         compact ? 'flex h-full min-h-0 flex-col px-3 py-3 md:px-4 md:py-4' : 'px-4 py-4 md:px-5 md:py-5'
       }`}
-      style={{ borderColor: '#ffffff30', borderWidth: '1.5px', backgroundColor: '#050505' }}
+      style={{ borderColor: '#ffffff30', borderWidth: '1.5px', backgroundColor: 'var(--surface-panel-raised)' }}
       onClick={handleCardClick}
     >
       <div className={`flex flex-wrap items-start justify-between gap-3 border-b ${compact ? 'pb-2.5' : 'pb-4'}`} style={{ borderColor: '#ffffff20' }}>
@@ -183,7 +183,7 @@ export function BurdenCard({
 
       <div
         className={`${compact ? 'mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[14px] px-3 py-3 pr-2.5 md:px-3.5 md:py-3.5 md:pr-3' : 'mt-4 rounded-[16px] px-3 py-3 md:px-4 md:py-4'} border`}
-        style={{ borderColor: '#ffffff22', backgroundColor: '#020202' }}
+        style={{ borderColor: '#ffffff22', backgroundColor: 'var(--surface-panel-soft)' }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <small className="text-[12px] uppercase tracking-[0.12em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
@@ -247,7 +247,7 @@ export function BurdenCard({
                   }`}
                   style={{
                     ['--button-border-color' as const]: isSelected ? selectedColor : '#ffffff22',
-                    backgroundColor: isSelected ? `${selectedColor}14` : '#050505',
+                    backgroundColor: isSelected ? `${selectedColor}14` : 'var(--surface-button-strong)',
                     color: isSelected ? selectedColor : SP_COLORS.white,
                     boxShadow: isSelected ? `0 0 0 1px ${selectedColor}, 0 0 16px ${selectedColor}22` : 'none',
                     transform: isSelected ? 'translateY(-1px)' : 'none'
@@ -276,7 +276,7 @@ export function BurdenCard({
               onKeyDown={handleNumericInputKeyDown}
               inputMode="numeric"
               enterKeyHint={hasNext ? 'next' : 'done'}
-              className={`rounded-[8px] border bg-black px-2 py-1 text-center text-white disabled:cursor-not-allowed disabled:opacity-45 ${
+              className={`rounded-[8px] border bg-[var(--surface-panel-raised)] px-2 py-1 text-center text-white disabled:cursor-not-allowed disabled:opacity-45 ${
                 compact ? 'w-[66px] text-[14px]' : 'w-[72px] text-[15px]'
               }`}
               style={{ borderColor: '#ffffff30' }}
@@ -377,7 +377,7 @@ export function SurveyProgressHeader({
 
   return (
     <div
-      className={`${pinToViewport ? 'sticky top-0 z-30' : 'relative'} mt-5 rounded-[16px] border bg-black/92 px-4 py-3 backdrop-blur-sm transition-[padding,border-radius,background-color] duration-500 ease-out md:px-5 ${className}`}
+      className={`${pinToViewport ? 'sticky top-0 z-30' : 'relative'} mt-5 rounded-[16px] border bg-[color:var(--surface-panel-soft)] px-4 py-3 backdrop-blur-sm transition-[padding,border-radius,background-color] duration-500 ease-out md:px-5 ${className}`}
       style={{ borderColor: '#ffffff24' }}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -454,7 +454,7 @@ export function SurveyProgressHeader({
                 <div
                   className="absolute left-1/2 top-1/2 flex h-[calc(100%-8px)] w-[calc(100%-8px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[clamp(10px,2.5vw,14px)] font-bold leading-none"
                   style={{
-                    backgroundColor: isComplete ? item.accentColor : '#050505',
+                    backgroundColor: isComplete ? item.accentColor : 'var(--surface-panel-raised)',
                     color: isComplete ? (itemUsesLightText ? SP_COLORS.white : SP_COLORS.bg) : item.accentColor,
                     border: `1px solid ${isComplete ? item.accentColor : '#ffffff1f'}`
                   }}
@@ -512,7 +512,7 @@ export function Input({
       value={value}
       placeholder={placeholder}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded-[11px] border bg-black px-3 py-2 text-[14px] text-white md:text-[16px]"
+      className="w-full rounded-[11px] border bg-[var(--surface-panel-raised)] px-3 py-2 text-[14px] text-white md:text-[16px]"
       style={{ borderColor: '#ffffff30' }}
     />
   )
@@ -543,7 +543,7 @@ export function BlockingSupportOverlay({
     <div className="absolute inset-0 z-50 flex items-center justify-center rounded-[21px] bg-black/85 px-4 py-6 backdrop-blur-sm">
       <div
         className="w-full max-w-[620px] rounded-[20px] border px-5 py-5 text-center md:px-6 md:py-6"
-        style={{ borderColor: `${SP_COLORS.red}80`, backgroundColor: '#070707' }}
+        style={{ borderColor: `${SP_COLORS.red}80`, backgroundColor: 'var(--surface-panel-soft)' }}
       >
         <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[13px]" style={{ color: SP_COLORS.red }}>
           save error

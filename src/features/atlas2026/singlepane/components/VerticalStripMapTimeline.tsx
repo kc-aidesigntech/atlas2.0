@@ -176,7 +176,7 @@ export default function VerticalStripMapTimeline({
           <AtlasTextButton
             onClick={onRoutePlanningClick}
             className="px-4 pb-2 pt-2 text-[11px] uppercase tracking-[0.1em]"
-            style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' } as React.CSSProperties}
+            style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: 'var(--surface-button)' } as React.CSSProperties}
           >
             route planning
           </AtlasTextButton>
@@ -230,11 +230,11 @@ export default function VerticalStripMapTimeline({
           const phaseColor = PHASE_COLORS[event.phase]
           return (
             <div key={event.id} className="relative pb-5 last:pb-0">
-              <div className="absolute left-[-4px] top-1 flex h-8 w-8 items-center justify-center rounded-full border bg-black" style={{ borderColor: SP_COLORS.white }}>
+              <div className="absolute left-[-4px] top-1 flex h-8 w-8 items-center justify-center rounded-full border bg-[var(--surface-panel-raised)]" style={{ borderColor: SP_COLORS.white }}>
                 <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: statusColor }} />
               </div>
 
-              <div className="rounded-[24px] border px-4 py-3" style={{ borderColor: '#ffffff3a', backgroundColor: '#050505' }}>
+              <div className="rounded-[24px] border px-4 py-3" style={{ borderColor: '#ffffff3a', backgroundColor: 'var(--surface-panel-raised)' }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
@@ -341,7 +341,7 @@ export default function VerticalStripMapTimeline({
       </div>
 
       {suggestedMarkers.length > 0 ? (
-        <div className="mt-4 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.yellow}70`, backgroundColor: '#080808' }}>
+        <div className="mt-4 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.yellow}70`, backgroundColor: 'var(--surface-panel-soft)' }}>
           <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.yellow }}>
             ranked station suggestions
           </small>

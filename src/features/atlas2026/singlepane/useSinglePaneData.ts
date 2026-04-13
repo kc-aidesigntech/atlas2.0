@@ -34,6 +34,7 @@ import {
   loadEnrollmentRequests,
   loadPartnerStationProfile,
   searchPartnerIdentifierRecordMatches,
+  ensurePartnerIdentifierRecordForSurvey,
   saveAccountSettings as persistAccountSettings,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
@@ -601,6 +602,15 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return searchPartnerIdentifierRecordMatches(firstName, lastName)
   }
 
+  async function ensurePartnerIdentifier(header: {
+    firstName: string
+    lastName: string
+    organizationName: string
+    email?: string | null
+  }): Promise<PartnerIdentifierRecord> {
+    return ensurePartnerIdentifierRecordForSurvey(header)
+  }
+
   return {
     role,
     setRole,
@@ -629,6 +639,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isSavingRegulationTest,
     regulationTestError,
     searchPartnerIdentifierMatches,
+    ensurePartnerIdentifier,
     supervisorNavigatorCompetency,
     navigatorCompetencyAssessments,
     selectedRouteAssignment,

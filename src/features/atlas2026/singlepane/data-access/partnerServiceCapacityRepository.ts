@@ -1,4 +1,5 @@
 import {
+  ensurePartnerIdentifierRecord,
   deletePartnerServiceCapacityDraft,
   normalizeOrganizationName,
   savePartnerServiceCapacityRecord,
@@ -63,6 +64,21 @@ export async function searchPartnerIdentifierRecordMatches(
   }
 
   return searchPartnerIdentifierRecords(supabase, trimmedFirstName, trimmedLastName)
+}
+
+export async function ensurePartnerIdentifierRecordForSurvey(
+  header: {
+    firstName: string
+    lastName: string
+    organizationName: string
+    email?: string | null
+  }
+): Promise<PartnerIdentifierRecord> {
+  if (!hasSupabaseConfig || !supabase) {
+    throw new Error('Supabase is required to create partner identifier records.')
+  }
+
+  return ensurePartnerIdentifierRecord(supabase, header)
 }
 
 export async function savePartnerServiceCapacitySurvey(

@@ -24,7 +24,7 @@ export function AtlasPanel({
   children
 }: AtlasPanelProps) {
   return (
-    <section className={cn('rounded-2xl border border-white/15 bg-[#0d0d0d] text-white', className)}>
+    <section className={cn('rounded-2xl border border-white/15 bg-[var(--surface-panel-soft)] text-white', className)}>
       {(kicker || title || description || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 px-6 pb-4 pt-6">
           <div className="min-w-0 flex-1">
@@ -49,7 +49,7 @@ export function AtlasInsetCard({
   className?: string
   children: React.ReactNode
 }) {
-  return <div className={cn('rounded-[20px] border border-white/15 bg-black/80 px-4 py-3', className)}>{children}</div>
+  return <div className={cn('rounded-[20px] border border-white/15 bg-[var(--surface-panel-raised)] px-4 py-3', className)}>{children}</div>
 }
 
 export function AtlasMetricPill({
@@ -102,7 +102,7 @@ export function AtlasIconBadge({
   className?: string
 }) {
   return (
-    <div className={cn('flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black', className)} style={color ? { color } : undefined}>
+    <div className={cn('flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-[var(--surface-panel-raised)]', className)} style={color ? { color } : undefined}>
       {children}
     </div>
   )

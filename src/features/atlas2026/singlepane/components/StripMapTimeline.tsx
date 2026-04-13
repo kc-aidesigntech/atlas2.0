@@ -361,7 +361,7 @@ export default function StripMapTimeline({
       {highlightedStationName ? (
         <div
           className="absolute left-4 top-4 z-10 max-w-[360px] rounded-[24px] border px-4 py-3"
-          style={{ borderColor: `${SP_COLORS.yellow}88`, backgroundColor: '#050505' }}
+          style={{ borderColor: `${SP_COLORS.yellow}88`, backgroundColor: 'var(--surface-panel-raised)' }}
         >
           <small
             className="block text-[11px] uppercase tracking-[0.08em]"
@@ -423,7 +423,7 @@ export default function StripMapTimeline({
           <AtlasTextButton
             onClick={onRoutePlanningClick}
             className="px-5 pb-2 pt-2 text-[12px] uppercase tracking-[0.12em]"
-            style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' } as React.CSSProperties}
+            style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: 'var(--surface-button)' } as React.CSSProperties}
           >
             route planning
           </AtlasTextButton>
