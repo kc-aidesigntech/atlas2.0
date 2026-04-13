@@ -182,7 +182,7 @@ export function BurdenCard({
               className={`absolute inset-0 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed ${compact ? 'h-5' : 'h-6'}`}
             />
           </div>
-          <div className={`${compact ? 'mt-2.5' : 'mt-3'} grid grid-cols-9`}>
+          <div className={`${compact ? 'mt-2.5' : 'mt-3'} relative z-10 grid grid-cols-9`}>
             {scale.map((option, index) => {
               const isSelected = !notEncountered && option.value === score
               const selectedColor = sliderScaleColors[index]

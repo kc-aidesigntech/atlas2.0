@@ -273,6 +273,12 @@
     padding-top: calc(var(--button-radius, 10px) + 3px);
     padding-bottom: calc(var(--button-radius, 10px) * 0.5);
     border-color: var(--button-border-color, currentColor);
+    transition:
+      border-color 150ms ease-out,
+      color 150ms ease-out,
+      background-color 150ms ease-out,
+      box-shadow 150ms ease-out,
+      filter 150ms ease-out;
   }
 
   .atlas-sign-button::before {
@@ -301,6 +307,11 @@
   .atlas-sign-button-icon > img {
     display: block;
     flex-shrink: 0;
+  }
+
+  .atlas-sign-button:not(:disabled):hover,
+  .atlas-sign-button:not(:disabled):active {
+    filter: brightness(var(--button-interaction-brightness, 1.18));
   }
 }
 
