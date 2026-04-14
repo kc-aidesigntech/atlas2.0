@@ -4,7 +4,6 @@ import { AtlasIconButton } from '@/features/atlas2026/components/AtlasPrimitives
 import type { RouteCandidateParentSummary, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
-import EnrolleeParentBadgeRow from './EnrolleeParentBadgeRow'
 
 const arrowIconUrl = new URL('../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png', import.meta.url).href
 
@@ -18,6 +17,7 @@ interface MtaRouteBoardProps {
   title: string
   subtitle?: string
   routeCandidates: RouteCandidateRecord[]
+  activeZCodeCount?: number
   headerParentCodes?: string[]
   completedParentCodes?: string[]
   selectedCandidateId?: string | null
@@ -26,6 +26,8 @@ interface MtaRouteBoardProps {
   onSelectCandidate?: (candidateId: string) => void
   onAssignCandidate?: (candidate: RouteCandidateRecord) => void
   onDoneCandidate?: (candidate: RouteCandidateRecord) => void
+  onSelectParentCode?: (selection: { parentCode: string; childCodes: string[] }) => void
+  parentCircleSize?: 'board' | 'mobile'
   headerActions?: React.ReactNode
   emptyMessage?: string
 }
@@ -36,6 +38,7 @@ export default function MtaRouteBoard({
   title,
   subtitle,
   routeCandidates,
+  activeZCodeCount = 0,
   headerParentCodes = [],
   completedParentCodes = [],
   selectedCandidateId = null,
@@ -44,6 +47,8 @@ export default function MtaRouteBoard({
   onSelectCandidate,
   onAssignCandidate,
   onDoneCandidate,
+  onSelectParentCode,
+  parentCircleSize = 'board',
   headerActions,
   emptyMessage = 'No partner specialties currently match this enrollee.'
 }: MtaRouteBoardProps) {
@@ -60,12 +65,29 @@ export default function MtaRouteBoard({
           <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
             {kicker}
           </small>
-          <div className="mt-1 flex items-center gap-3">
+          <div className="mt-1 flex flex-wrap items-center gap-3">
             <div className="text-[24px] font-medium leading-none text-white sm:text-[28px]">{title}</div>
             {headerParentCodes.length ? (
-              <EnrolleeParentBadgeRow parentCodes={headerParentCodes} completedParentCodes={completedParentCodes} />
+              <div className="flex flex-wrap items-center gap-[10px]">
+                {headerParentCodes.map((parentCode) => (
+                  <ProfileStyleParentCircle
+                    key={`header-${parentCode}`}
+                    parentCode={parentCode}
+                    childCodes={[]}
+                    isCompleted={completedParentCodes.includes(parentCode)}
+                    onSelect={onSelectParentCode}
+                    size={parentCircleSize}
+                  />
+                ))}
+              </div>
             ) : summaryCandidate ? (
-              <RouteCircleGroup candidate={summaryCandidate} limit={6} />
+              <RouteCircleGroup
+                candidate={summaryCandidate}
+                completedParentCodes={completedParentCodes}
+                onSelect={onSelectParentCode}
+                size={parentCircleSize}
+                limit={6}
+              />
             ) : null}
           </div>
           {subtitle ? (
@@ -174,7 +196,15 @@ export default function MtaRouteBoard({
 
                     <div className="mt-3 flex flex-wrap gap-2.5">
                       {summaries.length ? (
-                        summaries.map((summary) => <ParentScoreCard key={`${candidate.stationId}-${summary.parentCode}`} summary={summary} />)
+                        summaries.map((summary) => (
+                          <ParentScoreCard
+                            key={`${candidate.stationId}-${summary.parentCode}`}
+                            summary={summary}
+                            isCompleted={completedParentCodes.includes(summary.parentCode)}
+                            onSelect={onSelectParentCode}
+                            size={parentCircleSize}
+                          />
+                        ))
                       ) : (
                         <div className="rounded-[14px] border px-3 py-2 text-[11px]" style={{ borderColor: '#ffffff18', color: '#9eacb9' }}>
                           no aligned parents
@@ -183,10 +213,9 @@ export default function MtaRouteBoard({
                     </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]" style={{ color: '#9fafbd' }}>
-                      <StatChip label="s" value={formatMetricValue(candidate.score)} />
-                      <StatChip label="m" value={String(candidate.matchedZCodeCount)} />
-                      <StatChip label="n" value={String(candidate.needUnitsMatched)} />
-                      <StatChip label="b" value={formatMetricValue(candidate.partnerBurdenTotal)} />
+                      <StatChip label="score" value={formatMetricValue(candidate.score)} />
+                      <StatChip label="match" value={formatMatchPercent(candidate.matchedZCodeCount, activeZCodeCount)} />
+                      <StatChip label="station burden" value={formatMetricValue(candidate.partnerBurdenTotal)} />
                     </div>
                   </div>
                 </div>
@@ -212,21 +241,17 @@ function StateWord({ children, color }: { children: React.ReactNode; color: stri
 }
 
 const STAT_DEFINITIONS: Record<string, { term: string; description: string }> = {
-  s: {
+  score: {
     term: 'score',
     description: 'Overall route ranking score for this partner after weighting matched enrollee need against partner burden strength.'
   },
-  m: {
-    term: 'matched z-codes',
-    description: 'How many active enrollee Z-codes this partner matches.'
+  match: {
+    term: 'match',
+    description: 'Percent of the enrollee\'s active Z-codes that this station matches.'
   },
-  n: {
-    term: 'need units matched',
-    description: 'Total weighted enrollee need units covered by the matched Z-codes for this partner.'
-  },
-  b: {
-    term: 'partner burden',
-    description: 'Summed burden or specialty strength contributed by the partner across the matched Z-codes.'
+  'station burden': {
+    term: 'station burden',
+    description: 'Summed burden or specialty strength contributed by this station across the matched Z-codes.'
   }
 }
 
@@ -238,6 +263,40 @@ function StatChip({ label, value }: { label: string; value: string }) {
   const tooltipId = React.useId()
   const definition = STAT_DEFINITIONS[label] || { term: label, description: value }
   const isOpen = isHovered || isFocused || isPinned
+  const [tooltipStyle, setTooltipStyle] = React.useState<React.CSSProperties>({
+    left: 8,
+    top: 8,
+    width: 220,
+    transform: 'translateY(-100%)'
+  })
+
+  React.useEffect(() => {
+    if (!isOpen) return
+
+    function updateTooltipPosition() {
+      const rect = buttonRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const viewportWidth = window.innerWidth || 0
+      const tooltipWidth = Math.min(220, Math.max(180, viewportWidth - 16))
+      const centeredLeft = rect.left + rect.width / 2 - tooltipWidth / 2
+      const left = Math.max(8, Math.min(centeredLeft, viewportWidth - tooltipWidth - 8))
+      const top = Math.max(12, rect.top - 10)
+      setTooltipStyle({
+        left,
+        top,
+        width: tooltipWidth,
+        transform: 'translateY(-100%)'
+      })
+    }
+
+    updateTooltipPosition()
+    window.addEventListener('resize', updateTooltipPosition)
+    window.addEventListener('scroll', updateTooltipPosition, true)
+    return () => {
+      window.removeEventListener('resize', updateTooltipPosition)
+      window.removeEventListener('scroll', updateTooltipPosition, true)
+    }
+  }, [isOpen])
 
   React.useEffect(() => {
     if (!isPinned) return
@@ -295,8 +354,8 @@ function StatChip({ label, value }: { label: string; value: string }) {
         <span
           id={tooltipId}
           role="tooltip"
-          className="absolute left-1/2 top-[calc(100%+8px)] z-20 w-[220px] -translate-x-1/2 rounded-[12px] border px-3 py-2 normal-case shadow-[0_12px_28px_rgba(0,0,0,0.45)]"
-          style={{ borderColor: '#ffffff28', backgroundColor: 'rgba(6,6,6,0.96)', color: '#d8e1ea' }}
+          className="pointer-events-none fixed z-30 rounded-[12px] border px-3 py-2 normal-case shadow-[0_12px_28px_rgba(0,0,0,0.45)]"
+          style={{ ...tooltipStyle, borderColor: '#ffffff28', backgroundColor: 'rgba(6,6,6,0.96)', color: '#d8e1ea' }}
         >
           <span className="block text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: SP_COLORS.white }}>
             {definition.term}
@@ -308,53 +367,145 @@ function StatChip({ label, value }: { label: string; value: string }) {
   )
 }
 
-function RouteCircleGroup({ candidate, limit = 5 }: { candidate: RouteCandidateRecord; limit?: number }) {
+function RouteCircleGroup({
+  candidate,
+  completedParentCodes = [],
+  onSelect,
+  size = 'board',
+  limit = 5
+}: {
+  candidate: RouteCandidateRecord
+  completedParentCodes?: string[]
+  onSelect?: (selection: { parentCode: string; childCodes: string[] }) => void
+  size?: 'board' | 'mobile'
+  limit?: number
+}) {
   const summaries = getRenderableParentSummaries(candidate).slice(0, limit)
   if (!summaries.length) return null
 
   return (
-    <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+    <div className="flex shrink-0 flex-wrap justify-end gap-[10px]">
       {summaries.map((summary) => (
-        <ParentCircle key={`${candidate.stationId}-${summary.parentCode}`} parentCode={summary.parentCode} />
+        <ProfileStyleParentCircle
+          key={`${candidate.stationId}-${summary.parentCode}`}
+          parentCode={summary.parentCode}
+          childCodes={summary.matchedChildZCodes}
+          isCompleted={completedParentCodes.includes(summary.parentCode)}
+          onSelect={onSelect}
+          size={size}
+        />
       ))}
     </div>
   )
 }
 
-function ParentCircle({ parentCode }: { parentCode: string }) {
+function ProfileStyleParentCircle({
+  parentCode,
+  childCodes,
+  isCompleted,
+  onSelect,
+  size = 'board'
+}: {
+  parentCode: string
+  childCodes: string[]
+  isCompleted?: boolean
+  onSelect?: (selection: { parentCode: string; childCodes: string[] }) => void
+  size?: 'board' | 'mobile'
+}) {
   const fill = getZCodeParentColor(parentCode) || SP_COLORS.white
   const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
+  const circleClassName =
+    size === 'mobile'
+      ? `relative inline-flex h-7 w-7 items-center justify-center rounded-full text-[19px] font-bold ${
+          textColor === SP_COLORS.white ? 'text-white' : 'text-black'
+        }`
+      : `relative inline-flex h-9 w-9 items-center justify-center rounded-full text-[24px] font-bold ${
+          textColor === SP_COLORS.white ? 'text-white' : 'text-black'
+        }`
+  const checkClassName =
+    size === 'mobile'
+      ? 'absolute -right-0.5 -top-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border text-[8px] font-semibold'
+      : 'absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold'
+  const content = (
+    <>
+      {isCompleted ? (
+        <span
+          className={checkClassName}
+          style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
+        >
+          ✓
+        </span>
+      ) : null}
+      {parentCode.replace(/^Z/i, '')}
+    </>
+  )
+
+  if (onSelect) {
+    return (
+      <button
+        type="button"
+        className={`${circleClassName} cursor-pointer`}
+        style={{ backgroundColor: fill }}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onSelect({
+            parentCode,
+            childCodes
+          })
+        }}
+      >
+        {content}
+      </button>
+    )
+  }
+
   return (
     <span
-      className="inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-full border px-2 text-[10px] font-semibold tracking-[0.08em]"
-      style={{ backgroundColor: fill, borderColor: fill, color: textColor }}
+      className={circleClassName}
+      style={{ backgroundColor: fill }}
     >
-      {parentCode}
+      {content}
     </span>
   )
 }
 
-function ParentScoreCard({ summary }: { summary: RouteCandidateParentSummary }) {
-  const fill = getZCodeParentColor(summary.parentCode) || SP_COLORS.white
-  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
+function ParentScoreCard({
+  summary,
+  isCompleted = false,
+  onSelect,
+  size = 'board'
+}: {
+  summary: RouteCandidateParentSummary
+  isCompleted?: boolean
+  onSelect?: (selection: { parentCode: string; childCodes: string[] }) => void
+  size?: 'board' | 'mobile'
+}) {
   const hasAverage = summary.avgBurdenScore > 0
+  const scoreColor = hasAverage ? getSurveyScoreColor(summary.avgBurdenScore) : '#aeb8c4'
 
   return (
     <div
-      className="inline-flex min-w-[90px] items-center gap-2 rounded-[13px] border px-2 py-1.5"
+      className={
+        size === 'mobile'
+          ? 'inline-flex min-w-[96px] items-stretch rounded-[13px] border px-1.5 py-1.5'
+          : 'inline-flex min-w-[112px] items-stretch rounded-[13px] border px-1.5 py-1.5'
+      }
       style={{ borderColor: '#ffffff20', backgroundColor: 'rgba(255,255,255,0.035)' }}
     >
-      <span
-        className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-full border px-2 text-[11px] font-semibold"
-        style={{ backgroundColor: fill, borderColor: fill, color: textColor }}
-      >
-        {summary.parentCode.replace(/^Z/, '')}
-      </span>
-      <div className="min-w-0 leading-none">
-        <div className="text-[16px] font-medium text-white">{hasAverage ? formatMetricValue(summary.avgBurdenScore) : '--'}</div>
-        <small className="mt-1 block text-[9px] uppercase tracking-[0.12em]" style={{ color: '#aeb8c4' }}>
-          {summary.matchedChildCount}x
-        </small>
+      <div className="flex min-w-[50%] items-center justify-center">
+        <ProfileStyleParentCircle
+          parentCode={summary.parentCode}
+          childCodes={summary.matchedChildZCodes}
+          isCompleted={isCompleted}
+          onSelect={onSelect}
+          size={size}
+        />
+      </div>
+      <div className="flex min-w-[50%] items-center justify-center self-stretch leading-none">
+        <div className={size === 'mobile' ? 'text-[19px] font-semibold' : 'text-[22px] font-semibold'} style={{ color: scoreColor }}>
+          {hasAverage ? formatMetricValue(summary.avgBurdenScore) : '--'}
+        </div>
       </div>
     </div>
   )
@@ -379,4 +530,15 @@ function buildReasonLine(candidate: RouteCandidateRecord) {
 
 function formatMetricValue(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
+function formatMatchPercent(matchedZCodeCount: number, activeZCodeCount: number) {
+  if (!activeZCodeCount) return '--'
+  return `${Math.round((matchedZCodeCount / activeZCodeCount) * 100)}%`
+}
+
+function getSurveyScoreColor(value: number) {
+  if (value <= 3) return SP_COLORS.red
+  if (value <= 6) return SP_COLORS.yellow
+  return SP_COLORS.deepGreen
 }

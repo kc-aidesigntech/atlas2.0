@@ -368,38 +368,41 @@ export async function uploadEnrolleeProfileImage(
   const publicUrl = publicData?.publicUrl || `/storage/v1/object/public/profile-images/${storagePath}`
   const nowIso = new Date().toISOString()
 
-  const { error: demotePrimaryError } = await (supabase as any)
+  const profileImagePayload = {
+    enrollee_id: enrolleeId,
+    storage_bucket: 'profile-images',
+    storage_path: storagePath,
+    public_url: publicUrl,
+    original_filename: file.name || safeFileName,
+    mime_type: file.type || null,
+    file_size_bytes: typeof file.size === 'number' ? file.size : null,
+    intake_source: 'manual',
+    intake_status: 'ready',
+    is_primary: true,
+    alt_text: 'Enrollee profile image',
+    metadata: { uploaded_from: 'singlepane-ui' },
+    ready_at: nowIso,
+    updated_at: nowIso
+  }
+
+  const { data: updatedPrimaryRows, error: updatePrimaryError } = await (supabase as any)
     .schema('atlas')
     .from('profile_images')
-    .update({
-      is_primary: false,
-      updated_at: nowIso
-    })
+    .update(profileImagePayload)
     .eq('enrollee_id', enrolleeId)
     .eq('is_primary', true)
+    .select('id')
 
-  if (demotePrimaryError) throw demotePrimaryError
+  if (updatePrimaryError) throw updatePrimaryError
 
-  const { error: profileImageError } = await (supabase as any)
-    .schema('atlas')
-    .from('profile_images')
-    .insert({
-      enrollee_id: enrolleeId,
-      storage_bucket: 'profile-images',
-      storage_path: storagePath,
-      public_url: publicUrl,
-      original_filename: file.name || safeFileName,
-      mime_type: file.type || null,
-      file_size_bytes: typeof file.size === 'number' ? file.size : null,
-      intake_source: 'manual',
-      intake_status: 'ready',
-      is_primary: true,
-      alt_text: 'Enrollee profile image',
-      metadata: { uploaded_from: 'singlepane-ui' },
-      ready_at: nowIso
-    })
+  if (!updatedPrimaryRows?.length) {
+    const { error: profileImageInsertError } = await (supabase as any)
+      .schema('atlas')
+      .from('profile_images')
+      .insert(profileImagePayload)
 
-  if (profileImageError) throw profileImageError
+    if (profileImageInsertError) throw profileImageInsertError
+  }
 
   return {
     avatarUrl: publicUrl,

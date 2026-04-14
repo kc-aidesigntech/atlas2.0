@@ -15,6 +15,7 @@ interface RoutePlanningOverlayProps {
   onSelectCandidate: (candidateId: string) => void
   onAssignCandidate: (candidate: RouteCandidateRecord) => void
   onDoneCandidate: (candidate: RouteCandidateRecord) => void
+  onSelectZCode?: (selection: { parentCode: string; childCodes: string[] }) => void
   enrollmentStartLabel: string
   hasRecordedIntake: boolean
   suggestedPhase: string
@@ -32,6 +33,7 @@ export default function RoutePlanningOverlay({
   onSelectCandidate,
   onAssignCandidate,
   onDoneCandidate,
+  onSelectZCode,
   enrollmentStartLabel,
   hasRecordedIntake,
   suggestedPhase,
@@ -82,6 +84,7 @@ export default function RoutePlanningOverlay({
           title="route board"
           subtitle={`${enrollee.activeZCodeDetails.length || enrollee.zCodeTags.length || 0} active Z-codes`}
           routeCandidates={routeCandidates}
+          activeZCodeCount={enrollee.activeZCodeDetails.length || enrollee.zCodeTags.length || 0}
           headerParentCodes={headerParentCodes}
           completedParentCodes={completedParentCodes}
           selectedCandidateId={selectedCandidate?.stationId || null}
@@ -89,6 +92,8 @@ export default function RoutePlanningOverlay({
           onSelectCandidate={onSelectCandidate}
           onAssignCandidate={onAssignCandidate}
           onDoneCandidate={onDoneCandidate}
+          onSelectParentCode={onSelectZCode}
+          parentCircleSize="board"
           headerActions={
             <AtlasCloseButton
               onClick={onClose}

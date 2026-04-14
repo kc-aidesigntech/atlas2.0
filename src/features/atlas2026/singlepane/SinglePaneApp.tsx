@@ -89,6 +89,9 @@ export default function SinglePaneApp() {
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
   const [lastContentMenu, setLastContentMenu] = React.useState('assigned enrollees')
+  const [contentOpacity, setContentOpacity] = React.useState(1)
+  const transitionCycleRef = React.useRef(0)
+  const transitionBootstrappedRef = React.useRef(false)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const standaloneSurveyUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '/service-capacity-survey'
@@ -100,6 +103,25 @@ export default function SinglePaneApp() {
       setLastContentMenu(activeMenu)
     }
   }, [activeMenu])
+
+  React.useEffect(() => {
+    if (!selectedEnrolleeId) return
+    if (!transitionBootstrappedRef.current) {
+      transitionBootstrappedRef.current = true
+      return
+    }
+    const cycle = transitionCycleRef.current + 1
+    transitionCycleRef.current = cycle
+    setContentOpacity(0)
+    const targetAvatarUrl = enrollees.find((enrollee) => enrollee.id === selectedEnrolleeId)?.avatarUrl || null
+    void (async () => {
+      await sleep(160)
+      if (cycle !== transitionCycleRef.current) return
+      await preloadImageIfNeeded(targetAvatarUrl)
+      if (cycle !== transitionCycleRef.current) return
+      setContentOpacity(1)
+    })()
+  }, [enrollees, selectedEnrolleeId])
 
   React.useEffect(() => {
     if (role === 'partner' && activeMenu === 'service capacity') {
@@ -253,6 +275,15 @@ export default function SinglePaneApp() {
     setResolutionOverlayState(null)
   }
 
+  function openCanonicalZCodeOverlay(selection: { parentCode: string; childCodes: string[] }) {
+    setResolutionOverlayState({
+      source: 'page-zcode',
+      candidate: null,
+      filterParentCode: selection.parentCode,
+      filterChildCodes: selection.childCodes
+    })
+  }
+
   return (
     <div
       className="min-h-screen overflow-x-hidden bg-black text-white"
@@ -294,6 +325,7 @@ export default function SinglePaneApp() {
               assignedCandidateId={selectedRouteAssignment?.stationId || null}
               onAssignCandidate={handleAssignCandidate}
               onDoneCandidate={handleDoneCandidate}
+              onSelectZCode={openCanonicalZCodeOverlay}
               enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
               hasRecordedIntake={hasSavedIntake}
               suggestedPhase={getNextSuggestedPhase(selectedLogs, isRegulationCleared)}
@@ -332,7 +364,7 @@ export default function SinglePaneApp() {
             onSave={saveNavigatorRegulationTest}
             onDeleteDraft={deleteNavigatorRegulationTestDraft}
           />
-          <div className="flex min-h-full flex-col gap-[10px]">
+          <div className="flex min-h-full flex-col gap-[10px] transition-opacity duration-300 ease-in-out" style={{ opacity: contentOpacity }}>
             {isLoading || !isReady ? (
               <LoadingShell />
             ) : (
@@ -399,14 +431,7 @@ export default function SinglePaneApp() {
                         isUploadingAvatar={isUploadingProfileImage}
                         avatarUploadError={profileImageUploadError}
                         onReplaceAvatar={replaceSelectedEnrolleeProfileImage}
-                        onSelectZCode={(selection) => {
-                          setResolutionOverlayState({
-                            source: 'page-zcode',
-                            candidate: null,
-                            filterParentCode: selection.parentCode,
-                            filterChildCodes: selection.childCodes
-                          })
-                        }}
+                        onSelectZCode={openCanonicalZCodeOverlay}
                         enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
                       />
                     </div>
@@ -505,6 +530,7 @@ export default function SinglePaneApp() {
                       <MobileRouteBoardPanel
                         timelineConfig={timelineConfig}
                         routeCandidates={isRegulationCleared ? routeCandidates : []}
+                        activeZCodeCount={selectedEnrollee?.activeZCodeDetails.length || selectedEnrollee?.zCodeTags.length || 0}
                         headerParentCodes={readinessParentCodes}
                         completedParentCodes={completedParentCodes}
                         selectedCandidateId={selectedRouteCandidateId}
@@ -513,6 +539,7 @@ export default function SinglePaneApp() {
                         onSelectCandidate={setSelectedRouteCandidateId}
                         onAssignCandidate={handleAssignCandidate}
                         onDoneCandidate={handleDoneCandidate}
+                        onSelectZCode={openCanonicalZCodeOverlay}
                         showRoutePlanningQuickAction={showRoutePlanningQuickAction}
                         isRegulationCleared={isRegulationCleared}
                         regulationTestMarkers={regulationTestStripMarkers}
@@ -546,6 +573,22 @@ export default function SinglePaneApp() {
       </main>
     </div>
   )
+}
+
+function preloadImageIfNeeded(url: string | null) {
+  if (!url || url.startsWith('data:image/')) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve()
+    img.onerror = () => resolve()
+    img.src = url
+  })
+}
+
+function sleep(durationMs: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, durationMs)
+  })
 }
 
 function LoadingShell() {

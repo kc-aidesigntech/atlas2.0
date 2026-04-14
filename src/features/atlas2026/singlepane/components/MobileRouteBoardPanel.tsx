@@ -9,6 +9,7 @@ import StripMapControlOverlay from './StripMapControlOverlay'
 interface MobileRouteBoardPanelProps {
   timelineConfig: TimelineConfig
   routeCandidates: RouteCandidateRecord[]
+  activeZCodeCount?: number
   headerParentCodes?: string[]
   completedParentCodes?: string[]
   selectedCandidateId?: string | null
@@ -17,6 +18,7 @@ interface MobileRouteBoardPanelProps {
   onSelectCandidate?: (candidateId: string) => void
   onAssignCandidate?: (candidate: RouteCandidateRecord) => void
   onDoneCandidate?: (candidate: RouteCandidateRecord) => void
+  onSelectZCode?: (selection: { parentCode: string; childCodes: string[] }) => void
   showRoutePlanningQuickAction?: boolean
   isRegulationCleared?: boolean
   regulationTestMarkers?: RegulationTestStripMarker[]
@@ -30,6 +32,7 @@ interface MobileRouteBoardPanelProps {
 export default function MobileRouteBoardPanel({
   timelineConfig,
   routeCandidates,
+  activeZCodeCount = 0,
   headerParentCodes = [],
   completedParentCodes = [],
   selectedCandidateId = null,
@@ -38,6 +41,7 @@ export default function MobileRouteBoardPanel({
   onSelectCandidate,
   onAssignCandidate,
   onDoneCandidate,
+  onSelectZCode,
   showRoutePlanningQuickAction = false,
   isRegulationCleared = false,
   regulationTestMarkers = [],
@@ -188,6 +192,7 @@ export default function MobileRouteBoardPanel({
         title="readiness"
         subtitle={`${timelineConfig.durationMonths * 30}d · ${suggestedPhase}`}
         routeCandidates={routeCandidates}
+        activeZCodeCount={activeZCodeCount}
         headerParentCodes={headerParentCodes}
         completedParentCodes={completedParentCodes}
         selectedCandidateId={selectedCandidateId}
@@ -196,6 +201,8 @@ export default function MobileRouteBoardPanel({
         onSelectCandidate={onSelectCandidate}
         onAssignCandidate={onAssignCandidate}
         onDoneCandidate={onDoneCandidate}
+        onSelectParentCode={onSelectZCode}
+        parentCircleSize="mobile"
         headerActions={headerActions}
         emptyMessage="No ranked partner stations are available for this enrollee yet."
       />
