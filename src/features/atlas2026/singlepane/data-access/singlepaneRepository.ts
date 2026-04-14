@@ -13,6 +13,7 @@ import {
   fetchAppRoleNavigation,
   fetchNavigatorAssignedEnrollees,
   fetchPartnerLoadBreakdown,
+  setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   fetchSinglePaneAdminMetrics,
   fetchSinglePaneCountyHeatmap,
   fetchSinglePaneEnrolleeDomainLoadBreakdown,
@@ -148,7 +149,9 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     email: profile.email,
     avatarUrl: profile.avatarUrl || undefined,
     assignedNavigator: profile.assignedNavigator,
-    zCodeTags: profile.zCodeTags
+    zCodeTags: profile.zCodeTags,
+    activeZCodeDetails: profile.activeZCodeDetails,
+    completedParentCodes: profile.completedParentCodes
   }))
 
   const roleConfigs = roleNavigation.map((item) => ({
@@ -312,31 +315,29 @@ export async function loadJourneyStationMarkers(enrollmentId?: string, enrolleeI
         `singlepane.stationMarkers:${enrollmentId}`,
         () => fetchEnrollmentStationMarkers(supabase, enrollmentId),
         []
-      )).map((marker) => ({
+      ))
+        .filter((marker) => marker.status === 'completed')
+        .map((marker) => ({
         id: marker.routePlanStopId,
         stationName: marker.stationName,
         assignedAtIso: marker.assignedAt,
-        phase: marker.status === 'completed' ? 'renewal' : marker.status === 'active' ? 'readiness' : 'regulation',
+        phase: 'renewal',
         iconSlug: marker.iconSlug || undefined,
         markerType: 'history' as const
       }))
     : []
-  const assignments = await loadRouteAssignments()
-  const selectedAssignment =
-    (enrolleeId ? assignments[enrolleeId] : null) ||
-    assignments[enrollmentId] ||
-    Object.values(assignments).find((assignment) => assignment.enrolleeId === (enrolleeId || enrollmentId))
-  if (!selectedAssignment) return historyMarkers
-  return [
-    ...historyMarkers,
-    {
-      id: `route-assignment-${selectedAssignment.enrolleeId}`,
-      stationName: selectedAssignment.stationName,
-      assignedAtIso: selectedAssignment.assignedAtIso,
-      phase: selectedAssignment.phase,
-      markerType: 'selected'
+  return historyMarkers
+}
+
+export async function setEnrolleeZCodeResolution(enrolleeZCodeId: string, isResolved: boolean) {
+  if (!enrolleeZCodeId || !hasSupabaseConfig || !supabase) {
+    return {
+      enrolleeZCodeId,
+      isResolved,
+      resolutionAt: isResolved ? new Date().toISOString() : null
     }
-  ]
+  }
+  return persistEnrolleeZCodeResolution(supabase, enrolleeZCodeId, isResolved)
 }
 
 export async function loadPartnerRadialLoad(): Promise<DomainLoad | null> {

@@ -121,6 +121,13 @@ export default function VerticalStripMapTimeline({
   )
   const suggestedMarkers = useMemo(() => stationMarkers.filter((marker) => marker.markerType === 'suggested'), [stationMarkers])
   const visibleSuggestedMarkers = showReadinessProgress ? suggestedMarkers : []
+  const regulationHistoryMarkers = useMemo(
+    () =>
+      [...regulationTestMarkers].sort(
+        (left, right) => new Date(left.attemptedAtIso).getTime() - new Date(right.attemptedAtIso).getTime()
+      ),
+    [regulationTestMarkers]
+  )
   const normalizedTimelineConfig = useMemo(() => normalizeTimelineConfig(timelineConfig), [timelineConfig])
   const phaseSegments = useMemo(() => {
     return buildTimelinePhaseSegments(normalizedTimelineConfig)
@@ -268,18 +275,25 @@ export default function VerticalStripMapTimeline({
 
       <div className="relative mt-5 pl-8">
         <div className="absolute bottom-3 left-[11px] top-2 w-[3px] rounded-full bg-white/20" />
-        {regulationTestMarkers.length ? (
-          <div className="mb-5 flex flex-wrap gap-2">
-            {regulationTestMarkers.map((marker) => (
-              <span
-                key={marker.id}
-                className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px]"
-                style={{ borderColor: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red, color: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red }}
-              >
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red }} />
-                {marker.label}
-              </span>
-            ))}
+        {regulationHistoryMarkers.length ? (
+          <div className="mb-5 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.red}70`, backgroundColor: 'var(--surface-panel-soft)' }}>
+            <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.red }}>
+              regulation test history
+            </small>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {regulationHistoryMarkers.map((marker) => (
+                <span
+                  key={marker.id}
+                  className="inline-flex rounded-full border px-2.5 py-1 text-[11px]"
+                  style={{
+                    borderColor: marker.passed ? `${SP_COLORS.deepGreen}90` : `${SP_COLORS.red}90`,
+                    color: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red
+                  }}
+                >
+                  {marker.label.toLowerCase()} · {marker.passed ? 'pass' : 'fail'} · {formatDateLabel(marker.attemptedAtIso)}
+                </span>
+              ))}
+            </div>
           </div>
         ) : null}
         {sortedEvents.map((event, index) => {

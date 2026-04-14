@@ -1,5 +1,6 @@
 import React from 'react'
-import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { Check } from 'lucide-react'
+import { AtlasIconButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { RouteCandidateParentSummary, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
@@ -20,7 +21,8 @@ interface MtaRouteBoardProps {
   assignedCandidateId?: string | null
   highlightedStationName?: string | null
   onSelectCandidate?: (candidateId: string) => void
-  onCommitCandidate?: (candidate: RouteCandidateRecord) => void
+  onAssignCandidate?: (candidate: RouteCandidateRecord) => void
+  onDoneCandidate?: (candidate: RouteCandidateRecord) => void
   headerActions?: React.ReactNode
   emptyMessage?: string
 }
@@ -35,7 +37,8 @@ export default function MtaRouteBoard({
   assignedCandidateId = null,
   highlightedStationName = null,
   onSelectCandidate,
-  onCommitCandidate,
+  onAssignCandidate,
+  onDoneCandidate,
   headerActions,
   emptyMessage = 'No partner specialties currently match this enrollee.'
 }: MtaRouteBoardProps) {
@@ -112,46 +115,50 @@ export default function MtaRouteBoard({
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: rowGlow || '#b0bcc9' }}>
                           <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.15rem] w-[1.15rem] shrink-0 rotate-90 opacity-90" />
                           <span>{index === 0 ? 'quickest route' : `route ${index + 1}`}</span>
-                          {isAssigned ? <StateWord color={SP_COLORS.deepGreen}>saved</StateWord> : null}
-                          {isSelected && !isAssigned ? <StateWord color={SP_COLORS.yellow}>focused</StateWord> : null}
+                          {isAssigned ? <StateWord color={SP_COLORS.deepGreen}>assigned</StateWord> : null}
                         </div>
                       </div>
 
                       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                         <RouteCircleGroup candidate={candidate} limit={5} />
                         <div className="flex items-center gap-1.5">
-                          {onSelectCandidate ? (
-                            <AtlasTextButton
+                          {onAssignCandidate ? (
+                            <AtlasIconButton
                               onClick={(event) => {
                                 event.stopPropagation()
-                                onSelectCandidate(candidate.stationId)
+                                onAssignCandidate(candidate)
                               }}
-                              className="px-2.5 py-1 text-[10px] font-medium"
-                              style={{
-                                ['--button-border-color' as const]: isSelected ? SP_COLORS.yellow : '#ffffff30',
-                                ['--button-line-color' as const]: isSelected ? SP_COLORS.yellow : '#ffffff75',
-                                color: isSelected ? SP_COLORS.yellow : SP_COLORS.white
-                              } as React.CSSProperties}
-                            >
-                              focus
-                            </AtlasTextButton>
-                          ) : null}
-
-                          {onCommitCandidate ? (
-                            <AtlasTextButton
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                onCommitCandidate(candidate)
-                              }}
-                              className="px-2.5 py-1 text-[10px] font-medium"
+                              aria-label={`Assign ${candidate.stationName}`}
+                              title="assign"
+                              className="h-9 w-9"
                               style={{
                                 ['--button-border-color' as const]: isAssigned ? SP_COLORS.deepGreen : SP_COLORS.yellow,
                                 ['--button-line-color' as const]: isAssigned ? SP_COLORS.deepGreen : SP_COLORS.yellow,
                                 color: isAssigned ? SP_COLORS.deepGreen : SP_COLORS.yellow
                               } as React.CSSProperties}
                             >
-                              save
-                            </AtlasTextButton>
+                              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.15rem] w-[1.15rem] rotate-90" />
+                            </AtlasIconButton>
+                          ) : null}
+
+                          {onDoneCandidate ? (
+                            <AtlasIconButton
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                onDoneCandidate(candidate)
+                              }}
+                              aria-label={`Done with ${candidate.stationName}`}
+                              title="done"
+                              disabled={!isAssigned}
+                              className="h-9 w-9"
+                              style={{
+                                ['--button-border-color' as const]: isAssigned ? SP_COLORS.deepGreen : '#ffffff30',
+                                ['--button-line-color' as const]: isAssigned ? SP_COLORS.deepGreen : '#ffffff75',
+                                color: isAssigned ? SP_COLORS.deepGreen : SP_COLORS.white
+                              } as React.CSSProperties}
+                            >
+                              <Check size={17} strokeWidth={2.2} />
+                            </AtlasIconButton>
                           ) : null}
                         </div>
                       </div>

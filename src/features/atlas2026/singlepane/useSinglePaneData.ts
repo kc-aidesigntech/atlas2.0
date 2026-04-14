@@ -6,6 +6,7 @@ import type {
   CountyHeatPoint,
   DomainLoadBreakdown,
   DomainLoad,
+  EnrolleeActiveZCode,
   EnrolleeIntakeRecord,
   EnrollmentRequestRecord,
   EnrolleeProfile,
@@ -38,6 +39,7 @@ import {
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
   saveAccountSettings as persistAccountSettings,
+  setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
   saveRouteAssignment as persistRouteAssignment,
@@ -103,6 +105,19 @@ function buildFallbackTimelineConfig(planStartIso: string): TimelineConfig {
 
 function getRegulationTestLabel(testType: RegulationTestSubmissionRecord['testType']) {
   return testType === 'mh_sca' ? 'MH-SCA' : 'SVS'
+}
+
+function buildCompletedParentCodes(activeZCodeDetails: EnrolleeActiveZCode[]) {
+  const grouped = new Map<string, boolean[]>()
+  for (const detail of activeZCodeDetails) {
+    const parentCode = detail.parentCode.trim().toUpperCase()
+    const current = grouped.get(parentCode) || []
+    current.push(detail.isResolved)
+    grouped.set(parentCode, current)
+  }
+  return Array.from(grouped.entries())
+    .filter(([, values]) => values.length > 0 && values.every(Boolean))
+    .map(([parentCode]) => parentCode)
 }
 
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
@@ -535,20 +550,33 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           [saved.enrolleeId]: saved
         }
       }))
-      setJourneyStationMarkers((current) => {
-        const withoutSelected = current.filter((marker) => marker.markerType !== 'selected')
-        return [
-          ...withoutSelected,
-          {
-            id: `route-assignment-${saved.enrolleeId}`,
-            stationName: saved.stationName,
-            assignedAtIso: saved.assignedAtIso,
-            phase: saved.phase,
-            markerType: 'selected'
-          }
-        ]
-      })
     })
+  }
+
+  async function setEnrolleeZCodeResolution(enrolleeZCodeId: string, isResolved: boolean) {
+    if (!selectedEnrollee || !enrolleeZCodeId) return null
+    const saved = await persistEnrolleeZCodeResolution(enrolleeZCodeId, isResolved)
+    setBootstrapState((current) => ({
+      ...current,
+      enrollees: current.enrollees.map((enrollee) => {
+        if (enrollee.id !== selectedEnrollee.id) return enrollee
+        const activeZCodeDetails = enrollee.activeZCodeDetails.map((detail) =>
+          detail.enrolleeZCodeId === saved.enrolleeZCodeId
+            ? {
+                ...detail,
+                isResolved: saved.isResolved,
+                resolutionAt: saved.resolutionAt
+              }
+            : detail
+        )
+        return {
+          ...enrollee,
+          activeZCodeDetails,
+          completedParentCodes: buildCompletedParentCodes(activeZCodeDetails)
+        }
+      })
+    }))
+    return saved
   }
 
   async function savePartnerServiceCapacitySurvey(input: PartnerServiceCapacitySubmissionInput) {
@@ -731,6 +759,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     hasSavedIntake,
     saveAccountSettings,
     saveEnrolleeIntake,
+    setEnrolleeZCodeResolution,
     saveRouteAssignment,
     savePartnerServiceCapacitySurvey,
     deletePartnerServiceCapacityDraft,

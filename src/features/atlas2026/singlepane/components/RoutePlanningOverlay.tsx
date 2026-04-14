@@ -11,7 +11,8 @@ interface RoutePlanningOverlayProps {
   selectedCandidateId: string | null
   assignedCandidateId: string | null
   onSelectCandidate: (candidateId: string) => void
-  onCommitCandidate: (candidate: RouteCandidateRecord) => void
+  onAssignCandidate: (candidate: RouteCandidateRecord) => void
+  onDoneCandidate: (candidate: RouteCandidateRecord) => void
   enrollmentStartLabel: string
   hasRecordedIntake: boolean
   suggestedPhase: string
@@ -25,7 +26,8 @@ export default function RoutePlanningOverlay({
   selectedCandidateId,
   assignedCandidateId,
   onSelectCandidate,
-  onCommitCandidate,
+  onAssignCandidate,
+  onDoneCandidate,
   enrollmentStartLabel,
   hasRecordedIntake,
   suggestedPhase,
@@ -76,12 +78,13 @@ export default function RoutePlanningOverlay({
         <MtaRouteBoard
           kicker="readiness routing"
           title="quickest route"
-          subtitle={`${enrollee.zCodeTags.length || 0} active Z groups`}
+          subtitle={`${enrollee.activeZCodeDetails.length || enrollee.zCodeTags.length || 0} active Z-codes`}
           routeCandidates={routeCandidates}
           selectedCandidateId={selectedCandidate?.stationId || null}
           assignedCandidateId={assignedCandidateId}
           onSelectCandidate={onSelectCandidate}
-          onCommitCandidate={onCommitCandidate}
+          onAssignCandidate={onAssignCandidate}
+          onDoneCandidate={onDoneCandidate}
           headerActions={
             <AtlasTextButton
               onClick={onClose}

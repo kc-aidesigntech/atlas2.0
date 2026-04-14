@@ -9,6 +9,16 @@ import type {
 
 export type AtlasRole = 'navigator' | 'partner' | 'supervisor' | 'administrator'
 
+export interface EnrolleeActiveZCode {
+  enrolleeZCodeId: string
+  parentCode: string
+  zCode: string
+  title: string
+  description: string
+  isResolved: boolean
+  resolutionAt: string | null
+}
+
 export interface EnrolleeProfile {
   id: string
   enrollmentId?: string
@@ -19,6 +29,8 @@ export interface EnrolleeProfile {
   avatarUrl?: string
   assignedNavigator: string
   zCodeTags: string[]
+  activeZCodeDetails: EnrolleeActiveZCode[]
+  completedParentCodes: string[]
 }
 
 export interface DomainLoad {

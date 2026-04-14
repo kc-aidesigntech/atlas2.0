@@ -22,7 +22,7 @@ export function useJourneyStationMarkers(
       }
 
       const derived = selectedLogs
-        .filter((log) => log.phase !== 'regulation')
+        .filter((log) => log.phase !== 'regulation' && log.status === 'completed')
         .map((log, index) => {
           const candidate = routeCandidates[index % Math.max(routeCandidates.length, 1)]
           return {
@@ -30,7 +30,8 @@ export function useJourneyStationMarkers(
             stationName: candidate?.stationName || 'partner station',
             assignedAtIso: log.timestampIso,
             phase: log.phase,
-            iconSlug: log.stationIcon
+            iconSlug: log.stationIcon,
+            markerType: 'history'
           } as JourneyStationMarker
         })
       setJourneyStationMarkers(derived)

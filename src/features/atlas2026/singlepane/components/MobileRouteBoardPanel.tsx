@@ -12,7 +12,8 @@ interface MobileRouteBoardPanelProps {
   assignedCandidateId?: string | null
   highlightedStationName?: string | null
   onSelectCandidate?: (candidateId: string) => void
-  onCommitCandidate?: (candidate: RouteCandidateRecord) => void
+  onAssignCandidate?: (candidate: RouteCandidateRecord) => void
+  onDoneCandidate?: (candidate: RouteCandidateRecord) => void
   showRoutePlanningQuickAction?: boolean
   isRegulationCleared?: boolean
   regulationTestMarkers?: RegulationTestStripMarker[]
@@ -30,7 +31,8 @@ export default function MobileRouteBoardPanel({
   assignedCandidateId = null,
   highlightedStationName = null,
   onSelectCandidate,
-  onCommitCandidate,
+  onAssignCandidate,
+  onDoneCandidate,
   showRoutePlanningQuickAction = false,
   isRegulationCleared = false,
   regulationTestMarkers = [],
@@ -107,7 +109,8 @@ export default function MobileRouteBoardPanel({
         assignedCandidateId={assignedCandidateId}
         highlightedStationName={highlightedStationName}
         onSelectCandidate={onSelectCandidate}
-        onCommitCandidate={onCommitCandidate}
+        onAssignCandidate={onAssignCandidate}
+        onDoneCandidate={onDoneCandidate}
         headerActions={headerActions}
         emptyMessage="No ranked partner stations are available for this enrollee yet."
       />

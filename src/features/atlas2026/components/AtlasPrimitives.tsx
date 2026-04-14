@@ -148,7 +148,7 @@ export const AtlasTextButton = React.forwardRef<HTMLButtonElement, React.ButtonH
       type={type}
       {...props}
       className={cn(
-        'atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
+        'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
         className
       )}
     >
@@ -185,7 +185,7 @@ export const AtlasTextLink = React.forwardRef<HTMLAnchorElement, React.AnchorHTM
       ref={ref}
       {...props}
       className={cn(
-        'atlas-sign-button [--button-line-inset:8px] [--button-radius:10px] rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)]',
+        'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)]',
         className
       )}
     >

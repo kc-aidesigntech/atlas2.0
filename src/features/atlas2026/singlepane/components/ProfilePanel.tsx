@@ -14,6 +14,11 @@ interface ParentZCodeGroup {
   childCodes: string[]
 }
 
+function normalizeParentCode(value: string) {
+  const normalized = getParentZCode(value) || value.trim().toLowerCase()
+  return normalized.replace(/^z/i, 'Z')
+}
+
 function getInitials(fullName: string) {
   const parts = fullName
     .trim()
@@ -71,7 +76,15 @@ function buildParentZCodeGroups(tags: string[]): ParentZCodeGroup[] {
 export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartLabel }: ProfilePanelProps) {
   const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatar(enrollee.fullName), [enrollee.fullName])
   const avatarSrc = enrollee.avatarUrl || fallbackAvatarSrc
-  const parentGroups = React.useMemo(() => buildParentZCodeGroups(enrollee.zCodeTags), [enrollee.zCodeTags])
+  const activeZCodeTags = React.useMemo(
+    () => (enrollee.activeZCodeDetails.length ? enrollee.activeZCodeDetails.map((detail) => detail.zCode) : enrollee.zCodeTags),
+    [enrollee.activeZCodeDetails, enrollee.zCodeTags]
+  )
+  const parentGroups = React.useMemo(() => buildParentZCodeGroups(activeZCodeTags), [activeZCodeTags])
+  const completedParentCodes = React.useMemo(
+    () => new Set(enrollee.completedParentCodes.map((code) => normalizeParentCode(code))),
+    [enrollee.completedParentCodes]
+  )
 
   return (
     <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
@@ -95,10 +108,12 @@ export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartL
           {parentGroups.map((group, index) => {
             const bgColor = getZCodeParentColor(group.parentCode) || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]
             const useLightText = usesLightTextOnZCodeColor(bgColor)
+            const isCompleted = completedParentCodes.has(normalizeParentCode(group.parentCode))
             return (
-              <span
+              <button
                 key={group.parentCode}
-                className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[30px] font-bold ${
+                type="button"
+                className={`relative inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[30px] font-bold ${
                   useLightText ? 'text-white' : 'text-black'
                 }`}
                 style={{ backgroundColor: bgColor }}
@@ -109,8 +124,16 @@ export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartL
                   })
                 }
               >
+                {isCompleted ? (
+                  <span
+                    className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold"
+                    style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
+                  >
+                    ✓
+                  </span>
+                ) : null}
                 {group.parentCode.replace(/^z/i, '')}
-              </span>
+              </button>
             )
           })}
         </div>

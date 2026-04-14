@@ -215,6 +215,25 @@ export default function StripMapTimeline({
     }
   }, [normalizedTimelineConfig.gates, safePlanStart, timeScale])
 
+  const regulationSegment = useMemo(() => {
+    const regulationIndex = normalizedTimelineConfig.gates.findIndex((gate) => gate.phase === 'regulation')
+    const regulationGate = regulationIndex >= 0 ? normalizedTimelineConfig.gates[regulationIndex] : null
+    const nextGate = regulationIndex >= 0 ? normalizedTimelineConfig.gates[regulationIndex + 1] : null
+    if (!regulationGate || !nextGate) return null
+    return {
+      xStart: Number(timeScale(addMonths(safePlanStart, regulationGate.monthOffset || 0))),
+      xEnd: Number(timeScale(addMonths(safePlanStart, nextGate.monthOffset || 0)))
+    }
+  }, [normalizedTimelineConfig.gates, safePlanStart, timeScale])
+
+  const regulationHistoryMarkers = useMemo(
+    () =>
+      [...regulationTestMarkers].sort(
+        (left, right) => new Date(left.attemptedAtIso).getTime() - new Date(right.attemptedAtIso).getTime()
+      ),
+    [regulationTestMarkers]
+  )
+
   const phaseSegments = useMemo(() => {
     return buildTimelinePhaseSegments(normalizedTimelineConfig)
   }, [normalizedTimelineConfig])
@@ -687,33 +706,61 @@ export default function StripMapTimeline({
             )
           })}
 
-          {phaseSegments
-            .filter((segment) => segment.phase === 'regulation')
-            .map((segment) => {
-              const startDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.startOffset || 0)
-              const endDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.endOffset || 0)
-              const xStart = Number(timeScale(startDate))
-              const xEnd = Number(timeScale(endDate))
-              const segmentWidth = Math.max(xEnd - xStart, 1)
-              return regulationTestMarkers.map((marker, index) => {
-                const ratio = (index + 1) / Math.max(regulationTestMarkers.length + 1, 1)
-                const x = xStart + segmentWidth * ratio
-                const y = baselineY - 118 - (index % 2) * 42
-                const color = marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red
-                return (
-                  <g key={marker.id} transform={`translate(${x}, ${y})`}>
-                    <title>{`${marker.label} · ${marker.passed ? 'pass' : 'fail'} · ${formatDateLabel(marker.attemptedAtIso)}`}</title>
-                    <circle r="12" fill={color} stroke={SP_COLORS.white} strokeWidth="2" />
-                    <text y="-20" textAnchor="middle" fill={SP_COLORS.white} fontFamily="Helvetica, Arial, sans-serif" fontSize="11" fontWeight={700}>
-                      {marker.label}
-                    </text>
-                    {marker.isLatestCompleted ? (
-                      <circle r="18" fill="transparent" stroke={SP_COLORS.white} strokeWidth="1" strokeDasharray="3 3" />
-                    ) : null}
-                  </g>
-                )
-              })
-            })}
+          {regulationSegment && regulationHistoryMarkers.map((marker, index) => {
+            const segmentWidth = regulationSegment.xEnd - regulationSegment.xStart
+            const slotWidth = segmentWidth / Math.max(regulationHistoryMarkers.length + 1, 1)
+            const ratio = (index + 1) / (regulationHistoryMarkers.length + 1)
+            const x = regulationSegment.xStart + (regulationSegment.xEnd - regulationSegment.xStart) * ratio
+            const circleY = baselineY
+            const color = marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red
+            const markerLabel = `${marker.label.toLowerCase()} · ${marker.passed ? 'pass' : 'fail'}`
+            const visibleChars = Math.max(34, Math.floor(slotWidth / 4.4))
+            const labelText = truncateLabel(markerLabel, visibleChars)
+            const needsLift = regulationHistoryMarkers.length >= 3 || slotWidth < 140
+            const verticalLift = needsLift ? 34 + (index % 2) * 22 : 0
+            const verticalTopY = circleY - verticalLift
+            const diagonalRun = Math.max(42, Math.min(88, slotWidth * 0.34))
+            const labelAnchorX = x + diagonalRun
+            const labelAnchorY = verticalTopY - diagonalRun
+            return (
+              <g key={marker.id} transform={`translate(${x}, ${circleY})`}>
+                <title>{`${marker.label} · ${marker.passed ? 'pass' : 'fail'} · ${formatDateLabel(marker.attemptedAtIso)}`}</title>
+                <circle r="7" fill="#000000" stroke={color} strokeWidth="1.8" />
+                {marker.isLatestCompleted ? (
+                  <circle r="11" fill="transparent" stroke={SP_COLORS.white} strokeWidth="1" strokeDasharray="3 3" />
+                ) : null}
+                {needsLift ? (
+                  <line
+                    x1="0"
+                    y1="-7"
+                    x2="0"
+                    y2={verticalTopY - circleY}
+                    stroke={color}
+                    strokeWidth="1.1"
+                  />
+                ) : null}
+                <line
+                  x1="0"
+                  y1={needsLift ? verticalTopY - circleY : -7}
+                  x2={labelAnchorX - x}
+                  y2={labelAnchorY - circleY}
+                  stroke={color}
+                  strokeWidth="1.1"
+                />
+                <text
+                  x={labelAnchorX - x + 4}
+                  y={labelAnchorY - circleY - 2}
+                  transform={`rotate(-45 ${labelAnchorX - x + 4} ${labelAnchorY - circleY - 2})`}
+                  textAnchor="start"
+                  fill={color}
+                  fontFamily="Helvetica, Arial, sans-serif"
+                  fontSize="16"
+                >
+                  {labelText}
+                </text>
+              </g>
+            )
+          })}
         </Group>
       </svg>
       {phaseActionButtons

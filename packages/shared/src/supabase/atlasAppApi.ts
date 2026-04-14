@@ -58,9 +58,21 @@ export interface SinglePaneEnrolleeProfileRecord {
   avatarUrl: string | null;
   assignedNavigator: string;
   zCodeTags: string[];
+  activeZCodeDetails: SinglePaneEnrolleeActiveZCodeRecord[];
+  completedParentCodes: string[];
   enrollmentStartIso: string;
   targetDurationMonths: number;
   currentPhase: "regulation" | "readiness" | "renewal";
+}
+
+export interface SinglePaneEnrolleeActiveZCodeRecord {
+  enrolleeZCodeId: string;
+  parentCode: string;
+  zCode: string;
+  title: string;
+  description: string;
+  isResolved: boolean;
+  resolutionAt: string | null;
 }
 
 export interface SinglePaneDomainLoadRecord {
@@ -312,6 +324,49 @@ function asRouteCandidateParentSummaryArray(value: unknown): RouteCandidateParen
     .filter((item): item is RouteCandidateParentSummaryRecord => Boolean(item));
 }
 
+function asEnrolleeActiveZCodeArray(value: unknown): SinglePaneEnrolleeActiveZCodeRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const record = item as Record<string, unknown>;
+      const enrolleeZCodeId =
+        typeof record.enrolleeZCodeId === "string"
+          ? record.enrolleeZCodeId
+          : typeof record.enrollee_z_code_id === "string"
+            ? record.enrollee_z_code_id
+            : "";
+      const parentCode =
+        typeof record.parentCode === "string"
+          ? record.parentCode
+          : typeof record.parent_code === "string"
+            ? record.parent_code
+            : "";
+      const zCode =
+        typeof record.zCode === "string"
+          ? record.zCode
+          : typeof record.z_code === "string"
+            ? record.z_code
+            : "";
+      if (!enrolleeZCodeId || !parentCode || !zCode) return null;
+      return {
+        enrolleeZCodeId,
+        parentCode,
+        zCode,
+        title: typeof record.title === "string" ? record.title : "",
+        description: typeof record.description === "string" ? record.description : "",
+        isResolved: Boolean(record.isResolved ?? record.is_resolved),
+        resolutionAt:
+          typeof record.resolutionAt === "string"
+            ? record.resolutionAt
+            : typeof record.resolution_at === "string"
+              ? record.resolution_at
+              : null,
+      } satisfies SinglePaneEnrolleeActiveZCodeRecord;
+    })
+    .filter((item): item is SinglePaneEnrolleeActiveZCodeRecord => Boolean(item));
+}
+
 function asRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
@@ -443,11 +498,44 @@ export async function fetchSinglePaneEnrolleeProfiles(client: AnySupabaseClient)
       avatarUrl: row.avatar_url,
       assignedNavigator: row.assigned_navigator,
       zCodeTags: asStringArray(row.z_code_tags),
+      activeZCodeDetails: asEnrolleeActiveZCodeArray(row.active_z_code_details),
+      completedParentCodes: asStringArray(row.completed_parent_codes),
       enrollmentStartIso: row.enrollment_start_iso,
       targetDurationMonths: Number(row.target_duration_months || 9),
       currentPhase: row.current_phase,
     }),
   );
+}
+
+export async function setEnrolleeZCodeResolution(
+  client: AnySupabaseClient,
+  enrolleeZCodeId: string,
+  isResolved: boolean,
+) {
+  const { data, error } = await (client as SupabaseClient<any>)
+    .schema("atlas")
+    .rpc("fn_set_enrollee_z_code_resolution", {
+      p_enrollee_z_code_id: enrolleeZCodeId,
+      p_is_resolved: isResolved,
+    });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  const record = asRecord(row);
+  return {
+    enrolleeZCodeId:
+      typeof record.enrollee_z_code_id === "string"
+        ? record.enrollee_z_code_id
+        : typeof record.enrolleeZCodeId === "string"
+          ? record.enrolleeZCodeId
+          : enrolleeZCodeId,
+    isResolved: Boolean(record.is_resolved ?? record.isResolved ?? isResolved),
+    resolutionAt:
+      typeof record.resolution_at === "string"
+        ? record.resolution_at
+        : typeof record.resolutionAt === "string"
+          ? record.resolutionAt
+          : null,
+  };
 }
 
 export async function fetchSinglePaneEnrolleeDomainLoads(client: AnySupabaseClient) {
