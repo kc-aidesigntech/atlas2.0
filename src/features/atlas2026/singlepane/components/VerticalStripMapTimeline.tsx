@@ -15,6 +15,11 @@ import type {
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
 
+const arrowIconUrl = new URL(
+  '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
+  import.meta.url
+).href
+
 interface VerticalStripMapTimelineProps {
   events: RouteLogEvent[]
   timelineConfig: TimelineConfig
@@ -28,6 +33,7 @@ interface VerticalStripMapTimelineProps {
   showRoutePlanningQuickAction?: boolean
   onRoutePlanningClick?: () => void
   onRegulationTestsClick?: () => void
+  onRenewalTestsClick?: () => void
   onEventDelete?: (logId: string) => void
   onStartDateChange?: (nextStartIso: string) => void
   onEventDateChange?: (logId: string, nextTimestampIso: string) => void
@@ -122,6 +128,7 @@ export default function VerticalStripMapTimeline({
   showRoutePlanningQuickAction = false,
   onRoutePlanningClick,
   onRegulationTestsClick,
+  onRenewalTestsClick,
   onEventDelete,
   onStartDateChange,
   onEventDateChange,
@@ -239,7 +246,7 @@ export default function VerticalStripMapTimeline({
         {phaseSegments.map((segment) => {
           const isRegulationAction = segment.phase === 'regulation' && Boolean(onRegulationTestsClick)
           const isReadinessAction = segment.phase === 'readiness' && Boolean(onRoutePlanningClick) && showRoutePlanningQuickAction
-          const isRenewalButton = segment.phase === 'renewal'
+          const isRenewalButton = segment.phase === 'renewal' && Boolean(onRenewalTestsClick)
           return (
             <div
               key={segment.phase}
@@ -274,7 +281,7 @@ export default function VerticalStripMapTimeline({
               ) : isReadinessAction ? (
                 <AtlasTextButton
                   onClick={onRoutePlanningClick}
-                  className="px-3 py-1 text-[11px] font-medium"
+                  className="inline-flex items-center gap-2 px-3 py-1 text-[11px] font-medium"
                   style={{
                     ['--button-border-color' as const]: PHASE_COLORS.readiness,
                     ['--button-line-color' as const]: SP_COLORS.bg,
@@ -282,11 +289,18 @@ export default function VerticalStripMapTimeline({
                     backgroundColor: PHASE_COLORS.readiness
                   } as React.CSSProperties}
                 >
-                  readiness
+                  <span>plan route</span>
+                  <img
+                    src={arrowIconUrl}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-[0.9rem] w-[0.9rem] rotate-90"
+                    style={{ filter: 'brightness(0) saturate(100%)' }}
+                  />
                 </AtlasTextButton>
               ) : isRenewalButton ? (
                 <AtlasTextButton
-                  disabled
+                  onClick={onRenewalTestsClick}
                   className="px-3 py-1 text-[11px] font-medium"
                   style={{
                     ['--button-border-color' as const]: PHASE_COLORS.renewal,

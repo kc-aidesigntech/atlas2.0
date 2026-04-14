@@ -90,6 +90,7 @@ export default function SinglePaneApp() {
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = React.useState(false)
   const [isRoutePlanningOpen, setIsRoutePlanningOpen] = React.useState(false)
   const [isRegulationTestsOpen, setIsRegulationTestsOpen] = React.useState(false)
+  const [assessmentInitialTestType, setAssessmentInitialTestType] = React.useState<'mh_sca' | 'svs' | 'ipf' | 'b_ipf' | null>(null)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
@@ -196,6 +197,14 @@ export default function SinglePaneApp() {
       }))
   }, [routeCandidates])
   const showRoutePlanningQuickAction = role === 'navigator' ? isRegulationCleared : false
+  const nextSuggestedPhase = React.useMemo(
+    () => getNextSuggestedPhase(selectedLogs, isRegulationCleared),
+    [isRegulationCleared, selectedLogs]
+  )
+  const hasEnteredRenewalStage = React.useMemo(
+    () => selectedLogs.some((log) => log.phase === 'renewal') || nextSuggestedPhase === 'renewal',
+    [nextSuggestedPhase, selectedLogs]
+  )
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
     : selectedRouteAssignment?.stationName || null
@@ -214,6 +223,7 @@ export default function SinglePaneApp() {
     }
     if (menu === 'route planning') {
       if (role === 'navigator' && !isRegulationCleared) {
+        setAssessmentInitialTestType('mh_sca')
         setIsRegulationTestsOpen(true)
         return
       }
@@ -230,6 +240,7 @@ export default function SinglePaneApp() {
     }
     if (label.trim().toLowerCase() === 'route planning') {
       if (role === 'navigator' && !isRegulationCleared) {
+        setAssessmentInitialTestType('mh_sca')
         setIsRegulationTestsOpen(true)
         return
       }
@@ -274,6 +285,11 @@ export default function SinglePaneApp() {
       source: 'route-board',
       candidate
     })
+  }
+
+  function openAssessmentOverlay(testType: 'mh_sca' | 'svs' | 'ipf' | 'b_ipf') {
+    setAssessmentInitialTestType(testType)
+    setIsRegulationTestsOpen(true)
   }
 
   function closeResolvedZCodesOverlay() {
@@ -333,7 +349,7 @@ export default function SinglePaneApp() {
               onSelectZCode={openCanonicalZCodeOverlay}
               enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
               hasRecordedIntake={hasSavedIntake}
-              suggestedPhase={getNextSuggestedPhase(selectedLogs, isRegulationCleared)}
+              suggestedPhase={nextSuggestedPhase}
               onClose={closeRoutePlanning}
             />
           ) : null}
@@ -365,7 +381,11 @@ export default function SinglePaneApp() {
             isSaving={isSavingRegulationTest}
             saveError={regulationTestError}
             history={regulationTestHistory}
-            onClose={() => setIsRegulationTestsOpen(false)}
+            initialTestType={assessmentInitialTestType}
+            onClose={() => {
+              setIsRegulationTestsOpen(false)
+              setAssessmentInitialTestType(null)
+            }}
             onSave={saveNavigatorRegulationTest}
             onDeleteDraft={deleteNavigatorRegulationTestDraft}
           />
@@ -529,7 +549,8 @@ export default function SinglePaneApp() {
                           setActiveMenu('route planning')
                           setIsRoutePlanningOpen(true)
                         }}
-                        onRegulationTestsClick={() => setIsRegulationTestsOpen(true)}
+                        onRegulationTestsClick={() => openAssessmentOverlay('mh_sca')}
+                        onRenewalTestsClick={hasEnteredRenewalStage ? () => openAssessmentOverlay('ipf') : undefined}
                         onEventDelete={deleteRouteLog}
                         onEventPositionChange={updateRouteLogTimelinePosition}
                         onEventDateChange={updateRouteLogDate}
@@ -557,16 +578,17 @@ export default function SinglePaneApp() {
                         regulationTestMarkers={regulationTestStripMarkers}
                         onRoutePlanningClick={() => {
                           if (!isRegulationCleared) {
-                            setIsRegulationTestsOpen(true)
+                            openAssessmentOverlay('mh_sca')
                             return
                           }
                           setActiveMenu('route planning')
                           setIsRoutePlanningOpen(true)
                         }}
-                        onRegulationTestsClick={() => setIsRegulationTestsOpen(true)}
+                        onRegulationTestsClick={() => openAssessmentOverlay('mh_sca')}
+                        onRenewalTestsClick={hasEnteredRenewalStage ? () => openAssessmentOverlay('ipf') : undefined}
                         onStartDateChange={updateTimelineStartDate}
                         onTimelineConfigChange={updateTimelineConfig}
-                        suggestedPhase={getNextSuggestedPhase(selectedLogs, isRegulationCleared)}
+                        suggestedPhase={nextSuggestedPhase}
                       />
                     </div>
                     <ContextPanels

@@ -6,21 +6,16 @@ import type {
 } from '@/features/atlas2026/singlepane/types'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { computeAssessmentScoreSummary, isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
 
 const LOCAL_STORAGE_KEY = 'atlas2026.singlepane.regulation-tests.v1'
 
-function computePassThreshold(testType: RegulationTestType) {
-  return testType === 'mh_sca' ? 126 : 60
+function computePassThreshold(testType: RegulationTestType, answers: RegulationTestAnswer[]) {
+  return computeAssessmentScoreSummary(testType, answers).passThreshold
 }
 
 function computeScore(testType: RegulationTestType, answers: RegulationTestAnswer[]) {
-  const numericValues = answers.map((answer) => (typeof answer.responseValue === 'number' ? answer.responseValue : 0))
-  if (!numericValues.length) return null
-  if (testType === 'mh_sca') {
-    return numericValues.reduce((sum, value) => sum + value, 0)
-  }
-  const average = numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length
-  return Number(average.toFixed(2))
+  return computeAssessmentScoreSummary(testType, answers).gateScore
 }
 
 function mapSubmissionRow(
@@ -95,7 +90,7 @@ export async function loadRegulationTestHistory(enrolleeId: string, testType: Re
     .order('updated_at', { ascending: false })
 
   if (error) {
-    if (isOptionalSupabaseDataError(error)) {
+    if (isOptionalSupabaseDataError(error) || isRenewalAssessmentType(testType)) {
       return loadLocalState()
         .filter((record) => record.enrolleeId === enrolleeId && record.testType === testType)
         .sort((left, right) => new Date(right.updatedAtIso).getTime() - new Date(left.updatedAtIso).getTime())
@@ -135,7 +130,7 @@ export async function loadRegulationTestHistory(enrolleeId: string, testType: Re
 }
 
 export async function saveRegulationTestSubmission(input: RegulationTestSubmissionInput): Promise<RegulationTestSubmissionRecord> {
-  const threshold = computePassThreshold(input.testType)
+  const threshold = computePassThreshold(input.testType, input.answers)
   const score = computeScore(input.testType, input.answers)
   const passed = typeof score === 'number' ? score >= threshold : null
   const draftKey = input.draftKey?.trim() || `reg-test-${Date.now().toString(36)}`
@@ -190,7 +185,7 @@ export async function saveRegulationTestSubmission(input: RegulationTestSubmissi
     .single()
 
   if (error) {
-    if (!isOptionalSupabaseDataError(error)) throw error
+    if (!isOptionalSupabaseDataError(error) && !isRenewalAssessmentType(input.testType)) throw error
     const fallback: RegulationTestSubmissionRecord = {
       id: draftKey,
       draftKey,
@@ -246,9 +241,16 @@ export async function deleteRegulationTestDraft(
 ): Promise<{ id: string; draftKey: string } | null> {
   const trimmedSubmissionId = submissionId.trim()
   if (!trimmedSubmissionId) return null
+  const localMatch = loadLocalState().find((record) => record.id === trimmedSubmissionId)
+
+  if (localMatch && isRenewalAssessmentType(localMatch.testType)) {
+    if (localMatch.status !== 'draft') return null
+    persistLocalState(loadLocalState().filter((record) => record.id !== trimmedSubmissionId))
+    return { id: localMatch.id, draftKey: localMatch.draftKey }
+  }
 
   if (!hasSupabaseConfig || !supabase) {
-    const existing = loadLocalState().find((record) => record.id === trimmedSubmissionId)
+    const existing = localMatch
     if (!existing || existing.status !== 'draft') return null
     persistLocalState(loadLocalState().filter((record) => record.id !== trimmedSubmissionId))
     return { id: existing.id, draftKey: existing.draftKey }
@@ -265,6 +267,10 @@ export async function deleteRegulationTestDraft(
     throw fetchError
   }
   if (!submission || submission.status !== 'draft') return null
+  if (isRenewalAssessmentType(submission.test_type)) {
+    persistLocalState(loadLocalState().filter((record) => record.id !== trimmedSubmissionId))
+    return { id: submission.id, draftKey: submission.draft_key || submission.id }
+  }
 
   const { error: deleteError } = await (supabase as any)
     .schema('atlas')

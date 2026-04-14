@@ -110,7 +110,10 @@ function buildFallbackTimelineConfig(planStartIso: string): TimelineConfig {
 }
 
 function getRegulationTestLabel(testType: RegulationTestSubmissionRecord['testType']) {
-  return testType === 'mh_sca' ? 'MH-SCA' : 'SVS'
+  if (testType === 'mh_sca') return 'MH-SCA'
+  if (testType === 'svs') return 'SVS'
+  if (testType === 'ipf') return 'IPF'
+  return 'B-IPF'
 }
 
 function buildCompletedParentCodes(activeZCodeDetails: EnrolleeActiveZCode[]) {
@@ -341,11 +344,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     let isMounted = true
     Promise.all([
       loadRegulationTestHistory(selectedEnrollee.id, 'mh_sca'),
-      loadRegulationTestHistory(selectedEnrollee.id, 'svs')
+      loadRegulationTestHistory(selectedEnrollee.id, 'svs'),
+      loadRegulationTestHistory(selectedEnrollee.id, 'ipf'),
+      loadRegulationTestHistory(selectedEnrollee.id, 'b_ipf')
     ])
-      .then(([mhsca, svs]) => {
+      .then(([mhsca, svs, ipf, bipf]) => {
         if (!isMounted) return
-        setRegulationTestHistory([...mhsca, ...svs])
+        setRegulationTestHistory([...mhsca, ...svs, ...ipf, ...bipf])
         setRegulationTestError(null)
       })
       .catch((error) => {
@@ -360,7 +365,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const completedRegulationTests = useMemo(
     () =>
       regulationTestHistory
-        .filter((record) => record.status === 'completed' && record.passed !== null)
+        .filter(
+          (record) =>
+            record.status === 'completed' &&
+            record.passed !== null &&
+            (record.testType === 'mh_sca' || record.testType === 'svs')
+        )
         .slice()
         .sort((left, right) => new Date(left.updatedAtIso).getTime() - new Date(right.updatedAtIso).getTime()),
     [regulationTestHistory]

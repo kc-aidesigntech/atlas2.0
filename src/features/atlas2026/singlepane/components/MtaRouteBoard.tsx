@@ -16,6 +16,7 @@ interface MtaRouteBoardProps {
   kicker?: string
   title: string
   subtitle?: string
+  titleMarkerColor?: string | null
   routeCandidates: RouteCandidateRecord[]
   activeZCodeCount?: number
   headerParentCodes?: string[]
@@ -37,6 +38,7 @@ export default function MtaRouteBoard({
   kicker = 'route planning',
   title,
   subtitle,
+  titleMarkerColor = null,
   routeCandidates,
   activeZCodeCount = 0,
   headerParentCodes = [],
@@ -66,7 +68,16 @@ export default function MtaRouteBoard({
             {kicker}
           </small>
           <div className="mt-1 flex flex-wrap items-center gap-3">
-            <div className="text-[24px] font-medium leading-none text-white sm:text-[28px]">{title}</div>
+            <div className="flex items-center gap-2.5">
+              {titleMarkerColor ? (
+                <span
+                  className="inline-block h-4 w-4 rounded-full border"
+                  style={{ borderColor: SP_COLORS.white, backgroundColor: titleMarkerColor }}
+                  aria-hidden="true"
+                />
+              ) : null}
+              <div className="text-[24px] font-medium leading-none text-white sm:text-[28px]">{title}</div>
+            </div>
             {headerParentCodes.length ? (
               <div className="flex flex-wrap items-center gap-[10px]">
                 {headerParentCodes.map((parentCode) => (

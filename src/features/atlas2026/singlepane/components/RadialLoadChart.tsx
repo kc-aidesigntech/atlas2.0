@@ -8,6 +8,43 @@ interface RadialLoadChartProps {
   onClick?: () => void
 }
 
+function wrapAxisLabel(label: string) {
+  if (!label.includes(' ')) return [label]
+  return label.split(/\s+/).filter(Boolean)
+}
+
+function AxisTick(props: { x?: number; y?: number; cx?: number; cy?: number; payload?: { value?: string } }) {
+  const label = props.payload?.value || ''
+  if (!label || label.includes('-')) return null
+
+  const x = props.x ?? 0
+  const y = props.y ?? 0
+  const cx = props.cx ?? 0
+  const cy = props.cy ?? 0
+  const lines = wrapAxisLabel(label)
+  const anchor = Math.abs(x - cx) < 8 ? 'middle' : x > cx ? 'start' : 'end'
+  const dx = anchor === 'middle' ? 0 : anchor === 'start' ? 8 : -8
+  const baseDy = y < cy ? -4 : y > cy ? 6 : 4
+
+  return (
+    <text
+      x={x + dx}
+      y={y + baseDy}
+      textAnchor={anchor}
+      fill={SP_COLORS.text}
+      fontFamily="Helvetica, Arial, sans-serif"
+      fontSize="14"
+      fontWeight={500}
+    >
+      {lines.map((line, index) => (
+        <tspan key={`${label}-${line}-${index}`} x={x + dx} dy={index === 0 ? 0 : 14}>
+          {line}
+        </tspan>
+      ))}
+    </text>
+  )
+}
+
 export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps) {
   const habitat = load?.habitat || 0
   const work = load?.work || 0
@@ -31,20 +68,20 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
     <Wrapper
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`flex h-[250px] w-full max-w-[340px] flex-col items-center justify-center sm:h-[280px] sm:max-w-[360px] ${
+      className={`flex h-[250px] w-full max-w-[400px] flex-col items-center justify-center overflow-visible pr-3 sm:h-[280px] sm:max-w-[420px] sm:pr-4 ${
         onClick ? 'cursor-pointer rounded-[28px] transition-opacity hover:opacity-90' : ''
       }`}
       aria-label={onClick ? 'Open radial load source table' : undefined}
     >
       <ResponsiveContainer width="100%" height="84%">
         <RadarChart
-          cx="50%"
+          cx="47%"
           cy="53%"
           outerRadius="72%"
           data={data}
           startAngle={90}
           endAngle={-270}
-          margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+          margin={{ top: 14, right: 44, bottom: 14, left: 28 }}
         >
           <PolarGrid
             gridType="polygon"
@@ -64,8 +101,7 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
           />
           <PolarAngleAxis
             dataKey="axis"
-            tickFormatter={(value) => (value.includes('-') ? '' : value)}
-            tick={{ fill: SP_COLORS.text, fontSize: 14, fontFamily: 'Helvetica, Arial, sans-serif', fontWeight: 500 }}
+            tick={<AxisTick />}
             axisLine={false}
             tickLine={false}
           />

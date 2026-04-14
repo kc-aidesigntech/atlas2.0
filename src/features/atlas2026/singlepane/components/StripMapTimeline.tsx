@@ -31,6 +31,7 @@ interface StripMapTimelineProps {
   showRoutePlanningQuickAction?: boolean
   onRoutePlanningClick?: () => void
   onRegulationTestsClick?: () => void
+  onRenewalTestsClick?: () => void
   onEventDelete?: (logId: string) => void
   onEventPositionChange?: (logId: string, timelinePositionRatio: number | null) => void
   onEventDateChange?: (logId: string, nextTimestampIso: string) => void
@@ -190,6 +191,7 @@ export default function StripMapTimeline({
   showRoutePlanningQuickAction = false,
   onRoutePlanningClick,
   onRegulationTestsClick,
+  onRenewalTestsClick,
   onEventDelete,
   onEventPositionChange,
   onEventDateChange,
@@ -342,10 +344,25 @@ export default function StripMapTimeline({
       }),
     [baselineY, resolvedMarkerGroups]
   )
+  const maxResolvedStackDepth = useMemo(
+    () => resolvedMarkerGroups.reduce((maxDepth, group) => Math.max(maxDepth, group.length), 0),
+    [resolvedMarkerGroups]
+  )
 
   const phaseSegments = useMemo(() => {
     return buildTimelinePhaseSegments(normalizedTimelineConfig)
   }, [normalizedTimelineConfig])
+  const phaseSeparatorPositions = useMemo(
+    () =>
+      phaseSegments.slice(0, -1).map((segment) => {
+        const endDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.endOffset || 0)
+        return {
+          key: `${segment.phase}-separator`,
+          x: Number(timeScale(endDate))
+        }
+      }),
+    [normalizedTimelineConfig.planStartIso, phaseSegments, timeScale]
+  )
 
   const phaseActionButtons = useMemo(() => {
     return phaseSegments
@@ -370,23 +387,23 @@ export default function StripMapTimeline({
         if (segment.phase === 'readiness' && onRoutePlanningClick && showRoutePlanningQuickAction) {
           return {
             key: segment.phase,
-            label: 'readiness',
+            label: 'plan route',
             onClick: onRoutePlanningClick,
             centerX,
             color: PHASE_COLORS.readiness,
-            textColor: SP_COLORS.bg
+            textColor: SP_COLORS.bg,
+            iconHref: milestoneArrowIcon
           }
         }
 
-        if (segment.phase === 'renewal') {
+        if (segment.phase === 'renewal' && onRenewalTestsClick) {
           return {
             key: segment.phase,
             label: 'renewal',
-            onClick: () => undefined,
+            onClick: onRenewalTestsClick,
             centerX,
             color: PHASE_COLORS.renewal,
-            textColor: SP_COLORS.white,
-            disabled: true
+            textColor: SP_COLORS.white
           }
         }
 
@@ -399,6 +416,7 @@ export default function StripMapTimeline({
       centerX: number
       color: string
       textColor: string
+      iconHref?: string
       disabled?: boolean
     }>
   }, [normalizedTimelineConfig.planStartIso, onRegulationTestsClick, onRoutePlanningClick, phaseSegments, showRoutePlanningQuickAction, timeScale])
@@ -417,6 +435,11 @@ export default function StripMapTimeline({
       })
       .filter((marker) => marker.incrementDate.getTime() < safePlanEnd.getTime())
   }, [normalizedTimelineConfig.durationMonths, safePlanEnd, safePlanStart, timeScale])
+  const deepestResolvedMarkerBottom = maxResolvedStackDepth ? baselineY + (maxResolvedStackDepth - 1) * 40 + 18 : baselineY
+  const incrementLabelBottom = incrementMarkers.length ? baselineY + 34 : baselineY
+  const phaseButtonsTop = Math.max(deepestResolvedMarkerBottom, incrementLabelBottom) + 42
+  const focusedStationTop = phaseButtonsTop + 64
+  const containerHeight = highlightedStationName ? Math.max(height, focusedStationTop + 72) : Math.max(height, phaseButtonsTop + 64)
 
   function getEventX(event: RouteLogEvent, index: number) {
     if (typeof event.timelinePositionRatio === 'number' && Number.isFinite(event.timelinePositionRatio)) {
@@ -563,7 +586,7 @@ export default function StripMapTimeline({
   }, [resolvedTooltip?.pinned])
 
   return (
-    <div ref={wrapperRef} className="relative h-[580px] w-full overflow-visible">
+    <div ref={wrapperRef} className="relative w-full overflow-visible" style={{ height: containerHeight }}>
       {dateEditor ? (
         <div
           className="absolute z-20"
@@ -616,14 +639,14 @@ export default function StripMapTimeline({
           className="absolute z-20"
           style={{
             left: button.centerX,
-            top: 6,
+            top: phaseButtonsTop,
             transform: 'translateX(-50%)'
           }}
         >
           <AtlasTextButton
             onClick={button.onClick}
             disabled={button.disabled}
-            className="px-5 py-1.5 text-[22px] font-medium"
+            className="inline-flex items-center gap-2 px-5 py-1.5 text-[22px] font-medium"
             style={{
               ['--button-border-color' as const]: button.color,
               ['--button-line-color' as const]: button.textColor,
@@ -632,6 +655,15 @@ export default function StripMapTimeline({
             } as React.CSSProperties}
           >
             {button.label}
+            {button.iconHref ? (
+              <img
+                src={button.iconHref}
+                alt=""
+                aria-hidden="true"
+                className="h-[1.1rem] w-[1.1rem] rotate-90"
+                style={button.textColor === SP_COLORS.bg ? { filter: 'brightness(0) saturate(100%)' } : undefined}
+              />
+            ) : null}
           </AtlasTextButton>
         </div>
       ))}
@@ -679,6 +711,13 @@ export default function StripMapTimeline({
             )
           })}
 
+          {phaseSeparatorPositions.map((separator) => (
+            <g key={separator.key} transform={`translate(${separator.x}, ${baselineY})`} aria-hidden="true">
+              <line x1="-24" y1="0" x2="24" y2="0" stroke="#000000" strokeWidth="10" strokeLinecap="round" />
+              <image href={milestoneArrowIcon} x={-17} y={-17} width={34} height={34} transform="rotate(90 0 0)" opacity={1} />
+            </g>
+          ))}
+
           <g
             transform={`translate(${marginX}, ${baselineY})`}
             style={{ cursor: onStartDateChange ? 'pointer' : 'default' }}
@@ -698,17 +737,8 @@ export default function StripMapTimeline({
             return (
               <g key={marker.dayOffset} transform={`translate(${marker.x}, ${baselineY})`}>
                 <title>{`${marker.dayOffset} days from start · ${formatDateLabel(marker.dateIso)}`}</title>
-                <image
-                  href={milestoneArrowIcon}
-                  x={-11}
-                  y={68}
-                  width={22}
-                  height={22}
-                  transform="rotate(90 0 79)"
-                  opacity={0.72}
-                />
                 <text
-                  y="112"
+                  y="34"
                   textAnchor="middle"
                   fill={SP_COLORS.muted}
                   fontFamily="Helvetica, Arial, sans-serif"
@@ -719,6 +749,10 @@ export default function StripMapTimeline({
               </g>
             )
           })}
+
+          <g transform={`translate(${width - marginX}, ${baselineY})`} aria-hidden="true">
+            <circle r="10.5" fill="#000000" stroke={SP_COLORS.white} strokeWidth="2.2" />
+          </g>
 
           {positionedEvents.map(({ event, index, x, lane }) => {
             const color = STATUS_COLORS[event.status]
@@ -1057,14 +1091,14 @@ export default function StripMapTimeline({
           className="absolute z-20 max-w-[320px] rounded-[20px] border px-4 py-2 text-center"
           style={{
             left: readinessSegment ? readinessSegment.xStart + (readinessSegment.xEnd - readinessSegment.xStart) / 2 : width / 2,
-            bottom: 6,
+            top: focusedStationTop,
             transform: 'translateX(-50%)',
             borderColor: `${SP_COLORS.yellow}88`,
             backgroundColor: 'var(--surface-panel-raised)'
           }}
         >
           <small className="block text-[10px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.yellow }}>
-            focused station
+            next station
           </small>
           <div className="mt-1 text-[16px] leading-tight text-white">{highlightedStationName}</div>
         </div>

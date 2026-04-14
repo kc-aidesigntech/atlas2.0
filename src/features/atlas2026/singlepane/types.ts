@@ -318,7 +318,7 @@ export interface SupervisorNavigatorCompetencySummary {
   lastAssessmentAtIso: string | null
 }
 
-export type RegulationTestType = 'mh_sca' | 'svs'
+export type RegulationTestType = 'mh_sca' | 'svs' | 'ipf' | 'b_ipf'
 export type RegulationTestSubmissionStatus = 'draft' | 'completed'
 
 export interface RegulationTestPrompt {
