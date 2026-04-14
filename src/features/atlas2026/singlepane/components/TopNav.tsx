@@ -27,13 +27,25 @@ export default function TopNav({
 }: TopNavProps) {
   const firstMenu = roleConfig.topMenus[0] || ''
   const showEnrolleeSelector = firstMenu === 'assigned enrollees' && enrollees.length > 0
+  const rolePillLabel = `atlas ${role}`
 
   return (
     <header className="border-b bg-black" style={{ borderColor: '#ffffff70' }}>
       <div className="flex h-[44px] items-center justify-between border-b px-5" style={{ borderColor: '#ffffff45' }}>
         <div className="flex items-center gap-3">
-          <small className="text-[15px] font-medium tracking-[0.08em] text-white">ATLAS</small>
-          <small className="text-[11px] uppercase tracking-[0.16em] text-[#b9b9b9]">{role}</small>
+          {role === 'partner' ? (
+            <div
+              className="inline-flex min-h-[30px] items-center rounded-full border px-4 text-white"
+              style={{ borderColor: '#ffffff75' }}
+            >
+              <small className="text-[15px] leading-none tracking-[0.01em]">{rolePillLabel}</small>
+            </div>
+          ) : (
+            <>
+              <small className="text-[15px] font-medium tracking-[0.08em] text-white">ATLAS</small>
+              <small className="text-[11px] uppercase tracking-[0.16em] text-[#b9b9b9]">{role}</small>
+            </>
+          )}
         </div>
         <AtlasTextButton
           onClick={onOpenAccountSettings}

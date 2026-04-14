@@ -5,7 +5,7 @@ import { LinePath } from '@visx/shape'
 import { scaleTime } from 'd3-scale'
 import LocalDateInputBox from './LocalDateInputBox'
 import StripMapControlOverlay from './StripMapControlOverlay'
-import type { JourneyStationMarker, RouteLogEvent, StabilizationPhase, TimelineConfig } from '../types'
+import type { JourneyStationMarker, RegulationTestStripMarker, RouteLogEvent, StabilizationPhase, TimelineConfig } from '../types'
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
 import milestoneArrowIcon from '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
@@ -15,8 +15,12 @@ interface StripMapTimelineProps {
   timelineConfig: TimelineConfig
   stationMarkers?: JourneyStationMarker[]
   highlightedStationName?: string | null
+  regulationTestMarkers?: RegulationTestStripMarker[]
+  isRegulationCleared?: boolean
+  showReadinessProgress?: boolean
   showRoutePlanningQuickAction?: boolean
   onRoutePlanningClick?: () => void
+  onRegulationTestsClick?: () => void
   onEventDelete?: (logId: string) => void
   onEventPositionChange?: (logId: string, timelinePositionRatio: number | null) => void
   onEventDateChange?: (logId: string, nextTimestampIso: string) => void
@@ -123,8 +127,12 @@ export default function StripMapTimeline({
   timelineConfig,
   stationMarkers = [],
   highlightedStationName = null,
+  regulationTestMarkers = [],
+  isRegulationCleared = false,
+  showReadinessProgress = true,
   showRoutePlanningQuickAction = false,
   onRoutePlanningClick,
+  onRegulationTestsClick,
   onEventDelete,
   onEventPositionChange,
   onEventDateChange,
@@ -140,8 +148,8 @@ export default function StripMapTimeline({
   const [dateEditor, setDateEditor] = useState<DateEditorState | null>(null)
   const [dateEditorError, setDateEditorError] = useState<string | null>(null)
   const [isControlOverlayOpen, setIsControlOverlayOpen] = useState(false)
-  const height = 580
-  const baselineY = 338
+  const height = 540
+  const baselineY = 292
   const marginX = 90
   const laneStep = 82
   const collisionThreshold = 32
@@ -194,6 +202,7 @@ export default function StripMapTimeline({
   )
 
   const suggestedMarkers = useMemo(() => stationMarkers.filter((marker) => marker.markerType === 'suggested'), [stationMarkers])
+  const visibleSuggestedMarkers = showReadinessProgress ? suggestedMarkers : []
 
   const readinessSegment = useMemo(() => {
     const readinessIndex = normalizedTimelineConfig.gates.findIndex((gate) => gate.phase === 'readiness')
@@ -209,6 +218,62 @@ export default function StripMapTimeline({
   const phaseSegments = useMemo(() => {
     return buildTimelinePhaseSegments(normalizedTimelineConfig)
   }, [normalizedTimelineConfig])
+
+  const phaseActionButtons = useMemo(() => {
+    return phaseSegments
+      .map((segment) => {
+        const startDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.startOffset || 0)
+        const endDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.endOffset || 0)
+        const xStart = Number(timeScale(startDate))
+        const xEnd = Number(timeScale(endDate))
+        const centerX = (xStart + xEnd) / 2
+
+        if (segment.phase === 'regulation' && onRegulationTestsClick) {
+          return {
+            key: segment.phase,
+            label: 'regulation',
+            onClick: onRegulationTestsClick,
+            centerX,
+            color: PHASE_COLORS.regulation,
+            textColor: SP_COLORS.white
+          }
+        }
+
+        if (segment.phase === 'readiness' && onRoutePlanningClick && showRoutePlanningQuickAction) {
+          return {
+            key: segment.phase,
+            label: 'readiness',
+            onClick: onRoutePlanningClick,
+            centerX,
+            color: PHASE_COLORS.readiness,
+            textColor: SP_COLORS.bg
+          }
+        }
+
+        if (segment.phase === 'renewal') {
+          return {
+            key: segment.phase,
+            label: 'renewal',
+            onClick: () => undefined,
+            centerX,
+            color: PHASE_COLORS.renewal,
+            textColor: SP_COLORS.white,
+            disabled: true
+          }
+        }
+
+        return null
+      })
+      .filter(Boolean) as Array<{
+      key: StabilizationPhase
+      label: string
+      onClick: () => void
+      centerX: number
+      color: string
+      textColor: string
+      disabled?: boolean
+    }>
+  }, [normalizedTimelineConfig.planStartIso, onRegulationTestsClick, onRoutePlanningClick, phaseSegments, showRoutePlanningQuickAction, timeScale])
 
   const incrementMarkers = useMemo(() => {
     const configuredMilestones = normalizedTimelineConfig.durationMonths > 6 ? [60, 120, 180, 240, 300, 360] : [60, 120, 180]
@@ -418,17 +483,31 @@ export default function StripMapTimeline({
           setIsControlOverlayOpen(false)
         }}
       />
-      {showRoutePlanningQuickAction ? (
-        <div className="absolute right-4 top-4 z-20">
+      {phaseActionButtons.map((button) => (
+        <div
+          key={button.key}
+          className="absolute z-20"
+          style={{
+            left: button.centerX,
+            top: 6,
+            transform: 'translateX(-50%)'
+          }}
+        >
           <AtlasTextButton
-            onClick={onRoutePlanningClick}
-            className="px-5 pb-2 pt-2 text-[12px] uppercase tracking-[0.12em]"
-            style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: 'var(--surface-button)' } as React.CSSProperties}
+            onClick={button.onClick}
+            disabled={button.disabled}
+            className="px-5 py-1.5 text-[22px] font-medium"
+            style={{
+              ['--button-border-color' as const]: button.color,
+              ['--button-line-color' as const]: button.textColor,
+              color: button.textColor,
+              backgroundColor: button.color
+            } as React.CSSProperties}
           >
-            route planning
+            {button.label}
           </AtlasTextButton>
         </div>
-      ) : null}
+      ))}
       <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
         <Group>
           <LinePath data={baselinePoints} x={(point) => point.x} y={(point) => point.y} stroke={SP_COLORS.white} strokeWidth={5} />
@@ -439,6 +518,7 @@ export default function StripMapTimeline({
             const endDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.endOffset || 0)
             const xStart = Number(timeScale(startDate))
             const xEnd = Number(timeScale(endDate))
+            const isHiddenReadinessSegment = !showReadinessProgress && segment.phase !== 'regulation'
             return (
               <g key={segment.phase}>
                 <line
@@ -448,38 +528,26 @@ export default function StripMapTimeline({
                   y2={baselineY}
                   stroke={PHASE_COLORS[segment.phase]}
                   strokeWidth={6}
-                  strokeOpacity={0.8}
+                  strokeOpacity={isHiddenReadinessSegment ? 0.18 : 0.8}
                 />
-                <text
-                  x={(xStart + xEnd) / 2}
-                  y={phaseLabelY}
-                  textAnchor="middle"
-                  fill={PHASE_COLORS[segment.phase]}
-                  fontFamily="Helvetica, Arial, sans-serif"
-                  fontSize="22"
-                >
-                  {segment.label}
-                </text>
-                {onExtendPhaseDuration ? (
-                  <g
-                    transform={`translate(${Math.min(width - 34, Math.max(34, xStart + 22))}, ${baselineY - 54})`}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => onExtendPhaseDuration(segment.phase)}
+                {segment.phase === 'regulation' && onRegulationTestsClick
+                  ? null
+                  : segment.phase === 'readiness' && onRoutePlanningClick && showRoutePlanningQuickAction
+                    ? null
+                    : segment.phase === 'renewal'
+                      ? null
+                      : (
+                  <text
+                    x={(xStart + xEnd) / 2}
+                    y={phaseLabelY}
+                    textAnchor="middle"
+                    fill={PHASE_COLORS[segment.phase]}
+                    fontFamily="Helvetica, Arial, sans-serif"
+                    fontSize="22"
                   >
-                    <title>{`extend ${segment.label} by 30 days`}</title>
-                    <rect x="-24" y="-11" width="48" height="22" rx="11" fill="#040404" stroke={PHASE_COLORS[segment.phase]} strokeWidth="1.1" />
-                    <text
-                      y="4"
-                      textAnchor="middle"
-                      fill={PHASE_COLORS[segment.phase]}
-                      fontFamily="Helvetica, Arial, sans-serif"
-                      fontSize="12"
-                      fontWeight={700}
-                    >
-                      +30d
-                    </text>
-                  </g>
-                ) : null}
+                    {segment.label}
+                  </text>
+                    )}
               </g>
             )
           })}
@@ -567,16 +635,16 @@ export default function StripMapTimeline({
             )
           })}
 
-          {readinessSegment && suggestedMarkers.map((marker, index) => {
+          {readinessSegment && visibleSuggestedMarkers.map((marker, index) => {
             const segmentWidth = readinessSegment.xEnd - readinessSegment.xStart
-            const slotWidth = segmentWidth / Math.max(suggestedMarkers.length + 1, 1)
-            const ratio = (index + 1) / (suggestedMarkers.length + 1)
+            const slotWidth = segmentWidth / Math.max(visibleSuggestedMarkers.length + 1, 1)
+            const ratio = (index + 1) / (visibleSuggestedMarkers.length + 1)
             const x = readinessSegment.xStart + (readinessSegment.xEnd - readinessSegment.xStart) * ratio
             const circleY = baselineY
             const isHighlighted = highlightedStationName === marker.stationName
             const visibleChars = Math.max(40, Math.floor(slotWidth / 4.2))
             const labelText = truncateLabel(`${index + 1}. ${marker.stationName}`, visibleChars)
-            const needsLift = suggestedMarkers.length >= 4 || slotWidth < 120
+            const needsLift = visibleSuggestedMarkers.length >= 4 || slotWidth < 120
             const verticalLift = needsLift ? 34 + (index % 2) * 22 : 0
             const verticalTopY = circleY - verticalLift
             const diagonalRun = Math.max(42, Math.min(88, slotWidth * 0.34))
@@ -618,8 +686,64 @@ export default function StripMapTimeline({
               </g>
             )
           })}
+
+          {phaseSegments
+            .filter((segment) => segment.phase === 'regulation')
+            .map((segment) => {
+              const startDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.startOffset || 0)
+              const endDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.endOffset || 0)
+              const xStart = Number(timeScale(startDate))
+              const xEnd = Number(timeScale(endDate))
+              const segmentWidth = Math.max(xEnd - xStart, 1)
+              return regulationTestMarkers.map((marker, index) => {
+                const ratio = (index + 1) / Math.max(regulationTestMarkers.length + 1, 1)
+                const x = xStart + segmentWidth * ratio
+                const y = baselineY - 118 - (index % 2) * 42
+                const color = marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red
+                return (
+                  <g key={marker.id} transform={`translate(${x}, ${y})`}>
+                    <title>{`${marker.label} · ${marker.passed ? 'pass' : 'fail'} · ${formatDateLabel(marker.attemptedAtIso)}`}</title>
+                    <circle r="12" fill={color} stroke={SP_COLORS.white} strokeWidth="2" />
+                    <text y="-20" textAnchor="middle" fill={SP_COLORS.white} fontFamily="Helvetica, Arial, sans-serif" fontSize="11" fontWeight={700}>
+                      {marker.label}
+                    </text>
+                    {marker.isLatestCompleted ? (
+                      <circle r="18" fill="transparent" stroke={SP_COLORS.white} strokeWidth="1" strokeDasharray="3 3" />
+                    ) : null}
+                  </g>
+                )
+              })
+            })}
         </Group>
       </svg>
+      {phaseActionButtons
+        .filter((button) => button.key === 'regulation' && isRegulationCleared)
+        .map((button) => (
+          <div
+            key={`${button.key}-gate`}
+            className="absolute z-20"
+            style={{
+              left: button.centerX,
+              top: 64,
+              transform: 'translateX(-50%)'
+            }}
+          >
+            <div
+              className="flex h-9 w-9 items-center justify-center rounded-full border text-[18px]"
+              style={{ borderColor: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#000000' }}
+            >
+              ✓
+            </div>
+          </div>
+        ))}
+      {!showReadinessProgress ? (
+        <div
+          className="absolute bottom-16 right-5 rounded-[18px] border px-4 py-2 text-[12px]"
+          style={{ borderColor: `${SP_COLORS.red}90`, color: SP_COLORS.red, backgroundColor: 'rgba(0,0,0,0.78)' }}
+        >
+          readiness hidden pending regulation clearance
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -50,7 +50,7 @@ Why:
 ### 3. Elena Rodriguez
 
 - Primary theme: social reintegration
-- Primary Z-code: `Z60.4`
+- Active Z-codes: `Z59.1`, `Z56.2`, `Z60.4`
 - Supporting partner org: `BridgeLine Social Support Network`
 - Supporting station: `BridgeLine Community Commons`
 - Phase emphasis: `renewal`
@@ -59,7 +59,7 @@ Why:
 
 - shows a social-network-oriented journey
 - anchors supervision and governance examples
-- provides a draft survey record instead of only completed submissions
+- now provides a multi-parent route-ranking example instead of a single-code scenario
 
 ## Core Tables Seeded
 
@@ -140,21 +140,40 @@ Three example partner survey records were added:
 1. `North Harbor Housing Collaborative`
   Status: `completed`
    Respondent: `Maya Johnson`
-   Burden signal: `Z59.1`
+   Burden signals: `Z59.1=9`, `Z56.2=4`, `Z60.4=5`
 2. `WorkSpring Alliance`
   Status: `completed`
    Respondent: `Luis Ortega`
-   Burden signal: `Z56.2`
+   Burden signals: `Z59.1=5`, `Z56.2=8`, `Z60.4=4`
 3. `BridgeLine Social Support Network`
-  Status: `draft`
+  Status: `completed`
    Respondent: `Amina Rahman`
-   Burden signal: `Z60.4`
+   Burden signals: `Z59.1=7`, `Z56.2=6`, `Z60.4=9`
 
 Why:
 
-- gives the UI both completed and draft examples
+- gives the UI a concrete three-partner weighted ranking example
 - demonstrates respondent identity propagation
 - populates partner burden and partner capability surfaces
+
+### Elena Route-Ranking Example
+
+The seed now intentionally makes `Elena Rodriguez` a three-parent matching case so the mobile route board and readiness overlay have a meaningful ranked output to display.
+
+- Elena active need vector:
+  - `Z59.1`
+  - `Z56.2`
+  - `Z60.4`
+- Partner weighted burden totals used by the ranking view:
+  - `North Harbor Housing Collaborative`: `9 + 4 + 5 = 18`
+  - `WorkSpring Alliance`: `5 + 8 + 4 = 17`
+  - `BridgeLine Social Support Network`: `7 + 6 + 9 = 22`
+- Expected ranking result:
+  1. `BridgeLine Community Commons`
+  2. `North Harbor Housing Hub`
+  3. `WorkSpring Employment Desk`
+
+This means Elena now demonstrates a true ranked route sheet rather than a single-parent trivial match.
 
 ## Operational Outcomes Demonstrated
 

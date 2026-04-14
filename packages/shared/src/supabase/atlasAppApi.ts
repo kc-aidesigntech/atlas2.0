@@ -88,6 +88,14 @@ export interface RouteCandidateDetailsRecord {
   needUnitsMatched: number;
   partnerBurdenTotal: number;
   matchedZCodes: string[];
+  matchedParentSummaries: RouteCandidateParentSummaryRecord[];
+}
+
+export interface RouteCandidateParentSummaryRecord {
+  parentCode: string;
+  matchedChildCount: number;
+  avgBurdenScore: number;
+  matchedChildZCodes: string[];
 }
 
 export interface PartnerLoadBreakdownRecord {
@@ -280,6 +288,28 @@ function toTimestamp(value?: string | null): LegacyTimestamp {
 
 function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function asNumber(value: unknown) {
+  return typeof value === "number" ? value : Number(value || 0);
+}
+
+function asRouteCandidateParentSummaryArray(value: unknown): RouteCandidateParentSummaryRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+      const record = item as Record<string, unknown>;
+      const parentCode = typeof record.parentCode === "string" ? record.parentCode : "";
+      if (!parentCode) return null;
+      return {
+        parentCode,
+        matchedChildCount: asNumber(record.matchedChildCount),
+        avgBurdenScore: asNumber(record.avgBurdenScore),
+        matchedChildZCodes: asStringArray(record.matchedChildZCodes),
+      } satisfies RouteCandidateParentSummaryRecord;
+    })
+    .filter((item): item is RouteCandidateParentSummaryRecord => Boolean(item));
 }
 
 function asRecord(value: unknown) {
@@ -476,6 +506,7 @@ export async function fetchSinglePaneRouteCandidates(
       needUnitsMatched: Number(row.need_units_matched || 0),
       partnerBurdenTotal: Number(row.partner_burden_total || 0),
       matchedZCodes: asStringArray(row.matched_z_codes),
+      matchedParentSummaries: asRouteCandidateParentSummaryArray(row.matched_parent_summaries),
     }),
   );
 }

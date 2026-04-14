@@ -397,7 +397,9 @@ insert into atlas.enrollee_z_codes (id, enrollment_id, z_code_id, is_resolved, r
 values
   ('00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000601', (select id from atlas.z_codes where z_code = 'Z59.1'), false, null, 'manual', timestamptz '2026-01-10T12:00:00Z', null),
   ('00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000602', (select id from atlas.z_codes where z_code = 'Z56.2'), false, null, 'manual', timestamptz '2026-01-12T12:00:00Z', null),
-  ('00000000-0000-0000-0000-000000000803', '00000000-0000-0000-0000-000000000603', (select id from atlas.z_codes where z_code = 'Z60.4'), false, null, 'manual', timestamptz '2026-01-15T12:00:00Z', null)
+  ('00000000-0000-0000-0000-000000000803', '00000000-0000-0000-0000-000000000603', (select id from atlas.z_codes where z_code = 'Z59.1'), false, null, 'manual', timestamptz '2026-01-15T12:00:00Z', null),
+  ('00000000-0000-0000-0000-000000000804', '00000000-0000-0000-0000-000000000603', (select id from atlas.z_codes where z_code = 'Z56.2'), false, null, 'manual', timestamptz '2026-01-15T12:05:00Z', null),
+  ('00000000-0000-0000-0000-000000000805', '00000000-0000-0000-0000-000000000603', (select id from atlas.z_codes where z_code = 'Z60.4'), false, null, 'manual', timestamptz '2026-01-15T12:10:00Z', null)
 on conflict (id) do update
 set enrollment_id = excluded.enrollment_id,
     z_code_id = excluded.z_code_id,
@@ -418,8 +420,14 @@ insert into atlas.partner_z_code_capabilities (
 )
 values
   ((select id from atlas.partners where organization_name_normalized = 'north-harbor-housing-collaborative'), (select id from atlas.z_codes where z_code = 'Z59.1'), 'specialize', 0.93, 'survey', timestamptz '2026-02-01T09:00:00Z', true),
-  ((select id from atlas.partners where organization_name_normalized = 'workspring-alliance'), (select id from atlas.z_codes where z_code = 'Z56.2'), 'specialize', 0.88, 'survey', timestamptz '2026-02-02T09:00:00Z', true),
-  ((select id from atlas.partners where organization_name_normalized = 'bridgeline-social-support-network'), (select id from atlas.z_codes where z_code = 'Z60.4'), 'specialize', 0.84, 'survey', timestamptz '2026-02-03T09:00:00Z', true)
+  ((select id from atlas.partners where organization_name_normalized = 'north-harbor-housing-collaborative'), (select id from atlas.z_codes where z_code = 'Z56.2'), 'specialize', 0.44, 'survey', timestamptz '2026-02-01T09:00:00Z', true),
+  ((select id from atlas.partners where organization_name_normalized = 'north-harbor-housing-collaborative'), (select id from atlas.z_codes where z_code = 'Z60.4'), 'specialize', 0.56, 'survey', timestamptz '2026-02-01T09:00:00Z', true),
+  ((select id from atlas.partners where organization_name_normalized = 'workspring-alliance'), (select id from atlas.z_codes where z_code = 'Z59.1'), 'specialize', 0.56, 'survey', timestamptz '2026-02-02T09:00:00Z', true),
+  ((select id from atlas.partners where organization_name_normalized = 'workspring-alliance'), (select id from atlas.z_codes where z_code = 'Z56.2'), 'specialize', 0.89, 'survey', timestamptz '2026-02-02T09:00:00Z', true),
+  ((select id from atlas.partners where organization_name_normalized = 'workspring-alliance'), (select id from atlas.z_codes where z_code = 'Z60.4'), 'specialize', 0.44, 'survey', timestamptz '2026-02-02T09:00:00Z', true),
+  ((select id from atlas.partners where organization_name_normalized = 'bridgeline-social-support-network'), (select id from atlas.z_codes where z_code = 'Z59.1'), 'specialize', 0.78, 'survey', timestamptz '2026-02-03T09:00:00Z', true),
+  ((select id from atlas.partners where organization_name_normalized = 'bridgeline-social-support-network'), (select id from atlas.z_codes where z_code = 'Z56.2'), 'specialize', 0.67, 'survey', timestamptz '2026-02-03T09:00:00Z', true),
+  ((select id from atlas.partners where organization_name_normalized = 'bridgeline-social-support-network'), (select id from atlas.z_codes where z_code = 'Z60.4'), 'specialize', 1.00, 'survey', timestamptz '2026-02-03T09:00:00Z', true)
 on conflict (partner_id, z_code_id, relation_type, source) do update
 set strength = excluded.strength,
     source_submitted_at = excluded.source_submitted_at,
@@ -791,11 +799,11 @@ values
     '{administrator,other}',
     'cross-system coordinator',
     '2026-z-burden-v1',
-    '{"scenario":"social_arc","note":"Draft example social-support survey."}'::jsonb,
+    '{"scenario":"social_arc","note":"Completed example multi-parent survey used for Elena route ranking."}'::jsonb,
     timestamptz '2026-02-03T09:30:00Z',
     'example-submission-amina',
-    'draft',
-    null
+    'completed',
+    timestamptz '2026-02-03T09:30:00Z'
   )
 on conflict (draft_key) do update
 set partner_id = excluded.partner_id,
@@ -835,6 +843,36 @@ values
     9
   ),
   (
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-maya'),
+    'z56-2',
+    'Z56',
+    'Z56.2',
+    'Z56.2',
+    'Z56.2',
+    'Threat of Job Loss',
+    4
+  ),
+  (
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-maya'),
+    'z60-4',
+    'Z60',
+    'Z60.4',
+    'Z60.4',
+    'Z60.4',
+    'Social Exclusion or Rejection',
+    5
+  ),
+  (
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-luis'),
+    'z59-1',
+    'Z59',
+    'Z59.1',
+    'Z59.1',
+    'Z59.1',
+    'Inadequate Housing',
+    5
+  ),
+  (
     (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-luis'),
     'z56-2',
     'Z56',
@@ -843,6 +881,36 @@ values
     'Z56.2',
     'Threat of Job Loss',
     8
+  ),
+  (
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-luis'),
+    'z60-4',
+    'Z60',
+    'Z60.4',
+    'Z60.4',
+    'Z60.4',
+    'Social Exclusion or Rejection',
+    4
+  ),
+  (
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-amina'),
+    'z59-1',
+    'Z59',
+    'Z59.1',
+    'Z59.1',
+    'Z59.1',
+    'Inadequate Housing',
+    7
+  ),
+  (
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-amina'),
+    'z56-2',
+    'Z56',
+    'Z56.2',
+    'Z56.2',
+    'Z56.2',
+    'Threat of Job Loss',
+    6
   ),
   (
     (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-amina'),
@@ -882,11 +950,65 @@ values
     1.0
   ),
   (
+    (select id from atlas.partners where organization_name_normalized = 'north-harbor-housing-collaborative'),
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-maya'),
+    (select id from atlas.z_codes where z_code = 'Z56.2'),
+    'Z56.2',
+    4,
+    'specialize',
+    0.4444
+  ),
+  (
+    (select id from atlas.partners where organization_name_normalized = 'north-harbor-housing-collaborative'),
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-maya'),
+    (select id from atlas.z_codes where z_code = 'Z60.4'),
+    'Z60.4',
+    5,
+    'specialize',
+    0.5556
+  ),
+  (
+    (select id from atlas.partners where organization_name_normalized = 'workspring-alliance'),
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-luis'),
+    (select id from atlas.z_codes where z_code = 'Z59.1'),
+    'Z59.1',
+    5,
+    'specialize',
+    0.5556
+  ),
+  (
     (select id from atlas.partners where organization_name_normalized = 'workspring-alliance'),
     (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-luis'),
     (select id from atlas.z_codes where z_code = 'Z56.2'),
     'Z56.2',
     8,
+    'specialize',
+    0.8889
+  ),
+  (
+    (select id from atlas.partners where organization_name_normalized = 'workspring-alliance'),
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-luis'),
+    (select id from atlas.z_codes where z_code = 'Z60.4'),
+    'Z60.4',
+    4,
+    'specialize',
+    0.4444
+  ),
+  (
+    (select id from atlas.partners where organization_name_normalized = 'bridgeline-social-support-network'),
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-amina'),
+    (select id from atlas.z_codes where z_code = 'Z59.1'),
+    'Z59.1',
+    7,
+    'specialize',
+    0.7778
+  ),
+  (
+    (select id from atlas.partners where organization_name_normalized = 'bridgeline-social-support-network'),
+    (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-amina'),
+    (select id from atlas.z_codes where z_code = 'Z56.2'),
+    'Z56.2',
+    6,
     'specialize',
     0.6667
   ),
@@ -895,9 +1017,9 @@ values
     (select id from atlas.partner_service_capacity_submissions where draft_key = 'example-submission-amina'),
     (select id from atlas.z_codes where z_code = 'Z60.4'),
     'Z60.4',
-    7,
+    9,
     'specialize',
-    0.3333
+    1.0
   )
 on conflict (partner_id, z_code_id) do update
 set submission_id = excluded.submission_id,

@@ -122,6 +122,7 @@ Current implementation constraints visible in the codebase:
 - If ingestion errors are not quarantined and surfaced, operations teams may not know whether downstream views are trustworthy.
 - If audit events are missing or incomplete, admin overrides and automated data changes may become untraceable.
 - If ranking refreshes are asynchronous without visible status, users may act on stale route recommendations.
+- If strip-map regulation gates are not tied to the latest `MH-SCA` and `SVS` outcomes, the visible journey can drift away from the actual readiness state.
 
 ## Quality Objectives
 
@@ -133,6 +134,7 @@ The system is only ready for production when all of the following are true:
 - Partner survey ingestion is repeatable, observable, and safe to rerun.
 - Route candidate ordering is deterministic and conforms to the specialization/interference rules.
 - Timeline positions are based on an explicit enrollment-relative time model.
+- Regulation-to-readiness progression is derived from the latest completed `MH-SCA` and `SVS` outcomes, and readiness visuals regress safely when either test fails.
 - County commons data reads are correct, permissioned, and resilient to sparse data.
 - Admin mutations and rule-driven changes are auditable.
 
@@ -232,6 +234,12 @@ Exit criteria:
 ### 6. Ranking Engine Verification
 
 Goal: prove route recommendations are correct, deterministic, and explainable.
+
+Reference seeded scenario:
+
+- `Elena Rodriguez` carries active `Z59.1`, `Z56.2`, and `Z60.4`.
+- `BridgeLine Community Commons` should rank above `North Harbor Housing Hub`, which should rank above `WorkSpring Employment Desk`.
+- The expected weighted totals in the example seed are `22`, `18`, and `17` respectively.
 
 Tests:
 

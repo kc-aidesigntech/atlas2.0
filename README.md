@@ -74,6 +74,7 @@ flowchart TD
 
 - Primary app shell is `src/features/atlas2026/singlepane/SinglePaneApp.tsx` via `src/RootApp.jsx`
 - Standalone partner survey route is available at `/service-capacity-survey`
+- Narrow/mobile route planning now uses an MTA-inspired symbolic route board and applies the same visual system inside the readiness route-planning overlay
 - Supabase/Postgres is active for survey and capacity workflows
 - Authorization foundation is now in place (roles, permissions, user exceptions, RLS toggles)
 - Legacy Firebase paths still exist in the repo for specific 2026 services and migration continuity
@@ -93,6 +94,7 @@ The UI is intentionally dark and operational, not pastel/civic-light.
   - assigned enrollees
   - requests to enroll
   - route planning with z-code-aware partner ranking
+  - symbolic mobile route board for narrow-screen route inspection
   - station and county context
 - **Partner**
   - service-capacity survey and burden/capability updates
@@ -202,11 +204,28 @@ Apply in this sequence for a new Supabase environment:
 5. `supabase/migrations/20260411_authorization_foundation.sql`
 6. `supabase/migrations/20260411_supervisor_navigator_competency.sql`
 7. `supabase/migrations/20260414_zcode_master_alignment.sql`
+8. `supabase/migrations/20260413_atlas_app_runtime_cutover.sql`
+9. `supabase/migrations/20260415_example_records_seed.sql`
+10. `supabase/migrations/20260416_weighted_route_candidate_ranking.sql`
+11. `supabase/migrations/20260417_route_candidate_runtime_fix.sql`
 
 ## Useful Scripts
 
 - `npm run data:partner-capabilities` - builds partner capability seed artifact
-- `npm run test:route-ranking` - validates route ranking behavior
+- `npm run test:route-ranking` - validates route ranking behavior, including the three-parent Elena Rodriguez example
+
+## Example Ranking Scenario
+
+The seeded demo now includes a concrete weighted ranking case for `Elena Rodriguez`:
+
+- active Z-code parents represented by child codes: `Z59.1`, `Z56.2`, `Z60.4`
+- three completed partner surveys across the same codes
+- expected ranking:
+  1. `BridgeLine Community Commons`
+  2. `North Harbor Housing Hub`
+  3. `WorkSpring Employment Desk`
+
+This scenario is intended to make the mobile route board and readiness routing overlay easy to inspect without guessing at synthetic UI-only data.
 
 ## Documentation Map
 

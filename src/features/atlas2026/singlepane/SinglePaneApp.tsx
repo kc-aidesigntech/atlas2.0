@@ -3,6 +3,7 @@ import AdminDataControlPanel from '@/features/atlas2026/admin/AdminDataControlPa
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import AccountSettingsPanel from '@/features/atlas2026/singlepane/components/AccountSettingsPanel'
 import ContextPanels from '@/features/atlas2026/singlepane/components/ContextPanels'
+import MobileRouteBoardPanel from '@/features/atlas2026/singlepane/components/MobileRouteBoardPanel'
 import ProfilePanel from '@/features/atlas2026/singlepane/components/ProfilePanel'
 import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLoadChart'
 import RadialLoadTableOverlay from '@/features/atlas2026/singlepane/components/RadialLoadTableOverlay'
@@ -57,6 +58,9 @@ export default function SinglePaneApp() {
     hasSavedIntake,
     supervisorNavigatorCompetency,
     regulationTestHistory,
+    regulationTestStripMarkers,
+    isRegulationCleared,
+    shouldHideReadinessProgress,
     isSavingRegulationTest,
     regulationTestError,
     saveAccountSettings,
@@ -110,18 +114,37 @@ export default function SinglePaneApp() {
     )
   }, [isRoutePlanningOpen, routeCandidates, selectedRouteAssignment])
 
+  React.useEffect(() => {
+    if (role !== 'navigator' || isRegulationCleared || !isRoutePlanningOpen) return
+    setIsRoutePlanningOpen(false)
+    setSelectedRouteCandidateId(null)
+  }, [isRegulationCleared, isRoutePlanningOpen, role])
+
   const activeAction = actionMenus[0] || ''
   const isPartnerRole = role === 'partner'
   const isAdminSection = role === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
   const isServiceCapacitySection = role === 'partner' && activeMenu === 'service capacity'
   const isReady = isPartnerRole ? true : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
-  const journeyPhase = React.useMemo(() => deriveJourneyPhase(selectedLogs, 'regulation'), [selectedLogs])
-  const showRoutePlanningQuickAction = journeyPhase === 'readiness'
+  const visibleLogs = React.useMemo(
+    () => (role === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
+    [role, selectedLogs, shouldHideReadinessProgress]
+  )
+  const visibleJourneyStationMarkers = React.useMemo(
+    () =>
+      role === 'navigator' && shouldHideReadinessProgress
+        ? journeyStationMarkers.filter((marker) => marker.phase === 'regulation')
+        : journeyStationMarkers,
+    [journeyStationMarkers, role, shouldHideReadinessProgress]
+  )
+  const showRoutePlanningQuickAction = role === 'navigator' ? isRegulationCleared : false
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
     : selectedRouteAssignment?.stationName || null
   const previewStationMarkers = React.useMemo(() => {
+    if (role === 'navigator' && shouldHideReadinessProgress) {
+      return visibleJourneyStationMarkers
+    }
     const suggestedMarkers: JourneyStationMarker[] = routeCandidates.map((candidate) => ({
       id: `suggested-${candidate.stationId}`,
       stationName: candidate.stationName,
@@ -129,8 +152,8 @@ export default function SinglePaneApp() {
       phase: 'readiness',
       markerType: 'suggested'
     }))
-    return [...journeyStationMarkers, ...suggestedMarkers]
-  }, [journeyStationMarkers, routeCandidates, timelineConfig?.planStartIso])
+    return [...visibleJourneyStationMarkers, ...suggestedMarkers]
+  }, [role, routeCandidates, shouldHideReadinessProgress, timelineConfig?.planStartIso, visibleJourneyStationMarkers])
   const partnerStationBadgeCodes = React.useMemo(() => derivePartnerBadgeCodes(selectedLoadBreakdown), [selectedLoadBreakdown])
   const partnerContactName = React.useMemo(() => {
     const firstName = partnerStationProfile?.primaryContactFirstName?.trim() || ''
@@ -145,6 +168,10 @@ export default function SinglePaneApp() {
       return
     }
     if (menu === 'route planning') {
+      if (role === 'navigator' && !isRegulationCleared) {
+        setIsRegulationTestsOpen(true)
+        return
+      }
       setActiveMenu(menu)
       setIsRoutePlanningOpen(true)
       return
@@ -157,6 +184,10 @@ export default function SinglePaneApp() {
       return
     }
     if (label.trim().toLowerCase() === 'route planning') {
+      if (role === 'navigator' && !isRegulationCleared) {
+        setIsRegulationTestsOpen(true)
+        return
+      }
       setActiveMenu('route planning')
       setIsRoutePlanningOpen(true)
       return
@@ -224,10 +255,10 @@ export default function SinglePaneApp() {
               selectedCandidateId={selectedRouteCandidateId}
               onSelectCandidate={setSelectedRouteCandidateId}
               assignedCandidateId={selectedRouteAssignment?.stationId || null}
-              onCommitCandidate={(candidate) => saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs))}
+              onCommitCandidate={(candidate) => saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs, isRegulationCleared))}
               enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
               hasRecordedIntake={hasSavedIntake}
-              suggestedPhase={getNextSuggestedPhase(selectedLogs)}
+              suggestedPhase={getNextSuggestedPhase(selectedLogs, isRegulationCleared)}
               onClose={closeRoutePlanning}
             />
           ) : null}
@@ -332,31 +363,11 @@ export default function SinglePaneApp() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-center py-1">
-                  {role === 'navigator' ? (
-                    <div className="flex w-full flex-wrap items-center justify-center gap-2">
-                      <AtlasTextButton
-                        onClick={() => {
-                          setActiveMenu('route planning')
-                          setIsRoutePlanningOpen(true)
-                        }}
-                        className="relative px-5 pb-2 pt-2 text-[12px] uppercase tracking-[0.12em]"
-                        style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' } as React.CSSProperties}
-                      >
-                        route planning
-                      </AtlasTextButton>
-                      <AtlasTextButton
-                        onClick={() => setIsRegulationTestsOpen(true)}
-                        className="relative px-5 pb-2 pt-2 text-[12px] uppercase tracking-[0.12em]"
-                        style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: '#030303' } as React.CSSProperties}
-                      >
-                        regulation tests
-                      </AtlasTextButton>
-                    </div>
-                  ) : !showRoutePlanningQuickAction && actionMenus.length > 0 ? (
+                {role !== 'navigator' && !showRoutePlanningQuickAction && actionMenus.length > 0 ? (
+                  <div className="flex items-center justify-center py-1">
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
 
                 {isAdminSection ? (
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
@@ -372,19 +383,22 @@ export default function SinglePaneApp() {
                   <>
                     {timelineConfig ? (
                       <>
-                        <div className="hidden min-h-[220px] flex-1 items-center pt-1 md:flex">
+                        <div className="hidden min-h-[220px] flex-1 items-start md:flex">
                           <StripMapTimeline
-                            events={selectedLogs}
+                        events={visibleLogs}
                             timelineConfig={timelineConfig}
                             stationMarkers={previewStationMarkers}
                             highlightedStationName={highlightedStationName}
+                        regulationTestMarkers={regulationTestStripMarkers}
+                        isRegulationCleared={isRegulationCleared}
+                        showReadinessProgress={!shouldHideReadinessProgress}
                             onEventDelete={deleteRouteLog}
                             onEventPositionChange={updateRouteLogTimelinePosition}
                             onEventDateChange={updateRouteLogDate}
                             onStartDateChange={updateTimelineStartDate}
                           />
                         </div>
-                        <div className="flex min-h-[220px] flex-1 items-start pt-1 md:hidden">
+                        <div className="flex min-h-[220px] flex-1 items-start md:hidden">
                           <VerticalStripMapTimeline
                             events={selectedLogs}
                             timelineConfig={timelineConfig}
@@ -411,7 +425,7 @@ export default function SinglePaneApp() {
                   </>
                 ) : (
                   <>
-                    <div className="hidden min-h-[220px] flex-1 items-center pt-1 md:flex">
+                    <div className="hidden min-h-[220px] flex-1 items-start md:flex">
                       <StripMapTimeline
                         events={selectedLogs}
                         timelineConfig={timelineConfig}
@@ -422,6 +436,7 @@ export default function SinglePaneApp() {
                           setActiveMenu('route planning')
                           setIsRoutePlanningOpen(true)
                         }}
+                        onRegulationTestsClick={() => setIsRegulationTestsOpen(true)}
                         onEventDelete={deleteRouteLog}
                         onEventPositionChange={updateRouteLogTimelinePosition}
                         onEventDateChange={updateRouteLogDate}
@@ -430,22 +445,30 @@ export default function SinglePaneApp() {
                         onTimelineConfigChange={updateTimelineConfig}
                       />
                     </div>
-                    <div className="flex min-h-[220px] flex-1 items-start pt-1 md:hidden">
-                      <VerticalStripMapTimeline
-                        events={selectedLogs}
+                    <div className="flex min-h-[220px] flex-1 items-start md:hidden">
+                      <MobileRouteBoardPanel
                         timelineConfig={timelineConfig}
-                        stationMarkers={previewStationMarkers}
-                        highlightedStationName={highlightedStationName}
+                        routeCandidates={isRegulationCleared ? routeCandidates : []}
+                        selectedCandidateId={selectedRouteCandidateId}
+                        assignedCandidateId={selectedRouteAssignment?.stationId || null}
+                        highlightedStationName={isRegulationCleared ? highlightedStationName : null}
+                        onSelectCandidate={setSelectedRouteCandidateId}
+                        onCommitCandidate={(candidate) => saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs, isRegulationCleared))}
                         showRoutePlanningQuickAction={showRoutePlanningQuickAction}
+                        isRegulationCleared={isRegulationCleared}
+                        regulationTestMarkers={regulationTestStripMarkers}
                         onRoutePlanningClick={() => {
+                          if (!isRegulationCleared) {
+                            setIsRegulationTestsOpen(true)
+                            return
+                          }
                           setActiveMenu('route planning')
                           setIsRoutePlanningOpen(true)
                         }}
-                        onEventDelete={deleteRouteLog}
-                        onEventDateChange={updateRouteLogDate}
+                        onRegulationTestsClick={() => setIsRegulationTestsOpen(true)}
                         onStartDateChange={updateTimelineStartDate}
-                        onExtendPhaseDuration={updateTimelinePhaseDuration}
                         onTimelineConfigChange={updateTimelineConfig}
+                        suggestedPhase={getNextSuggestedPhase(selectedLogs, isRegulationCleared)}
                       />
                     </div>
                     <ContextPanels
@@ -495,9 +518,9 @@ function LoadingShell() {
   )
 }
 
-function getNextSuggestedPhase(logs: { phase: StabilizationPhase; status: string }[]) {
+function getNextSuggestedPhase(logs: { phase: StabilizationPhase; status: string }[], isRegulationCleared: boolean) {
   const last = logs[logs.length - 1]
-  if (!last) return 'regulation'
+  if (!last) return isRegulationCleared ? 'readiness' : 'regulation'
   if (last.status !== 'active') return last.phase
   if (last.phase === 'regulation') return 'readiness'
   if (last.phase === 'readiness') return 'renewal'

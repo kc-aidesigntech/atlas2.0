@@ -34,31 +34,34 @@ function assert(condition, message) {
 }
 
 const activeNeedByZCode = {
-  'Z59.0': 2,
-  'Z56.0': 1,
-  'Z60.0': 1
+  'Z59.1': 1,
+  'Z56.2': 1,
+  'Z60.4': 1
 }
 
 const partnerBurdenByStation = {
-  stationAlpha: {
-    'Z59.0': 9,
-    'Z56.0': 1
+  northHarborHousingHub: {
+    'Z59.1': 9,
+    'Z56.2': 4,
+    'Z60.4': 5
   },
-  stationBeta: {
-    'Z59.0': 5,
-    'Z56.0': 5,
-    'Z60.0': 5
+  workSpringEmploymentDesk: {
+    'Z59.1': 5,
+    'Z56.2': 8,
+    'Z60.4': 4
   },
-  stationGamma: {
-    'Z59.0': 8
+  bridgeLineCommunityCommons: {
+    'Z59.1': 7,
+    'Z56.2': 6,
+    'Z60.4': 9
   }
 }
 
 const ranked = scoreStation(activeNeedByZCode, partnerBurdenByStation)
-assert(ranked[0].stationId === 'stationBeta', 'station with the highest aggregated need x burden total should rank first')
-assert(ranked[0].score === 20, 'top ranked weighted score should equal summed need x burden products')
-assert(ranked[1].stationId === 'stationAlpha', 'secondary station should rank below the highest total and above weaker partial matches')
-assert(ranked[2].stationId === 'stationGamma', 'single-code match should rank below broader higher-total matches')
+assert(ranked[0].stationId === 'bridgeLineCommunityCommons', 'bridgeLine should rank first for Elena when it is strongest across all three active parent groups')
+assert(ranked[0].score === 22, 'top ranked weighted score should equal Elena route total 7 + 6 + 9')
+assert(ranked[1].stationId === 'northHarborHousingHub', 'north harbor should rank second with an 18-point three-parent total')
+assert(ranked[2].stationId === 'workSpringEmploymentDesk', 'workspring should rank third with a 17-point three-parent total')
 assert(ranked.every((item) => item.score === Number(item.score)), 'all scored stations should have numeric scores')
 
 process.stdout.write('weighted route ranking rule test passed\n')

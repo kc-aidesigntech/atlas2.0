@@ -292,7 +292,7 @@
     left: var(--button-line-inset, 8px);
     right: var(--button-line-inset, 8px);
     top: calc(var(--button-radius, 10px) - 2px);
-    height: 1px;
+    height: var(--button-line-thickness, 1.5px);
     background: var(--button-line-color, var(--button-border-color, currentColor));
     opacity: var(--button-line-opacity, 1);
     pointer-events: none;

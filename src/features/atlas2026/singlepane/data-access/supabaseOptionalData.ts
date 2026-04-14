@@ -27,6 +27,10 @@ export async function withOptionalSupabaseFallback<T>(key: string, loader: () =>
     return await loader()
   } catch (error) {
     if (isOptionalSupabaseDataError(error)) {
+      if (import.meta.env.DEV) {
+        const candidate = error as { message?: string; code?: string }
+        console.warn(`[singlepane] optional supabase fallback for ${key}`, candidate.code || '', candidate.message || '')
+      }
       optionalSupabaseFallbackCache.set(key, fallback)
       return fallback
     }

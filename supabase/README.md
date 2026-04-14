@@ -9,6 +9,10 @@
    - `npm run data:partner-capabilities`
    - file: `sample-data/ATLASDB-excel/partner-capabilities.seed.json`
 5. apply `migrations/20260411_supervisor_navigator_competency.sql`
+6. apply `migrations/20260413_atlas_app_runtime_cutover.sql`
+7. apply `migrations/20260415_example_records_seed.sql`
+8. apply `migrations/20260416_weighted_route_candidate_ranking.sql`
+9. apply `migrations/20260417_route_candidate_runtime_fix.sql`
 
 ## env vars for app runtime
 

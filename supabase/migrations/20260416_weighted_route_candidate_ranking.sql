@@ -10,7 +10,8 @@ returns table(
   matched_z_code_count int,
   need_units_matched int,
   partner_burden_total numeric,
-  matched_z_codes text[]
+  matched_z_codes text[],
+  matched_parent_summaries jsonb
 )
 language sql
 stable
@@ -18,13 +19,14 @@ as $$
 with active_code_need as (
   select
     ez.z_code_id,
+    upper(z.z_code) as matched_z_code,
     count(*)::int as enrollee_need_count,
     upper('z' || substring(z.z_code from 2 for 2)) as matched_z_group
   from atlas.enrollee_z_codes ez
   join atlas.z_codes z on z.id = ez.z_code_id
   where ez.enrollment_id = p_enrollment_id
     and ez.ended_at is null
-  group by ez.z_code_id, upper('z' || substring(z.z_code from 2 for 2))
+  group by ez.z_code_id, upper(z.z_code), upper('z' || substring(z.z_code from 2 for 2))
 ),
 station_pairs as (
   select
@@ -32,6 +34,7 @@ station_pairs as (
     ps.partner_id,
     ps.station_name,
     ac.z_code_id,
+    ac.matched_z_code,
     ac.matched_z_group,
     ac.enrollee_need_count,
     coalesce(pzbs.burden_score, 0) as partner_burden_score,
@@ -56,17 +59,53 @@ agg as (
       filter (where partner_burden_score > 0) as matched_z_codes
   from station_pairs
   group by station_id, partner_id, station_name
+),
+parent_summary as (
+  select
+    station_id,
+    partner_id,
+    station_name,
+    matched_z_group,
+    count(*) filter (where partner_burden_score > 0)::int as matched_child_count,
+    round(avg(partner_burden_score) filter (where partner_burden_score > 0)::numeric, 1) as avg_burden_score,
+    array_agg(distinct matched_z_code order by matched_z_code)
+      filter (where partner_burden_score > 0) as matched_child_z_codes
+  from station_pairs
+  group by station_id, partner_id, station_name, matched_z_group
+),
+parent_summary_agg as (
+  select
+    station_id,
+    partner_id,
+    station_name,
+    jsonb_agg(
+      jsonb_build_object(
+        'parentCode', matched_z_group,
+        'matchedChildCount', matched_child_count,
+        'avgBurdenScore', avg_burden_score,
+        'matchedChildZCodes', coalesce(matched_child_z_codes, '{}')
+      )
+      order by matched_z_group
+    ) as matched_parent_summaries
+  from parent_summary
+  where matched_child_count > 0
+  group by station_id, partner_id, station_name
 )
 select
-  station_id,
-  partner_id,
-  station_name,
-  score,
-  matched_z_code_count,
-  need_units_matched,
-  partner_burden_total,
-  coalesce(matched_z_codes, '{}')
+  agg.station_id,
+  agg.partner_id,
+  agg.station_name,
+  agg.score,
+  agg.matched_z_code_count,
+  agg.need_units_matched,
+  agg.partner_burden_total,
+  coalesce(agg.matched_z_codes, '{}'),
+  coalesce(parent_summary_agg.matched_parent_summaries, '[]'::jsonb)
 from agg
+left join parent_summary_agg
+  on parent_summary_agg.station_id = agg.station_id
+ and parent_summary_agg.partner_id = agg.partner_id
+ and parent_summary_agg.station_name = agg.station_name
 order by score desc, matched_z_code_count desc, need_units_matched desc, partner_burden_total desc, station_name asc;
 $$;
 
@@ -80,7 +119,8 @@ select
   ranked.matched_z_code_count,
   ranked.need_units_matched,
   ranked.partner_burden_total,
-  ranked.matched_z_codes
+  ranked.matched_z_codes,
+  ranked.matched_parent_summaries
 from atlas.enrollments en
 cross join lateral atlas.fn_rank_route_candidates(en.id) ranked
 where en.status = 'active';

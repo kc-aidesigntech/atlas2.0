@@ -153,7 +153,12 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
 
   const roleConfigs = roleNavigation.map((item) => ({
     role: item.roleKey as AtlasRole,
-    topMenus: item.topMenus,
+    topMenus:
+      item.roleKey === 'navigator' && !item.topMenus.includes('assigned enrollees')
+        ? ['assigned enrollees', ...item.topMenus]
+        : item.roleKey === 'partner'
+          ? ['referral portal', 'my station', 'county commons']
+          : item.topMenus,
     actionMenus: item.actionMenus
   }))
 
@@ -279,7 +284,8 @@ export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteC
     matchedZCodeCount: row.matchedZCodeCount,
     needUnitsMatched: row.needUnitsMatched,
     partnerBurdenTotal: row.partnerBurdenTotal,
-    matchedZCodes: row.matchedZCodes
+    matchedZCodes: row.matchedZCodes,
+    matchedParentSummaries: row.matchedParentSummaries
   }))
 }
 

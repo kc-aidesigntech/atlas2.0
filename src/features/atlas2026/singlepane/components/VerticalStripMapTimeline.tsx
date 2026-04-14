@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import LocalDateInputBox from './LocalDateInputBox'
 import StripMapControlOverlay from './StripMapControlOverlay'
-import type { JourneyStationMarker, RouteLogEvent, RouteLogStatus, StabilizationPhase, TimelineConfig, ZDomain } from '../types'
+import type { JourneyStationMarker, RegulationTestStripMarker, RouteLogEvent, RouteLogStatus, StabilizationPhase, TimelineConfig, ZDomain } from '../types'
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
 
@@ -11,8 +11,12 @@ interface VerticalStripMapTimelineProps {
   timelineConfig: TimelineConfig
   stationMarkers?: JourneyStationMarker[]
   highlightedStationName?: string | null
+  regulationTestMarkers?: RegulationTestStripMarker[]
+  isRegulationCleared?: boolean
+  showReadinessProgress?: boolean
   showRoutePlanningQuickAction?: boolean
   onRoutePlanningClick?: () => void
+  onRegulationTestsClick?: () => void
   onEventDelete?: (logId: string) => void
   onStartDateChange?: (nextStartIso: string) => void
   onEventDateChange?: (logId: string, nextTimestampIso: string) => void
@@ -87,8 +91,12 @@ export default function VerticalStripMapTimeline({
   timelineConfig,
   stationMarkers = [],
   highlightedStationName = null,
+  regulationTestMarkers = [],
+  isRegulationCleared = false,
+  showReadinessProgress = true,
   showRoutePlanningQuickAction = false,
   onRoutePlanningClick,
+  onRegulationTestsClick,
   onEventDelete,
   onStartDateChange,
   onEventDateChange,
@@ -112,6 +120,7 @@ export default function VerticalStripMapTimeline({
     [events]
   )
   const suggestedMarkers = useMemo(() => stationMarkers.filter((marker) => marker.markerType === 'suggested'), [stationMarkers])
+  const visibleSuggestedMarkers = showReadinessProgress ? suggestedMarkers : []
   const normalizedTimelineConfig = useMemo(() => normalizeTimelineConfig(timelineConfig), [timelineConfig])
   const phaseSegments = useMemo(() => {
     return buildTimelinePhaseSegments(normalizedTimelineConfig)
@@ -171,18 +180,6 @@ export default function VerticalStripMapTimeline({
       >
         start: {formatDateLabel(normalizedTimelineConfig.planStartIso)}
       </AtlasTextButton>
-      {showRoutePlanningQuickAction ? (
-        <div className="mt-3">
-          <AtlasTextButton
-            onClick={onRoutePlanningClick}
-            className="px-4 pb-2 pt-2 text-[11px] uppercase tracking-[0.1em]"
-            style={{ ['--button-border-color' as const]: SP_COLORS.white, color: SP_COLORS.white, backgroundColor: 'var(--surface-button)' } as React.CSSProperties}
-          >
-            route planning
-          </AtlasTextButton>
-        </div>
-      ) : null}
-
       <StripMapControlOverlay
         isOpen={isControlOverlayOpen}
         timelineConfig={normalizedTimelineConfig}
@@ -198,26 +195,72 @@ export default function VerticalStripMapTimeline({
 
       <div className="mt-4 flex flex-wrap gap-2">
         {phaseSegments.map((segment) => {
+          const isRegulationAction = segment.phase === 'regulation' && Boolean(onRegulationTestsClick)
+          const isReadinessAction = segment.phase === 'readiness' && Boolean(onRoutePlanningClick) && showRoutePlanningQuickAction
+          const isRenewalButton = segment.phase === 'renewal'
           return (
             <div
               key={segment.phase}
               className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px]"
-              style={{ borderColor: '#ffffff35', color: SP_COLORS.white }}
+              style={{
+                borderColor: '#ffffff35',
+                color: SP_COLORS.white,
+                opacity: !showReadinessProgress && segment.phase !== 'regulation' ? 0.42 : 1
+              }}
             >
               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PHASE_COLORS[segment.phase] }} />
-              <span style={{ color: PHASE_COLORS[segment.phase] }}>{segment.label}</span>
+              {isRegulationAction ? (
+                <>
+                  <AtlasTextButton
+                    onClick={onRegulationTestsClick}
+                    className="px-3 py-1 text-[11px] font-medium"
+                    style={{
+                      ['--button-border-color' as const]: PHASE_COLORS.regulation,
+                      ['--button-line-color' as const]: SP_COLORS.white,
+                      color: SP_COLORS.white,
+                      backgroundColor: PHASE_COLORS.regulation
+                    } as React.CSSProperties}
+                  >
+                    regulation
+                  </AtlasTextButton>
+                  {isRegulationCleared ? (
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-[12px]" style={{ borderColor: SP_COLORS.white, color: SP_COLORS.white }}>
+                      ✓
+                    </span>
+                  ) : null}
+                </>
+              ) : isReadinessAction ? (
+                <AtlasTextButton
+                  onClick={onRoutePlanningClick}
+                  className="px-3 py-1 text-[11px] font-medium"
+                  style={{
+                    ['--button-border-color' as const]: PHASE_COLORS.readiness,
+                    ['--button-line-color' as const]: SP_COLORS.bg,
+                    color: SP_COLORS.bg,
+                    backgroundColor: PHASE_COLORS.readiness
+                  } as React.CSSProperties}
+                >
+                  readiness
+                </AtlasTextButton>
+              ) : isRenewalButton ? (
+                <AtlasTextButton
+                  disabled
+                  className="px-3 py-1 text-[11px] font-medium"
+                  style={{
+                    ['--button-border-color' as const]: PHASE_COLORS.renewal,
+                    ['--button-line-color' as const]: SP_COLORS.white,
+                    color: SP_COLORS.white,
+                    backgroundColor: PHASE_COLORS.renewal
+                  } as React.CSSProperties}
+                >
+                  renewal
+                </AtlasTextButton>
+              ) : (
+                <span style={{ color: PHASE_COLORS[segment.phase] }}>{segment.label}</span>
+              )}
               <span style={{ color: SP_COLORS.muted }}>
                 {formatPhaseRange(normalizedTimelineConfig.planStartIso, segment.startOffset, segment.endOffset)}
               </span>
-              {onExtendPhaseDuration ? (
-                <AtlasTextButton
-                  onClick={() => onExtendPhaseDuration(segment.phase)}
-                  className="px-2 py-0.5 text-[10px] font-medium"
-                  style={{ ['--button-border-color' as const]: PHASE_COLORS[segment.phase], color: PHASE_COLORS[segment.phase] } as React.CSSProperties}
-                >
-                  +30d
-                </AtlasTextButton>
-              ) : null}
             </div>
           )
         })}
@@ -225,6 +268,20 @@ export default function VerticalStripMapTimeline({
 
       <div className="relative mt-5 pl-8">
         <div className="absolute bottom-3 left-[11px] top-2 w-[3px] rounded-full bg-white/20" />
+        {regulationTestMarkers.length ? (
+          <div className="mb-5 flex flex-wrap gap-2">
+            {regulationTestMarkers.map((marker) => (
+              <span
+                key={marker.id}
+                className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px]"
+                style={{ borderColor: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red, color: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red }}
+              >
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red }} />
+                {marker.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
         {sortedEvents.map((event, index) => {
           const statusColor = STATUS_COLORS[event.status]
           const phaseColor = PHASE_COLORS[event.phase]
@@ -340,13 +397,13 @@ export default function VerticalStripMapTimeline({
         })}
       </div>
 
-      {suggestedMarkers.length > 0 ? (
+      {visibleSuggestedMarkers.length > 0 ? (
         <div className="mt-4 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.yellow}70`, backgroundColor: 'var(--surface-panel-soft)' }}>
           <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.yellow }}>
             ranked station suggestions
           </small>
           <div className="mt-2 flex flex-wrap gap-2">
-            {suggestedMarkers.map((marker, index) => (
+            {visibleSuggestedMarkers.map((marker, index) => (
               <span
                 key={marker.id}
                 className="inline-flex rounded-full border px-2.5 py-1 text-[11px]"
@@ -356,6 +413,11 @@ export default function VerticalStripMapTimeline({
               </span>
             ))}
           </div>
+        </div>
+      ) : null}
+      {!showReadinessProgress ? (
+        <div className="mt-4 rounded-[18px] border px-4 py-2 text-[12px]" style={{ borderColor: `${SP_COLORS.red}90`, color: SP_COLORS.red }}>
+          readiness hidden pending regulation clearance
         </div>
       ) : null}
     </div>

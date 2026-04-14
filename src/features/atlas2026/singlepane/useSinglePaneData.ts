@@ -19,6 +19,7 @@ import type {
   RoleMenuConfig,
   RegulationTestSubmissionInput,
   RegulationTestSubmissionRecord,
+  RegulationTestStripMarker,
   RouteAssignmentRecord,
   RouteCandidateRecord,
   RouteLogEvent,
@@ -97,6 +98,10 @@ function buildFallbackTimelineConfig(planStartIso: string): TimelineConfig {
     maxDurationMonths: DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
     gates: buildDefaultTimelineGates(DEFAULT_TIMELINE_DURATION_MONTHS)
   }
+}
+
+function getRegulationTestLabel(testType: RegulationTestSubmissionRecord['testType']) {
+  return testType === 'mh_sca' ? 'MH-SCA' : 'SVS'
 }
 
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
@@ -286,6 +291,50 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       isMounted = false
     }
   }, [role, selectedEnrollee?.id])
+
+  const completedRegulationTests = useMemo(
+    () =>
+      regulationTestHistory
+        .filter((record) => record.status === 'completed' && record.passed !== null)
+        .slice()
+        .sort((left, right) => new Date(left.updatedAtIso).getTime() - new Date(right.updatedAtIso).getTime()),
+    [regulationTestHistory]
+  )
+
+  const latestCompletedMhSca = useMemo(
+    () =>
+      [...completedRegulationTests]
+        .reverse()
+        .find((record) => record.testType === 'mh_sca') || null,
+    [completedRegulationTests]
+  )
+
+  const latestCompletedSvs = useMemo(
+    () =>
+      [...completedRegulationTests]
+        .reverse()
+        .find((record) => record.testType === 'svs') || null,
+    [completedRegulationTests]
+  )
+
+  const isRegulationCleared = Boolean(latestCompletedMhSca?.passed && latestCompletedSvs?.passed)
+
+  const regulationTestStripMarkers = useMemo<RegulationTestStripMarker[]>(
+    () =>
+      completedRegulationTests.map((record) => ({
+        id: record.id,
+        label: getRegulationTestLabel(record.testType),
+        testType: record.testType,
+        attemptedAtIso: record.updatedAtIso,
+        passed: Boolean(record.passed),
+        isLatestCompleted:
+          (record.testType === 'mh_sca' && record.id === latestCompletedMhSca?.id) ||
+          (record.testType === 'svs' && record.id === latestCompletedSvs?.id)
+      })),
+    [completedRegulationTests, latestCompletedMhSca?.id, latestCompletedSvs?.id]
+  )
+
+  const shouldHideReadinessProgress = !isRegulationCleared
 
   function setLogs(nextLogs: RouteLogEvent[] | ((current: RouteLogEvent[]) => RouteLogEvent[])) {
     setBootstrapState((current) => ({
@@ -636,6 +685,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
     regulationTestHistory,
+    regulationTestStripMarkers,
+    latestCompletedMhSca,
+    latestCompletedSvs,
+    isRegulationCleared,
+    shouldHideReadinessProgress,
     isSavingRegulationTest,
     regulationTestError,
     searchPartnerIdentifierMatches,

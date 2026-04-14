@@ -107,6 +107,14 @@ export interface RouteCandidateRecord {
   needUnitsMatched: number
   partnerBurdenTotal: number
   matchedZCodes: string[]
+  matchedParentSummaries: RouteCandidateParentSummary[]
+}
+
+export interface RouteCandidateParentSummary {
+  parentCode: string
+  matchedChildCount: number
+  avgBurdenScore: number
+  matchedChildZCodes: string[]
 }
 
 export type {
@@ -278,4 +286,13 @@ export interface RegulationTestSubmissionInput {
   enrolleeCaseId: string
   enrolleeEmail: string
   answers: RegulationTestAnswer[]
+}
+
+export interface RegulationTestStripMarker {
+  id: string
+  label: string
+  testType: RegulationTestType
+  attemptedAtIso: string
+  passed: boolean
+  isLatestCompleted: boolean
 }
