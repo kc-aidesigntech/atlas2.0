@@ -28,10 +28,12 @@ import { fetchEnrollmentStationMarkers } from '@atlas/shared'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 import {
   applyIntakeOverrides,
+  loadAdminPortalRegistry,
   loadAccountSettings,
   loadEnrolleeIntakes,
   loadRouteAssignments,
   loadTimelineConfigs,
+  saveAdminPortalRegistry,
   saveAccountSettings,
   saveEnrolleeIntake,
   saveRouteAssignment,
@@ -593,6 +595,7 @@ export async function loadPartnerStationProfile(
 
 export {
   appendRouteLog,
+  loadAdminPortalRegistry,
   loadAccountSettings,
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
@@ -600,6 +603,7 @@ export {
   loadPartnerServiceCapacitySurveyHistory,
   deletePartnerServiceCapacityDraftRecord,
   loadRouteAssignments,
+  saveAdminPortalRegistry,
   saveAccountSettings,
   saveEnrolleeIntake,
   saveNavigatorCompetencyAssessment,

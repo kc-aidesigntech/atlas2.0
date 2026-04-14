@@ -155,6 +155,28 @@ function truncateLabel(label: string, visibleChars: number) {
   return `${normalized.slice(0, Math.max(visibleChars, 1)).trimEnd()}...`
 }
 
+const RESOLVED_STACK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+function groupResolvedMarkersByWeek(markers: ResolvedZCodeStripMarker[]) {
+  return markers.reduce<ResolvedZCodeStripMarker[][]>((groups, marker) => {
+    const markerTime = new Date(marker.resolvedAtIso).getTime()
+    const currentGroup = groups[groups.length - 1]
+    const groupAnchorMarker = currentGroup?.[0]
+    const groupAnchorTime = groupAnchorMarker ? new Date(groupAnchorMarker.resolvedAtIso).getTime() : Number.NaN
+    if (
+      !currentGroup ||
+      !Number.isFinite(markerTime) ||
+      !Number.isFinite(groupAnchorTime) ||
+      markerTime - groupAnchorTime > RESOLVED_STACK_WINDOW_MS
+    ) {
+      groups.push([marker])
+    } else {
+      currentGroup.push(marker)
+    }
+    return groups
+  }, [])
+}
+
 export default function StripMapTimeline({
   events,
   timelineConfig,
@@ -278,6 +300,47 @@ export default function StripMapTimeline({
           )
         : [],
     [resolvedZCodeMarkers, showReadinessProgress]
+  )
+  const resolvedMarkerGroups = useMemo(
+    () => groupResolvedMarkersByWeek(visibleResolvedZCodeMarkers),
+    [visibleResolvedZCodeMarkers]
+  )
+  const resolvedMarkerLayouts = useMemo(
+    () =>
+      resolvedMarkerGroups.flatMap((group, groupIndex) => {
+        const ratio = (groupIndex + 1) / (resolvedMarkerGroups.length + 1)
+        const x = ratio
+        const groupStartIndex = resolvedMarkerGroups
+          .slice(0, groupIndex)
+          .reduce((count, priorGroup) => count + priorGroup.length, 0)
+        return group.map((marker, stackIndex) => {
+          const markerIndex = groupStartIndex + stackIndex
+          const y = baselineY + stackIndex * 40
+          const fill = getZCodeParentColor(marker.parentCode) || SP_COLORS.yellow
+          const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
+          const partnerLabel = truncateLabel(marker.partnerName || 'resolved partner', 36)
+          const stemOffsetX = stackIndex === 0 ? 0 : stackIndex * 6
+          const stemStrokeWidth = 2.2
+          const diagonalRun = 62
+          const lineLift = 42 + (markerIndex % 2) * 22
+          const labelX = stemOffsetX + diagonalRun
+          const labelY = -lineLift - diagonalRun
+          return {
+            marker,
+            xRatio: x,
+            y,
+            fill,
+            textColor,
+            partnerLabel,
+            stemOffsetX,
+            stemStrokeWidth,
+            labelX,
+            labelY,
+            lineLift
+          }
+        })
+      }),
+    [baselineY, resolvedMarkerGroups]
   )
 
   const phaseSegments = useMemo(() => {
@@ -753,97 +816,94 @@ export default function StripMapTimeline({
 
           {readinessSegment &&
             (visibleResolvedZCodeMarkers.length
-              ? visibleResolvedZCodeMarkers.map((marker, index) => {
-                  const markerTime = new Date(marker.resolvedAtIso)
-                  const fallbackRatio = (index + 1) / (visibleResolvedZCodeMarkers.length + 1)
-                  const scaledX = Number.isFinite(markerTime.getTime())
-                    ? Number(timeScale(markerTime))
-                    : readinessSegment.xStart + (readinessSegment.xEnd - readinessSegment.xStart) * fallbackRatio
-                  const x = Math.max(readinessSegment.xStart + 20, Math.min(readinessSegment.xEnd - 20, scaledX))
-                  const fill = getZCodeParentColor(marker.parentCode) || SP_COLORS.yellow
-                  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
-                  const partnerLabel = truncateLabel(marker.partnerName || 'resolved partner', 36)
-                  const diagonalRun = 62
-                  const lineLift = 42 + (index % 2) * 22
-                  const labelX = x + diagonalRun
-                  const labelY = baselineY - lineLift - diagonalRun
-                  return (
-                    <g
-                      key={marker.id}
-                      data-resolved-zcode-marker="true"
-                      transform={`translate(${x}, ${baselineY})`}
-                      style={{ cursor: 'pointer' }}
-                      onMouseEnter={() =>
-                        setResolvedTooltip({
-                          markerId: marker.id,
-                          x,
-                          y: baselineY,
-                          title: marker.zCode,
-                          description: marker.description,
-                          resolvedAtLabel: formatDateTimeLabel(marker.resolvedAtIso),
-                          partnerName: marker.partnerName || null,
-                          pinned: false
-                        })
-                      }
-                      onMouseLeave={() => setResolvedTooltip((current) => (current?.pinned ? current : null))}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setResolvedTooltip((current) =>
-                          current?.markerId === marker.id && current.pinned
-                            ? null
-                            : {
-                                markerId: marker.id,
-                                x,
-                                y: baselineY,
-                                title: marker.zCode,
-                                description: marker.description,
-                                resolvedAtLabel: formatDateTimeLabel(marker.resolvedAtIso),
-                                partnerName: marker.partnerName || null,
-                                pinned: true
-                              }
-                        )
-                      }}
-                    >
-                      <title>{`${marker.zCode} resolved\n${marker.description}\n${formatDateTimeLabel(marker.resolvedAtIso)}`}</title>
-                      <circle r="17" fill={fill} stroke={fill} strokeWidth="2" />
-                      <text
-                        y="5"
-                        textAnchor="middle"
-                        fill={textColor}
-                        fontFamily="Helvetica, Arial, sans-serif"
-                        fontSize="11"
-                        fontWeight={700}
+              ? [
+                  ...resolvedMarkerLayouts.map(({ marker, xRatio, y, fill, stemOffsetX, stemStrokeWidth, labelX, labelY, lineLift }) => {
+                    const x = readinessSegment.xStart + (readinessSegment.xEnd - readinessSegment.xStart) * xRatio
+                    return (
+                      <g key={`${marker.id}-stems`} transform={`translate(${x}, ${y})`} aria-hidden="true">
+                        <line x1={stemOffsetX} y1="-17" x2={stemOffsetX} y2={-lineLift} stroke={fill} strokeWidth={stemStrokeWidth} />
+                        <line x1={stemOffsetX} y1={-lineLift} x2={labelX} y2={labelY} stroke={fill} strokeWidth={stemStrokeWidth} />
+                      </g>
+                    )
+                  }),
+                  ...resolvedMarkerLayouts.map(({ marker, xRatio, y, fill, textColor, partnerLabel, labelX, labelY }) => {
+                    const x = readinessSegment.xStart + (readinessSegment.xEnd - readinessSegment.xStart) * xRatio
+                    return (
+                      <g
+                        key={marker.id}
+                        data-resolved-zcode-marker="true"
+                        transform={`translate(${x}, ${y})`}
+                        style={{ cursor: 'pointer' }}
+                        onMouseEnter={() =>
+                          setResolvedTooltip({
+                            markerId: marker.id,
+                            x,
+                            y,
+                            title: marker.zCode,
+                            description: marker.description,
+                            resolvedAtLabel: formatDateTimeLabel(marker.resolvedAtIso),
+                            partnerName: marker.partnerName || null,
+                            pinned: false
+                          })
+                        }
+                        onMouseLeave={() => setResolvedTooltip((current) => (current?.pinned ? current : null))}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setResolvedTooltip((current) =>
+                            current?.markerId === marker.id && current.pinned
+                              ? null
+                              : {
+                                  markerId: marker.id,
+                                  x,
+                                  y,
+                                  title: marker.zCode,
+                                  description: marker.description,
+                                  resolvedAtLabel: formatDateTimeLabel(marker.resolvedAtIso),
+                                  partnerName: marker.partnerName || null,
+                                  pinned: true
+                                }
+                          )
+                        }}
                       >
-                        {marker.zCode.replace(/^Z/i, '')}
-                      </text>
-                      <circle cx="12" cy="-13" r="7.5" fill={SP_COLORS.deepGreen} stroke={SP_COLORS.white} strokeWidth="1.3" />
-                      <text
-                        x="12"
-                        y="-10.1"
-                        textAnchor="middle"
-                        fill={SP_COLORS.white}
-                        fontFamily="Helvetica, Arial, sans-serif"
-                        fontSize="9"
-                        fontWeight={700}
-                      >
-                        ✓
-                      </text>
-                      <line x1="0" y1="-17" x2="0" y2={-lineLift} stroke={fill} strokeWidth="1.1" />
-                      <line x1="0" y1={-lineLift} x2={labelX - x} y2={labelY - baselineY} stroke={fill} strokeWidth="1.1" />
-                      <text
-                        x={labelX - x + 4}
-                        y={labelY - baselineY - 2}
-                        transform={`rotate(-45 ${labelX - x + 4} ${labelY - baselineY - 2})`}
-                        textAnchor="start"
-                        fill={SP_COLORS.white}
-                        fontFamily="Helvetica, Arial, sans-serif"
-                        fontSize="15"
-                      >
-                        {partnerLabel}
-                      </text>
-                    </g>
-                  )
-                })
+                        <title>{`${marker.zCode} resolved\n${marker.description}\n${formatDateTimeLabel(marker.resolvedAtIso)}`}</title>
+                        <circle r="17" fill={fill} stroke={fill} strokeWidth="2" />
+                        <text
+                          y="5"
+                          textAnchor="middle"
+                          fill={textColor}
+                          fontFamily="Helvetica, Arial, sans-serif"
+                          fontSize="11"
+                          fontWeight={700}
+                        >
+                          {marker.zCode.replace(/^Z/i, '')}
+                        </text>
+                        <circle cx="12" cy="-13" r="7.5" fill={SP_COLORS.deepGreen} stroke={SP_COLORS.white} strokeWidth="1.3" />
+                        <text
+                          x="12"
+                          y="-10.1"
+                          textAnchor="middle"
+                          fill={SP_COLORS.white}
+                          fontFamily="Helvetica, Arial, sans-serif"
+                          fontSize="9"
+                          fontWeight={700}
+                        >
+                          ✓
+                        </text>
+                        <text
+                          x={labelX + 4}
+                          y={labelY - 2}
+                          transform={`rotate(-45 ${labelX + 4} ${labelY - 2})`}
+                          textAnchor="start"
+                          fill={SP_COLORS.white}
+                          fontFamily="Helvetica, Arial, sans-serif"
+                          fontSize="15"
+                        >
+                          {partnerLabel}
+                        </text>
+                      </g>
+                    )
+                  })
+                ]
               : completedParentCodes.map((parentCode, index) => {
                   const normalized = parentCode.trim().toUpperCase()
                   const ratio = (index + 1) / (completedParentCodes.length + 1)

@@ -50,6 +50,8 @@ export default function SinglePaneApp() {
     routeCandidates,
     countyHeatmap,
     adminMetrics,
+    adminPortalRegistry,
+    adminPortalRegistryError,
     journeyStationMarkers,
     resolvedZCodeStripMarkers,
     selectedRouteAssignment,
@@ -62,8 +64,10 @@ export default function SinglePaneApp() {
     updateTimelineConfig,
     accountSettings,
     partnerStationProfile,
+    intakeFormsByEnrolleeId,
     selectedIntake,
     hasSavedIntake,
+    isSavingAdminPortalRegistry,
     supervisorNavigatorCompetency,
     regulationTestHistory,
     regulationTestStripMarkers,
@@ -74,6 +78,7 @@ export default function SinglePaneApp() {
     isUploadingProfileImage,
     profileImageUploadError,
     saveAccountSettings,
+    saveAdminPortalRegistry,
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
@@ -451,9 +456,16 @@ export default function SinglePaneApp() {
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
                     <AdminDataControlPanel
                       metrics={adminMetrics}
+                      enrollees={enrollees}
+                      intakeFormsByEnrolleeId={intakeFormsByEnrolleeId}
                       selectedEnrollee={selectedEnrollee}
-                      intake={selectedIntake}
-                      hasRecordedIntake={hasSavedIntake}
+                      accountSettings={accountSettings}
+                      enrollmentRequests={enrollmentRequests}
+                      supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                      registry={adminPortalRegistry}
+                      isSavingRegistry={isSavingAdminPortalRegistry}
+                      registryError={adminPortalRegistryError}
+                      onSaveRegistry={saveAdminPortalRegistry}
                       onSaveIntake={saveEnrolleeIntake}
                     />
                   </div>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type {
+  AdminPortalRegistry,
   AdminDataQualityMetric,
   AccountSettings,
   AtlasRole,
@@ -33,6 +34,7 @@ import type {
 import {
   appendRouteLog as appendRouteLogRecord,
   deletePartnerServiceCapacityDraftRecord,
+  loadAdminPortalRegistry,
   loadAdminDataQuality,
   loadCountyHeatmap,
   loadEnrollmentRequests,
@@ -41,6 +43,7 @@ import {
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
   uploadEnrolleeProfileImage,
+  saveAdminPortalRegistry as persistAdminPortalRegistry,
   saveAccountSettings as persistAccountSettings,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
@@ -143,6 +146,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [role, setRole] = useState<AtlasRole>(initialRole)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
   const [activeMenu, setActiveMenu] = useState<string>('route planning')
+  const [adminPortalRegistry, setAdminPortalRegistry] = useState<AdminPortalRegistry | null>(null)
+  const [isSavingAdminPortalRegistry, setIsSavingAdminPortalRegistry] = useState(false)
+  const [adminPortalRegistryError, setAdminPortalRegistryError] = useState<string | null>(null)
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
@@ -308,6 +314,23 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setPartnerServiceCapacitySurveyHistory,
     setPartnerServiceCapacitySurveyError
   } = usePartnerServiceCapacityHistory(role, accountSettings.organization)
+
+  useEffect(() => {
+    let isMounted = true
+    loadAdminPortalRegistry()
+      .then((registry) => {
+        if (!isMounted) return
+        setAdminPortalRegistry(registry)
+        setAdminPortalRegistryError(null)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setAdminPortalRegistryError(error instanceof Error ? error.message : 'Unable to load admin portal registry.')
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   useEffect(() => {
     if (role !== 'navigator' || !selectedEnrollee?.id) {
@@ -731,6 +754,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return saved
   }
 
+  async function saveAdminPortalRegistry(registry: AdminPortalRegistry) {
+    setIsSavingAdminPortalRegistry(true)
+    setAdminPortalRegistryError(null)
+    try {
+      const saved = await persistAdminPortalRegistry(registry)
+      setAdminPortalRegistry(saved)
+      return saved
+    } catch (error) {
+      setAdminPortalRegistryError(error instanceof Error ? error.message : 'Unable to save admin portal registry.')
+      throw error
+    } finally {
+      setIsSavingAdminPortalRegistry(false)
+    }
+  }
+
   async function saveNavigatorRegulationTest(input: RegulationTestSubmissionInput) {
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
@@ -800,6 +838,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     routeCandidates,
     countyHeatmap,
     adminMetrics,
+    adminPortalRegistry,
+    adminPortalRegistryError,
     journeyStationMarkers,
     resolvedZCodeStripMarkers,
     partnerServiceCapacitySurveyHistory,
@@ -832,9 +872,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     updateTimelineConfig,
     accountSettings,
     partnerStationProfile,
+    intakeFormsByEnrolleeId,
     selectedIntake,
     hasSavedIntake,
+    isSavingAdminPortalRegistry,
     saveAccountSettings,
+    saveAdminPortalRegistry,
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,

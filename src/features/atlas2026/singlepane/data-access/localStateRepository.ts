@@ -1,4 +1,5 @@
 import type {
+  AdminPortalRegistry,
   AccountSettings,
   AtlasRole,
   EnrolleeIntakeRecord,
@@ -13,12 +14,14 @@ const SETTINGS_CONFIG_KEY = 'account_settings'
 const ENROLLEE_INTAKE_CONFIG_KEY_PREFIX = 'enrollee_intake:'
 const ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX = 'route_assignment:'
 const TIMELINE_CONFIG_KEY_PREFIX = 'timeline_config:'
+const ADMIN_PORTAL_REGISTRY_CONFIG_KEY = 'admin_portal_registry'
 const CONFIG_SURFACE = 'singlepane'
 const CONFIG_VERSION = 'runtime-v1'
 const LOCAL_ACCOUNT_SETTINGS_KEY = 'atlas2026.singlepane.account-settings.v2'
 const LOCAL_ENROLLEE_INTAKES_KEY = 'atlas2026.singlepane.enrollee-intakes.v2'
 const LOCAL_ROUTE_ASSIGNMENTS_KEY = 'atlas2026.singlepane.route-assignments.v2'
 const LOCAL_TIMELINE_CONFIGS_KEY = 'atlas2026.singlepane.timeline-configs.v1'
+const LOCAL_ADMIN_PORTAL_REGISTRY_KEY = 'atlas2026.singlepane.admin-portal-registry.v1'
 
 function getDefaultAccountSettings(): AccountSettings {
   return {
@@ -109,6 +112,52 @@ function loadLocalTimelineConfigState(): Record<string, TimelineConfig> {
 function persistLocalTimelineConfigState(state: Record<string, TimelineConfig>) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(LOCAL_TIMELINE_CONFIGS_KEY, JSON.stringify(state))
+}
+
+function getDefaultAdminPortalRegistry(): AdminPortalRegistry {
+  return {
+    people: [],
+    organizations: [],
+    customEnrollees: [],
+    archivedPersonIds: [],
+    archivedOrganizationIds: [],
+    archivedEnrolleeIds: [],
+    updatedAtIso: new Date().toISOString()
+  }
+}
+
+function normalizeAdminPortalRegistry(payload: Partial<AdminPortalRegistry> | null | undefined): AdminPortalRegistry {
+  return {
+    people: Array.isArray(payload?.people) ? payload!.people.filter(Boolean) : [],
+    organizations: Array.isArray(payload?.organizations) ? payload!.organizations.filter(Boolean) : [],
+    customEnrollees: Array.isArray(payload?.customEnrollees) ? payload!.customEnrollees.filter(Boolean) : [],
+    archivedPersonIds: Array.isArray(payload?.archivedPersonIds)
+      ? payload!.archivedPersonIds.map((value) => String(value)).filter(Boolean)
+      : [],
+    archivedOrganizationIds: Array.isArray(payload?.archivedOrganizationIds)
+      ? payload!.archivedOrganizationIds.map((value) => String(value)).filter(Boolean)
+      : [],
+    archivedEnrolleeIds: Array.isArray(payload?.archivedEnrolleeIds)
+      ? payload!.archivedEnrolleeIds.map((value) => String(value)).filter(Boolean)
+      : [],
+    updatedAtIso: payload?.updatedAtIso || new Date().toISOString()
+  }
+}
+
+function loadLocalAdminPortalRegistryState(): AdminPortalRegistry {
+  if (typeof window === 'undefined') return getDefaultAdminPortalRegistry()
+  const raw = window.localStorage.getItem(LOCAL_ADMIN_PORTAL_REGISTRY_KEY)
+  if (!raw) return getDefaultAdminPortalRegistry()
+  try {
+    return normalizeAdminPortalRegistry(JSON.parse(raw) as Partial<AdminPortalRegistry>)
+  } catch {
+    return getDefaultAdminPortalRegistry()
+  }
+}
+
+function persistLocalAdminPortalRegistryState(registry: AdminPortalRegistry) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LOCAL_ADMIN_PORTAL_REGISTRY_KEY, JSON.stringify(registry))
 }
 
 export function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrides: Record<string, EnrolleeIntakeRecord>) {
@@ -353,4 +402,54 @@ export async function saveTimelineConfig(
     }
   }
   return config
+}
+
+export async function loadAdminPortalRegistry(): Promise<AdminPortalRegistry> {
+  if (!hasSupabaseConfig || !supabase) return loadLocalAdminPortalRegistryState()
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .select('payload')
+    .eq('surface', CONFIG_SURFACE)
+    .eq('config_key', ADMIN_PORTAL_REGISTRY_CONFIG_KEY)
+    .eq('version', CONFIG_VERSION)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return loadLocalAdminPortalRegistryState()
+    throw error
+  }
+
+  const normalized = normalizeAdminPortalRegistry((data?.[0]?.payload || null) as Partial<AdminPortalRegistry> | null)
+  persistLocalAdminPortalRegistryState(normalized)
+  return normalized
+}
+
+export async function saveAdminPortalRegistry(registry: AdminPortalRegistry): Promise<AdminPortalRegistry> {
+  const normalized = normalizeAdminPortalRegistry({
+    ...registry,
+    updatedAtIso: new Date().toISOString()
+  })
+  persistLocalAdminPortalRegistryState(normalized)
+  if (!hasSupabaseConfig || !supabase) {
+    return normalized
+  }
+  const { error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .upsert(
+      {
+        surface: CONFIG_SURFACE,
+        config_key: ADMIN_PORTAL_REGISTRY_CONFIG_KEY,
+        version: CONFIG_VERSION,
+        payload: normalized
+      },
+      { onConflict: 'surface,config_key,version' }
+    )
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return normalized
+    throw error
+  }
+  return normalized
 }

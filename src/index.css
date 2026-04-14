@@ -1,3 +1,24 @@
+.atlas-admin-input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.atlas-admin-input:focus {
+  border-color: rgba(252, 192, 26, 0.7);
+  box-shadow: 0 0 0 1px rgba(252, 192, 26, 0.35), 0 0 0 6px rgba(252, 192, 26, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.atlas-admin-input option {
+  color: #111111;
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

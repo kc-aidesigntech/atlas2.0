@@ -203,6 +203,50 @@ export interface AdminDataQualityMetric {
   countValue: number
 }
 
+export type AdminPortalPersonRole = AtlasRole | 'enrollee'
+export type AdminPortalPersonStatus = 'active' | 'invited' | 'inactive'
+export type AdminPortalOrganizationType = 'partner' | 'internal' | 'public_agency' | 'community'
+export type AdminPortalOrganizationStatus = 'active' | 'draft' | 'inactive'
+export type AdminPortalCustomEnrolleeStatus = 'active' | 'draft' | 'archived'
+
+export interface AdminPortalPersonRecord {
+  id: string
+  fullName: string
+  email: string
+  title: string
+  roles: AdminPortalPersonRole[]
+  organizationId: string | null
+  reportsToPersonId: string | null
+  linkedEnrolleeId: string | null
+  status: AdminPortalPersonStatus
+  notes: string
+}
+
+export interface AdminPortalOrganizationRecord {
+  id: string
+  name: string
+  type: AdminPortalOrganizationType
+  countyName: string
+  primaryContactPersonId: string | null
+  status: AdminPortalOrganizationStatus
+  notes: string
+}
+
+export interface AdminPortalCustomEnrolleeRecord extends EnrolleeIntakeRecord {
+  status: AdminPortalCustomEnrolleeStatus
+  notes: string
+}
+
+export interface AdminPortalRegistry {
+  people: AdminPortalPersonRecord[]
+  organizations: AdminPortalOrganizationRecord[]
+  customEnrollees: AdminPortalCustomEnrolleeRecord[]
+  archivedPersonIds: string[]
+  archivedOrganizationIds: string[]
+  archivedEnrolleeIds: string[]
+  updatedAtIso: string
+}
+
 export interface JourneyStationMarker {
   id: string
   stationName: string
