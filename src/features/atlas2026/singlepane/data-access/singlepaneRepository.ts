@@ -157,7 +157,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
       item.roleKey === 'navigator' && !item.topMenus.includes('assigned enrollees')
         ? ['assigned enrollees', ...item.topMenus]
         : item.roleKey === 'partner'
-          ? ['referral portal', 'my station', 'county commons']
+          ? ['referral portal', 'my station', 'service capacity', 'county commons']
           : item.topMenus,
     actionMenus: item.actionMenus
   }))

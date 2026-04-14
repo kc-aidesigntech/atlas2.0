@@ -6,7 +6,7 @@
   },
   {
     "role": "partner",
-    "topMenus": ["referral portal", "my station", "county commons"],
+    "topMenus": ["referral portal", "my station", "service capacity", "county commons"],
     "actionMenus": []
   },
   {
