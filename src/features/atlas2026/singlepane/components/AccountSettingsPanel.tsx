@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AccountSettings, AtlasRole } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
@@ -65,13 +65,11 @@ export default function AccountSettingsPanel({
               Switch roles, define operator basics, and keep core access controls in one place.
             </small>
           </div>
-          <AtlasTextButton
+          <AtlasCloseButton
             onClick={onClose}
-            className="px-3 py-1 text-[12px] text-white"
+            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
-          >
-            close
-          </AtlasTextButton>
+          />
         </div>
 
         <div className="space-y-4">

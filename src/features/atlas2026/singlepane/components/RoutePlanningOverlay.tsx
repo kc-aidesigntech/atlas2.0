@@ -1,5 +1,5 @@
 import React from 'react'
-import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { EnrolleeProfile, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import MtaRouteBoard from './MtaRouteBoard'
@@ -8,6 +8,8 @@ interface RoutePlanningOverlayProps {
   isOpen: boolean
   enrollee: EnrolleeProfile | null
   routeCandidates: RouteCandidateRecord[]
+  headerParentCodes?: string[]
+  completedParentCodes?: string[]
   selectedCandidateId: string | null
   assignedCandidateId: string | null
   onSelectCandidate: (candidateId: string) => void
@@ -23,6 +25,8 @@ export default function RoutePlanningOverlay({
   isOpen,
   enrollee,
   routeCandidates,
+  headerParentCodes = [],
+  completedParentCodes = [],
   selectedCandidateId,
   assignedCandidateId,
   onSelectCandidate,
@@ -44,7 +48,7 @@ export default function RoutePlanningOverlay({
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <small className="block text-[12px] uppercase tracking-[0.18em] text-[#9f9f9f]">route planning overlay</small>
+            <small className="block text-[12px] uppercase tracking-[0.18em] text-[#9f9f9f]">route board</small>
             <h3 className="text-[28px] font-medium text-white">{enrollee.fullName}</h3>
             <div className="mt-2 flex flex-wrap gap-2">
               {enrollee.zCodeTags.length ? (
@@ -58,13 +62,11 @@ export default function RoutePlanningOverlay({
               )}
             </div>
           </div>
-          <AtlasTextButton
+          <AtlasCloseButton
             onClick={onClose}
-            className="px-3 py-1 text-[12px] text-white"
+            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
-          >
-            close
-          </AtlasTextButton>
+          />
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2">
@@ -76,23 +78,23 @@ export default function RoutePlanningOverlay({
         </div>
 
         <MtaRouteBoard
-          kicker="readiness routing"
-          title="quickest route"
+          kicker="route board"
+          title="route board"
           subtitle={`${enrollee.activeZCodeDetails.length || enrollee.zCodeTags.length || 0} active Z-codes`}
           routeCandidates={routeCandidates}
+          headerParentCodes={headerParentCodes}
+          completedParentCodes={completedParentCodes}
           selectedCandidateId={selectedCandidate?.stationId || null}
           assignedCandidateId={assignedCandidateId}
           onSelectCandidate={onSelectCandidate}
           onAssignCandidate={onAssignCandidate}
           onDoneCandidate={onDoneCandidate}
           headerActions={
-            <AtlasTextButton
+            <AtlasCloseButton
               onClick={onClose}
-              className="px-3 py-1.5 text-[11px] font-medium"
+              className="h-8 w-8"
               style={{ ['--button-border-color' as const]: '#ffffff45', color: SP_COLORS.white } as React.CSSProperties}
-            >
-              close
-            </AtlasTextButton>
+            />
           }
           emptyMessage="No partner specialties currently match this enrollee's active Z-codes."
         />

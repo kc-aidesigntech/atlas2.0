@@ -1,5 +1,5 @@
 import React from 'react'
-import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type { DomainLoad, DomainLoadBreakdown } from '@/features/atlas2026/singlepane/types'
 
@@ -29,13 +29,11 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
             <h3 className="text-[28px] font-medium text-white">{breakdown?.subjectLabel || 'Load details'}</h3>
             <small className="text-[13px] text-[#c7c7c7]">{breakdown?.sourceLabel || 'No source data available.'}</small>
           </div>
-          <AtlasTextButton
+          <AtlasCloseButton
             onClick={onClose}
-            className="px-3 py-1 text-[12px] text-white"
+            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
-          >
-            close
-          </AtlasTextButton>
+          />
         </div>
 
         <div className="mb-5 grid gap-3 md:grid-cols-3">

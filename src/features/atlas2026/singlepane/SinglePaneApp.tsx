@@ -8,20 +8,27 @@ import ProfilePanel from '@/features/atlas2026/singlepane/components/ProfilePane
 import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLoadChart'
 import RadialLoadTableOverlay from '@/features/atlas2026/singlepane/components/RadialLoadTableOverlay'
 import RegulationTestsOverlay from '@/features/atlas2026/singlepane/components/RegulationTestsOverlay'
+import ResolvedZCodesOverlay from '@/features/atlas2026/singlepane/components/ResolvedZCodesOverlay'
 import RoleMenus from '@/features/atlas2026/singlepane/components/RoleMenus'
 import RoutePlanningOverlay from '@/features/atlas2026/singlepane/components/RoutePlanningOverlay'
 import StripMapTimeline from '@/features/atlas2026/singlepane/components/StripMapTimeline'
 import TopNav from '@/features/atlas2026/singlepane/components/TopNav'
 import VerticalStripMapTimeline from '@/features/atlas2026/singlepane/components/VerticalStripMapTimeline'
-import ZCodeTaskPane from '@/features/atlas2026/singlepane/components/ZCodeTaskPane'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import type { JourneyStationMarker, StabilizationPhase } from '@/features/atlas2026/singlepane/types'
+import type { RouteCandidateRecord, StabilizationPhase } from '@/features/atlas2026/singlepane/types'
 import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePaneData'
 
 const PERSISTED_ACTION_LABELS = new Set([
   'route planning',
   'record navigator assessment'
 ])
+
+interface ResolutionOverlayState {
+  source: 'route-board' | 'page-zcode'
+  candidate: RouteCandidateRecord | null
+  filterParentCode?: string | null
+  filterChildCodes?: string[]
+}
 
 export default function SinglePaneApp() {
   const {
@@ -44,6 +51,7 @@ export default function SinglePaneApp() {
     countyHeatmap,
     adminMetrics,
     journeyStationMarkers,
+    resolvedZCodeStripMarkers,
     selectedRouteAssignment,
     appendRouteLog,
     deleteRouteLog,
@@ -63,20 +71,23 @@ export default function SinglePaneApp() {
     shouldHideReadinessProgress,
     isSavingRegulationTest,
     regulationTestError,
+    isUploadingProfileImage,
+    profileImageUploadError,
     saveAccountSettings,
+    replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
+    setEnrolleeZCodeResolution,
     saveRouteAssignment,
     saveNavigatorCompetencyAssessment,
     saveNavigatorRegulationTest,
     deleteNavigatorRegulationTestDraft
   } = useSinglePaneData()
-  const [activeZCode, setActiveZCode] = React.useState<string | null>(null)
-  const [activeZCodeChildren, setActiveZCodeChildren] = React.useState<string[]>([])
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = React.useState(false)
   const [isRoutePlanningOpen, setIsRoutePlanningOpen] = React.useState(false)
   const [isRegulationTestsOpen, setIsRegulationTestsOpen] = React.useState(false)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
+  const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
   const [lastContentMenu, setLastContentMenu] = React.useState('assigned enrollees')
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const standaloneSurveyUrl = React.useMemo(() => {
@@ -137,23 +148,30 @@ export default function SinglePaneApp() {
         : journeyStationMarkers,
     [journeyStationMarkers, role, shouldHideReadinessProgress]
   )
+  const historyOnlyLogs = React.useMemo(() => visibleLogs.filter((log) => log.status === 'completed'), [visibleLogs])
+  const readinessParentCodes = React.useMemo(
+    () => deriveEnrolleeParentCodes(selectedEnrollee),
+    [selectedEnrollee]
+  )
+  const completedParentCodes = selectedEnrollee?.completedParentCodes || []
+  const resolutionPartnerOptions = React.useMemo(() => {
+    const seen = new Set<string>()
+    return routeCandidates
+      .filter((candidate) => {
+        const normalizedPartnerId = candidate.partnerId?.trim()
+        if (!normalizedPartnerId || seen.has(normalizedPartnerId)) return false
+        seen.add(normalizedPartnerId)
+        return true
+      })
+      .map((candidate) => ({
+        partnerId: candidate.partnerId,
+        label: candidate.stationName
+      }))
+  }, [routeCandidates])
   const showRoutePlanningQuickAction = role === 'navigator' ? isRegulationCleared : false
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
     : selectedRouteAssignment?.stationName || null
-  const previewStationMarkers = React.useMemo(() => {
-    if (role === 'navigator' && shouldHideReadinessProgress) {
-      return visibleJourneyStationMarkers
-    }
-    const suggestedMarkers: JourneyStationMarker[] = routeCandidates.map((candidate) => ({
-      id: `suggested-${candidate.stationId}`,
-      stationName: candidate.stationName,
-      assignedAtIso: timelineConfig?.planStartIso || new Date().toISOString(),
-      phase: 'readiness',
-      markerType: 'suggested'
-    }))
-    return [...visibleJourneyStationMarkers, ...suggestedMarkers]
-  }, [role, routeCandidates, shouldHideReadinessProgress, timelineConfig?.planStartIso, visibleJourneyStationMarkers])
   const partnerStationBadgeCodes = React.useMemo(() => derivePartnerBadgeCodes(selectedLoadBreakdown), [selectedLoadBreakdown])
   const partnerContactName = React.useMemo(() => {
     const firstName = partnerStationProfile?.primaryContactFirstName?.trim() || ''
@@ -213,9 +231,26 @@ export default function SinglePaneApp() {
   function closeRoutePlanning() {
     setIsRoutePlanningOpen(false)
     setSelectedRouteCandidateId(null)
+    setResolutionOverlayState(null)
     const fallbackMenu =
       lastContentMenu && lastContentMenu !== 'route planning' ? lastContentMenu : selectedRoleConfig.topMenus?.[0] || 'assigned enrollees'
     setActiveMenu(fallbackMenu)
+  }
+
+  function handleAssignCandidate(candidate: RouteCandidateRecord) {
+    saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs, isRegulationCleared))
+    setSelectedRouteCandidateId(candidate.stationId)
+  }
+
+  function handleDoneCandidate(candidate: RouteCandidateRecord) {
+    setResolutionOverlayState({
+      source: 'route-board',
+      candidate
+    })
+  }
+
+  function closeResolvedZCodesOverlay() {
+    setResolutionOverlayState(null)
   }
 
   return (
@@ -234,7 +269,7 @@ export default function SinglePaneApp() {
         onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
       />
 
-      <main className="relative px-[14px] py-[10px]">
+      <main className="atlas-shell-edge-buffer relative py-[10px]">
         <section
           className="relative mx-auto min-h-[calc(100vh-112px)] w-full rounded-[38px] border bg-black px-[20px] pb-[12px] pt-[14px]"
           style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
@@ -252,16 +287,35 @@ export default function SinglePaneApp() {
               isOpen={isRoutePlanningOpen}
               enrollee={selectedEnrollee}
               routeCandidates={routeCandidates}
+              headerParentCodes={readinessParentCodes}
+              completedParentCodes={completedParentCodes}
               selectedCandidateId={selectedRouteCandidateId}
               onSelectCandidate={setSelectedRouteCandidateId}
               assignedCandidateId={selectedRouteAssignment?.stationId || null}
-              onCommitCandidate={(candidate) => saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs, isRegulationCleared))}
+              onAssignCandidate={handleAssignCandidate}
+              onDoneCandidate={handleDoneCandidate}
               enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
               hasRecordedIntake={hasSavedIntake}
               suggestedPhase={getNextSuggestedPhase(selectedLogs, isRegulationCleared)}
               onClose={closeRoutePlanning}
             />
           ) : null}
+          <ResolvedZCodesOverlay
+            key={
+              resolutionOverlayState
+                ? `${resolutionOverlayState.source}:${resolutionOverlayState.candidate?.stationId || 'none'}:${resolutionOverlayState.filterParentCode || 'all'}`
+                : 'closed'
+            }
+            isOpen={Boolean(resolutionOverlayState)}
+            enrollee={selectedEnrollee}
+            candidate={resolutionOverlayState?.candidate || null}
+            partnerOptions={resolutionPartnerOptions}
+            launchSource={resolutionOverlayState?.source || 'page-zcode'}
+            filterParentCode={resolutionOverlayState?.filterParentCode || null}
+            filterChildCodes={resolutionOverlayState?.filterChildCodes || []}
+            onToggleResolution={setEnrolleeZCodeResolution}
+            onClose={closeResolvedZCodesOverlay}
+          />
           <RadialLoadTableOverlay
             isOpen={isLoadTableOpen}
             load={selectedLoad}
@@ -277,14 +331,6 @@ export default function SinglePaneApp() {
             onClose={() => setIsRegulationTestsOpen(false)}
             onSave={saveNavigatorRegulationTest}
             onDeleteDraft={deleteNavigatorRegulationTestDraft}
-          />
-          <ZCodeTaskPane
-            zCode={activeZCode}
-            childCodes={activeZCodeChildren}
-            onClose={() => {
-              setActiveZCode(null)
-              setActiveZCodeChildren([])
-            }}
           />
           <div className="flex min-h-full flex-col gap-[10px]">
             {isLoading || !isReady ? (
@@ -350,9 +396,16 @@ export default function SinglePaneApp() {
                     <div className="min-w-0 flex-1 basis-[520px]">
                       <ProfilePanel
                         enrollee={selectedEnrollee}
+                        isUploadingAvatar={isUploadingProfileImage}
+                        avatarUploadError={profileImageUploadError}
+                        onReplaceAvatar={replaceSelectedEnrolleeProfileImage}
                         onSelectZCode={(selection) => {
-                          setActiveZCode(selection.parentCode)
-                          setActiveZCodeChildren(selection.childCodes)
+                          setResolutionOverlayState({
+                            source: 'page-zcode',
+                            candidate: null,
+                            filterParentCode: selection.parentCode,
+                            filterChildCodes: selection.childCodes
+                          })
                         }}
                         enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
                       />
@@ -385,9 +438,11 @@ export default function SinglePaneApp() {
                       <>
                         <div className="hidden min-h-[220px] flex-1 items-start md:flex">
                           <StripMapTimeline
-                            events={selectedLogs}
+                            events={historyOnlyLogs}
                             timelineConfig={timelineConfig}
-                            stationMarkers={previewStationMarkers}
+                            completedParentCodes={completedParentCodes}
+                            resolvedZCodeMarkers={resolvedZCodeStripMarkers}
+                            stationMarkers={visibleJourneyStationMarkers}
                             highlightedStationName={highlightedStationName}
                             onEventDelete={deleteRouteLog}
                             onEventPositionChange={updateRouteLogTimelinePosition}
@@ -397,9 +452,11 @@ export default function SinglePaneApp() {
                         </div>
                         <div className="flex min-h-[220px] flex-1 items-start md:hidden">
                           <VerticalStripMapTimeline
-                            events={selectedLogs}
+                            events={historyOnlyLogs}
                             timelineConfig={timelineConfig}
-                            stationMarkers={previewStationMarkers}
+                            completedParentCodes={completedParentCodes}
+                            resolvedZCodeMarkers={resolvedZCodeStripMarkers}
+                            stationMarkers={visibleJourneyStationMarkers}
                             highlightedStationName={highlightedStationName}
                             onEventDelete={deleteRouteLog}
                             onEventDateChange={updateRouteLogDate}
@@ -424,9 +481,11 @@ export default function SinglePaneApp() {
                   <>
                     <div className="hidden min-h-[220px] flex-1 items-start md:flex">
                       <StripMapTimeline
-                        events={selectedLogs}
+                        events={historyOnlyLogs}
                         timelineConfig={timelineConfig}
-                        stationMarkers={previewStationMarkers}
+                        completedParentCodes={completedParentCodes}
+                        resolvedZCodeMarkers={resolvedZCodeStripMarkers}
+                        stationMarkers={visibleJourneyStationMarkers}
                         highlightedStationName={highlightedStationName}
                         showRoutePlanningQuickAction={showRoutePlanningQuickAction}
                         onRoutePlanningClick={() => {
@@ -446,11 +505,14 @@ export default function SinglePaneApp() {
                       <MobileRouteBoardPanel
                         timelineConfig={timelineConfig}
                         routeCandidates={isRegulationCleared ? routeCandidates : []}
+                        headerParentCodes={readinessParentCodes}
+                        completedParentCodes={completedParentCodes}
                         selectedCandidateId={selectedRouteCandidateId}
                         assignedCandidateId={selectedRouteAssignment?.stationId || null}
                         highlightedStationName={isRegulationCleared ? highlightedStationName : null}
                         onSelectCandidate={setSelectedRouteCandidateId}
-                        onCommitCandidate={(candidate) => saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs, isRegulationCleared))}
+                        onAssignCandidate={handleAssignCandidate}
+                        onDoneCandidate={handleDoneCandidate}
                         showRoutePlanningQuickAction={showRoutePlanningQuickAction}
                         isRegulationCleared={isRegulationCleared}
                         regulationTestMarkers={regulationTestStripMarkers}
@@ -538,6 +600,24 @@ function toCompetencyScore(rawCount: number, specializeCount: number) {
 function deriveJourneyPhase(logs: { phase: StabilizationPhase }[], fallback: StabilizationPhase): StabilizationPhase {
   if (!logs.length) return fallback
   return logs[logs.length - 1]?.phase || fallback
+}
+
+function deriveEnrolleeParentCodes(
+  enrollee: { activeZCodeDetails: { parentCode: string }[]; zCodeTags: string[] } | null
+) {
+  if (!enrollee) return []
+  const fromDetails = enrollee.activeZCodeDetails
+    .map((detail) => detail.parentCode.trim().toUpperCase())
+    .filter(Boolean)
+  const source = fromDetails.length
+    ? fromDetails
+    : enrollee.zCodeTags
+        .map((tag) => {
+          const match = tag.trim().toUpperCase().match(/^Z(\d{2})/)
+          return match ? `Z${match[1]}` : ''
+        })
+        .filter(Boolean)
+  return Array.from(new Set(source)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
 }
 
 function derivePartnerBadgeCodes(loadBreakdown: { rows: { zCodeGroup: string }[] } | null) {

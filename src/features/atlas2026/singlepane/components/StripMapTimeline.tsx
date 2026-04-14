@@ -5,7 +5,15 @@ import { LinePath } from '@visx/shape'
 import { scaleTime } from 'd3-scale'
 import LocalDateInputBox from './LocalDateInputBox'
 import StripMapControlOverlay from './StripMapControlOverlay'
-import type { JourneyStationMarker, RegulationTestStripMarker, RouteLogEvent, StabilizationPhase, TimelineConfig } from '../types'
+import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
+import type {
+  JourneyStationMarker,
+  RegulationTestStripMarker,
+  ResolvedZCodeStripMarker,
+  RouteLogEvent,
+  StabilizationPhase,
+  TimelineConfig
+} from '../types'
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
 import milestoneArrowIcon from '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
@@ -13,6 +21,8 @@ import milestoneArrowIcon from '../../../../../assets/up-arrow-icon-symbol-sign-
 interface StripMapTimelineProps {
   events: RouteLogEvent[]
   timelineConfig: TimelineConfig
+  completedParentCodes?: string[]
+  resolvedZCodeMarkers?: ResolvedZCodeStripMarker[]
   stationMarkers?: JourneyStationMarker[]
   highlightedStationName?: string | null
   regulationTestMarkers?: RegulationTestStripMarker[]
@@ -46,6 +56,17 @@ interface DateEditorState {
   currentIso: string
 }
 
+interface ResolvedTooltipState {
+  markerId: string
+  x: number
+  y: number
+  title: string
+  description: string
+  resolvedAtLabel: string
+  partnerName: string | null
+  pinned: boolean
+}
+
 const STATUS_COLORS = {
   planned: SP_COLORS.steel,
   active: SP_COLORS.orange,
@@ -75,6 +96,18 @@ function formatDateLabel(timestampIso: string) {
   const date = new Date(timestampIso)
   if (!Number.isFinite(date.getTime())) return 'date pending'
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+}
+
+function formatDateTimeLabel(timestampIso: string) {
+  const date = new Date(timestampIso)
+  if (!Number.isFinite(date.getTime())) return 'date pending'
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(date)
 }
 
 function formatDateInputValue(timestampIso: string) {
@@ -125,6 +158,8 @@ function truncateLabel(label: string, visibleChars: number) {
 export default function StripMapTimeline({
   events,
   timelineConfig,
+  completedParentCodes = [],
+  resolvedZCodeMarkers = [],
   stationMarkers = [],
   highlightedStationName = null,
   regulationTestMarkers = [],
@@ -148,6 +183,7 @@ export default function StripMapTimeline({
   const [dateEditor, setDateEditor] = useState<DateEditorState | null>(null)
   const [dateEditorError, setDateEditorError] = useState<string | null>(null)
   const [isControlOverlayOpen, setIsControlOverlayOpen] = useState(false)
+  const [resolvedTooltip, setResolvedTooltip] = useState<ResolvedTooltipState | null>(null)
   const height = 540
   const baselineY = 292
   const marginX = 90
@@ -232,6 +268,16 @@ export default function StripMapTimeline({
         (left, right) => new Date(left.attemptedAtIso).getTime() - new Date(right.attemptedAtIso).getTime()
       ),
     [regulationTestMarkers]
+  )
+
+  const visibleResolvedZCodeMarkers = useMemo(
+    () =>
+      showReadinessProgress
+        ? [...resolvedZCodeMarkers].sort(
+            (left, right) => new Date(left.resolvedAtIso).getTime() - new Date(right.resolvedAtIso).getTime()
+          )
+        : [],
+    [resolvedZCodeMarkers, showReadinessProgress]
   )
 
   const phaseSegments = useMemo(() => {
@@ -440,22 +486,21 @@ export default function StripMapTimeline({
     }
   }, [dragState, onEventPositionChange, width])
 
+  useEffect(() => {
+    if (!resolvedTooltip?.pinned) return undefined
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('[data-resolved-zcode-marker="true"]')) return
+      setResolvedTooltip(null)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [resolvedTooltip?.pinned])
+
   return (
     <div ref={wrapperRef} className="relative h-[580px] w-full overflow-visible">
-      {highlightedStationName ? (
-        <div
-          className="absolute left-4 top-4 z-10 max-w-[360px] rounded-[24px] border px-4 py-3"
-          style={{ borderColor: `${SP_COLORS.yellow}88`, backgroundColor: 'var(--surface-panel-raised)' }}
-        >
-          <small
-            className="block text-[11px] uppercase tracking-[0.08em]"
-            style={{ color: SP_COLORS.yellow }}
-          >
-            focused station
-          </small>
-          <div className="mt-1 text-[18px] leading-tight text-white">{highlightedStationName}</div>
-        </div>
-      ) : null}
       {dateEditor ? (
         <div
           className="absolute z-20"
@@ -706,6 +751,135 @@ export default function StripMapTimeline({
             )
           })}
 
+          {readinessSegment &&
+            (visibleResolvedZCodeMarkers.length
+              ? visibleResolvedZCodeMarkers.map((marker, index) => {
+                  const markerTime = new Date(marker.resolvedAtIso)
+                  const fallbackRatio = (index + 1) / (visibleResolvedZCodeMarkers.length + 1)
+                  const scaledX = Number.isFinite(markerTime.getTime())
+                    ? Number(timeScale(markerTime))
+                    : readinessSegment.xStart + (readinessSegment.xEnd - readinessSegment.xStart) * fallbackRatio
+                  const x = Math.max(readinessSegment.xStart + 20, Math.min(readinessSegment.xEnd - 20, scaledX))
+                  const fill = getZCodeParentColor(marker.parentCode) || SP_COLORS.yellow
+                  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
+                  const partnerLabel = truncateLabel(marker.partnerName || 'resolved partner', 36)
+                  const diagonalRun = 62
+                  const lineLift = 42 + (index % 2) * 22
+                  const labelX = x + diagonalRun
+                  const labelY = baselineY - lineLift - diagonalRun
+                  return (
+                    <g
+                      key={marker.id}
+                      data-resolved-zcode-marker="true"
+                      transform={`translate(${x}, ${baselineY})`}
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() =>
+                        setResolvedTooltip({
+                          markerId: marker.id,
+                          x,
+                          y: baselineY,
+                          title: marker.zCode,
+                          description: marker.description,
+                          resolvedAtLabel: formatDateTimeLabel(marker.resolvedAtIso),
+                          partnerName: marker.partnerName || null,
+                          pinned: false
+                        })
+                      }
+                      onMouseLeave={() => setResolvedTooltip((current) => (current?.pinned ? current : null))}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setResolvedTooltip((current) =>
+                          current?.markerId === marker.id && current.pinned
+                            ? null
+                            : {
+                                markerId: marker.id,
+                                x,
+                                y: baselineY,
+                                title: marker.zCode,
+                                description: marker.description,
+                                resolvedAtLabel: formatDateTimeLabel(marker.resolvedAtIso),
+                                partnerName: marker.partnerName || null,
+                                pinned: true
+                              }
+                        )
+                      }}
+                    >
+                      <title>{`${marker.zCode} resolved\n${marker.description}\n${formatDateTimeLabel(marker.resolvedAtIso)}`}</title>
+                      <circle r="17" fill={fill} stroke={fill} strokeWidth="2" />
+                      <text
+                        y="5"
+                        textAnchor="middle"
+                        fill={textColor}
+                        fontFamily="Helvetica, Arial, sans-serif"
+                        fontSize="11"
+                        fontWeight={700}
+                      >
+                        {marker.zCode.replace(/^Z/i, '')}
+                      </text>
+                      <circle cx="12" cy="-13" r="7.5" fill={SP_COLORS.deepGreen} stroke={SP_COLORS.white} strokeWidth="1.3" />
+                      <text
+                        x="12"
+                        y="-10.1"
+                        textAnchor="middle"
+                        fill={SP_COLORS.white}
+                        fontFamily="Helvetica, Arial, sans-serif"
+                        fontSize="9"
+                        fontWeight={700}
+                      >
+                        ✓
+                      </text>
+                      <line x1="0" y1="-17" x2="0" y2={-lineLift} stroke={fill} strokeWidth="1.1" />
+                      <line x1="0" y1={-lineLift} x2={labelX - x} y2={labelY - baselineY} stroke={fill} strokeWidth="1.1" />
+                      <text
+                        x={labelX - x + 4}
+                        y={labelY - baselineY - 2}
+                        transform={`rotate(-45 ${labelX - x + 4} ${labelY - baselineY - 2})`}
+                        textAnchor="start"
+                        fill={SP_COLORS.white}
+                        fontFamily="Helvetica, Arial, sans-serif"
+                        fontSize="15"
+                      >
+                        {partnerLabel}
+                      </text>
+                    </g>
+                  )
+                })
+              : completedParentCodes.map((parentCode, index) => {
+                  const normalized = parentCode.trim().toUpperCase()
+                  const ratio = (index + 1) / (completedParentCodes.length + 1)
+                  const x = readinessSegment.xStart + (readinessSegment.xEnd - readinessSegment.xStart) * ratio
+                  const fill = getZCodeParentColor(normalized) || SP_COLORS.yellow
+                  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
+                  return (
+                    <g key={`resolved-${normalized}`} transform={`translate(${x}, ${baselineY})`}>
+                      <title>{`${normalized} resolved`}</title>
+                      <circle r="16" fill={fill} stroke={fill} strokeWidth="2" />
+                      <text
+                        y="5"
+                        textAnchor="middle"
+                        fill={textColor}
+                        fontFamily="Helvetica, Arial, sans-serif"
+                        fontSize="14"
+                        fontWeight={700}
+                      >
+                        {normalized.replace(/^Z/, '')}
+                      </text>
+                      <circle cx="11" cy="-12" r="7.5" fill={SP_COLORS.deepGreen} stroke={SP_COLORS.white} strokeWidth="1.3" />
+                      <text
+                        x="11"
+                        y="-9.4"
+                        textAnchor="middle"
+                        fill={SP_COLORS.white}
+                        fontFamily="Helvetica, Arial, sans-serif"
+                        fontSize="9"
+                        fontWeight={700}
+                      >
+                        ✓
+                      </text>
+                    </g>
+                  )
+                }))}
+
           {regulationSegment && regulationHistoryMarkers.map((marker, index) => {
             const segmentWidth = regulationSegment.xEnd - regulationSegment.xStart
             const slotWidth = segmentWidth / Math.max(regulationHistoryMarkers.length + 1, 1)
@@ -789,6 +963,50 @@ export default function StripMapTimeline({
           style={{ borderColor: `${SP_COLORS.red}90`, color: SP_COLORS.red, backgroundColor: 'rgba(0,0,0,0.78)' }}
         >
           readiness hidden pending regulation clearance
+        </div>
+      ) : null}
+      {resolvedTooltip ? (
+        <div
+          className="absolute z-30 w-[260px] rounded-[18px] border px-4 py-3"
+          style={{
+            left: Math.max(12, Math.min(width - 272, resolvedTooltip.x + 18)),
+            top: Math.max(90, resolvedTooltip.y - 6),
+            borderColor: '#ffffff24',
+            backgroundColor: 'rgba(6,6,6,0.96)'
+          }}
+        >
+          <small className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+            resolved z-code
+          </small>
+          <div className="mt-1 text-[16px] font-medium text-white">{resolvedTooltip.title}</div>
+          <small className="mt-1 block text-[12px] leading-[1.45]" style={{ color: '#d7e0e9' }}>
+            {resolvedTooltip.description}
+          </small>
+          {resolvedTooltip.partnerName ? (
+            <small className="mt-2 block text-[11px] leading-[1.45]" style={{ color: '#a6d5b2' }}>
+              partner: {resolvedTooltip.partnerName}
+            </small>
+          ) : null}
+          <small className="mt-1 block text-[11px] leading-[1.45]" style={{ color: '#c5ced8' }}>
+            resolved: {resolvedTooltip.resolvedAtLabel}
+          </small>
+        </div>
+      ) : null}
+      {highlightedStationName ? (
+        <div
+          className="absolute z-20 max-w-[320px] rounded-[20px] border px-4 py-2 text-center"
+          style={{
+            left: readinessSegment ? readinessSegment.xStart + (readinessSegment.xEnd - readinessSegment.xStart) / 2 : width / 2,
+            bottom: 6,
+            transform: 'translateX(-50%)',
+            borderColor: `${SP_COLORS.yellow}88`,
+            backgroundColor: 'var(--surface-panel-raised)'
+          }}
+        >
+          <small className="block text-[10px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.yellow }}>
+            focused station
+          </small>
+          <div className="mt-1 text-[16px] leading-tight text-white">{highlightedStationName}</div>
         </div>
       ) : null}
     </div>

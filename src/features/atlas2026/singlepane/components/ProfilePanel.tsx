@@ -3,8 +3,13 @@ import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import type { EnrolleeProfile } from '../types'
 import { SP_COLORS } from '../theme'
 
+const elenaRodriguezPortraitUrl = new URL('../../../../../assets/portraits/elena-rodriguez.jpeg', import.meta.url).href
+
 interface ProfilePanelProps {
   enrollee: EnrolleeProfile
+  isUploadingAvatar?: boolean
+  avatarUploadError?: string | null
+  onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onSelectZCode?: (selection: { parentCode: string; childCodes: string[] }) => void
   enrollmentStartLabel?: string
 }
@@ -73,9 +78,18 @@ function buildParentZCodeGroups(tags: string[]): ParentZCodeGroup[] {
   return Array.from(grouped.entries()).map(([parentCode, childCodes]) => ({ parentCode, childCodes }))
 }
 
-export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartLabel }: ProfilePanelProps) {
+export default function ProfilePanel({
+  enrollee,
+  isUploadingAvatar = false,
+  avatarUploadError = null,
+  onReplaceAvatar,
+  onSelectZCode,
+  enrollmentStartLabel
+}: ProfilePanelProps) {
   const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatar(enrollee.fullName), [enrollee.fullName])
-  const avatarSrc = enrollee.avatarUrl || fallbackAvatarSrc
+  const isElenaRodriguez = enrollee.fullName.trim().toLowerCase() === 'elena rodriguez'
+  const avatarSrc = enrollee.avatarUrl || (isElenaRodriguez ? elenaRodriguezPortraitUrl : fallbackAvatarSrc)
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const activeZCodeTags = React.useMemo(
     () => (enrollee.activeZCodeDetails.length ? enrollee.activeZCodeDetails.map((detail) => detail.zCode) : enrollee.zCodeTags),
     [enrollee.activeZCodeDetails, enrollee.zCodeTags]
@@ -93,17 +107,56 @@ export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartL
           className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-white"
           style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
         >
-          <img
-            src={avatarSrc}
-            alt={`${enrollee.fullName} profile`}
-            className="h-full w-full object-cover"
-            onError={(event) => {
-              if (event.currentTarget.src !== fallbackAvatarSrc) {
-                event.currentTarget.src = fallbackAvatarSrc
-              }
+          <button
+            type="button"
+            className="relative h-full w-full cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={!onReplaceAvatar}
+            title={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
+          >
+            <img
+              src={avatarSrc}
+              alt={`${enrollee.fullName} profile`}
+              className="h-full w-full object-cover"
+              onError={(event) => {
+                if (isElenaRodriguez && event.currentTarget.src !== elenaRodriguezPortraitUrl) {
+                  event.currentTarget.src = elenaRodriguezPortraitUrl
+                  return
+                }
+                if (event.currentTarget.src !== fallbackAvatarSrc) {
+                  event.currentTarget.src = fallbackAvatarSrc
+                }
+              }}
+            />
+            <div className="absolute inset-0 flex items-end justify-center bg-black/0 pb-2 opacity-0 transition-opacity hover:bg-black/25 hover:opacity-100">
+              <small className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-white" style={{ borderColor: '#ffffff90' }}>
+                replace image
+              </small>
+            </div>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(event) => {
+              const selectedFile = event.target.files?.[0]
+              event.currentTarget.value = ''
+              if (!selectedFile || !onReplaceAvatar) return
+              void Promise.resolve(onReplaceAvatar(selectedFile))
             }}
           />
         </div>
+        {isUploadingAvatar ? (
+          <small className="mt-2 block text-[11px]" style={{ color: SP_COLORS.muted }}>
+            uploading image...
+          </small>
+        ) : null}
+        {avatarUploadError ? (
+          <small className="mt-2 block text-[11px]" style={{ color: SP_COLORS.red }}>
+            {avatarUploadError}
+          </small>
+        ) : null}
         <div className="mt-4 flex flex-wrap items-center gap-[10px]">
           {parentGroups.map((group, index) => {
             const bgColor = getZCodeParentColor(group.parentCode) || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]

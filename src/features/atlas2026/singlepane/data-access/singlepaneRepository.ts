@@ -4,6 +4,7 @@ import type {
   CountyHeatPoint,
   DomainLoad,
   DomainLoadBreakdown,
+  EnrolleeZCodeResolutionInput,
   EnrollmentRequestRecord,
   JourneyStationMarker,
   PartnerStationProfile,
@@ -329,15 +330,106 @@ export async function loadJourneyStationMarkers(enrollmentId?: string, enrolleeI
   return historyMarkers
 }
 
-export async function setEnrolleeZCodeResolution(enrolleeZCodeId: string, isResolved: boolean) {
+function sanitizeFilename(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+export async function uploadEnrolleeProfileImage(
+  enrolleeId: string,
+  file: File
+): Promise<{ avatarUrl: string; storagePath: string }> {
+  if (!enrolleeId.trim()) {
+    throw new Error('An enrollee id is required to upload a profile image.')
+  }
+  if (!hasSupabaseConfig || !supabase) {
+    throw new Error('Supabase is required to upload profile images.')
+  }
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please select an image file.')
+  }
+
+  const safeFileName = sanitizeFilename(file.name || 'profile-image.jpeg') || 'profile-image.jpeg'
+  const storagePath = `enrollees/${enrolleeId}/${Date.now()}-${safeFileName}`
+  const bucket = (supabase as any).storage.from('profile-images')
+  const { error: uploadError } = await bucket.upload(storagePath, file, {
+    cacheControl: '3600',
+    contentType: file.type,
+    upsert: false
+  })
+
+  if (uploadError) throw uploadError
+
+  const { data: publicData } = bucket.getPublicUrl(storagePath)
+  const publicUrl = publicData?.publicUrl || `/storage/v1/object/public/profile-images/${storagePath}`
+  const nowIso = new Date().toISOString()
+
+  const { error: demotePrimaryError } = await (supabase as any)
+    .schema('atlas')
+    .from('profile_images')
+    .update({
+      is_primary: false,
+      updated_at: nowIso
+    })
+    .eq('enrollee_id', enrolleeId)
+    .eq('is_primary', true)
+
+  if (demotePrimaryError) throw demotePrimaryError
+
+  const { error: profileImageError } = await (supabase as any)
+    .schema('atlas')
+    .from('profile_images')
+    .insert({
+      enrollee_id: enrolleeId,
+      storage_bucket: 'profile-images',
+      storage_path: storagePath,
+      public_url: publicUrl,
+      original_filename: file.name || safeFileName,
+      mime_type: file.type || null,
+      file_size_bytes: typeof file.size === 'number' ? file.size : null,
+      intake_source: 'manual',
+      intake_status: 'ready',
+      is_primary: true,
+      alt_text: 'Enrollee profile image',
+      metadata: { uploaded_from: 'singlepane-ui' },
+      ready_at: nowIso
+    })
+
+  if (profileImageError) throw profileImageError
+
+  return {
+    avatarUrl: publicUrl,
+    storagePath
+  }
+}
+
+export async function setEnrolleeZCodeResolution(
+  enrolleeZCodeId: string,
+  isResolved: boolean,
+  input: EnrolleeZCodeResolutionInput = {}
+) {
   if (!enrolleeZCodeId || !hasSupabaseConfig || !supabase) {
     return {
       enrolleeZCodeId,
       isResolved,
-      resolutionAt: isResolved ? new Date().toISOString() : null
+      resolutionAt: isResolved ? new Date().toISOString() : null,
+      resolutionPartnerId: isResolved ? input.partnerId ?? null : null,
+      resolutionPartnerName: isResolved ? input.partnerName ?? null : null,
+      resolutionNote: isResolved ? input.resolutionNote?.trim() || null : null
     }
   }
-  return persistEnrolleeZCodeResolution(supabase, enrolleeZCodeId, isResolved)
+  return persistEnrolleeZCodeResolution(
+    supabase,
+    enrolleeZCodeId,
+    isResolved,
+    isResolved ? input.partnerId ?? null : null,
+    isResolved ? input.partnerName?.trim() || null : null,
+    isResolved ? input.resolutionNote?.trim() || null : null
+  )
 }
 
 export async function loadPartnerRadialLoad(): Promise<DomainLoad | null> {

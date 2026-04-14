@@ -17,6 +17,25 @@ export interface EnrolleeActiveZCode {
   description: string
   isResolved: boolean
   resolutionAt: string | null
+  resolutionPartnerId?: string | null
+  resolutionPartnerName?: string | null
+  resolutionNote?: string | null
+}
+
+export interface EnrolleeZCodeResolutionInput {
+  partnerId?: string | null
+  partnerName?: string | null
+  resolutionNote?: string | null
+}
+
+export interface ResolvedZCodeStripMarker {
+  id: string
+  parentCode: string
+  zCode: string
+  description: string
+  resolvedAtIso: string
+  partnerName: string | null
+  resolutionNote?: string | null
 }
 
 export interface EnrolleeProfile {

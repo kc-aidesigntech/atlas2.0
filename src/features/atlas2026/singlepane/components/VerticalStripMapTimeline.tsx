@@ -2,13 +2,24 @@ import React, { useMemo } from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import LocalDateInputBox from './LocalDateInputBox'
 import StripMapControlOverlay from './StripMapControlOverlay'
-import type { JourneyStationMarker, RegulationTestStripMarker, RouteLogEvent, RouteLogStatus, StabilizationPhase, TimelineConfig, ZDomain } from '../types'
+import type {
+  JourneyStationMarker,
+  RegulationTestStripMarker,
+  ResolvedZCodeStripMarker,
+  RouteLogEvent,
+  RouteLogStatus,
+  StabilizationPhase,
+  TimelineConfig,
+  ZDomain
+} from '../types'
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
 
 interface VerticalStripMapTimelineProps {
   events: RouteLogEvent[]
   timelineConfig: TimelineConfig
+  completedParentCodes?: string[]
+  resolvedZCodeMarkers?: ResolvedZCodeStripMarker[]
   stationMarkers?: JourneyStationMarker[]
   highlightedStationName?: string | null
   regulationTestMarkers?: RegulationTestStripMarker[]
@@ -58,6 +69,18 @@ function formatDateLabel(timestampIso: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
 }
 
+function formatDateTimeLabel(timestampIso: string) {
+  const date = new Date(timestampIso)
+  if (!Number.isFinite(date.getTime())) return 'date pending'
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(date)
+}
+
 function formatPhaseRange(startIso: string, startOffset: number, endOffset: number) {
   const start = addMonths(new Date(startIso), startOffset || 0)
   const end = addMonths(new Date(startIso), endOffset || 0)
@@ -89,6 +112,8 @@ function mergeDateInputWithTime(dateInput: string, currentIso: string) {
 export default function VerticalStripMapTimeline({
   events,
   timelineConfig,
+  completedParentCodes = [],
+  resolvedZCodeMarkers = [],
   stationMarkers = [],
   highlightedStationName = null,
   regulationTestMarkers = [],
@@ -115,6 +140,7 @@ export default function VerticalStripMapTimeline({
   >(null)
   const [dateEditorError, setDateEditorError] = React.useState<string | null>(null)
   const [isControlOverlayOpen, setIsControlOverlayOpen] = React.useState(false)
+  const [activeResolvedMarkerId, setActiveResolvedMarkerId] = React.useState<string | null>(null)
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => new Date(a.timestampIso).getTime() - new Date(b.timestampIso).getTime()),
     [events]
@@ -127,6 +153,15 @@ export default function VerticalStripMapTimeline({
         (left, right) => new Date(left.attemptedAtIso).getTime() - new Date(right.attemptedAtIso).getTime()
       ),
     [regulationTestMarkers]
+  )
+  const visibleResolvedZCodeMarkers = useMemo(
+    () =>
+      showReadinessProgress
+        ? [...resolvedZCodeMarkers].sort(
+            (left, right) => new Date(left.resolvedAtIso).getTime() - new Date(right.resolvedAtIso).getTime()
+          )
+        : [],
+    [resolvedZCodeMarkers, showReadinessProgress]
   )
   const normalizedTimelineConfig = useMemo(() => normalizeTimelineConfig(timelineConfig), [timelineConfig])
   const phaseSegments = useMemo(() => {
@@ -426,6 +461,46 @@ export default function VerticalStripMapTimeline({
                 {index + 1}. {marker.stationName}
               </span>
             ))}
+          </div>
+        </div>
+      ) : null}
+      {visibleResolvedZCodeMarkers.length ? (
+        <div className="mt-4 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.deepGreen}70`, backgroundColor: 'var(--surface-panel-soft)' }}>
+          <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.deepGreen }}>
+            resolved z-codes
+          </small>
+          <div className="mt-2 grid gap-2">
+            {visibleResolvedZCodeMarkers.map((marker) => {
+              const isOpen = activeResolvedMarkerId === marker.id
+              return (
+                <button
+                  key={marker.id}
+                  type="button"
+                  onClick={() => setActiveResolvedMarkerId((current) => (current === marker.id ? null : marker.id))}
+                  className="rounded-[16px] border px-3 py-2 text-left"
+                  style={{ borderColor: '#ffffff22', color: SP_COLORS.white, backgroundColor: 'rgba(255,255,255,0.03)' }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[12px] font-medium text-white">
+                      {marker.zCode} · {marker.partnerName || 'resolved partner'}
+                    </span>
+                    <span className="text-[11px]" style={{ color: SP_COLORS.deepGreen }}>
+                      resolved
+                    </span>
+                  </div>
+                  {isOpen ? (
+                    <div className="mt-2">
+                      <small className="block text-[11px] leading-[1.45]" style={{ color: '#d7e0e9' }}>
+                        {marker.description}
+                      </small>
+                      <small className="mt-1 block text-[11px] leading-[1.45]" style={{ color: '#c5ced8' }}>
+                        {formatDateTimeLabel(marker.resolvedAtIso)}
+                      </small>
+                    </div>
+                  ) : null}
+                </button>
+              )
+            })}
           </div>
         </div>
       ) : null}

@@ -31,7 +31,7 @@ export default function TopNav({
 
   return (
     <header className="border-b bg-black" style={{ borderColor: '#ffffff70' }}>
-      <div className="flex h-[44px] items-center justify-between border-b px-5" style={{ borderColor: '#ffffff45' }}>
+      <div className="atlas-shell-edge-buffer flex h-[44px] items-center justify-between border-b" style={{ borderColor: '#ffffff45' }}>
         <div className="flex items-center gap-3">
           {role === 'partner' ? (
             <div
@@ -57,7 +57,7 @@ export default function TopNav({
         </AtlasTextButton>
       </div>
 
-      <div className="overflow-x-auto px-4 py-2 text-white">
+      <div className="atlas-shell-edge-buffer overflow-x-auto py-2 text-white">
         <div className="flex min-w-max items-center gap-6 text-white">
           <div className="flex items-center gap-2 pl-2">
             {showEnrolleeSelector ? (

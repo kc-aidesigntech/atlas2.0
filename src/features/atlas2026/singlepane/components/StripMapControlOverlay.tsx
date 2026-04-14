@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { StabilizationPhase, TimelineConfig } from '../types'
 import {
   adjustTimelineDuration,
@@ -65,13 +65,11 @@ export default function StripMapControlOverlay({
               Set the start date, overall duration, and the 30-day geometry of regulation, readiness, and renewal.
             </small>
           </div>
-          <AtlasTextButton
+          <AtlasCloseButton
             onClick={onClose}
-            className="px-4 py-2 text-[12px] font-medium"
+            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: '#ffffff30', color: SP_COLORS.white } as React.CSSProperties}
-          >
-            close
-          </AtlasTextButton>
+          />
         </div>
 
         <div className="mt-5 space-y-4">

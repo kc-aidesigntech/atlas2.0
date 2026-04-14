@@ -10,6 +10,7 @@ import type {
   EnrolleeIntakeRecord,
   EnrollmentRequestRecord,
   EnrolleeProfile,
+  EnrolleeZCodeResolutionInput,
   JourneyStationMarker,
   PartnerIdentifierRecord,
   PartnerServiceCapacityHeader,
@@ -21,6 +22,7 @@ import type {
   RegulationTestSubmissionInput,
   RegulationTestSubmissionRecord,
   RegulationTestStripMarker,
+  ResolvedZCodeStripMarker,
   RouteAssignmentRecord,
   RouteCandidateRecord,
   RouteLogEvent,
@@ -38,6 +40,7 @@ import {
   loadPartnerStationProfile,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
+  uploadEnrolleeProfileImage,
   saveAccountSettings as persistAccountSettings,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
@@ -120,11 +123,29 @@ function buildCompletedParentCodes(activeZCodeDetails: EnrolleeActiveZCode[]) {
     .map(([parentCode]) => parentCode)
 }
 
+function buildResolvedZCodeStripMarkers(activeZCodeDetails: EnrolleeActiveZCode[]) {
+  return activeZCodeDetails
+    .filter((detail) => detail.isResolved && detail.resolutionAt)
+    .slice()
+    .sort((left, right) => new Date(left.resolutionAt || 0).getTime() - new Date(right.resolutionAt || 0).getTime())
+    .map((detail) => ({
+      id: detail.enrolleeZCodeId,
+      parentCode: detail.parentCode.trim().toUpperCase(),
+      zCode: detail.zCode.trim().toUpperCase(),
+      description: detail.description || detail.title || detail.zCode,
+      resolvedAtIso: detail.resolutionAt || new Date().toISOString(),
+      partnerName: detail.resolutionPartnerName?.trim() || null,
+      resolutionNote: detail.resolutionNote?.trim() || null
+    })) satisfies ResolvedZCodeStripMarker[]
+}
+
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [role, setRole] = useState<AtlasRole>(initialRole)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
   const [activeMenu, setActiveMenu] = useState<string>('route planning')
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
+  const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
+  const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
   const [regulationTestHistory, setRegulationTestHistory] = useState<RegulationTestSubmissionRecord[]>([])
   const [isSavingRegulationTest, setIsSavingRegulationTest] = useState(false)
   const [regulationTestError, setRegulationTestError] = useState<string | null>(null)
@@ -234,6 +255,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const selectedRouteAssignment = useMemo(
     () => (selectedEnrollee ? routeAssignmentsByEnrolleeId[selectedEnrollee.id] || null : null),
     [routeAssignmentsByEnrolleeId, selectedEnrollee]
+  )
+
+  const resolvedZCodeStripMarkers = useMemo(
+    () => buildResolvedZCodeStripMarkers(selectedEnrollee?.activeZCodeDetails || []),
+    [selectedEnrollee?.activeZCodeDetails]
   )
 
   const partnerServiceCapacityDefaultHeader = useMemo<PartnerServiceCapacityHeader>(() => {
@@ -501,6 +527,47 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function replaceSelectedEnrolleeProfileImage(file: File) {
+    if (!selectedEnrollee) {
+      throw new Error('Select an enrollee profile before uploading an image.')
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    const previousAvatarUrl = selectedEnrollee.avatarUrl || null
+    setIsUploadingProfileImage(true)
+    setProfileImageUploadError(null)
+    setBootstrapState((current) => ({
+      ...current,
+      enrollees: current.enrollees.map((enrollee) =>
+        enrollee.id === selectedEnrollee.id ? { ...enrollee, avatarUrl: previewUrl } : enrollee
+      )
+    }))
+
+    try {
+      const uploaded = await uploadEnrolleeProfileImage(selectedEnrollee.id, file)
+      setBootstrapState((current) => ({
+        ...current,
+        enrollees: current.enrollees.map((enrollee) =>
+          enrollee.id === selectedEnrollee.id ? { ...enrollee, avatarUrl: uploaded.avatarUrl } : enrollee
+        )
+      }))
+      return uploaded
+    } catch (error) {
+      setBootstrapState((current) => ({
+        ...current,
+        enrollees: current.enrollees.map((enrollee) =>
+          enrollee.id === selectedEnrollee.id ? { ...enrollee, avatarUrl: previousAvatarUrl || undefined } : enrollee
+        )
+      }))
+      const message = error instanceof Error ? error.message : 'Unable to upload profile image.'
+      setProfileImageUploadError(message)
+      throw error
+    } finally {
+      URL.revokeObjectURL(previewUrl)
+      setIsUploadingProfileImage(false)
+    }
+  }
+
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
     persistEnrolleeIntake(nextIntake).then((saved) => {
       setBootstrapState((current) => ({
@@ -553,9 +620,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     })
   }
 
-  async function setEnrolleeZCodeResolution(enrolleeZCodeId: string, isResolved: boolean) {
+  async function setEnrolleeZCodeResolution(
+    enrolleeZCodeId: string,
+    isResolved: boolean,
+    input: EnrolleeZCodeResolutionInput = {}
+  ) {
     if (!selectedEnrollee || !enrolleeZCodeId) return null
-    const saved = await persistEnrolleeZCodeResolution(enrolleeZCodeId, isResolved)
+    const saved = await persistEnrolleeZCodeResolution(enrolleeZCodeId, isResolved, input)
     setBootstrapState((current) => ({
       ...current,
       enrollees: current.enrollees.map((enrollee) => {
@@ -565,7 +636,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
             ? {
                 ...detail,
                 isResolved: saved.isResolved,
-                resolutionAt: saved.resolutionAt
+                resolutionAt: saved.resolutionAt,
+                resolutionPartnerId: saved.resolutionPartnerId ?? (saved.isResolved ? input.partnerId ?? null : null),
+                resolutionPartnerName: saved.resolutionPartnerName ?? (saved.isResolved ? input.partnerName ?? null : null),
+                resolutionNote: saved.resolutionNote ?? (saved.isResolved ? input.resolutionNote?.trim() || null : null)
               }
             : detail
         )
@@ -727,6 +801,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     countyHeatmap,
     adminMetrics,
     journeyStationMarkers,
+    resolvedZCodeStripMarkers,
     partnerServiceCapacitySurveyHistory,
     setPartnerServiceCapacitySurveyHistory,
     partnerServiceCapacityDefaultHeader,
@@ -741,6 +816,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     shouldHideReadinessProgress,
     isSavingRegulationTest,
     regulationTestError,
+    isUploadingProfileImage,
+    profileImageUploadError,
     searchPartnerIdentifierMatches,
     ensurePartnerIdentifier,
     supervisorNavigatorCompetency,
@@ -758,6 +835,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     selectedIntake,
     hasSavedIntake,
     saveAccountSettings,
+    replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
     saveRouteAssignment,

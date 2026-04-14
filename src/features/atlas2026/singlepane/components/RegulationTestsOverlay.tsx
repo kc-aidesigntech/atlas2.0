@@ -1,6 +1,6 @@
 import React from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
-import { AtlasIconButton, AtlasInsetCard, AtlasPanel, AtlasPlusButton, AtlasStatusPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasIconButton, AtlasInsetCard, AtlasPanel, AtlasPlusButton, AtlasStatusPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type {
   EnrolleeProfile,
@@ -149,13 +149,11 @@ export default function RegulationTestsOverlay({
             <h3 className="text-[28px] font-medium text-white">{enrollee.fullName}</h3>
             <small className="text-[13px] text-[#cfcfcf]">{enrollee.caseId} · {enrollee.email || 'no email on file'}</small>
           </div>
-          <AtlasTextButton
+          <AtlasCloseButton
             onClick={onClose}
-            className="px-3 py-1 text-[12px] text-white"
+            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
-          >
-            close
-          </AtlasTextButton>
+          />
         </div>
 
         <div className="mb-4 flex flex-wrap gap-2">

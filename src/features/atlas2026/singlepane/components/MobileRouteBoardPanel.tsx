@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { CalendarDays } from 'lucide-react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { RegulationTestStripMarker, RouteCandidateRecord, TimelineConfig } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
@@ -8,6 +9,8 @@ import StripMapControlOverlay from './StripMapControlOverlay'
 interface MobileRouteBoardPanelProps {
   timelineConfig: TimelineConfig
   routeCandidates: RouteCandidateRecord[]
+  headerParentCodes?: string[]
+  completedParentCodes?: string[]
   selectedCandidateId?: string | null
   assignedCandidateId?: string | null
   highlightedStationName?: string | null
@@ -27,6 +30,8 @@ interface MobileRouteBoardPanelProps {
 export default function MobileRouteBoardPanel({
   timelineConfig,
   routeCandidates,
+  headerParentCodes = [],
+  completedParentCodes = [],
   selectedCandidateId = null,
   assignedCandidateId = null,
   highlightedStationName = null,
@@ -44,23 +49,11 @@ export default function MobileRouteBoardPanel({
 }: MobileRouteBoardPanelProps) {
   const [isControlOverlayOpen, setIsControlOverlayOpen] = useState(false)
   const headerActions = useMemo(() => {
-    const actions: React.ReactNode[] = []
-
-    if (onStartDateChange || onTimelineConfigChange) {
-      actions.push(
-        <AtlasTextButton
-          key="timeline-start"
-          onClick={() => setIsControlOverlayOpen(true)}
-          className="px-3 py-1.5 text-[11px] font-medium"
-          style={{ ['--button-border-color' as const]: `${SP_COLORS.yellow}88`, color: SP_COLORS.yellow } as React.CSSProperties}
-        >
-          start {formatDateLabel(timelineConfig.planStartIso)}
-        </AtlasTextButton>
-      )
-    }
+    const phaseButtons: React.ReactNode[] = []
+    const hasTimelineControls = Boolean(onStartDateChange || onTimelineConfigChange)
 
     if (onRegulationTestsClick) {
-      actions.push(
+      phaseButtons.push(
         <AtlasTextButton
           key="regulation-tests"
           onClick={onRegulationTestsClick}
@@ -78,7 +71,7 @@ export default function MobileRouteBoardPanel({
     }
 
     if (showRoutePlanningQuickAction && onRoutePlanningClick) {
-      actions.push(
+      phaseButtons.push(
         <AtlasTextButton
           key="route-planning"
           onClick={onRoutePlanningClick}
@@ -95,16 +88,108 @@ export default function MobileRouteBoardPanel({
       )
     }
 
-    return actions
+    phaseButtons.push(
+      <AtlasTextButton
+        key="renewal-phase"
+        disabled
+        className="px-3 py-1.5 text-[11px] font-medium"
+        style={{
+          ['--button-border-color' as const]: SP_COLORS.deepGreen,
+          ['--button-line-color' as const]: SP_COLORS.white,
+          backgroundColor: SP_COLORS.deepGreen,
+          color: SP_COLORS.white
+        }}
+      >
+        renewal
+      </AtlasTextButton>
+    )
+
+    return (
+      <div className="flex flex-col items-stretch gap-2">
+        {hasTimelineControls ? (
+          <AtlasTextButton
+            onClick={() => setIsControlOverlayOpen(true)}
+            className="inline-flex self-start items-center gap-2 px-3 py-1.5 text-[11px] font-medium"
+            style={{ ['--button-border-color' as const]: '#ffffff3d', color: SP_COLORS.white } as React.CSSProperties}
+          >
+            <CalendarDays size={14} strokeWidth={2} />
+            <span>start {formatDateLabel(timelineConfig.planStartIso)}</span>
+          </AtlasTextButton>
+        ) : null}
+        <div className="flex flex-wrap items-center justify-end gap-2">{phaseButtons}</div>
+      </div>
+    )
   }, [onRegulationTestsClick, onRoutePlanningClick, onStartDateChange, onTimelineConfigChange, showRoutePlanningQuickAction, timelineConfig.planStartIso])
 
   return (
-    <>
+    <div className="flex w-full min-w-0 flex-col gap-3">
+      <section
+        className="rounded-[30px] border px-4 py-4 text-white"
+        style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+              first step
+            </small>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <div className="text-[24px] font-medium leading-none text-white">regulation</div>
+              <span
+                className="inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.12em]"
+                style={{ borderColor: isRegulationCleared ? `${SP_COLORS.deepGreen}90` : `${SP_COLORS.red}90`, color: isRegulationCleared ? SP_COLORS.deepGreen : SP_COLORS.red }}
+              >
+                {isRegulationCleared ? 'cleared' : 'pending'}
+              </span>
+            </div>
+            <small className="mt-2 block text-[11px] leading-[1.35]" style={{ color: '#aab6c3' }}>
+              Complete regulation checks before moving into readiness routing.
+            </small>
+          </div>
+          {onRegulationTestsClick ? (
+            <AtlasTextButton
+              onClick={onRegulationTestsClick}
+              className="px-3 py-1.5 text-[11px] font-medium"
+              style={{
+                ['--button-border-color' as const]: SP_COLORS.red,
+                ['--button-line-color' as const]: SP_COLORS.white,
+                color: SP_COLORS.white,
+                backgroundColor: SP_COLORS.red
+              } as React.CSSProperties}
+            >
+              regulation
+            </AtlasTextButton>
+          ) : null}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2.5">
+          {regulationTestMarkers.length ? (
+            regulationTestMarkers.map((marker) => (
+              <span
+                key={marker.id}
+                className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.08em]"
+                style={{
+                  borderColor: marker.passed ? `${SP_COLORS.deepGreen}88` : `${SP_COLORS.red}88`,
+                  color: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red,
+                  backgroundColor: 'var(--surface-panel-raised)'
+                }}
+              >
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red }} />
+                {marker.label}
+              </span>
+            ))
+          ) : (
+            <div className="rounded-[14px] border px-3 py-2 text-[11px]" style={{ borderColor: '#ffffff18', color: '#9eacb9', backgroundColor: 'var(--surface-panel-raised)' }}>
+              no completed regulation tests yet
+            </div>
+          )}
+        </div>
+      </section>
       <MtaRouteBoard
         kicker="mobile route board"
-        title="quickest route"
+        title="readiness"
         subtitle={`${timelineConfig.durationMonths * 30}d · ${suggestedPhase}`}
         routeCandidates={routeCandidates}
+        headerParentCodes={headerParentCodes}
+        completedParentCodes={completedParentCodes}
         selectedCandidateId={selectedCandidateId}
         assignedCandidateId={assignedCandidateId}
         highlightedStationName={highlightedStationName}
@@ -114,36 +199,6 @@ export default function MobileRouteBoardPanel({
         headerActions={headerActions}
         emptyMessage="No ranked partner stations are available for this enrollee yet."
       />
-      <div className="mt-3 rounded-[22px] border px-4 py-3" style={{ borderColor: '#ffffff32', backgroundColor: 'var(--surface-panel-soft)' }}>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.muted }}>
-            regulation
-          </span>
-          {isRegulationCleared ? (
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-[13px]" style={{ borderColor: SP_COLORS.white, color: SP_COLORS.white }}>
-              ✓
-            </span>
-          ) : null}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {regulationTestMarkers.length ? (
-            regulationTestMarkers.map((marker) => (
-              <span
-                key={marker.id}
-                className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px]"
-                style={{ borderColor: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red, color: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red }}
-              >
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: marker.passed ? SP_COLORS.deepGreen : SP_COLORS.red }} />
-                {marker.label}
-              </span>
-            ))
-          ) : (
-            <span className="text-[12px]" style={{ color: SP_COLORS.muted }}>
-              No completed regulation tests yet.
-            </span>
-          )}
-        </div>
-      </div>
       <StripMapControlOverlay
         isOpen={isControlOverlayOpen}
         timelineConfig={timelineConfig}
@@ -156,7 +211,7 @@ export default function MobileRouteBoardPanel({
           setIsControlOverlayOpen(false)
         }}
       />
-    </>
+    </div>
   )
 }
 

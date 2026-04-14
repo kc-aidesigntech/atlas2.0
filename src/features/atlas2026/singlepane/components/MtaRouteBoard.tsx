@@ -4,6 +4,7 @@ import { AtlasIconButton } from '@/features/atlas2026/components/AtlasPrimitives
 import type { RouteCandidateParentSummary, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
+import EnrolleeParentBadgeRow from './EnrolleeParentBadgeRow'
 
 const arrowIconUrl = new URL('../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png', import.meta.url).href
 
@@ -17,6 +18,8 @@ interface MtaRouteBoardProps {
   title: string
   subtitle?: string
   routeCandidates: RouteCandidateRecord[]
+  headerParentCodes?: string[]
+  completedParentCodes?: string[]
   selectedCandidateId?: string | null
   assignedCandidateId?: string | null
   highlightedStationName?: string | null
@@ -33,6 +36,8 @@ export default function MtaRouteBoard({
   title,
   subtitle,
   routeCandidates,
+  headerParentCodes = [],
+  completedParentCodes = [],
   selectedCandidateId = null,
   assignedCandidateId = null,
   highlightedStationName = null,
@@ -57,7 +62,11 @@ export default function MtaRouteBoard({
           </small>
           <div className="mt-1 flex items-center gap-3">
             <div className="text-[24px] font-medium leading-none text-white sm:text-[28px]">{title}</div>
-            {summaryCandidate ? <RouteCircleGroup candidate={summaryCandidate} limit={6} /> : null}
+            {headerParentCodes.length ? (
+              <EnrolleeParentBadgeRow parentCodes={headerParentCodes} completedParentCodes={completedParentCodes} />
+            ) : summaryCandidate ? (
+              <RouteCircleGroup candidate={summaryCandidate} limit={6} />
+            ) : null}
           </div>
           {subtitle ? (
             <small className="mt-2 block text-[11px] leading-[1.35]" style={{ color: '#aab6c3' }}>
@@ -120,7 +129,6 @@ export default function MtaRouteBoard({
                       </div>
 
                       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                        <RouteCircleGroup candidate={candidate} limit={5} />
                         <div className="flex items-center gap-1.5">
                           {onAssignCandidate ? (
                             <AtlasIconButton
@@ -203,12 +211,100 @@ function StateWord({ children, color }: { children: React.ReactNode; color: stri
   )
 }
 
+const STAT_DEFINITIONS: Record<string, { term: string; description: string }> = {
+  s: {
+    term: 'score',
+    description: 'Overall route ranking score for this partner after weighting matched enrollee need against partner burden strength.'
+  },
+  m: {
+    term: 'matched z-codes',
+    description: 'How many active enrollee Z-codes this partner matches.'
+  },
+  n: {
+    term: 'need units matched',
+    description: 'Total weighted enrollee need units covered by the matched Z-codes for this partner.'
+  },
+  b: {
+    term: 'partner burden',
+    description: 'Summed burden or specialty strength contributed by the partner across the matched Z-codes.'
+  }
+}
+
 function StatChip({ label, value }: { label: string; value: string }) {
+  const [isHovered, setIsHovered] = React.useState(false)
+  const [isFocused, setIsFocused] = React.useState(false)
+  const [isPinned, setIsPinned] = React.useState(false)
+  const buttonRef = React.useRef<HTMLButtonElement | null>(null)
+  const tooltipId = React.useId()
+  const definition = STAT_DEFINITIONS[label] || { term: label, description: value }
+  const isOpen = isHovered || isFocused || isPinned
+
+  React.useEffect(() => {
+    if (!isPinned) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (buttonRef.current?.contains(event.target as Node)) return
+      setIsPinned(false)
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
+  }, [isPinned])
+
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border px-2 py-[3px]" style={{ borderColor: '#ffffff18', backgroundColor: 'rgba(255,255,255,0.03)' }}>
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-describedby={tooltipId}
+      aria-expanded={isOpen}
+      onMouseEnter={(event) => {
+        event.stopPropagation()
+        setIsHovered(true)
+      }}
+      onMouseLeave={(event) => {
+        event.stopPropagation()
+        setIsHovered(false)
+      }}
+      onFocus={(event) => {
+        event.stopPropagation()
+        setIsFocused(true)
+      }}
+      onBlur={(event) => {
+        event.stopPropagation()
+        setIsFocused(false)
+      }}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        setIsPinned((current) => !current)
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation()
+        if (event.key === 'Escape') {
+          setIsPinned(false)
+          buttonRef.current?.blur()
+        }
+      }}
+      className="relative inline-flex items-center gap-1 rounded-full border px-2 py-[3px] text-left transition-[border-color,box-shadow] duration-150 ease-out hover:border-white/35 focus-visible:border-white/45 focus-visible:outline-none focus-visible:shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
+      style={{ borderColor: '#ffffff18', backgroundColor: 'rgba(255,255,255,0.03)' }}
+      title={`${definition.term}: ${definition.description}`}
+    >
       <span>{label}</span>
       <strong className="font-medium text-white">{value}</strong>
-    </span>
+      {isOpen ? (
+        <span
+          id={tooltipId}
+          role="tooltip"
+          className="absolute left-1/2 top-[calc(100%+8px)] z-20 w-[220px] -translate-x-1/2 rounded-[12px] border px-3 py-2 normal-case shadow-[0_12px_28px_rgba(0,0,0,0.45)]"
+          style={{ borderColor: '#ffffff28', backgroundColor: 'rgba(6,6,6,0.96)', color: '#d8e1ea' }}
+        >
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: SP_COLORS.white }}>
+            {definition.term}
+          </span>
+          <span className="mt-1 block text-[11px] leading-[1.4]">{definition.description}</span>
+        </span>
+      ) : null}
+    </button>
   )
 }
 

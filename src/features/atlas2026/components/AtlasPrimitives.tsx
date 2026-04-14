@@ -1,4 +1,5 @@
 import React from 'react'
+import { X } from 'lucide-react'
 
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
@@ -134,6 +135,27 @@ export function AtlasPlusButton({
         <path d="M12 5v14" />
         <path d="M5 12h14" />
       </svg>
+    </AtlasIconButton>
+  )
+}
+
+export function AtlasCloseButton({
+  onClick,
+  title = 'close',
+  className,
+  ...props
+}: Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
+  title?: string
+}) {
+  return (
+    <AtlasIconButton
+      onClick={onClick}
+      aria-label={title}
+      title={title}
+      className={cn('h-9 w-9 text-white', className)}
+      {...props}
+    >
+      <X className="h-4 w-4" strokeWidth={2.1} />
     </AtlasIconButton>
   )
 }

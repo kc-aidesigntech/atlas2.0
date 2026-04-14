@@ -33,7 +33,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
 
   return (
     <div
-      className="min-h-screen overflow-x-hidden bg-black px-4 py-6 text-white md:px-6 md:py-8"
+      className="atlas-shell-edge-buffer min-h-screen overflow-x-hidden bg-black py-6 text-white md:py-8"
       style={{ backgroundColor: SP_COLORS.bg, color: SP_COLORS.text, fontFamily: 'Helvetica, Arial, sans-serif' }}
     >
       <main className="mx-auto w-full max-w-[1240px]">

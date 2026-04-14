@@ -50,6 +50,7 @@
 
     --accent-color: var(--atlas-signal-yellow);
     --accent-muted: color-mix(in srgb, var(--atlas-signal-yellow) 28%, transparent);
+    --atlas-shell-edge-buffer: clamp(0.25in, 5vw, 0.75in);
   }
 
   .dark {
@@ -154,6 +155,11 @@
 }
 
 @layer utilities {
+  .atlas-shell-edge-buffer {
+    padding-left: var(--atlas-shell-edge-buffer);
+    padding-right: var(--atlas-shell-edge-buffer);
+  }
+
   @keyframes atlasTickerMarquee {
     0% {
       transform: translateX(0);

@@ -73,6 +73,9 @@ export interface SinglePaneEnrolleeActiveZCodeRecord {
   description: string;
   isResolved: boolean;
   resolutionAt: string | null;
+  resolutionPartnerId: string | null;
+  resolutionPartnerName: string | null;
+  resolutionNote: string | null;
 }
 
 export interface SinglePaneDomainLoadRecord {
@@ -362,6 +365,24 @@ function asEnrolleeActiveZCodeArray(value: unknown): SinglePaneEnrolleeActiveZCo
             : typeof record.resolution_at === "string"
               ? record.resolution_at
               : null,
+        resolutionPartnerId:
+          typeof record.resolutionPartnerId === "string"
+            ? record.resolutionPartnerId
+            : typeof record.resolution_partner_id === "string"
+              ? record.resolution_partner_id
+              : null,
+        resolutionPartnerName:
+          typeof record.resolutionPartnerName === "string"
+            ? record.resolutionPartnerName
+            : typeof record.resolution_partner_name === "string"
+              ? record.resolution_partner_name
+              : null,
+        resolutionNote:
+          typeof record.resolutionNote === "string"
+            ? record.resolutionNote
+            : typeof record.resolution_note === "string"
+              ? record.resolution_note
+              : null,
       } satisfies SinglePaneEnrolleeActiveZCodeRecord;
     })
     .filter((item): item is SinglePaneEnrolleeActiveZCodeRecord => Boolean(item));
@@ -511,13 +532,16 @@ export async function setEnrolleeZCodeResolution(
   client: AnySupabaseClient,
   enrolleeZCodeId: string,
   isResolved: boolean,
+  partnerId?: string | null,
+  partnerName?: string | null,
+  resolutionNote?: string | null,
 ) {
-  const { data, error } = await (client as SupabaseClient<any>)
-    .schema("atlas")
-    .rpc("fn_set_enrollee_z_code_resolution", {
-      p_enrollee_z_code_id: enrolleeZCodeId,
-      p_is_resolved: isResolved,
-    });
+  const { data, error } = await (client as SupabaseClient<any>).rpc("fn_set_enrollee_z_code_resolution_context", {
+    p_enrollee_z_code_id: enrolleeZCodeId,
+    p_is_resolved: isResolved,
+    p_partner_id: partnerId ?? null,
+    p_resolution_note: resolutionNote?.trim() || null,
+  });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
   const record = asRecord(row);
@@ -535,6 +559,24 @@ export async function setEnrolleeZCodeResolution(
         : typeof record.resolutionAt === "string"
           ? record.resolutionAt
           : null,
+    resolutionPartnerId:
+      typeof record.resolution_partner_id === "string"
+        ? record.resolution_partner_id
+        : typeof record.resolutionPartnerId === "string"
+          ? record.resolutionPartnerId
+          : partnerId ?? null,
+    resolutionPartnerName:
+      typeof record.resolution_partner_name === "string"
+        ? record.resolution_partner_name
+        : typeof record.resolutionPartnerName === "string"
+          ? record.resolutionPartnerName
+          : partnerName?.trim() || null,
+    resolutionNote:
+      typeof record.resolution_note === "string"
+        ? record.resolution_note
+        : typeof record.resolutionNote === "string"
+          ? record.resolutionNote
+          : resolutionNote?.trim() || null,
   };
 }
 
