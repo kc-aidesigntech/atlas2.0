@@ -30,60 +30,42 @@ export function RecordManagementView({
   onEditDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
   onDeleteDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
 }) {
+  const showResumeRegion = isResolvingResumeDraft || hasPersistedDraft || resumeDraftError
+  const canResumeFromBrowser = hasPersistedDraft && !resumeDraftError
+
   return (
     <AtlasPanel
       kicker="partner service capacity"
-      title="Record management"
-      description="Review service-capacity submission history in read-only mode, then check out a new blank survey record when you are ready to reassess."
+      title="Survey history"
+      description="Past submissions and drafts stay here. Open a draft to keep editing; completed runs stay read-only. Start a new survey only when you need a fresh assessment."
       className="rounded-[21px] bg-[var(--surface-panel-soft)]"
       actions={
-        <AtlasPlusButton
-          onClick={onCheckoutNewRecord}
-          label="Conduct a new service capacity survey"
-        />
+        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
+          {showResumeRegion ? (
+            <AtlasTextButton
+              onClick={onResumeDraft}
+              disabled={!canResumeFromBrowser || isResolvingResumeDraft}
+              className="order-first inline-flex items-center justify-center px-5 py-2.5 text-[13px] font-semibold md:order-none md:text-[14px]"
+              style={
+                {
+                  ['--button-border-color' as const]: SP_COLORS.yellow,
+                  color: SP_COLORS.yellow,
+                  boxShadow: canResumeFromBrowser && !isResolvingResumeDraft ? '0 0 22px rgba(252,192,26,0.18)' : 'none',
+                  opacity: canResumeFromBrowser && !isResolvingResumeDraft ? 1 : 0.55
+                } as React.CSSProperties
+              }
+            >
+              {isResolvingResumeDraft ? 'Checking saved draft…' : resumeDraftError ? 'Resume unavailable' : 'Resume draft'}
+            </AtlasTextButton>
+          ) : null}
+          <AtlasPlusButton
+            onClick={onCheckoutNewRecord}
+            label="Start a new survey"
+          />
+        </div>
       }
     >
       <div className="space-y-3">
-        {isResolvingResumeDraft || hasPersistedDraft || resumeDraftError ? (
-          <AtlasInsetCard className="rounded-[16px] border-white/20 bg-[#090909] px-4 py-4 md:px-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <small className="block text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
-                  resume draft
-                </small>
-                {resumeDraftError ? (
-                  <div className="mt-1 text-[13px]" style={{ color: SP_COLORS.red }}>
-                    {resumeDraftError}
-                  </div>
-                ) : isResolvingResumeDraft ? (
-                  <div className="mt-1 text-[14px] text-white md:text-[15px]">Checking for your unfinished survey...</div>
-                ) : (
-                  <>
-                    <div className="mt-1 text-[16px] font-medium text-white md:text-[18px]">
-                      {resumeDraftRecord
-                        ? [resumeDraftRecord.header.firstName, resumeDraftRecord.header.lastName].filter(Boolean).join(' ') || 'unfinished survey'
-                        : 'unfinished survey'}
-                    </div>
-                    <small className="mt-1 block text-[12px] text-[var(--foreground-secondary)] md:text-[13px]">
-                      {resumeDraftRecord?.header.organizationName || 'Draft available in this browser'}
-                      {resumeDraftPersistedAtLabel ? ` · last updated ${resumeDraftPersistedAtLabel}` : ''}
-                    </small>
-                  </>
-                )}
-              </div>
-              {hasPersistedDraft && !resumeDraftError ? (
-                <AtlasTextButton
-                  onClick={onResumeDraft}
-                  disabled={isResolvingResumeDraft}
-                  className="px-4 py-2 text-[13px] font-medium md:text-[14px]"
-                  style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
-                >
-                  resume draft
-                </AtlasTextButton>
-              ) : null}
-            </div>
-          </AtlasInsetCard>
-        ) : null}
         {records.length ? (
           records.map((record) => {
             const updatedLabel = formatDateTimeLabel(record.updatedAtIso || record.submittedAtIso)
@@ -142,12 +124,52 @@ export function RecordManagementView({
           })
         ) : (
           <AtlasInsetCard className="rounded-[16px] border-white/15 bg-[var(--surface-panel-raised)] px-4 py-6 text-center md:px-5">
-            <div className="text-[18px] font-medium text-white md:text-[20px]">No service-capacity records yet</div>
+            <div className="text-[18px] font-medium text-white md:text-[20px]">No saved surveys yet</div>
             <small className="mt-2 block text-[13px] text-[var(--foreground-secondary)] md:text-[15px]">
-              Use the + action to check out the first blank survey record for this partner.
+              When you begin a survey, each draft appears here. Use “Start a new survey” above, or resume an in-browser draft when one is available.
             </small>
           </AtlasInsetCard>
         )}
+        {showResumeRegion ? (
+          <AtlasInsetCard className="rounded-[16px] border-white/20 bg-[#090909] px-4 py-4 md:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <small className="block text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+                  in-browser draft
+                </small>
+                {resumeDraftError ? (
+                  <div className="mt-1 text-[13px]" style={{ color: SP_COLORS.red }}>
+                    {resumeDraftError}
+                  </div>
+                ) : isResolvingResumeDraft ? (
+                  <div className="mt-1 text-[14px] text-white md:text-[15px]">Looking for an unfinished survey saved in this browser…</div>
+                ) : (
+                  <>
+                    <div className="mt-1 text-[16px] font-medium text-white md:text-[18px]">
+                      {resumeDraftRecord
+                        ? [resumeDraftRecord.header.firstName, resumeDraftRecord.header.lastName].filter(Boolean).join(' ') || 'Unfinished survey'
+                        : 'Unfinished survey'}
+                    </div>
+                    <small className="mt-1 block text-[12px] text-[var(--foreground-secondary)] md:text-[13px]">
+                      {resumeDraftRecord?.header.organizationName || 'Draft stored locally in this browser'}
+                      {resumeDraftPersistedAtLabel ? ` · last touched ${resumeDraftPersistedAtLabel}` : ''}
+                    </small>
+                  </>
+                )}
+              </div>
+              {canResumeFromBrowser ? (
+                <AtlasTextButton
+                  onClick={onResumeDraft}
+                  disabled={isResolvingResumeDraft}
+                  className="px-4 py-2 text-[13px] font-medium md:text-[14px]"
+                  style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                >
+                  Resume draft
+                </AtlasTextButton>
+              ) : null}
+            </div>
+          </AtlasInsetCard>
+        ) : null}
       </div>
     </AtlasPanel>
   )

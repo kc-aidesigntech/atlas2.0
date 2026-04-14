@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { PartnerServiceCapacitySubmissionRecord } from '@/features/atlas2026/singlepane/types'
 import {
-  getPersistedDraftSortTime,
-  getRecordSortTime,
+  buildLocalOnlyResumeSubmissionRecord,
+  getResumeDraftDisplayTimestampIso,
+  isPartnerServiceCapacityDraftEditable,
+  listHistoryRecordsForDraftKey,
   loadPersistedSurveyDraft,
+  pickFreshestPartnerServiceCapacityRecord,
   type PersistedSurveyDraft
 } from '@/features/atlas2026/singlepane/components/serviceCapacitySurvey/draft'
 import { loadPartnerServiceCapacitySurvey } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
@@ -13,18 +16,7 @@ interface PartnerServiceCapacityDraftResolverState {
   resumeDraftRecord: PartnerServiceCapacitySubmissionRecord | null
   isResolvingResumeDraft: boolean
   resumeDraftError: string | null
-}
-
-function chooseNewestDraftRecord(
-  records: Array<PartnerServiceCapacitySubmissionRecord | null | undefined>
-) {
-  return records
-    .filter((record): record is PartnerServiceCapacitySubmissionRecord => Boolean(record))
-    .sort((left, right) => getRecordSortTime(right) - getRecordSortTime(left))[0] || null
-}
-
-function getResumeDraftSortTime(record: PartnerServiceCapacitySubmissionRecord | null) {
-  return record ? getRecordSortTime(record) : 0
+  resumeDraftIsEditable: boolean
 }
 
 export function usePartnerServiceCapacityDraftResolver(
@@ -36,65 +28,81 @@ export function usePartnerServiceCapacityDraftResolver(
     persistedDraft: null,
     resumeDraftRecord: null,
     isResolvingResumeDraft: false,
-    resumeDraftError: null
+    resumeDraftError: null,
+    resumeDraftIsEditable: false
   })
+
+  const submissionHistorySignature = useMemo(
+    () =>
+      submissionHistory
+        .map((record) => `${record.id}\t${record.draftKey}\t${record.updatedAtIso}\t${record.status}`)
+        .join('\n'),
+    [submissionHistory]
+  )
 
   useEffect(() => {
     let isMounted = true
     const persistedDraft = loadPersistedSurveyDraft()
+    const draftKey = persistedDraft?.draftKey?.trim()
 
-    if (!persistedDraft?.draftKey) {
+    if (!draftKey) {
       setState({
         persistedDraft: null,
         resumeDraftRecord: null,
         isResolvingResumeDraft: false,
-        resumeDraftError: null
+        resumeDraftError: null,
+        resumeDraftIsEditable: false
       })
       return () => {
         isMounted = false
       }
     }
 
-    const historyDraftRecord =
-      submissionHistory.find((record) => record.draftKey === persistedDraft.draftKey || record.id === persistedDraft.draftKey) || null
+    const historyMatches = listHistoryRecordsForDraftKey(submissionHistory, draftKey)
+    const historyBest = pickFreshestPartnerServiceCapacityRecord(historyMatches)
     const lookupOrganizationName = organizationName?.trim() || persistedDraft.header.organizationName.trim()
 
     setState({
       persistedDraft,
-      resumeDraftRecord: historyDraftRecord,
+      resumeDraftRecord: historyBest,
       isResolvingResumeDraft: true,
-      resumeDraftError: null
+      resumeDraftError: null,
+      resumeDraftIsEditable: isPartnerServiceCapacityDraftEditable(historyBest)
     })
 
-    loadPartnerServiceCapacitySurvey(lookupOrganizationName, persistedDraft.draftKey)
-      .then((loadedDraftRecord) => {
+    loadPartnerServiceCapacitySurvey(lookupOrganizationName, draftKey)
+      .then((fetched) => {
         if (!isMounted) return
+        const serverBest = pickFreshestPartnerServiceCapacityRecord([historyBest, fetched])
+        const resumeDraftRecord =
+          serverBest ?? buildLocalOnlyResumeSubmissionRecord(persistedDraft)
         setState({
           persistedDraft,
-          resumeDraftRecord: chooseNewestDraftRecord([historyDraftRecord, loadedDraftRecord]),
+          resumeDraftRecord,
           isResolvingResumeDraft: false,
-          resumeDraftError: null
+          resumeDraftError: null,
+          resumeDraftIsEditable: isPartnerServiceCapacityDraftEditable(resumeDraftRecord)
         })
       })
       .catch((error) => {
         if (!isMounted) return
+        const resumeDraftRecord =
+          historyBest ?? buildLocalOnlyResumeSubmissionRecord(persistedDraft)
         setState({
           persistedDraft,
-          resumeDraftRecord: historyDraftRecord,
+          resumeDraftRecord,
           isResolvingResumeDraft: false,
-          resumeDraftError: error instanceof Error ? error.message : 'Unable to resolve active draft.'
+          resumeDraftError: error instanceof Error ? error.message : 'Unable to resolve active draft.',
+          resumeDraftIsEditable: isPartnerServiceCapacityDraftEditable(resumeDraftRecord)
         })
       })
 
     return () => {
       isMounted = false
     }
-  }, [organizationName, resolutionKey, submissionHistory])
+  }, [organizationName, resolutionKey, submissionHistorySignature, submissionHistory])
 
-  const resumeDraftUpdatedAtIso =
-    getPersistedDraftSortTime(state.persistedDraft) > getResumeDraftSortTime(state.resumeDraftRecord)
-      ? state.persistedDraft?.persistedAtIso || null
-      : state.resumeDraftRecord?.updatedAtIso || state.resumeDraftRecord?.submittedAtIso || state.persistedDraft?.persistedAtIso || null
+  const resumeDraftUpdatedAtIso = getResumeDraftDisplayTimestampIso(state.persistedDraft, state.resumeDraftRecord)
 
   return {
     ...state,

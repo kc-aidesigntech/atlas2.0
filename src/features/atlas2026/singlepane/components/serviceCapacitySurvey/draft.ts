@@ -1,5 +1,8 @@
-import { createPartnerServiceCapacityDraftKey } from '@atlas/shared'
-import { buildDefaultPartnerServiceCapacityAnswers } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
+import { createPartnerServiceCapacityDraftKey, normalizeOrganizationName } from '@atlas/shared'
+import {
+  buildDefaultPartnerServiceCapacityAnswers,
+  SERVICE_CAPACITY_FORM_VERSION
+} from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import type {
   PartnerServiceCapacityAnswer,
   PartnerServiceCapacityHeader,
@@ -108,4 +111,60 @@ export function getPersistedDraftSortTime(draft: PersistedSurveyDraft | null) {
   if (!draft?.persistedAtIso) return 0
   const timestamp = new Date(draft.persistedAtIso).getTime()
   return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+export function submissionMatchesPersistedDraftKey(record: PartnerServiceCapacitySubmissionRecord, persistedDraftKey: string) {
+  const key = persistedDraftKey.trim()
+  if (!key) return false
+  return record.draftKey === key || record.id === key
+}
+
+export function listHistoryRecordsForDraftKey(
+  history: PartnerServiceCapacitySubmissionRecord[],
+  persistedDraftKey: string
+): PartnerServiceCapacitySubmissionRecord[] {
+  return history.filter((record) => submissionMatchesPersistedDraftKey(record, persistedDraftKey))
+}
+
+export function pickFreshestPartnerServiceCapacityRecord(
+  records: Array<PartnerServiceCapacitySubmissionRecord | null | undefined>
+): PartnerServiceCapacitySubmissionRecord | null {
+  const present = records.filter((record): record is PartnerServiceCapacitySubmissionRecord => Boolean(record))
+  if (!present.length) return null
+  return present.sort((left, right) => getRecordSortTime(right) - getRecordSortTime(left))[0] || null
+}
+
+/** When Supabase has no row yet, expose a draft-shaped record so history/resume share the same draftKey identity. */
+export function buildLocalOnlyResumeSubmissionRecord(persisted: PersistedSurveyDraft): PartnerServiceCapacitySubmissionRecord {
+  const nowIso = new Date().toISOString()
+  const timestampIso = persisted.persistedAtIso && Number.isFinite(new Date(persisted.persistedAtIso).getTime())
+    ? persisted.persistedAtIso
+    : nowIso
+  return {
+    id: persisted.draftKey,
+    draftKey: persisted.draftKey,
+    status: 'draft',
+    completedAtIso: null,
+    partnerId: null,
+    organizationNameNormalized: normalizeOrganizationName(persisted.header.organizationName) || null,
+    submittedAtIso: timestampIso,
+    updatedAtIso: timestampIso,
+    formVersion: SERVICE_CAPACITY_FORM_VERSION,
+    header: persisted.header,
+    answers: persisted.answers
+  }
+}
+
+export function isPartnerServiceCapacityDraftEditable(record: PartnerServiceCapacitySubmissionRecord | null) {
+  return Boolean(record && record.status === 'draft')
+}
+
+export function getResumeDraftDisplayTimestampIso(
+  persisted: PersistedSurveyDraft | null,
+  record: PartnerServiceCapacitySubmissionRecord | null
+) {
+  const persistedMs = getPersistedDraftSortTime(persisted)
+  const recordMs = record ? getRecordSortTime(record) : 0
+  if (persistedMs > recordMs) return persisted?.persistedAtIso || null
+  return record?.updatedAtIso || record?.submittedAtIso || persisted?.persistedAtIso || null
 }

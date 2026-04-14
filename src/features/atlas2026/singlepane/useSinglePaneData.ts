@@ -33,6 +33,7 @@ import {
   loadAdminDataQuality,
   loadCountyHeatmap,
   loadEnrollmentRequests,
+  loadPartnerServiceCapacitySurveyHistory,
   loadPartnerStationProfile,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
@@ -468,7 +469,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     const finalSettings = { ...nextSettings, enabledRoles }
     try {
       const saved = await persistAccountSettings(finalSettings)
-      const stationProfile = await loadPartnerStationProfile(saved.organization)
+      const stationProfile = await loadPartnerStationProfile(saved.organization, {
+        fullName: saved.fullName,
+        email: saved.email
+      })
       setBootstrapState((current) => ({
         ...current,
         accountSettings: saved,
@@ -579,6 +583,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function reloadPartnerServiceCapacitySurveyHistory() {
+    if (role !== 'partner') return
+    const organizationName = accountSettings.organization?.trim()
+    if (!organizationName) return
+    setPartnerServiceCapacitySurveyError(null)
+    try {
+      const rows = await loadPartnerServiceCapacitySurveyHistory(organizationName)
+      setPartnerServiceCapacitySurveyHistory(rows)
+    } catch (error) {
+      setPartnerServiceCapacitySurveyError(
+        error instanceof Error ? error.message : 'Unable to load service capacity survey.'
+      )
+    }
+  }
+
   async function deletePartnerServiceCapacityDraft(submissionId: string) {
     setIsSavingPartnerServiceCapacitySurvey(true)
     setPartnerServiceCapacitySurveyError(null)
@@ -681,9 +700,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     adminMetrics,
     journeyStationMarkers,
     partnerServiceCapacitySurveyHistory,
+    setPartnerServiceCapacitySurveyHistory,
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
+    reloadPartnerServiceCapacitySurveyHistory,
     regulationTestHistory,
     regulationTestStripMarkers,
     latestCompletedMhSca,

@@ -30,7 +30,7 @@ export async function loadPartnerServiceCapacitySurvey(
 
   if (trimmedDraftKey) {
     const draftRecord = await getPartnerServiceCapacitySubmissionByDraftKey(supabase, trimmedDraftKey)
-    if (draftRecord) return draftRecord
+    return draftRecord
   }
 
   if (!organizationNameNormalized) return null

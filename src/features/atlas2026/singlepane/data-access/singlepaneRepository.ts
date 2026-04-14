@@ -360,12 +360,45 @@ function normalizeOrganizationName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
-export async function loadPartnerStationProfile(organizationName: string): Promise<PartnerStationProfile | null> {
-  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return null
-  const normalized = normalizeOrganizationName(organizationName)
-  if (!normalized) return null
+function splitFullName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return { firstName: '', lastName: '' }
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] }
+}
 
-  const data = await withOptionalSupabaseFallback(
+function buildFallbackPartnerStationProfile(
+  organizationName: string,
+  fallback?: { fullName?: string | null; email?: string | null }
+): PartnerStationProfile | null {
+  const normalizedOrganizationName = organizationName.trim()
+  if (!normalizedOrganizationName) return null
+  const splitName = splitFullName(fallback?.fullName || '')
+  return {
+    partnerId: 'local-partner-profile',
+    organizationName: normalizedOrganizationName,
+    stationId: null,
+    stationName: normalizedOrganizationName || '[My Station]',
+    countyName: null,
+    primaryContactFirstName: splitName.firstName || null,
+    primaryContactLastName: splitName.lastName || null,
+    primaryContactEmail: fallback?.email?.trim() || null,
+    capacityTotal: null,
+    capacityAvailable: null
+  }
+}
+
+export async function loadPartnerStationProfile(
+  organizationName: string,
+  fallback?: { fullName?: string | null; email?: string | null }
+): Promise<PartnerStationProfile | null> {
+  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) {
+    return buildFallbackPartnerStationProfile(organizationName, fallback)
+  }
+  const normalized = normalizeOrganizationName(organizationName)
+  if (!normalized) return buildFallbackPartnerStationProfile(organizationName, fallback)
+
+  let data = await withOptionalSupabaseFallback(
     `singlepane.partnerStationProfile:${normalized}`,
     async () => {
       const { data: rows, error } = await (supabase as any)
@@ -395,8 +428,55 @@ export async function loadPartnerStationProfile(organizationName: string): Promi
     []
   )
 
-  const partner = data?.[0]
-  if (!partner) return null
+  let partner = data?.[0]
+  if (!partner) {
+    const splitName = splitFullName(fallback?.fullName || '')
+    if (splitName.firstName && splitName.lastName) {
+      try {
+        await ensurePartnerIdentifierRecordForSurvey({
+          firstName: splitName.firstName,
+          lastName: splitName.lastName,
+          organizationName,
+          email: fallback?.email || null
+        })
+      } catch {
+        // best-effort auto-registration; UI still gets fallback profile below
+      }
+
+      data = await withOptionalSupabaseFallback(
+        `singlepane.partnerStationProfile.refresh:${normalized}`,
+        async () => {
+          const { data: rows, error } = await (supabase as any)
+            .schema('atlas')
+            .from('partners')
+            .select(
+              `
+              id,
+              organization_name,
+              primary_contact_first_name,
+              primary_contact_last_name,
+              primary_contact_email,
+              partner_stations(
+                id,
+                station_name,
+                capacity_total,
+                capacity_available,
+                counties(county_name)
+              )
+            `
+            )
+            .eq('organization_name_normalized', normalized)
+            .limit(1)
+          if (error) throw error
+          return rows || []
+        },
+        []
+      )
+      partner = data?.[0]
+    }
+  }
+
+  if (!partner) return buildFallbackPartnerStationProfile(organizationName, fallback)
   const station = Array.isArray(partner.partner_stations) ? partner.partner_stations[0] : partner.partner_stations
   const stationCounty = station?.counties
   const countyName = Array.isArray(stationCounty) ? stationCounty[0]?.county_name || null : stationCounty?.county_name || null

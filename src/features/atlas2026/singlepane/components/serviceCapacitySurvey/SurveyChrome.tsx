@@ -59,9 +59,12 @@ export function BurdenCard({
   const previousScoreRef = useRef<number | null>(score)
   const shouldRefocusInputRef = useRef(false)
   const [isPulsing, setIsPulsing] = useState(false)
-  const effectiveScore = typeof score === 'number' && score >= 1 && score <= 9 ? score : 5
-  const scaleState = typeof score === 'number' && score >= 1 && score <= 9 ? getScaleOption(scale, effectiveScore) : null
-  const thumbPercent = ((effectiveScore - 1) / 8) * 100
+  const hasAnsweredScore = typeof score === 'number' && score >= 1 && score <= 9
+  /** Range inputs require a numeric value; keep internal default off the visible thumb until the respondent picks a score. */
+  const rangeInputValue = hasAnsweredScore ? score : 5
+  const scaleState = hasAnsweredScore ? getScaleOption(scale, score) : null
+  const thumbPercent = hasAnsweredScore ? ((score - 1) / 8) * 100 : 0
+  const showScoreThumb = hasAnsweredScore && !notEncountered
   const badgeTextColor =
     accentColor === SP_COLORS.yellow || accentColor === SP_COLORS.green ? SP_COLORS.bg : SP_COLORS.white
   const sliderScaleColors = useMemo(() => scale.map((option) => {
@@ -218,7 +221,7 @@ export function BurdenCard({
               className={`pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.18)] transition-[left,opacity] duration-150 ease-out ${
                 compact ? 'h-[13px] w-[13px]' : 'h-[15px] w-[15px]'
               }`}
-              style={{ left: `${thumbPercent}%`, opacity: score == null && !notEncountered ? 0.45 : 1 }}
+              style={{ left: `${thumbPercent}%`, opacity: showScoreThumb ? 1 : 0 }}
             />
             <input
               type="range"
@@ -226,7 +229,7 @@ export function BurdenCard({
               max={9}
               step={1}
               disabled={notEncountered}
-              value={effectiveScore}
+              value={rangeInputValue}
               onChange={(event) => handleSelectScore(Number(event.target.value))}
               className={`absolute inset-0 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed ${compact ? 'h-5' : 'h-6'}`}
             />

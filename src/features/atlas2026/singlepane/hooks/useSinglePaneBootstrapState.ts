@@ -125,7 +125,10 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
         if (!isMounted) return
 
         const partnerViewLoad = derivePartnerRadialLoad(partnerViewLoadBreakdown)
-        const stationProfile = await loadPartnerStationProfile(nextAccountSettings.organization)
+        const stationProfile = await loadPartnerStationProfile(nextAccountSettings.organization, {
+          fullName: nextAccountSettings.fullName,
+          email: nextAccountSettings.email
+        })
         if (!isMounted) return
 
         setState((current) => ({

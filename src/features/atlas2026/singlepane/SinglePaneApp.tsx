@@ -385,13 +385,10 @@ export default function SinglePaneApp() {
                       <>
                         <div className="hidden min-h-[220px] flex-1 items-start md:flex">
                           <StripMapTimeline
-                        events={visibleLogs}
+                            events={selectedLogs}
                             timelineConfig={timelineConfig}
                             stationMarkers={previewStationMarkers}
                             highlightedStationName={highlightedStationName}
-                        regulationTestMarkers={regulationTestStripMarkers}
-                        isRegulationCleared={isRegulationCleared}
-                        showReadinessProgress={!shouldHideReadinessProgress}
                             onEventDelete={deleteRouteLog}
                             onEventPositionChange={updateRouteLogTimelinePosition}
                             onEventDateChange={updateRouteLogDate}

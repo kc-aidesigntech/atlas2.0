@@ -313,9 +313,6 @@ function ServiceCapacitySurveyForm({
   const [dismissedBlockingSaveError, setDismissedBlockingSaveError] = useState<string | null>(null)
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(initialSubmission?.id ?? null)
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0)
-  const [surveyStarted, setSurveyStarted] = useState(
-    () => Boolean(persistedDraftOverride?.isSurveyStarted || initialSubmission?.answers.length)
-  )
   const [isSurveyImmersed, setIsSurveyImmersed] = useState(false)
   const [isMobileViewport, setIsMobileViewport] = useState(false)
   const firstNameInputRef = useRef<HTMLInputElement | null>(null)
@@ -488,11 +485,6 @@ function ServiceCapacitySurveyForm({
   }, [visiblePromptEntries])
 
   useEffect(() => {
-    if (!surveyStarted) {
-      setIsSurveyImmersed(false)
-      return
-    }
-
     function updateSurveyImmersion() {
       const element = surveyExperienceRef.current
       if (!element) return
@@ -506,7 +498,7 @@ function ServiceCapacitySurveyForm({
       window.removeEventListener('scroll', updateSurveyImmersion)
       window.removeEventListener('resize', updateSurveyImmersion)
     }
-  }, [surveyStarted])
+  }, [])
 
   useEffect(() => {
     function updateViewportMode() {
@@ -521,20 +513,16 @@ function ServiceCapacitySurveyForm({
   }, [])
 
   useEffect(() => {
-    if (!surveyStarted || !shouldScrollSurveyIntoViewRef.current) return
+    if (!shouldScrollSurveyIntoViewRef.current) return
     const element = surveyExperienceRef.current
     if (!element) return
     shouldScrollSurveyIntoViewRef.current = false
     requestAnimationFrame(() => {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
-  }, [surveyStarted, currentPromptIndex])
+  }, [currentPromptIndex])
 
   useEffect(() => {
-    if (!surveyStarted) {
-      wasSurveyCompleteRef.current = false
-      return
-    }
     if (!isSurveyComplete || wasSurveyCompleteRef.current) {
       wasSurveyCompleteRef.current = isSurveyComplete
       return
@@ -544,7 +532,7 @@ function ServiceCapacitySurveyForm({
     requestAnimationFrame(() => {
       completeSubmissionButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     })
-  }, [isSurveyComplete, surveyStarted])
+  }, [isSurveyComplete])
 
   const useImmersiveSurveyLayout = isSurveyImmersed && !isMobileViewport
 
@@ -611,7 +599,7 @@ function ServiceCapacitySurveyForm({
   useEffect(() => {
     const localDraft: PersistedSurveyDraft = {
       draftKey,
-      isSurveyStarted: surveyStarted,
+      isSurveyStarted: true,
       header: draft.header,
       answers: draft.answers
     }
@@ -664,7 +652,7 @@ function ServiceCapacitySurveyForm({
         window.clearTimeout(autosaveTimeoutRef.current)
       }
     }
-  }, [draft, draftKey, surveyStarted])
+  }, [draft, draftKey])
 
   async function handleSubmit() {
     const trimmedFirstName = draft.header.firstName.trim()
@@ -726,14 +714,30 @@ function ServiceCapacitySurveyForm({
     shouldScrollSurveyIntoViewRef.current = true
   }
 
-  function handleStartSurvey() {
-    const firstIncompleteIndex = visiblePromptEntries.findIndex((entry) => !isAnswerComplete(answersByPromptId.get(entry.prompt.id)))
-    setCurrentPromptIndex(firstIncompleteIndex >= 0 ? firstIncompleteIndex : 0)
-    shouldScrollSurveyIntoViewRef.current = true
-    setSurveyStarted(true)
-  }
-
   const lastSavedLabel = formatDateTimeLabel(latestSavedSubmission?.updatedAtIso || latestSavedSubmission?.submittedAtIso)
+  const sessionResumeMessage = useMemo(() => {
+    if (persistedDraftOverride) {
+      return 'Restored your in-browser draft. The server copy updates as you answer each question.'
+    }
+    if (initialSubmission?.status === 'draft' && initialSubmission.id) {
+      return 'Continuing this saved draft. Return to the history screen anytime; use “Resume draft” if you leave mid-survey.'
+    }
+    return null
+  }, [persistedDraftOverride, initialSubmission?.id, initialSubmission?.status])
+  const autosaveStatusLine = useMemo(() => {
+    if (autosaveState === 'saving') {
+      return 'Saving draft to the server…'
+    }
+    if (autosaveState === 'error') {
+      return 'Draft did not save. You can keep working here; try again when the connection is stable.'
+    }
+    if (autosaveState === 'saved') {
+      return lastSavedLabel
+        ? `Draft saved ${lastSavedLabel}. Safe to leave—open “Resume draft” on the history screen to pick up.`
+        : 'Draft saved. Safe to leave—use “Resume draft” on the history screen when you return.'
+    }
+    return 'Answers autosave as you go. Leave anytime and resume from the survey history screen.'
+  }, [autosaveState, lastSavedLabel])
   const effectiveBlockingSaveError = blockingSaveError ?? saveError
   const blockingIssue = effectiveBlockingSaveError ? describeBlockingSaveIssue(effectiveBlockingSaveError) : null
   const visibleBlockingSaveError =
@@ -777,23 +781,11 @@ function ServiceCapacitySurveyForm({
               label="Check out a new blank survey record"
             />
           </div>
-          {lastSavedLabel ? (
-            <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
-              last saved {lastSavedLabel}
-            </small>
-          ) : (
-            <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
-              no saved survey yet
-            </small>
-          )}
-          <small className="text-[12px] md:text-[13px]" style={{ color: autosaveState === 'error' ? SP_COLORS.red : SP_COLORS.muted }}>
-            {autosaveState === 'saving'
-              ? 'saving draft...'
-              : autosaveState === 'saved'
-                ? 'draft saved'
-                : autosaveState === 'error'
-                  ? 'draft save failed'
-                  : 'draft autosaves as you go'}
+          <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+            {lastSavedLabel ? `Server draft last updated ${lastSavedLabel}.` : 'No server draft yet—answers create one automatically.'}
+          </small>
+          <small className="max-w-[320px] text-right text-[12px] leading-snug md:text-[13px]" style={{ color: autosaveState === 'error' ? SP_COLORS.red : SP_COLORS.muted }}>
+            {autosaveStatusLine}
           </small>
           {currentRecordId ? (
             <small className="font-mono text-[11px] lowercase text-white md:text-[12px]">
@@ -802,6 +794,15 @@ function ServiceCapacitySurveyForm({
           ) : null}
         </div>
       </div>
+
+      {sessionResumeMessage ? (
+        <div
+          className="mt-4 rounded-[12px] border px-4 py-3 text-[13px] leading-snug md:text-[14px]"
+          style={{ borderColor: `${SP_COLORS.yellow}55`, backgroundColor: `${SP_COLORS.yellow}10`, color: '#e8e8e8' }}
+        >
+          {sessionResumeMessage}
+        </div>
+      ) : null}
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-4">
@@ -923,7 +924,7 @@ function ServiceCapacitySurveyForm({
               </div>
             </div>
             <small className="mt-4 block text-[12px] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
-              Complete your details and move through the survey one question at a time. Drafts save automatically as you go.
+              Fill in who is responding, then scroll to the questions—one card at a time, like a short Google Form. Required fields are enforced when you submit.
             </small>
           </section>
         </div>
@@ -957,45 +958,16 @@ function ServiceCapacitySurveyForm({
         </div>
       ) : null}
 
-      {!surveyStarted ? (
-        <div className="mt-5 rounded-[16px] border px-4 py-5 md:px-5" style={{ borderColor: '#ffffff25', backgroundColor: 'var(--surface-panel-raised)' }}>
-          <small className="block text-[12px] uppercase tracking-[0.12em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
-            ready to begin
-          </small>
-          <div className="mt-2 text-[18px] font-medium text-white md:text-[22px]">Start the survey when your details are ready.</div>
-          <small className="mt-2 block max-w-[760px] text-[13px] text-[#bdbdbd] md:text-[15px]">
-            The question-by-question flow keeps the current clarity, scale language, and autosave behavior, but only shows one active item at a time.
-          </small>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <AtlasTextButton
-              onClick={handleStartSurvey}
-              disabled={Boolean(respondentValidationMessage) || !visiblePromptEntries.length}
-              className="inline-flex items-center gap-2 px-5 py-2 text-[13px] font-medium md:text-[14px]"
-              style={{
-                ['--button-border-color' as const]: SP_COLORS.yellow,
-                color: SP_COLORS.yellow,
-                opacity: !respondentValidationMessage && visiblePromptEntries.length ? 1 : 0.45
-              } as React.CSSProperties}
-            >
-              <span>start the survey</span>
-              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] rotate-180 opacity-90" />
-            </AtlasTextButton>
-            {respondentValidationMessage ? (
-              <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
-                Complete the required details first.
-              </small>
-            ) : null}
-            {!visiblePromptEntries.length && !isLoadingCatalog ? (
-              <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.red }}>
-                No survey questions are currently available.
-              </small>
-            ) : null}
-          </div>
+      {!visiblePromptEntries.length && !isLoadingCatalog ? (
+        <div className="mt-5 rounded-[16px] border px-4 py-4 text-[13px] md:px-5 md:text-[14px]" style={{ borderColor: `${SP_COLORS.red}70`, color: SP_COLORS.red }}>
+          No survey questions are currently available.
         </div>
-      ) : currentPromptEntry ? (
+      ) : null}
+
+      {currentPromptEntry ? (
         <div
           ref={surveyExperienceRef}
-          className={`${useImmersiveSurveyLayout ? 'sticky top-0 z-20' : 'relative'} transition-[transform] duration-500 ease-out`}
+          className={`${useImmersiveSurveyLayout ? 'sticky top-0 z-20' : 'relative'} mt-5 transition-[transform] duration-500 ease-out`}
           style={{ scrollMarginTop: '0px' }}
         >
           <div
@@ -1075,11 +1047,15 @@ function ServiceCapacitySurveyForm({
             </div>
           </div>
         </div>
-      ) : (
+      ) : visiblePromptEntries.length > 0 ? (
         <div className="mt-5 rounded-[16px] border px-4 py-5 text-[13px] md:px-5 md:text-[14px]" style={{ borderColor: `${SP_COLORS.red}70`, color: SP_COLORS.red }}>
           Unable to load survey questions.
         </div>
-      )}
+      ) : isLoadingCatalog ? (
+        <div className="mt-5 rounded-[16px] border px-4 py-4 text-[13px] md:px-5 md:text-[14px]" style={{ borderColor: '#ffffff25', color: SP_COLORS.muted }}>
+          Loading survey questions…
+        </div>
+      ) : null}
 
       {!useImmersiveSurveyLayout && isSurveyComplete ? (
         <div className="mt-5 flex justify-end">
