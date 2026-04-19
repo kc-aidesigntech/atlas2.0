@@ -1,8 +1,8 @@
 import React from 'react'
 import { Check } from 'lucide-react'
-import { AtlasIconButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { RouteCandidateParentSummary, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { AtlasIconButton } from '../../components/AtlasPrimitives'
+import type { RouteCandidateParentSummary, RouteCandidateRecord } from '../types'
+import { SP_COLORS } from '../theme'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 
 const arrowIconUrl = new URL('../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png', import.meta.url).href

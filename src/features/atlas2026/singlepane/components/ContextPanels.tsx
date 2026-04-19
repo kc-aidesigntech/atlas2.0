@@ -14,10 +14,10 @@ interface ContextPanelsProps {
 }
 
 export default function ContextPanels({ role, activeMenu, enrollmentRequests, countyHeatmap, supervisorNavigatorCompetency }: ContextPanelsProps) {
-  if (activeMenu === 'requests to enroll') {
+  if (activeMenu === 'my profile' && role !== 'navigator') {
     return (
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
-        <small className="mb-2 block text-[13px] text-white">requests to enroll</small>
+        <small className="mb-2 block text-[13px] text-white">my profile</small>
         <div className="space-y-2">
           {enrollmentRequests.map((item) => (
             <div key={item.id} className="flex items-center justify-between rounded-md border px-2 py-1.5" style={{ borderColor: '#ffffff3a' }}>
@@ -41,7 +41,7 @@ export default function ContextPanels({ role, activeMenu, enrollmentRequests, co
     return <SupervisorCompetencyPanel competencyByNavigator={supervisorNavigatorCompetency} />
   }
 
-  if (activeMenu === 'referral portal') {
+  if (activeMenu === 'refer' || activeMenu === 'referral portal') {
     return (
       <div className="space-y-2">
         <AtlasTextLink
@@ -54,7 +54,7 @@ export default function ContextPanels({ role, activeMenu, enrollmentRequests, co
           open atlas referral portal
         </AtlasTextLink>
         <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
-          referral portal is currently an external handoff with no in-shell write actions.
+          refer is currently an external handoff with no in-shell write actions.
         </small>
       </div>
     )

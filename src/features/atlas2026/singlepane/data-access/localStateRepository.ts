@@ -4,6 +4,7 @@ import type {
   AtlasRole,
   EnrolleeIntakeRecord,
   EnrolleeProfile,
+  NavigatorProgramState,
   RouteAssignmentRecord,
   TimelineConfig
 } from '@/features/atlas2026/singlepane/types'
@@ -22,6 +23,8 @@ const LOCAL_ENROLLEE_INTAKES_KEY = 'atlas2026.singlepane.enrollee-intakes.v2'
 const LOCAL_ROUTE_ASSIGNMENTS_KEY = 'atlas2026.singlepane.route-assignments.v2'
 const LOCAL_TIMELINE_CONFIGS_KEY = 'atlas2026.singlepane.timeline-configs.v1'
 const LOCAL_ADMIN_PORTAL_REGISTRY_KEY = 'atlas2026.singlepane.admin-portal-registry.v1'
+const NAVIGATOR_PROGRAM_STATE_CONFIG_KEY = 'navigator_program_state'
+const LOCAL_NAVIGATOR_PROGRAM_STATE_KEY = 'atlas2026.singlepane.navigator-program-state.v1'
 
 function getDefaultAccountSettings(): AccountSettings {
   return {
@@ -158,6 +161,42 @@ function loadLocalAdminPortalRegistryState(): AdminPortalRegistry {
 function persistLocalAdminPortalRegistryState(registry: AdminPortalRegistry) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(LOCAL_ADMIN_PORTAL_REGISTRY_KEY, JSON.stringify(registry))
+}
+
+function getDefaultNavigatorProgramState(): NavigatorProgramState {
+  return {
+    pickupQueue: [],
+    selfAssessments: [],
+    supervisionSessions: [],
+    intervalAssessmentRules: [],
+    updatedAtIso: new Date().toISOString()
+  }
+}
+
+function normalizeNavigatorProgramState(payload: Partial<NavigatorProgramState> | null | undefined): NavigatorProgramState {
+  return {
+    pickupQueue: Array.isArray(payload?.pickupQueue) ? payload!.pickupQueue.filter(Boolean) : [],
+    selfAssessments: Array.isArray(payload?.selfAssessments) ? payload!.selfAssessments.filter(Boolean) : [],
+    supervisionSessions: Array.isArray(payload?.supervisionSessions) ? payload!.supervisionSessions.filter(Boolean) : [],
+    intervalAssessmentRules: Array.isArray(payload?.intervalAssessmentRules) ? payload!.intervalAssessmentRules.filter(Boolean) : [],
+    updatedAtIso: payload?.updatedAtIso || new Date().toISOString()
+  }
+}
+
+function loadLocalNavigatorProgramState(): NavigatorProgramState {
+  if (typeof window === 'undefined') return getDefaultNavigatorProgramState()
+  const raw = window.localStorage.getItem(LOCAL_NAVIGATOR_PROGRAM_STATE_KEY)
+  if (!raw) return getDefaultNavigatorProgramState()
+  try {
+    return normalizeNavigatorProgramState(JSON.parse(raw) as Partial<NavigatorProgramState>)
+  } catch {
+    return getDefaultNavigatorProgramState()
+  }
+}
+
+function persistLocalNavigatorProgramState(state: NavigatorProgramState) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(LOCAL_NAVIGATOR_PROGRAM_STATE_KEY, JSON.stringify(state))
 }
 
 export function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrides: Record<string, EnrolleeIntakeRecord>) {
@@ -442,6 +481,56 @@ export async function saveAdminPortalRegistry(registry: AdminPortalRegistry): Pr
       {
         surface: CONFIG_SURFACE,
         config_key: ADMIN_PORTAL_REGISTRY_CONFIG_KEY,
+        version: CONFIG_VERSION,
+        payload: normalized
+      },
+      { onConflict: 'surface,config_key,version' }
+    )
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return normalized
+    throw error
+  }
+  return normalized
+}
+
+export async function loadNavigatorProgramState(): Promise<NavigatorProgramState> {
+  if (!hasSupabaseConfig || !supabase) return loadLocalNavigatorProgramState()
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .select('payload')
+    .eq('surface', CONFIG_SURFACE)
+    .eq('config_key', NAVIGATOR_PROGRAM_STATE_CONFIG_KEY)
+    .eq('version', CONFIG_VERSION)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return loadLocalNavigatorProgramState()
+    throw error
+  }
+
+  const normalized = normalizeNavigatorProgramState((data?.[0]?.payload || null) as Partial<NavigatorProgramState> | null)
+  persistLocalNavigatorProgramState(normalized)
+  return normalized
+}
+
+export async function saveNavigatorProgramState(state: NavigatorProgramState): Promise<NavigatorProgramState> {
+  const normalized = normalizeNavigatorProgramState({
+    ...state,
+    updatedAtIso: new Date().toISOString()
+  })
+  persistLocalNavigatorProgramState(normalized)
+  if (!hasSupabaseConfig || !supabase) {
+    return normalized
+  }
+  const { error } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .upsert(
+      {
+        surface: CONFIG_SURFACE,
+        config_key: NAVIGATOR_PROGRAM_STATE_CONFIG_KEY,
         version: CONFIG_VERSION,
         payload: normalized
       },

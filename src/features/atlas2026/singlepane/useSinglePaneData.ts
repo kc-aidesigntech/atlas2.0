@@ -12,7 +12,12 @@ import type {
   EnrollmentRequestRecord,
   EnrolleeProfile,
   EnrolleeZCodeResolutionInput,
+  IntervalAssessmentDueItem,
+  IntervalAssessmentRule,
   JourneyStationMarker,
+  NavigatorProgramState,
+  NavigatorSelfAssessmentRecord,
+  NavigatorSelfAssessmentSummary,
   PartnerIdentifierRecord,
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
@@ -28,7 +33,9 @@ import type {
   RouteCandidateRecord,
   RouteLogEvent,
   StabilizationPhase,
+  SupervisionSessionRecord,
   TimelineConfig,
+  UnassignedEnrolleePickupRecord,
   ZDomain
 } from '@/features/atlas2026/singlepane/types'
 import {
@@ -40,11 +47,13 @@ import {
   loadEnrollmentRequests,
   loadPartnerServiceCapacitySurveyHistory,
   loadPartnerStationProfile,
+  loadNavigatorProgramState,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
   uploadEnrolleeProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
   saveAccountSettings as persistAccountSettings,
+  saveNavigatorProgramState as persistNavigatorProgramState,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
@@ -145,13 +154,273 @@ function buildResolvedZCodeStripMarkers(activeZCodeDetails: EnrolleeActiveZCode[
     })) satisfies ResolvedZCodeStripMarker[]
 }
 
+function createNavigatorProgramState(): NavigatorProgramState {
+  return {
+    pickupQueue: [],
+    selfAssessments: [],
+    supervisionSessions: [],
+    intervalAssessmentRules: [],
+    updatedAtIso: new Date().toISOString()
+  }
+}
+
+function toMidnightIso(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString()
+}
+
+function getWeekStartIso(dateIso: string) {
+  const date = new Date(dateIso)
+  if (!Number.isFinite(date.getTime())) return toMidnightIso(new Date())
+  const day = date.getUTCDay()
+  const diff = (day + 6) % 7
+  date.setUTCDate(date.getUTCDate() - diff)
+  return toMidnightIso(date)
+}
+
+function buildSeedPickupQueue(enrollmentRequests: EnrollmentRequestRecord[]): UnassignedEnrolleePickupRecord[] {
+  return enrollmentRequests.map((request, index) => ({
+    id: `pickup-${request.id}`,
+    fullName: request.prospectiveEnrollee,
+    dob: '',
+    caseId: `atlas-intake-${index + 1}`.padEnd(12, '0'),
+    email: request.email || '',
+    phone: '',
+    demographicsSummary: 'Demographics pending intake confirmation.',
+    referredAtIso: request.submittedAt,
+    referrerName: 'atlas referral intake',
+    referrerOrganization: 'community referral network',
+    referrerMessage: 'Initial enrollee interest captured in referral intake. Review and claim if appropriate.',
+    zCodeTags: [],
+    status: request.status === 'assigned' ? 'claimed' : 'available',
+    claimedByNavigatorName: null,
+    claimedAtIso: null
+  }))
+}
+
+function buildSeedSelfAssessments(navigatorName: string): NavigatorSelfAssessmentRecord[] {
+  const now = new Date()
+  return [0, 7, 14].map((daysAgo, index) => {
+    const submitted = new Date(now)
+    submitted.setUTCDate(submitted.getUTCDate() - daysAgo)
+    return {
+      id: `self-assessment-${index + 1}`,
+      navigatorName,
+      weekStartIso: getWeekStartIso(submitted.toISOString()),
+      submittedAtIso: submitted.toISOString(),
+      stressLoadScore: 3 + (index % 2),
+      confidenceScore: 4 - (index % 2),
+      supportScore: 4,
+      note: index === 0 ? 'Current caseload manageable with supervisor check-ins.' : 'Tracked as seeded historical weekly assessment.'
+    }
+  })
+}
+
+function buildSeedSupervisionSessions(navigatorName: string): SupervisionSessionRecord[] {
+  const now = new Date()
+  return [5, 19].map((daysAgo, index) => {
+    const sessionDate = new Date(now)
+    sessionDate.setUTCDate(sessionDate.getUTCDate() - daysAgo)
+    return {
+      id: `supervision-${index + 1}`,
+      navigatorName,
+      supervisorName: 'peer supervisor',
+      sessionAtIso: sessionDate.toISOString(),
+      status: 'completed',
+      supervisorNote: index === 0 ? 'Strong readiness planning judgment; continue documenting partner follow-through.' : 'Reviewed active caseload patterns and escalation discipline.',
+      navigatorNote: index === 0 ? 'Need faster way to flag housing instability earlier in intake.' : '',
+      actionItems: index === 0 ? 'Pilot earlier housing-risk review on new enrollees.' : 'Continue weekly self-assessment submissions.'
+    }
+  })
+}
+
+function buildSeedIntervalRules(navigatorName: string): IntervalAssessmentRule[] {
+  const startsAtIso = toMidnightIso(new Date())
+  return [
+    {
+      id: 'rule-weekly-self-assessment',
+      title: 'Weekly self assessment',
+      assessmentType: 'navigator_self_assessment',
+      assigneeRole: 'navigator',
+      navigatorName,
+      cadence: 'weekly',
+      startsAtIso,
+      weekday: 1,
+      isActive: true,
+      instructions: 'Every Monday, record stress load, confidence, and support for the prior week.',
+      lastGeneratedAtIso: null
+    },
+    {
+      id: 'rule-monthly-supervision',
+      title: 'Monthly supervision session',
+      assessmentType: 'supervision_session',
+      assigneeRole: 'supervisor',
+      navigatorName,
+      cadence: 'monthly',
+      startsAtIso,
+      weekday: null,
+      isActive: true,
+      instructions: 'Schedule one completed supervision session per month with notes from both parties.',
+      lastGeneratedAtIso: null
+    },
+    {
+      id: 'rule-quarterly-competency',
+      title: 'Quarterly navigator competency review',
+      assessmentType: 'navigator_competency_review',
+      assigneeRole: 'supervisor',
+      navigatorName,
+      cadence: 'quarterly',
+      startsAtIso,
+      weekday: null,
+      isActive: true,
+      instructions: 'Supervisor submits a competency assessment once per quarter.',
+      lastGeneratedAtIso: null
+    }
+  ]
+}
+
+function mergeNavigatorProgramState(
+  rawState: NavigatorProgramState | null,
+  navigatorName: string,
+  enrollmentRequests: EnrollmentRequestRecord[]
+): NavigatorProgramState {
+  const base = rawState || createNavigatorProgramState()
+  return {
+    pickupQueue: base.pickupQueue.length ? base.pickupQueue : buildSeedPickupQueue(enrollmentRequests),
+    selfAssessments: base.selfAssessments.length ? base.selfAssessments : buildSeedSelfAssessments(navigatorName),
+    supervisionSessions: base.supervisionSessions.length ? base.supervisionSessions : buildSeedSupervisionSessions(navigatorName),
+    intervalAssessmentRules: base.intervalAssessmentRules.length ? base.intervalAssessmentRules : buildSeedIntervalRules(navigatorName),
+    updatedAtIso: base.updatedAtIso || new Date().toISOString()
+  }
+}
+
+function buildNavigatorSelfAssessmentSummary(records: NavigatorSelfAssessmentRecord[]): NavigatorSelfAssessmentSummary {
+  if (!records.length) {
+    return {
+      responseCount: 0,
+      averageStressLoad: 0,
+      averageConfidence: 0,
+      averageSupport: 0,
+      averageComposite: 0,
+      latestSubmittedAtIso: null
+    }
+  }
+  const totals = records.reduce(
+    (sum, record) => {
+      sum.stress += record.stressLoadScore
+      sum.confidence += record.confidenceScore
+      sum.support += record.supportScore
+      return sum
+    },
+    { stress: 0, confidence: 0, support: 0 }
+  )
+  const count = records.length
+  const latest = records
+    .slice()
+    .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime())[0]
+  const averageStressLoad = Number((totals.stress / count).toFixed(2))
+  const averageConfidence = Number((totals.confidence / count).toFixed(2))
+  const averageSupport = Number((totals.support / count).toFixed(2))
+  return {
+    responseCount: count,
+    averageStressLoad,
+    averageConfidence,
+    averageSupport,
+    averageComposite: Number(((averageStressLoad + averageConfidence + averageSupport) / 3).toFixed(2)),
+    latestSubmittedAtIso: latest?.submittedAtIso || null
+  }
+}
+
+function cadenceDays(cadence: IntervalAssessmentRule['cadence']) {
+  if (cadence === 'weekly') return 7
+  if (cadence === 'monthly') return 30
+  return 90
+}
+
+function buildIntervalDueItems(
+  rules: IntervalAssessmentRule[],
+  selfAssessments: NavigatorSelfAssessmentRecord[],
+  supervisionSessions: SupervisionSessionRecord[],
+  competency: NavigatorCompetencyAssessmentRecord[]
+): IntervalAssessmentDueItem[] {
+  const today = new Date()
+  return rules
+    .filter((rule) => rule.isActive)
+    .map((rule) => {
+      const dueDate = new Date(rule.startsAtIso)
+      while (dueDate.getTime() + cadenceDays(rule.cadence) * 24 * 60 * 60 * 1000 < today.getTime()) {
+        dueDate.setUTCDate(dueDate.getUTCDate() + cadenceDays(rule.cadence))
+      }
+      const status =
+        rule.assessmentType === 'navigator_self_assessment'
+          ? selfAssessments.some((record) => record.weekStartIso === getWeekStartIso(dueDate.toISOString()))
+          : rule.assessmentType === 'supervision_session'
+            ? supervisionSessions.some((record) => getWeekStartIso(record.sessionAtIso) === getWeekStartIso(dueDate.toISOString()))
+            : competency.some((record) => new Date(record.submittedAtIso).getTime() >= dueDate.getTime())
+      return {
+        id: `due-${rule.id}`,
+        ruleId: rule.id,
+        title: rule.title,
+        assessmentType: rule.assessmentType,
+        navigatorName: rule.navigatorName,
+        dueAtIso: dueDate.toISOString(),
+        cadence: rule.cadence,
+        status: status ? 'completed' : 'open'
+      } satisfies IntervalAssessmentDueItem
+    })
+}
+
+function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
+  if (!loads.length) return null
+  const totals = loads.reduce(
+    (sum, load) => {
+      sum.habitat += load.habitat
+      sum.work += load.work
+      sum.socialNetworks += load.socialNetworks
+      return sum
+    },
+    { habitat: 0, work: 0, socialNetworks: 0 }
+  )
+  const maxTotal = Math.max(totals.habitat, totals.work, totals.socialNetworks, 1)
+  return {
+    enrolleeId: 'navigator-aggregate',
+    habitat: Math.round((totals.habitat / maxTotal) * 100),
+    work: Math.round((totals.work / maxTotal) * 100),
+    socialNetworks: Math.round((totals.socialNetworks / maxTotal) * 100)
+  }
+}
+
+function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadBreakdown>, navigatorName: string): DomainLoadBreakdown | null {
+  const values = Object.values(loadBreakdowns)
+  if (!values.length) return null
+  const rows = values.flatMap((breakdown) => breakdown.rows)
+  const totals = rows.reduce(
+    (sum, row) => {
+      if (row.mappedDomain === 'habitat') sum.habitatTotal += row.rawCount
+      if (row.mappedDomain === 'work') sum.workTotal += row.rawCount
+      if (row.mappedDomain === 'socialNetworks') sum.socialNetworksTotal += row.rawCount
+      return sum
+    },
+    { habitatTotal: 0, workTotal: 0, socialNetworksTotal: 0 }
+  )
+  return {
+    subjectId: 'navigator-aggregate',
+    subjectLabel: navigatorName,
+    sourceKind: 'enrolleeRecords',
+    sourceLabel: 'Assigned enrollee aggregate',
+    ...totals,
+    rows: rows.map((row, index) => ({ ...row, id: `${row.id}:${index}` }))
+  }
+}
+
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [role, setRole] = useState<AtlasRole>(initialRole)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
   const [activeMenu, setActiveMenu] = useState<string>('route planning')
   const [adminPortalRegistry, setAdminPortalRegistry] = useState<AdminPortalRegistry | null>(null)
+  const [navigatorProgramState, setNavigatorProgramState] = useState<NavigatorProgramState>(createNavigatorProgramState())
   const [isSavingAdminPortalRegistry, setIsSavingAdminPortalRegistry] = useState(false)
   const [adminPortalRegistryError, setAdminPortalRegistryError] = useState<string | null>(null)
+  const [navigatorProgramError, setNavigatorProgramError] = useState<string | null>(null)
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
@@ -283,6 +552,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       otherRoleText: ''
     }
   }, [accountSettings.email, accountSettings.fullName, accountSettings.organization, role])
+  const currentNavigatorName = useMemo(
+    () => accountSettings.fullName.trim() || selectedEnrollee?.assignedNavigator || 'atlas navigator',
+    [accountSettings.fullName, selectedEnrollee?.assignedNavigator]
+  )
 
   const supervisorNavigatorCompetency = useMemo<SupervisorNavigatorCompetencySummary[]>(() => {
     const navigatorNames = Array.from(new Set(enrollees.map((enrollee) => enrollee.assignedNavigator).filter(Boolean)))
@@ -309,6 +582,67 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     })
     return byNavigator
   }, [enrollees, navigatorCompetencyAssessments])
+  const mergedNavigatorProgramState = useMemo(
+    () => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, enrollmentRequests),
+    [currentNavigatorName, enrollmentRequests, navigatorProgramState]
+  )
+  const navigatorSelfAssessments = useMemo(
+    () =>
+      mergedNavigatorProgramState.selfAssessments
+        .filter((record) => record.navigatorName === currentNavigatorName)
+        .slice()
+        .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime()),
+    [currentNavigatorName, mergedNavigatorProgramState.selfAssessments]
+  )
+  const navigatorSelfAssessmentSummary = useMemo(
+    () => buildNavigatorSelfAssessmentSummary(navigatorSelfAssessments),
+    [navigatorSelfAssessments]
+  )
+  const navigatorSupervisionSessions = useMemo(
+    () =>
+      mergedNavigatorProgramState.supervisionSessions
+        .filter((record) => record.navigatorName === currentNavigatorName)
+        .slice()
+        .sort((left, right) => new Date(right.sessionAtIso).getTime() - new Date(left.sessionAtIso).getTime()),
+    [currentNavigatorName, mergedNavigatorProgramState.supervisionSessions]
+  )
+  const navigatorIntervalRules = useMemo(
+    () =>
+      mergedNavigatorProgramState.intervalAssessmentRules.filter(
+        (rule) => !rule.navigatorName || rule.navigatorName === currentNavigatorName
+      ),
+    [currentNavigatorName, mergedNavigatorProgramState.intervalAssessmentRules]
+  )
+  const navigatorIntervalDueItems = useMemo(
+    () =>
+      buildIntervalDueItems(
+        navigatorIntervalRules,
+        navigatorSelfAssessments,
+        navigatorSupervisionSessions,
+        navigatorCompetencyAssessments.filter((record) => record.navigatorName === currentNavigatorName)
+      ),
+    [currentNavigatorName, navigatorCompetencyAssessments, navigatorIntervalRules, navigatorSelfAssessments, navigatorSupervisionSessions]
+  )
+  const navigatorAssignedCompetencySummary = useMemo(
+    () =>
+      supervisorNavigatorCompetency.find((summary) => summary.navigatorName === currentNavigatorName) ||
+      supervisorNavigatorCompetency[0] ||
+      null,
+    [currentNavigatorName, supervisorNavigatorCompetency]
+  )
+  const navigatorAggregateLoad = useMemo(() => deriveNavigatorLoad(loads), [loads])
+  const navigatorAggregateLoadBreakdown = useMemo(
+    () => deriveNavigatorLoadBreakdown(loadBreakdownsByEnrolleeId, currentNavigatorName),
+    [currentNavigatorName, loadBreakdownsByEnrolleeId]
+  )
+  const pickupQueue = useMemo(
+    () =>
+      mergedNavigatorProgramState.pickupQueue
+        .filter((item) => item.status !== 'archived')
+        .slice()
+        .sort((left, right) => new Date(right.referredAtIso).getTime() - new Date(left.referredAtIso).getTime()),
+    [mergedNavigatorProgramState.pickupQueue]
+  )
   const routeCandidates = useRouteCandidates(selectedEnrollee)
   const { journeyStationMarkers, setJourneyStationMarkers } = useJourneyStationMarkers(selectedEnrollee, selectedLogs, routeCandidates)
   const {
@@ -329,6 +663,23 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       .catch((error) => {
         if (!isMounted) return
         setAdminPortalRegistryError(error instanceof Error ? error.message : 'Unable to load admin portal registry.')
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    loadNavigatorProgramState()
+      .then((state) => {
+        if (!isMounted) return
+        setNavigatorProgramState(state)
+        setNavigatorProgramError(null)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setNavigatorProgramError(error instanceof Error ? error.message : 'Unable to load navigator program state.')
       })
     return () => {
       isMounted = false
@@ -779,6 +1130,68 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function saveNavigatorProgramState(state: NavigatorProgramState) {
+    setNavigatorProgramError(null)
+    try {
+      const saved = await persistNavigatorProgramState(state)
+      setNavigatorProgramState(saved)
+      return saved
+    } catch (error) {
+      setNavigatorProgramError(error instanceof Error ? error.message : 'Unable to save navigator program state.')
+      throw error
+    }
+  }
+
+  async function claimPickupQueueRecord(recordId: string) {
+    const nextState = {
+      ...mergedNavigatorProgramState,
+      pickupQueue: mergedNavigatorProgramState.pickupQueue.map((record) =>
+        record.id === recordId
+          ? {
+              ...record,
+              status: 'claimed' as const,
+              claimedByNavigatorName: currentNavigatorName,
+              claimedAtIso: new Date().toISOString()
+            }
+          : record
+      )
+    }
+    return saveNavigatorProgramState(nextState)
+  }
+
+  async function saveNavigatorSelfAssessment(record: NavigatorSelfAssessmentRecord) {
+    const nextState = {
+      ...mergedNavigatorProgramState,
+      selfAssessments: [
+        record,
+        ...mergedNavigatorProgramState.selfAssessments.filter((item) => item.id !== record.id)
+      ]
+    }
+    return saveNavigatorProgramState(nextState)
+  }
+
+  async function saveSupervisionSession(record: SupervisionSessionRecord) {
+    const nextState = {
+      ...mergedNavigatorProgramState,
+      supervisionSessions: [
+        record,
+        ...mergedNavigatorProgramState.supervisionSessions.filter((item) => item.id !== record.id)
+      ]
+    }
+    return saveNavigatorProgramState(nextState)
+  }
+
+  async function saveIntervalAssessmentRule(rule: IntervalAssessmentRule) {
+    const nextState = {
+      ...mergedNavigatorProgramState,
+      intervalAssessmentRules: [
+        rule,
+        ...mergedNavigatorProgramState.intervalAssessmentRules.filter((item) => item.id !== rule.id)
+      ]
+    }
+    return saveNavigatorProgramState(nextState)
+  }
+
   async function saveNavigatorRegulationTest(input: RegulationTestSubmissionInput) {
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
@@ -850,6 +1263,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     adminMetrics,
     adminPortalRegistry,
     adminPortalRegistryError,
+    navigatorProgramState: mergedNavigatorProgramState,
+    navigatorProgramError,
     journeyStationMarkers,
     resolvedZCodeStripMarkers,
     partnerServiceCapacitySurveyHistory,
@@ -868,6 +1283,16 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     regulationTestError,
     isUploadingProfileImage,
     profileImageUploadError,
+    currentNavigatorName,
+    navigatorAggregateLoad,
+    navigatorAggregateLoadBreakdown,
+    pickupQueue,
+    navigatorSelfAssessments,
+    navigatorSelfAssessmentSummary,
+    navigatorSupervisionSessions,
+    navigatorAssignedCompetencySummary,
+    navigatorIntervalRules,
+    navigatorIntervalDueItems,
     searchPartnerIdentifierMatches,
     ensurePartnerIdentifier,
     supervisorNavigatorCompetency,
@@ -888,6 +1313,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isSavingAdminPortalRegistry,
     saveAccountSettings,
     saveAdminPortalRegistry,
+    saveNavigatorProgramState,
+    claimPickupQueueRecord,
+    saveNavigatorSelfAssessment,
+    saveSupervisionSession,
+    saveIntervalAssessmentRule,
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,

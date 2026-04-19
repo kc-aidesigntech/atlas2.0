@@ -31,11 +31,13 @@ import {
   loadAdminPortalRegistry,
   loadAccountSettings,
   loadEnrolleeIntakes,
+  loadNavigatorProgramState,
   loadRouteAssignments,
   loadTimelineConfigs,
   saveAdminPortalRegistry,
   saveAccountSettings,
   saveEnrolleeIntake,
+  saveNavigatorProgramState,
   saveRouteAssignment,
   saveTimelineConfig
 } from '@/features/atlas2026/singlepane/data-access/localStateRepository'
@@ -80,6 +82,23 @@ function createDefaultTimelineConfig() {
     maxDurationMonths: DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
     gates: buildDefaultTimelineGates(DEFAULT_TIMELINE_DURATION_MONTHS)
   }
+}
+
+function normalizeNavigatorTopMenus(menus: string[]) {
+  const normalized = menus
+    .map((menu) => {
+      const lower = menu.trim().toLowerCase()
+      if (lower === 'assigned enrollees') return 'enrollees'
+      if (lower === 'requests to enroll') return 'my profile'
+      if (lower === 'referral portal') return 'refer'
+      return menu
+    })
+    .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+
+  if (!normalized.some((menu) => menu.trim().toLowerCase() === 'enrollees')) {
+    normalized.unshift('enrollees')
+  }
+  return normalized
 }
 
 function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]): SinglePaneBootstrapData {
@@ -160,8 +179,8 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   const roleConfigs = roleNavigation.map((item) => ({
     role: item.roleKey as AtlasRole,
     topMenus:
-      item.roleKey === 'navigator' && !item.topMenus.includes('assigned enrollees')
-        ? ['assigned enrollees', ...item.topMenus]
+      item.roleKey === 'navigator'
+        ? normalizeNavigatorTopMenus(item.topMenus)
         : item.roleKey === 'partner'
           ? ['referral portal', 'my station', 'service capacity', 'county commons']
           : item.topMenus,
@@ -599,6 +618,7 @@ export {
   loadAccountSettings,
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
+  loadNavigatorProgramState,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
   deletePartnerServiceCapacityDraftRecord,
@@ -607,6 +627,7 @@ export {
   saveAccountSettings,
   saveEnrolleeIntake,
   saveNavigatorCompetencyAssessment,
+  saveNavigatorProgramState,
   savePartnerServiceCapacitySurvey,
   saveRouteAssignment,
   saveTimelineConfig,

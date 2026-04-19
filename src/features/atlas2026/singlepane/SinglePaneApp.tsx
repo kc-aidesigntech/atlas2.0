@@ -4,6 +4,7 @@ import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives
 import AccountSettingsPanel from '@/features/atlas2026/singlepane/components/AccountSettingsPanel'
 import ContextPanels from '@/features/atlas2026/singlepane/components/ContextPanels'
 import MobileRouteBoardPanel from '@/features/atlas2026/singlepane/components/MobileRouteBoardPanel'
+import NavigatorMyProfilePanel from '@/features/atlas2026/singlepane/components/NavigatorMyProfilePanel'
 import ProfilePanel from '@/features/atlas2026/singlepane/components/ProfilePanel'
 import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLoadChart'
 import RadialLoadTableOverlay from '@/features/atlas2026/singlepane/components/RadialLoadTableOverlay'
@@ -52,8 +53,19 @@ export default function SinglePaneApp() {
     adminMetrics,
     adminPortalRegistry,
     adminPortalRegistryError,
+    navigatorProgramError,
     journeyStationMarkers,
     resolvedZCodeStripMarkers,
+    currentNavigatorName,
+    navigatorAggregateLoad,
+    navigatorAggregateLoadBreakdown,
+    pickupQueue,
+    navigatorSelfAssessments,
+    navigatorSelfAssessmentSummary,
+    navigatorSupervisionSessions,
+    navigatorAssignedCompetencySummary,
+    navigatorIntervalDueItems,
+    navigatorProgramState,
     selectedRouteAssignment,
     appendRouteLog,
     deleteRouteLog,
@@ -79,6 +91,10 @@ export default function SinglePaneApp() {
     profileImageUploadError,
     saveAccountSettings,
     saveAdminPortalRegistry,
+    claimPickupQueueRecord,
+    saveNavigatorSelfAssessment,
+    saveSupervisionSession,
+    saveIntervalAssessmentRule,
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
@@ -94,7 +110,7 @@ export default function SinglePaneApp() {
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
-  const [lastContentMenu, setLastContentMenu] = React.useState('assigned enrollees')
+  const [lastContentMenu, setLastContentMenu] = React.useState('enrollees')
   const [contentOpacity, setContentOpacity] = React.useState(1)
   const transitionCycleRef = React.useRef(0)
   const transitionBootstrappedRef = React.useRef(false)
@@ -163,7 +179,8 @@ export default function SinglePaneApp() {
   const isPartnerRole = role === 'partner'
   const isAdminSection = role === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
   const isServiceCapacitySection = role === 'partner' && activeMenu === 'service capacity'
-  const isReady = isPartnerRole ? true : Boolean(selectedEnrollee && timelineConfig)
+  const isNavigatorMyProfile = role === 'navigator' && activeMenu === 'my profile'
+  const isReady = isPartnerRole ? true : isNavigatorMyProfile ? true : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const visibleLogs = React.useMemo(
     () => (role === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
@@ -208,6 +225,8 @@ export default function SinglePaneApp() {
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
     : selectedRouteAssignment?.stationName || null
+  const displayLoad = isNavigatorMyProfile ? navigatorAggregateLoad : selectedLoad
+  const displayLoadBreakdown = isNavigatorMyProfile ? navigatorAggregateLoadBreakdown : selectedLoadBreakdown
   const partnerStationBadgeCodes = React.useMemo(() => derivePartnerBadgeCodes(selectedLoadBreakdown), [selectedLoadBreakdown])
   const partnerContactName = React.useMemo(() => {
     const firstName = partnerStationProfile?.primaryContactFirstName?.trim() || ''
@@ -271,7 +290,7 @@ export default function SinglePaneApp() {
     setSelectedRouteCandidateId(null)
     setResolutionOverlayState(null)
     const fallbackMenu =
-      lastContentMenu && lastContentMenu !== 'route planning' ? lastContentMenu : selectedRoleConfig.topMenus?.[0] || 'assigned enrollees'
+      lastContentMenu && lastContentMenu !== 'route planning' ? lastContentMenu : selectedRoleConfig.topMenus?.[0] || 'enrollees'
     setActiveMenu(fallbackMenu)
   }
 
@@ -371,8 +390,8 @@ export default function SinglePaneApp() {
           />
           <RadialLoadTableOverlay
             isOpen={isLoadTableOpen}
-            load={selectedLoad}
-            breakdown={selectedLoadBreakdown}
+            load={displayLoad}
+            breakdown={displayLoadBreakdown}
             onClose={() => setIsLoadTableOpen(false)}
           />
           <RegulationTestsOverlay
@@ -445,6 +464,24 @@ export default function SinglePaneApp() {
                       <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
                     </div>
                   </div>
+                ) : isNavigatorMyProfile ? (
+                  <NavigatorMyProfilePanel
+                    accountSettings={accountSettings}
+                    currentNavigatorName={currentNavigatorName}
+                    aggregateLoad={navigatorAggregateLoad}
+                    assignedEnrolleeCount={enrollees.length}
+                    pickupQueue={pickupQueue}
+                    competencySummary={navigatorAssignedCompetencySummary}
+                    selfAssessmentSummary={navigatorSelfAssessmentSummary}
+                    selfAssessments={navigatorSelfAssessments}
+                    supervisionSessions={navigatorSupervisionSessions}
+                    dueItems={navigatorIntervalDueItems}
+                    programError={navigatorProgramError}
+                    onOpenLoadTable={() => setIsLoadTableOpen(true)}
+                    onClaimPickupQueueRecord={claimPickupQueueRecord}
+                    onSaveSelfAssessment={saveNavigatorSelfAssessment}
+                    onSaveSupervisionSession={saveSupervisionSession}
+                  />
                 ) : (
                   <div
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
@@ -482,14 +519,27 @@ export default function SinglePaneApp() {
                       accountSettings={accountSettings}
                       enrollmentRequests={enrollmentRequests}
                       supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                      navigatorProgramState={navigatorProgramState}
+                      navigatorIntervalDueItems={navigatorIntervalDueItems}
                       registry={adminPortalRegistry}
                       isSavingRegistry={isSavingAdminPortalRegistry}
                       registryError={adminPortalRegistryError}
                       onSaveRegistry={saveAdminPortalRegistry}
+                      onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
                       onSaveIntake={saveEnrolleeIntake}
                     />
                   </div>
-                ) : isServiceCapacitySection ? null : isPartnerRole ? (
+                ) : isServiceCapacitySection ? null : isNavigatorMyProfile ? (
+                  activeMenu === 'refer' || activeMenu === 'county commons' ? (
+                    <ContextPanels
+                      role={role}
+                      activeMenu={activeMenu}
+                      enrollmentRequests={enrollmentRequests}
+                      countyHeatmap={countyHeatmap}
+                      supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                    />
+                  ) : null
+                ) : isPartnerRole ? (
                   <>
                     {timelineConfig ? (
                       <>

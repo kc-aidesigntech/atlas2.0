@@ -318,6 +318,95 @@ export interface SupervisorNavigatorCompetencySummary {
   lastAssessmentAtIso: string | null
 }
 
+export type NavigatorPickupQueueStatus = 'available' | 'claimed' | 'archived'
+
+export interface UnassignedEnrolleePickupRecord {
+  id: string
+  fullName: string
+  dob: string
+  caseId: string
+  email: string
+  phone: string
+  demographicsSummary: string
+  referredAtIso: string
+  referrerName: string
+  referrerOrganization: string
+  referrerMessage: string
+  zCodeTags: string[]
+  status: NavigatorPickupQueueStatus
+  claimedByNavigatorName: string | null
+  claimedAtIso: string | null
+}
+
+export interface NavigatorSelfAssessmentRecord {
+  id: string
+  navigatorName: string
+  weekStartIso: string
+  submittedAtIso: string
+  stressLoadScore: number
+  confidenceScore: number
+  supportScore: number
+  note: string
+}
+
+export interface NavigatorSelfAssessmentSummary {
+  responseCount: number
+  averageStressLoad: number
+  averageConfidence: number
+  averageSupport: number
+  averageComposite: number
+  latestSubmittedAtIso: string | null
+}
+
+export type SupervisionSessionStatus = 'scheduled' | 'completed'
+
+export interface SupervisionSessionRecord {
+  id: string
+  navigatorName: string
+  supervisorName: string
+  sessionAtIso: string
+  status: SupervisionSessionStatus
+  supervisorNote: string
+  navigatorNote: string
+  actionItems: string
+}
+
+export type IntervalAssessmentType = 'navigator_self_assessment' | 'navigator_competency_review' | 'supervision_session'
+export type IntervalCadence = 'weekly' | 'monthly' | 'quarterly'
+
+export interface IntervalAssessmentRule {
+  id: string
+  title: string
+  assessmentType: IntervalAssessmentType
+  assigneeRole: 'navigator' | 'supervisor'
+  navigatorName: string | null
+  cadence: IntervalCadence
+  startsAtIso: string
+  weekday: number | null
+  isActive: boolean
+  instructions: string
+  lastGeneratedAtIso: string | null
+}
+
+export interface NavigatorProgramState {
+  pickupQueue: UnassignedEnrolleePickupRecord[]
+  selfAssessments: NavigatorSelfAssessmentRecord[]
+  supervisionSessions: SupervisionSessionRecord[]
+  intervalAssessmentRules: IntervalAssessmentRule[]
+  updatedAtIso: string
+}
+
+export interface IntervalAssessmentDueItem {
+  id: string
+  ruleId: string
+  title: string
+  assessmentType: IntervalAssessmentType
+  navigatorName: string | null
+  dueAtIso: string
+  cadence: IntervalCadence
+  status: 'open' | 'completed'
+}
+
 export type RegulationTestType = 'mh_sca' | 'svs' | 'ipf' | 'b_ipf'
 export type RegulationTestSubmissionStatus = 'draft' | 'completed'
 

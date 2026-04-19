@@ -19,10 +19,13 @@ import type {
   EnrolleeIntakeRecord,
   EnrolleeProfile,
   EnrollmentRequestRecord,
+  IntervalAssessmentDueItem,
+  IntervalAssessmentRule,
+  NavigatorProgramState,
   SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/singlepane/types'
 
-type AdminPortalSection = 'overview' | 'enrollees' | 'directory' | 'organizations' | 'relationships'
+type AdminPortalSection = 'overview' | 'enrollees' | 'directory' | 'organizations' | 'relationships' | 'assessments'
 type CombinedEnrolleeRow =
   | { kind: 'existing'; id: string; profile: EnrolleeProfile; intake: EnrolleeIntakeRecord }
   | { kind: 'custom'; id: string; record: AdminPortalCustomEnrolleeRecord }
@@ -35,10 +38,13 @@ interface AdminDataControlPanelProps {
   accountSettings: { fullName: string; email: string; organization: string }
   enrollmentRequests: EnrollmentRequestRecord[]
   supervisorNavigatorCompetency: SupervisorNavigatorCompetencySummary[]
+  navigatorProgramState: NavigatorProgramState
+  navigatorIntervalDueItems: IntervalAssessmentDueItem[]
   registry: AdminPortalRegistry | null
   isSavingRegistry: boolean
   registryError: string | null
   onSaveRegistry: (registry: AdminPortalRegistry) => Promise<AdminPortalRegistry>
+  onSaveIntervalAssessmentRule: (rule: IntervalAssessmentRule) => Promise<unknown> | unknown
   onSaveIntake: (intake: EnrolleeIntakeRecord) => Promise<unknown> | unknown
 }
 
@@ -47,7 +53,8 @@ const ADMIN_SECTIONS: Array<{ id: AdminPortalSection; label: string; description
   { id: 'enrollees', label: 'Enrollees', description: 'Edit records, create drafts, archive, and reassign.' },
   { id: 'directory', label: 'People & roles', description: 'Manage administrators, supervisors, navigators, and partner users.' },
   { id: 'organizations', label: 'Organizations', description: 'Partner and internal organization registry with contact ownership.' },
-  { id: 'relationships', label: 'Assignments', description: 'Quickly manage one-to-many reporting and coverage relationships.' }
+  { id: 'relationships', label: 'Assignments', description: 'Quickly manage one-to-many reporting and coverage relationships.' },
+  { id: 'assessments', label: 'Assessments', description: 'Control interval rules, due generation, and navigator program monitoring.' }
 ]
 
 const ROLE_OPTIONS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
@@ -142,6 +149,22 @@ function buildBlankOrganization(): AdminPortalOrganizationRecord {
   }
 }
 
+function buildBlankIntervalAssessmentRule(): IntervalAssessmentRule {
+  return {
+    id: createPortalId('assessment-rule'),
+    title: '',
+    assessmentType: 'navigator_self_assessment',
+    assigneeRole: 'navigator',
+    navigatorName: null,
+    cadence: 'weekly',
+    startsAtIso: new Date().toISOString(),
+    weekday: 1,
+    isActive: true,
+    instructions: '',
+    lastGeneratedAtIso: null
+  }
+}
+
 function mergeById<T extends { id: string }>(seedRows: T[], persistedRows: T[], archivedIds: string[]) {
   const map = new Map(seedRows.map((row) => [row.id, row]))
   for (const row of persistedRows) {
@@ -192,10 +215,13 @@ export default function AdminDataControlPanel({
   accountSettings,
   enrollmentRequests,
   supervisorNavigatorCompetency,
+  navigatorProgramState,
+  navigatorIntervalDueItems,
   registry,
   isSavingRegistry,
   registryError,
   onSaveRegistry,
+  onSaveIntervalAssessmentRule,
   onSaveIntake
 }: AdminDataControlPanelProps) {
   const effectiveRegistry = registry || getEmptyRegistry()
@@ -206,6 +232,7 @@ export default function AdminDataControlPanel({
   const [enrolleeDraft, setEnrolleeDraft] = useState<CombinedEnrolleeRow | null>(null)
   const [personDraft, setPersonDraft] = useState<AdminPortalPersonRecord | null>(null)
   const [organizationDraft, setOrganizationDraft] = useState<AdminPortalOrganizationRecord | null>(null)
+  const [intervalRuleDraft, setIntervalRuleDraft] = useState<IntervalAssessmentRule | null>(null)
   const [portalMessage, setPortalMessage] = useState<string | null>(null)
   const [isSubmittingEnrollee, setIsSubmittingEnrollee] = useState(false)
 
@@ -486,14 +513,22 @@ export default function AdminDataControlPanel({
     )
   }
 
+  async function handleSaveIntervalRule() {
+    if (!intervalRuleDraft) return
+    await Promise.resolve(onSaveIntervalAssessmentRule(intervalRuleDraft))
+    setPortalMessage(`Saved interval rule for ${intervalRuleDraft.title || 'assessment rule'}.`)
+  }
+
   const overviewCards = useMemo(
     () => [
       { label: 'Active enrollees', value: visibleEnrollees.length, accentColor: SP_COLORS.blue },
       { label: 'People directory', value: combinedPeople.length, accentColor: SP_COLORS.yellow },
       { label: 'Organizations', value: combinedOrganizations.length, accentColor: SP_COLORS.deepGreen },
-      { label: 'Pending requests', value: enrollmentRequests.filter((item) => item.status === 'pending').length, accentColor: SP_COLORS.red }
+      { label: 'Pending requests', value: enrollmentRequests.filter((item) => item.status === 'pending').length, accentColor: SP_COLORS.red },
+      { label: 'Pickup queue', value: navigatorProgramState.pickupQueue.filter((item) => item.status === 'available').length, accentColor: SP_COLORS.yellow },
+      { label: 'Assessment rules', value: navigatorProgramState.intervalAssessmentRules.length, accentColor: SP_COLORS.blue }
     ],
-    [combinedOrganizations.length, combinedPeople.length, enrollmentRequests, visibleEnrollees.length]
+    [combinedOrganizations.length, combinedPeople.length, enrollmentRequests, navigatorProgramState.intervalAssessmentRules.length, navigatorProgramState.pickupQueue, visibleEnrollees.length]
   )
 
   return (
@@ -1310,6 +1345,246 @@ export default function AdminDataControlPanel({
                       </div>
                     </div>
                   ))}
+                </div>
+              </AtlasInsetCard>
+            </div>
+          ) : null}
+
+          {activeSection === 'assessments' ? (
+            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <AtlasInsetCard className="rounded-[22px] px-5 py-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[22px] font-medium text-white">Interval assessment rules</div>
+                    <small className="block text-[13px] text-[var(--foreground-secondary)]">
+                      Define cadence, assignee scope, and rule metadata that drive recurring navigator assessments and supervision workflows.
+                    </small>
+                  </div>
+                  <AtlasTextButton
+                    onClick={() => setIntervalRuleDraft(buildBlankIntervalAssessmentRule())}
+                    className="px-4 py-2 text-[13px] font-medium"
+                    style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                  >
+                    new rule
+                  </AtlasTextButton>
+                </div>
+                <div className="space-y-3">
+                  {navigatorProgramState.intervalAssessmentRules.map((rule) => (
+                    <button
+                      key={rule.id}
+                      type="button"
+                      className="w-full rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-left transition hover:bg-white/10"
+                      onClick={() => setIntervalRuleDraft(rule)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[15px] font-medium text-white">{rule.title || 'Untitled rule'}</div>
+                          <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                            {rule.assessmentType} · {rule.cadence} · {rule.navigatorName || 'all navigators'}
+                          </small>
+                        </div>
+                        <StatusPill status={rule.isActive ? 'active' : 'inactive'} />
+                      </div>
+                    </button>
+                  ))}
+                  {!navigatorProgramState.intervalAssessmentRules.length ? (
+                    <small className="text-[13px] text-[var(--foreground-secondary)]">No interval rules configured yet.</small>
+                  ) : null}
+                </div>
+              </AtlasInsetCard>
+
+              <AtlasInsetCard className="rounded-[22px] px-5 py-5">
+                <div className="mb-4 text-[22px] font-medium text-white">Rule editor</div>
+                {intervalRuleDraft ? (
+                  <div className="space-y-3">
+                    <Field label="title">
+                      <input
+                        value={intervalRuleDraft.title}
+                        onChange={(event) => setIntervalRuleDraft({ ...intervalRuleDraft, title: event.target.value })}
+                        className="atlas-admin-input"
+                      />
+                    </Field>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Field label="assessment type">
+                        <select
+                          value={intervalRuleDraft.assessmentType}
+                          onChange={(event) =>
+                            setIntervalRuleDraft({
+                              ...intervalRuleDraft,
+                              assessmentType: event.target.value as IntervalAssessmentRule['assessmentType']
+                            })
+                          }
+                          className="atlas-admin-input"
+                        >
+                          <option value="navigator_self_assessment">navigator self assessment</option>
+                          <option value="navigator_competency_review">navigator competency review</option>
+                          <option value="supervision_session">supervision session</option>
+                        </select>
+                      </Field>
+                      <Field label="cadence">
+                        <select
+                          value={intervalRuleDraft.cadence}
+                          onChange={(event) =>
+                            setIntervalRuleDraft({
+                              ...intervalRuleDraft,
+                              cadence: event.target.value as IntervalAssessmentRule['cadence']
+                            })
+                          }
+                          className="atlas-admin-input"
+                        >
+                          <option value="weekly">weekly</option>
+                          <option value="monthly">monthly</option>
+                          <option value="quarterly">quarterly</option>
+                        </select>
+                      </Field>
+                      <Field label="assignee role">
+                        <select
+                          value={intervalRuleDraft.assigneeRole}
+                          onChange={(event) =>
+                            setIntervalRuleDraft({
+                              ...intervalRuleDraft,
+                              assigneeRole: event.target.value as IntervalAssessmentRule['assigneeRole']
+                            })
+                          }
+                          className="atlas-admin-input"
+                        >
+                          <option value="navigator">navigator</option>
+                          <option value="supervisor">supervisor</option>
+                        </select>
+                      </Field>
+                      <Field label="navigator scope">
+                        <input
+                          value={intervalRuleDraft.navigatorName || ''}
+                          onChange={(event) => setIntervalRuleDraft({ ...intervalRuleDraft, navigatorName: event.target.value || null })}
+                          className="atlas-admin-input"
+                          placeholder="Leave blank for all navigators"
+                        />
+                      </Field>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Field label="starts at">
+                        <input
+                          type="date"
+                          value={intervalRuleDraft.startsAtIso.slice(0, 10)}
+                          onChange={(event) =>
+                            setIntervalRuleDraft({
+                              ...intervalRuleDraft,
+                              startsAtIso: `${event.target.value || '2026-01-01'}T00:00:00.000Z`
+                            })
+                          }
+                          className="atlas-admin-input"
+                        />
+                      </Field>
+                      <Field label="weekday">
+                        <select
+                          value={intervalRuleDraft.weekday ?? ''}
+                          onChange={(event) =>
+                            setIntervalRuleDraft({
+                              ...intervalRuleDraft,
+                              weekday: event.target.value ? Number(event.target.value) : null
+                            })
+                          }
+                          className="atlas-admin-input"
+                        >
+                          <option value="">not weekday-bound</option>
+                          <option value="1">monday</option>
+                          <option value="2">tuesday</option>
+                          <option value="3">wednesday</option>
+                          <option value="4">thursday</option>
+                          <option value="5">friday</option>
+                        </select>
+                      </Field>
+                    </div>
+                    <Field label="instructions">
+                      <textarea
+                        value={intervalRuleDraft.instructions}
+                        onChange={(event) => setIntervalRuleDraft({ ...intervalRuleDraft, instructions: event.target.value })}
+                        className="atlas-admin-input min-h-[96px] resize-y"
+                      />
+                    </Field>
+                    <label className="flex items-center gap-2 text-[13px] text-white">
+                      <input
+                        type="checkbox"
+                        checked={intervalRuleDraft.isActive}
+                        onChange={(event) => setIntervalRuleDraft({ ...intervalRuleDraft, isActive: event.target.checked })}
+                      />
+                      active rule
+                    </label>
+                    <div className="flex justify-end">
+                      <AtlasTextButton
+                        onClick={() => void handleSaveIntervalRule()}
+                        className="px-4 py-2 text-[13px] font-medium"
+                        style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                      >
+                        save rule
+                      </AtlasTextButton>
+                    </div>
+                  </div>
+                ) : (
+                  <small className="text-[13px] text-[var(--foreground-secondary)]">Select a rule or create a new one to edit interval cadence.</small>
+                )}
+              </AtlasInsetCard>
+
+              <AtlasInsetCard className="rounded-[22px] px-5 py-5 xl:col-span-2">
+                <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">
+                  <div>
+                    <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">due monitor</small>
+                    <div className="mt-1 text-[22px] font-medium text-white">Open and completed items</div>
+                  </div>
+                  <AtlasMetricPill
+                    label="open due items"
+                    value={navigatorIntervalDueItems.filter((item) => item.status === 'open').length}
+                    accentColor={SP_COLORS.red}
+                    className="rounded-[18px]"
+                  />
+                  <AtlasMetricPill
+                    label="completed due items"
+                    value={navigatorIntervalDueItems.filter((item) => item.status === 'completed').length}
+                    accentColor={SP_COLORS.deepGreen}
+                    className="rounded-[18px]"
+                  />
+                </div>
+                <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                  <div className="space-y-3">
+                    {navigatorIntervalDueItems.map((item) => (
+                      <div key={item.id} className="rounded-[18px] border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-[15px] font-medium text-white">{item.title}</div>
+                            <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                              {item.navigatorName || 'all navigators'} · due {formatDateLabel(item.dueAtIso)} · {item.cadence}
+                            </small>
+                          </div>
+                          <StatusPill status={item.status} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="space-y-3">
+                    <AtlasInsetCard className="rounded-[18px] px-4 py-4">
+                      <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">pickup queue watch</small>
+                      <div className="mt-1 text-[22px] font-medium text-white">Unassigned intake pool</div>
+                      <div className="mt-3 space-y-2">
+                        {navigatorProgramState.pickupQueue.slice(0, 5).map((item) => (
+                          <div key={item.id} className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-2">
+                            <div className="text-[14px] font-medium text-white">{item.fullName}</div>
+                            <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                              {item.referrerOrganization} · {formatDateLabel(item.referredAtIso)} · {item.status}
+                            </small>
+                          </div>
+                        ))}
+                      </div>
+                    </AtlasInsetCard>
+                    <AtlasInsetCard className="rounded-[18px] px-4 py-4">
+                      <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">submission watch</small>
+                      <div className="mt-1 text-[22px] font-medium text-white">Navigator signal volume</div>
+                      <div className="mt-3 grid grid-cols-3 gap-3">
+                        <AtlasMetricPill label="self assessments" value={navigatorProgramState.selfAssessments.length} accentColor={SP_COLORS.yellow} className="rounded-[16px]" />
+                        <AtlasMetricPill label="supervision notes" value={navigatorProgramState.supervisionSessions.length} accentColor={SP_COLORS.blue} className="rounded-[16px]" />
+                        <AtlasMetricPill label="competency reviews" value={supervisorNavigatorCompetency.reduce((sum, item) => sum + item.assessmentCount, 0)} accentColor={SP_COLORS.deepGreen} className="rounded-[16px]" />
+                      </div>
+                    </AtlasInsetCard>
+                  </div>
                 </div>
               </AtlasInsetCard>
             </div>
