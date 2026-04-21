@@ -1,5 +1,5 @@
 import React from 'react'
-import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from 'recharts'
+import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from 'recharts'
 import type { DomainLoad } from '../types'
 import { SP_COLORS } from '../theme'
 
@@ -49,6 +49,8 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
   const habitat = load?.habitat || 0
   const work = load?.work || 0
   const social = load?.socialNetworks || 0
+  const chartWidth = 340
+  const chartHeight = 220
 
   // 6 points total:
   // 3 labeled anchor domains + 3 unlabeled adjacency interaction nodes.
@@ -73,11 +75,13 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
       }`}
       aria-label={onClick ? 'Open radial load source table' : undefined}
     >
-      <ResponsiveContainer width="100%" height="84%">
+      <div className="flex h-[84%] w-full items-center justify-center overflow-visible">
         <RadarChart
-          cx="47%"
-          cy="53%"
-          outerRadius="72%"
+          width={chartWidth}
+          height={chartHeight}
+          cx={chartWidth * 0.47}
+          cy={chartHeight * 0.53}
+          outerRadius={chartHeight * 0.34}
           data={data}
           startAngle={90}
           endAngle={-270}
@@ -89,8 +93,8 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
             polarRadius={polarRadius}
             polarAngles={polarAngles}
             stroke={SP_COLORS.text}
-            strokeOpacity={.5}
-            strokeWidth={.4}
+            strokeOpacity={0.5}
+            strokeWidth={0.4}
           />
           <PolarRadiusAxis
             domain={[0, 100]}
@@ -107,7 +111,7 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
           />
           <Radar dataKey="value" stroke={SP_COLORS.text} fill={SP_COLORS.blue} fillOpacity={0.28} strokeOpacity={1} strokeWidth={1.8} isAnimationActive={false} />
         </RadarChart>
-      </ResponsiveContainer>
+      </div>
       <div className="mt-[2px] flex w-[92%] items-center justify-between">
         <small className="text-[14px]" style={{ color: SP_COLORS.text }}>
           manageable strain

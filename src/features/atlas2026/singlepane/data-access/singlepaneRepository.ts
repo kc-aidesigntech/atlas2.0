@@ -520,21 +520,20 @@ export async function loadPartnerStationProfile(
     async () => {
       const { data: rows, error } = await (supabase as any)
         .schema('atlas')
-        .from('partners')
+        .from('v_partner_station_directory')
         .select(
           `
-          id,
+          partner_id,
           organization_name,
+          organization_name_normalized,
           primary_contact_first_name,
           primary_contact_last_name,
           primary_contact_email,
-          partner_stations(
-            id,
-            station_name,
-            capacity_total,
-            capacity_available,
-            counties(county_name)
-          )
+          station_id,
+          station_name,
+          capacity_total,
+          capacity_available,
+          county_name
         `
         )
         .eq('organization_name_normalized', normalized)
@@ -565,21 +564,20 @@ export async function loadPartnerStationProfile(
         async () => {
           const { data: rows, error } = await (supabase as any)
             .schema('atlas')
-            .from('partners')
+            .from('v_partner_station_directory')
             .select(
               `
-              id,
+              partner_id,
               organization_name,
+              organization_name_normalized,
               primary_contact_first_name,
               primary_contact_last_name,
               primary_contact_email,
-              partner_stations(
-                id,
-                station_name,
-                capacity_total,
-                capacity_available,
-                counties(county_name)
-              )
+              station_id,
+              station_name,
+              capacity_total,
+              capacity_available,
+              county_name
             `
             )
             .eq('organization_name_normalized', normalized)
@@ -594,21 +592,18 @@ export async function loadPartnerStationProfile(
   }
 
   if (!partner) return buildFallbackPartnerStationProfile(organizationName, fallback)
-  const station = Array.isArray(partner.partner_stations) ? partner.partner_stations[0] : partner.partner_stations
-  const stationCounty = station?.counties
-  const countyName = Array.isArray(stationCounty) ? stationCounty[0]?.county_name || null : stationCounty?.county_name || null
 
   return {
-    partnerId: partner.id,
+    partnerId: partner.partner_id,
     organizationName: partner.organization_name,
-    stationId: station?.id || null,
-    stationName: station?.station_name || null,
-    countyName,
+    stationId: partner.station_id || null,
+    stationName: partner.station_name || null,
+    countyName: partner.county_name || null,
     primaryContactFirstName: partner.primary_contact_first_name || null,
     primaryContactLastName: partner.primary_contact_last_name || null,
     primaryContactEmail: partner.primary_contact_email || null,
-    capacityTotal: typeof station?.capacity_total === 'number' ? station.capacity_total : null,
-    capacityAvailable: typeof station?.capacity_available === 'number' ? station.capacity_available : null
+    capacityTotal: typeof partner.capacity_total === 'number' ? partner.capacity_total : null,
+    capacityAvailable: typeof partner.capacity_available === 'number' ? partner.capacity_available : null
   }
 }
 

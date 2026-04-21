@@ -392,6 +392,12 @@ function asRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+function toZCodeGroup(value: string) {
+  const match = value.trim().toUpperCase().match(/^Z?(\d{2})$/);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
 async function fetchConfigPayload(
   client: AnySupabaseClient,
   surface: string,
@@ -464,6 +470,53 @@ export async function fetchSinglePaneSurveyDefinition(
 ) {
   const payload = await fetchConfigPayload(client, "singlepane", "service_capacity_survey", version);
   const record = asRecord(payload);
+  const sectionHeaders = new Map<number, string>();
+
+  const sectionParentGroups = Array.isArray(record.sections)
+    ? Array.from(
+        new Set(
+          record.sections
+            .map((section) => toZCodeGroup(String(asRecord(section).parentCode || "")))
+            .filter((group): group is number => Number.isFinite(group)),
+        ),
+      )
+    : [];
+
+  if (sectionParentGroups.length) {
+    try {
+      const { data: groupedRows, error: groupedError } = await (client as SupabaseClient<any>)
+        .schema("atlas")
+        .from("z_code_headers")
+        .select("z_group,z_code_hdr_desc")
+        .in("z_group", sectionParentGroups);
+
+      if (!groupedError) {
+        (groupedRows || []).forEach((row) => {
+          const groupValue = Number(row.z_group);
+          const description = String(row.z_code_hdr_desc || "").trim();
+          if (!Number.isFinite(groupValue) || !description) return;
+          sectionHeaders.set(groupValue, description);
+        });
+      } else {
+        const { data: keyedRows, error: keyedError } = await (client as SupabaseClient<any>)
+          .schema("atlas")
+          .from("z_code_headers")
+          .select("z_code_key,z_code_hdr_desc")
+          .in("z_code_key", sectionParentGroups);
+        if (keyedError) throw keyedError;
+        (keyedRows || []).forEach((row) => {
+          const groupValue = Number(row.z_code_key);
+          const description = String(row.z_code_hdr_desc || "").trim();
+          if (!Number.isFinite(groupValue) || !description) return;
+          sectionHeaders.set(groupValue, description);
+        });
+      }
+    } catch (error) {
+      /** Fall back to survey-config theme text when z_code_headers are unavailable. */
+      console.warn("Failed to load z_code_headers for service capacity survey progress labels.", error);
+    }
+  }
+
   return {
     scale: Array.isArray(record.scale)
       ? record.scale.map((entry) => {
@@ -478,16 +531,20 @@ export async function fetchSinglePaneSurveyDefinition(
     sections: Array.isArray(record.sections)
       ? record.sections.map((section) => {
           const typedSection = asRecord(section);
+          const parentCode = String(typedSection.parentCode || "");
+          const sectionTheme = String(typedSection.theme || "");
+          const zCodeGroup = toZCodeGroup(parentCode);
+          const headerDescription = zCodeGroup == null ? null : sectionHeaders.get(zCodeGroup) || null;
           return {
-            parentCode: String(typedSection.parentCode || ""),
-            theme: String(typedSection.theme || ""),
+            parentCode,
+            theme: headerDescription || sectionTheme,
             prompts: Array.isArray(typedSection.prompts)
               ? typedSection.prompts.map((prompt) => {
                   const typedPrompt = asRecord(prompt);
                   return {
                     id: String(typedPrompt.id || ""),
-                    parentCode: String(typedPrompt.parentCode || ""),
-                    parentTheme: String(typedPrompt.parentTheme || ""),
+                    parentCode: String(typedPrompt.parentCode || parentCode),
+                    parentTheme: headerDescription || String(typedPrompt.parentTheme || sectionTheme),
                     zCode: String(typedPrompt.zCode || ""),
                     normalizedZCode: String(typedPrompt.normalizedZCode || ""),
                     title: String(typedPrompt.title || ""),

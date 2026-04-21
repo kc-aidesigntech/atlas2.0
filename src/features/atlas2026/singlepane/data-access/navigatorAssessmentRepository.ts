@@ -129,7 +129,7 @@ export async function loadNavigatorCompetencyAssessments(): Promise<NavigatorCom
     )
     const { data: people, error: peopleError } = await supabase
       .schema('atlas')
-      .from('people')
+      .from('v_people_directory')
       .select('id,display_name')
       .in('id', personIds)
     if (peopleError) throw peopleError

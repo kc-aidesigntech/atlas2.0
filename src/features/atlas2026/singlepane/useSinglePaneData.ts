@@ -415,7 +415,7 @@ function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadB
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [role, setRole] = useState<AtlasRole>(initialRole)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
-  const [activeMenu, setActiveMenu] = useState<string>('route planning')
+  const [activeMenu, setActiveMenu] = useState<string>('')
   const [adminPortalRegistry, setAdminPortalRegistry] = useState<AdminPortalRegistry | null>(null)
   const [navigatorProgramState, setNavigatorProgramState] = useState<NavigatorProgramState>(createNavigatorProgramState())
   const [isSavingAdminPortalRegistry, setIsSavingAdminPortalRegistry] = useState(false)

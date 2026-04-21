@@ -179,13 +179,35 @@ export interface AtlasDatabase {
         Row: {
           id: string;
           z_code: string;
+          z_group: number | null;
         };
         Insert: {
           id?: string;
           z_code: string;
+          z_group?: number | null;
         };
         Update: Partial<{
           z_code: string;
+          z_group: number | null;
+        }>;
+      };
+      z_code_headers: {
+        Row: {
+          id: number;
+          z_code_key: number | null;
+          z_group: number | null;
+          z_code_hdr_desc: string;
+        };
+        Insert: {
+          id?: number;
+          z_code_key?: number | null;
+          z_group?: number | null;
+          z_code_hdr_desc: string;
+        };
+        Update: Partial<{
+          z_code_key: number | null;
+          z_group: number | null;
+          z_code_hdr_desc: string;
         }>;
       };
       partner_z_code_burden_scores: {

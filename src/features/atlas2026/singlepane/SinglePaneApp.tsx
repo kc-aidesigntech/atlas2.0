@@ -1,23 +1,23 @@
 import React from 'react'
-import AdminDataControlPanel from '@/features/atlas2026/admin/AdminDataControlPanel'
-import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import AccountSettingsPanel from '@/features/atlas2026/singlepane/components/AccountSettingsPanel'
-import ContextPanels from '@/features/atlas2026/singlepane/components/ContextPanels'
-import MobileRouteBoardPanel from '@/features/atlas2026/singlepane/components/MobileRouteBoardPanel'
-import NavigatorMyProfilePanel from '@/features/atlas2026/singlepane/components/NavigatorMyProfilePanel'
-import ProfilePanel from '@/features/atlas2026/singlepane/components/ProfilePanel'
-import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLoadChart'
-import RadialLoadTableOverlay from '@/features/atlas2026/singlepane/components/RadialLoadTableOverlay'
-import RegulationTestsOverlay from '@/features/atlas2026/singlepane/components/RegulationTestsOverlay'
-import ResolvedZCodesOverlay from '@/features/atlas2026/singlepane/components/ResolvedZCodesOverlay'
-import RoleMenus from '@/features/atlas2026/singlepane/components/RoleMenus'
-import RoutePlanningOverlay from '@/features/atlas2026/singlepane/components/RoutePlanningOverlay'
-import StripMapTimeline from '@/features/atlas2026/singlepane/components/StripMapTimeline'
-import TopNav from '@/features/atlas2026/singlepane/components/TopNav'
-import VerticalStripMapTimeline from '@/features/atlas2026/singlepane/components/VerticalStripMapTimeline'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import type { RouteCandidateRecord, StabilizationPhase } from '@/features/atlas2026/singlepane/types'
-import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePaneData'
+import AdminDataControlPanel from '../admin/AdminDataControlPanel'
+import { AtlasTextButton } from '../components/AtlasPrimitives'
+import AccountSettingsPanel from './components/AccountSettingsPanel'
+import ContextPanels from './components/ContextPanels'
+import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
+import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
+import ProfilePanel from './components/ProfilePanel'
+import RadialLoadChart from './components/RadialLoadChart'
+import RadialLoadTableOverlay from './components/RadialLoadTableOverlay'
+import RegulationTestsOverlay from './components/RegulationTestsOverlay'
+import ResolvedZCodesOverlay from './components/ResolvedZCodesOverlay'
+import RoleMenus from './components/RoleMenus'
+import RoutePlanningOverlay from './components/RoutePlanningOverlay'
+import StripMapTimeline from './components/StripMapTimeline'
+import TopNav from './components/TopNav'
+import VerticalStripMapTimeline from './components/VerticalStripMapTimeline'
+import { SP_COLORS } from './theme'
+import type { RouteCandidateRecord, StabilizationPhase } from './types'
+import { useSinglePaneData } from './useSinglePaneData'
 
 const PERSISTED_ACTION_LABELS = new Set([
   'route planning',
@@ -114,10 +114,11 @@ export default function SinglePaneApp() {
   const [contentOpacity, setContentOpacity] = React.useState(1)
   const transitionCycleRef = React.useRef(0)
   const transitionBootstrappedRef = React.useRef(false)
+  const hashSyncBootstrappedRef = React.useRef(false)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const standaloneSurveyUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '/service-capacity-survey'
-    return new URL('service-capacity-survey', `${window.location.origin}${import.meta.env.BASE_URL}`).toString()
+    return new URL('service-capacity-survey', window.location.href.split('#')[0]).toString()
   }, [])
 
   React.useEffect(() => {
@@ -125,6 +126,62 @@ export default function SinglePaneApp() {
       setLastContentMenu(activeMenu)
     }
   }, [activeMenu])
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!selectedRoleConfig.topMenus.length) return
+    const hashTarget = hashToMenu(window.location.hash, selectedRoleConfig.topMenus)
+    const fallbackMenu = hashTarget || selectedRoleConfig.topMenus[0]
+    if (!fallbackMenu) return
+    if (fallbackMenu !== activeMenu) {
+      setActiveMenu(fallbackMenu)
+      return
+    }
+    const fallbackHash = menuToHash(fallbackMenu)
+    if (!fallbackHash) return
+    const currentHash = window.location.hash.replace(/^#/, '')
+    if (currentHash !== fallbackHash) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${fallbackHash}`)
+    }
+    hashSyncBootstrappedRef.current = true
+  }, [selectedRoleConfig.topMenus, setActiveMenu])
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!selectedRoleConfig.topMenus.length) return
+    if (!selectedRoleConfig.topMenus.includes(activeMenu)) return
+    const nextHash = menuToHash(activeMenu)
+    if (!nextHash) return
+    const currentHash = window.location.hash.replace(/^#/, '')
+    if (currentHash === nextHash) return
+
+    const nextUrl = `${window.location.pathname}${window.location.search}#${nextHash}`
+    if (!hashSyncBootstrappedRef.current) {
+      window.history.replaceState(null, '', nextUrl)
+      hashSyncBootstrappedRef.current = true
+      return
+    }
+    window.history.pushState(null, '', nextUrl)
+  }, [activeMenu])
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!selectedRoleConfig.topMenus.length) return
+
+    function syncMenuFromLocation() {
+      const hashTarget = hashToMenu(window.location.hash, selectedRoleConfig.topMenus)
+      if (hashTarget && hashTarget !== activeMenu) {
+        setActiveMenu(hashTarget)
+      }
+    }
+
+    window.addEventListener('hashchange', syncMenuFromLocation)
+    window.addEventListener('popstate', syncMenuFromLocation)
+    return () => {
+      window.removeEventListener('hashchange', syncMenuFromLocation)
+      window.removeEventListener('popstate', syncMenuFromLocation)
+    }
+  }, [activeMenu, selectedRoleConfig.topMenus, setActiveMenu])
 
   React.useEffect(() => {
     if (!selectedEnrolleeId) return
@@ -529,17 +586,7 @@ export default function SinglePaneApp() {
                       onSaveIntake={saveEnrolleeIntake}
                     />
                   </div>
-                ) : isServiceCapacitySection ? null : isNavigatorMyProfile ? (
-                  activeMenu === 'refer' || activeMenu === 'county commons' ? (
-                    <ContextPanels
-                      role={role}
-                      activeMenu={activeMenu}
-                      enrollmentRequests={enrollmentRequests}
-                      countyHeatmap={countyHeatmap}
-                      supervisorNavigatorCompetency={supervisorNavigatorCompetency}
-                    />
-                  ) : null
-                ) : isPartnerRole ? (
+                ) : isServiceCapacitySection || isNavigatorMyProfile ? null : isPartnerRole ? (
                   <>
                     {timelineConfig ? (
                       <>
@@ -745,6 +792,20 @@ function deriveEnrolleeParentCodes(
         })
         .filter(Boolean)
   return Array.from(new Set(source)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+}
+
+function menuToHash(menu: string) {
+  return menu
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function hashToMenu(hashValue: string, menus: string[]) {
+  const normalizedHash = hashValue.replace(/^#/, '').trim().toLowerCase()
+  if (!normalizedHash) return null
+  return menus.find((menu) => menuToHash(menu) === normalizedHash) || null
 }
 
 function derivePartnerBadgeCodes(loadBreakdown: { rows: { zCodeGroup: string }[] } | null) {
