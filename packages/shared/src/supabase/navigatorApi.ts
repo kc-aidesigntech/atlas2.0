@@ -20,9 +20,41 @@ export interface EnrollmentStationMarker {
   iconSlug: string | null;
 }
 
+type NavigatorAssignedEnrolleeRow =
+  AtlasDatabase["atlas"]["Views"]["v_navigator_assigned_enrollees"]["Row"];
+type EnrollmentStationMarkerRow =
+  AtlasDatabase["atlas"]["Views"]["v_enrollment_station_markers"]["Row"];
+
+function mapNavigatorAssignedEnrolleeRow(
+  row: NavigatorAssignedEnrolleeRow,
+): NavigatorAssignedEnrollee {
+  // Keep the snake_case -> camelCase contract in one place so DB view changes
+  // are easy to audit without hunting through query call sites.
+  return {
+    enrollmentId: row.enrollment_id,
+    enrolleeId: row.enrollee_id,
+    enrolleeName: row.enrollee_name,
+    caseId: row.case_id,
+    currentPhase: row.current_phase,
+    avatarUrl: row.avatar_url,
+  };
+}
+
+function mapEnrollmentStationMarkerRow(row: EnrollmentStationMarkerRow): EnrollmentStationMarker {
+  return {
+    routePlanStopId: row.route_plan_stop_id,
+    enrollmentId: row.enrollment_id,
+    assignedAt: row.assigned_at,
+    status: row.status,
+    stationId: row.station_id,
+    stationName: row.station_name,
+    iconSlug: row.icon_slug,
+  };
+}
+
 export async function fetchNavigatorAssignedEnrollees(
   client: SupabaseClient<AtlasDatabase>,
-) {
+): Promise<NavigatorAssignedEnrollee[]> {
   const { data, error } = await client
     .schema("atlas")
     .from("v_navigator_assigned_enrollees")
@@ -32,22 +64,14 @@ export async function fetchNavigatorAssignedEnrollees(
     .order("enrollee_name", { ascending: true });
 
   if (error) throw error;
-  return (data || []).map(
-    (row): NavigatorAssignedEnrollee => ({
-      enrollmentId: row.enrollment_id,
-      enrolleeId: row.enrollee_id,
-      enrolleeName: row.enrollee_name,
-      caseId: row.case_id,
-      currentPhase: row.current_phase,
-      avatarUrl: row.avatar_url,
-    }),
-  );
+  // Supabase can return null data with no error for empty views.
+  return (data || []).map(mapNavigatorAssignedEnrolleeRow);
 }
 
 export async function fetchEnrollmentStationMarkers(
   client: SupabaseClient<AtlasDatabase>,
   enrollmentId: string,
-) {
+): Promise<EnrollmentStationMarker[]> {
   const { data, error } = await client
     .schema("atlas")
     .from("v_enrollment_station_markers")
@@ -58,15 +82,7 @@ export async function fetchEnrollmentStationMarkers(
     .order("assigned_at", { ascending: true });
 
   if (error) throw error;
-  return (data || []).map(
-    (row): EnrollmentStationMarker => ({
-      routePlanStopId: row.route_plan_stop_id,
-      enrollmentId: row.enrollment_id,
-      assignedAt: row.assigned_at,
-      status: row.status,
-      stationId: row.station_id,
-      stationName: row.station_name,
-      iconSlug: row.icon_slug,
-    }),
-  );
+  // Keep empty enrollment timelines as [] so UI layers can render "no markers"
+  // without special null/undefined handling.
+  return (data || []).map(mapEnrollmentStationMarkerRow);
 }

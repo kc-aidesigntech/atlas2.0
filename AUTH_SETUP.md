@@ -65,6 +65,7 @@ Set in `.env.local` (see `env.template`):
 |----------|---------|
 | `VITE_SUPABASE_URL` | Project API URL |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable (preferred) or legacy anon key—**never** service role in the browser |
+| `VITE_SUPABASE_AUTH_REDIRECT_URL` | Optional absolute callback URL for email/OAuth flows (recommended when sign-up starts on localhost but must confirm on hosted URL) |
 | `VITE_ENABLE_SINGLEPANE_SUPABASE_BOOTSTRAP` | When `true` in dev, or always in production builds as you configure, the shell requires a Supabase session before loading the single pane |
 
 The Vite client uses **PKCE** and **session detection from the URL** for OAuth return traffic (`src/lib/supabaseClient.ts`).

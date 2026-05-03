@@ -2,6 +2,14 @@ import type { RouteLogEvent } from '@/features/atlas2026/singlepane/types'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 
+/**
+ * Route-log persistence repository.
+ *
+ * Purpose:
+ * - normalizes timeline log records before persistence.
+ * - maintains local durability with optional Supabase replication.
+ */
+
 const ROUTE_LOG_CONFIG_KEY = 'route_logs'
 const CONFIG_SURFACE = 'singlepane'
 const CONFIG_VERSION = 'runtime-v1'

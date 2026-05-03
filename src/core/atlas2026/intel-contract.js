@@ -1,6 +1,8 @@
 import { ROUTE_SCORING_FACTORS, STABILIZATION_PHASES } from './canonical-spec'
 import { ROUTE_LIFECYCLE, summarizePressure } from './data-model'
 
+// Intel contract defines API-level request/response shapes and deterministic scoring
+// behavior used by Atlas route evaluation endpoints.
 export const INTEL_API_VERSION = '2026-01'
 
 export const INTEL_ENDPOINTS = {
@@ -42,6 +44,7 @@ export function evaluateParticipantForRoutes({ participantState, capacityTopolog
     const transferCost = partner.transferCost ?? 0.35
     const interferenceRisk = partner.interferenceRisk ?? 0.2
 
+    // Weighted score intentionally mirrors canonical factors so explainability remains auditable.
     const score =
       coverageScore * ROUTE_SCORING_FACTORS.coverageWeight +
       alignmentScore * ROUTE_SCORING_FACTORS.phaseAlignmentWeight +
@@ -63,6 +66,7 @@ export function evaluateParticipantForRoutes({ participantState, capacityTopolog
     }
   })
 
+  // Higher score is always preferred; deterministic sort order keeps recommendations stable.
   const sorted = routeOptions.sort((a, b) => b.score - a.score)
   const recommended = sorted[0] ?? null
 

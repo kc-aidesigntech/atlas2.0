@@ -1,5 +1,13 @@
 import type { StabilizationPhase, TimelineConfig, TimelineGate } from './types'
 
+/**
+ * Timeline configuration normalization and mutation helpers.
+ *
+ * Purpose:
+ * - enforces valid gate/duration invariants for all timeline editors.
+ * - exposes deterministic transforms used by UI + persistence layers.
+ */
+
 export const DEFAULT_TIMELINE_DURATION_MONTHS = 6
 export const DEFAULT_TIMELINE_MAX_DURATION_MONTHS = 12
 
@@ -39,6 +47,8 @@ export function buildDefaultTimelineGates(durationMonths = DEFAULT_TIMELINE_DURA
 }
 
 export function buildTimelinePhaseSegments(config: TimelineConfig): TimelinePhaseSegment[] {
+  // Segment boundaries are always derived from ordered phase gates to keep strip-map
+  // rendering and duration math aligned.
   const safeDurationMonths = getSafeTimelineDurationMonths(config)
   return PHASE_ORDER.map((phase, index) => {
     const configuredGate = config.gates.find((gate) => gate.phase === phase)

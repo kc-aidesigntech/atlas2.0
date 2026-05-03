@@ -19,6 +19,7 @@ export default function EnrolleeParentBadgeRow({
   className,
   badgeClassName
 }: EnrolleeParentBadgeRowProps) {
+  // Normalize once so completion matching is case/whitespace invariant across upstream data sources.
   const completedSet = React.useMemo(() => new Set(completedParentCodes.map((code) => code.trim().toUpperCase())), [completedParentCodes])
 
   if (!parentCodes.length) return null

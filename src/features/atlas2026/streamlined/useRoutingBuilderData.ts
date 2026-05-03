@@ -8,6 +8,8 @@ import {
   saveRouteTemplate
 } from '@/features/atlas2026/data/repository'
 
+// Hook centralizes dataset hydration plus local optimistic state updates for the
+// streamlined routing builder views. Repository functions own persistence side effects.
 export function useRoutingBuilderData() {
   const [dataset, setDataset] = useState<AtlasJsonDataset>({
     participants: [],

@@ -9,6 +9,8 @@ import {
   updateLegacyRouteStepRecord
 } from '@atlas/shared'
 
+// Gateway intentionally preserves legacy persistence contracts while the atlas2026 layer evolves.
+// Do not reshape payloads here unless shared contract adapters are updated in lockstep.
 export async function createRouteRecord({ db, appId, payload }) {
   return createLegacyRouteRecord(db, payload)
 }

@@ -5,6 +5,14 @@ import type {
   ZCodeSurveySection
 } from '@/features/atlas2026/singlepane/types'
 
+/**
+ * Service-capacity survey catalog.
+ *
+ * Purpose:
+ * - defines the default Z-code prompt corpus and burden scoring scale.
+ * - provides deterministic helpers for constructing answer payload skeletons.
+ */
+
 export const SERVICE_CAPACITY_FORM_VERSION = '2026-z-burden-v2'
 
 export const DEFAULT_SERVICE_CAPACITY_SCALE: PartnerServiceCapacityScaleOption[] = [
@@ -20,6 +28,8 @@ export const DEFAULT_SERVICE_CAPACITY_SCALE: PartnerServiceCapacityScaleOption[]
 ]
 
 export const DEFAULT_SERVICE_CAPACITY_SECTIONS: ZCodeSurveySection[] = [
+  // Prompt ids/normalized codes are treated as stable persistence keys, so
+  // edits here should preserve backward compatibility with stored submissions.
   {
     parentCode: 'Z55',
     theme: 'Problems related to education and literacy',

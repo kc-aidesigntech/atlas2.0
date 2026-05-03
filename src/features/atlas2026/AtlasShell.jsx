@@ -6,6 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ATLAS_ROLES } from '@/core/atlas2026/policy'
 import { useAtlasDecisioning } from './useAtlasDecisioning'
 
+// Atlas shell coordinates role-scoped workspaces that all share one decisioning data contract.
+// Each workspace consumes the same snapshots but surfaces different operator actions.
 const SituationalAwarenessPage = lazy(() => import('./pages/SituationalAwarenessPage'))
 const PrecisionNavigationPage = lazy(() => import('./pages/PrecisionNavigationPage'))
 const CollectiveMemoryPage = lazy(() => import('./pages/CollectiveMemoryPage'))
@@ -23,6 +25,13 @@ const WORKSPACES = {
   governance: 'governance',
   integrations: 'integrations'
 }
+
+const TICKER_ITEMS = [
+  { icon: Activity, color: 'orange', label: 'system load' },
+  { icon: Globe, color: 'blue', label: 'watershed weights calibrated' },
+  { icon: Lock, color: 'steel', label: 'sovereign interpretation locked' },
+  { icon: Layout, color: 'green', label: 'regional yield' }
+]
 
 function RoleAndParticipantControls({
   selectedRole,
@@ -161,6 +170,8 @@ export default function AtlasShell() {
   } = useAtlasDecisioning()
 
   const screenContract = useMemo(() => {
+    // The CTA contract intentionally centralizes stage intent so top-banner guidance
+    // and action behavior stay in sync across workspace switches.
     if (surface === WORKSPACES.situationalAwareness) {
       return {
         title: 'stage 1 - situational awareness',
@@ -379,30 +390,18 @@ export default function AtlasShell() {
 
       <footer className="fixed bottom-0 left-0 right-0 z-40 flex h-12 items-center overflow-hidden border-t border-slate-800 bg-black">
         <div className="atlas-ticker flex min-w-max items-center gap-10 px-6">
-          <small className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
-            <Activity size={14} className="text-orange-500" /> system load: {systemLoad}
-          </small>
-          <small className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
-            <Globe size={14} className="text-blue-500" /> watershed weights calibrated
-          </small>
-          <small className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
-            <Lock size={14} className="text-slate-400" /> sovereign interpretation locked
-          </small>
-          <small className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
-            <Layout size={14} className="text-emerald-500" /> regional yield: {currentYield}%
-          </small>
-          <small className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
-            <Activity size={14} className="text-orange-500" /> system load: {systemLoad}
-          </small>
-          <small className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
-            <Globe size={14} className="text-blue-500" /> watershed weights calibrated
-          </small>
-          <small className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
-            <Lock size={14} className="text-slate-400" /> sovereign interpretation locked
-          </small>
-          <small className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
-            <Layout size={14} className="text-emerald-500" /> regional yield: {currentYield}%
-          </small>
+          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, index) => {
+            const Icon = item.icon
+            const value = item.label === 'system load' ? `: ${systemLoad}` : item.label === 'regional yield' ? `: ${currentYield}%` : ''
+            const colorClass =
+              item.color === 'orange' ? 'text-orange-500' : item.color === 'blue' ? 'text-blue-500' : item.color === 'green' ? 'text-emerald-500' : 'text-slate-400'
+            return (
+              <small key={`${item.label}-${index}`} className="flex items-center gap-2 text-[10px] font-black tracking-[0.14em] text-slate-500">
+                <Icon size={14} className={colorClass} /> {item.label}
+                {value}
+              </small>
+            )
+          })}
         </div>
       </footer>
     </div>

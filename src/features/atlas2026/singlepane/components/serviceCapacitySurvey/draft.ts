@@ -75,6 +75,7 @@ export function persistSurveyDraft(draft: PersistedSurveyDraft | null) {
     window.localStorage.removeItem(SERVICE_CAPACITY_DRAFT_STORAGE_KEY)
     return
   }
+  // Persist timestamp on every write so resume flows can deterministically pick the newest browser draft.
   window.localStorage.setItem(
     SERVICE_CAPACITY_DRAFT_STORAGE_KEY,
     JSON.stringify({
@@ -87,6 +88,7 @@ export function persistSurveyDraft(draft: PersistedSurveyDraft | null) {
 export function buildDraftAnswers(savedSubmission: PartnerServiceCapacitySubmissionRecord | null, prompts: ZCodeSurveyPrompt[]) {
   const defaults = buildDefaultPartnerServiceCapacityAnswers(prompts)
   const answersByPromptId = new Map(savedSubmission?.answers.map((answer) => [answer.promptId, answer]) || [])
+  // Keep full prompt coverage by overlaying saved answers on catalog defaults.
   return defaults.map((answer) => answersByPromptId.get(answer.promptId) || answer)
 }
 
@@ -131,6 +133,7 @@ export function pickFreshestPartnerServiceCapacityRecord(
 ): PartnerServiceCapacitySubmissionRecord | null {
   const present = records.filter((record): record is PartnerServiceCapacitySubmissionRecord => Boolean(record))
   if (!present.length) return null
+  // Newest-first selection keeps resume behavior consistent across local draft and server history merges.
   return present.sort((left, right) => getRecordSortTime(right) - getRecordSortTime(left))[0] || null
 }
 

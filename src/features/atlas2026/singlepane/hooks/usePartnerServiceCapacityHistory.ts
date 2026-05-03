@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 import type { PartnerServiceCapacitySubmissionRecord } from '@/features/atlas2026/singlepane/types'
 import { loadPartnerServiceCapacitySurveyHistory } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 
+/**
+ * Loads partner survey submission history for the active organization.
+ *
+ * Invariant:
+ * - only partner role is allowed to surface this history.
+ */
+
 export function usePartnerServiceCapacityHistory(role: string, organizationName: string | undefined) {
   const [partnerServiceCapacitySurveyHistory, setPartnerServiceCapacitySurveyHistory] = useState<PartnerServiceCapacitySubmissionRecord[]>([])
   const [partnerServiceCapacitySurveyError, setPartnerServiceCapacitySurveyError] = useState<string | null>(null)

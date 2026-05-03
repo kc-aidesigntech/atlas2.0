@@ -7,6 +7,8 @@ import RoutePlannerPage from '@/features/atlas2026/streamlined/RoutePlannerPage'
 import { SUBWAY_COLORS } from '@/features/atlas2026/streamlined/theme'
 import { useRoutingBuilderData } from '@/features/atlas2026/streamlined/useRoutingBuilderData'
 
+// Streamlined shell hosts a narrower "routing builder" workflow over the same
+// Atlas dataset contracts used by the broader multi-workspace experience.
 type StreamlinedView = 'navigation' | 'intelligence' | 'route-planner'
 
 const VIEWS: StreamlinedView[] = ['navigation', 'intelligence', 'route-planner']

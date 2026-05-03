@@ -11,6 +11,16 @@ import type {
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 
+/**
+ * Single-pane local/config repository.
+ *
+ * Purpose:
+ * - owns normalization + persistence of UI-managed config documents.
+ * - keeps localStorage and Supabase writes aligned under a local-first contract.
+ */
+
+// Contract constants mirror app_config_documents identity fields so reads/writes
+// stay addressable across local-only and Supabase-backed runtime modes.
 const SETTINGS_CONFIG_KEY = 'account_settings'
 const ENROLLEE_INTAKE_CONFIG_KEY_PREFIX = 'enrollee_intake:'
 const ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX = 'route_assignment:'
@@ -297,6 +307,8 @@ export async function loadEnrolleeIntakes(): Promise<Record<string, EnrolleeInta
   return normalized
 }
 
+// Intake/route/timeline writes intentionally update local state first so editing
+// remains resilient during transient Supabase permission/network failures.
 export async function saveEnrolleeIntake(intake: EnrolleeIntakeRecord): Promise<EnrolleeIntakeRecord> {
   persistLocalEnrolleeIntakeState({
     ...loadLocalEnrolleeIntakeState(),

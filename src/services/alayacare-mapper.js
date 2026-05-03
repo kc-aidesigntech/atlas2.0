@@ -75,6 +75,7 @@ export function calculateWellnessScores(assessment) {
 
 // Helper mapping functions
 function mapScoreToPercentile(value, minIn, maxIn, minOut, maxOut) {
+  // Linear scaling keeps source form migrations predictable as long as min/max ranges remain stable.
   return Math.round(((value - minIn) / (maxIn - minIn)) * (maxOut - minOut) + minOut)
 }
 
@@ -197,6 +198,7 @@ export function mapClientToEnrollee(alayaCareClient) {
       firstName: alayaCareClient.firstName || alayaCareClient.first_name,
       lastName: alayaCareClient.lastName || alayaCareClient.last_name,
       dob: alayaCareClient.dateOfBirth || alayaCareClient.date_of_birth,
+      // Placeholder image ensures roster cards render even when upstream profile photos are missing.
       photoUrl: alayaCareClient.photoUrl || generatePlaceholderPhoto(
         alayaCareClient.firstName, 
         alayaCareClient.lastName

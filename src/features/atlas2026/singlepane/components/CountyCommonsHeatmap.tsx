@@ -28,7 +28,11 @@ export default function CountyCommonsHeatmap({ points }: CountyCommonsHeatmapPro
       next.push(point)
       grouped.set(key, next)
     }
-    return Array.from(grouped.entries())
+    // Sort once when deriving view data so render stays pure and doesn't mutate grouped arrays in place.
+    return Array.from(grouped.entries()).map(([countyName, countyPoints]) => [
+      countyName,
+      countyPoints.slice().sort((a, b) => b.activeCaseCount - a.activeCaseCount)
+    ] as const)
   }, [points])
 
   return (
@@ -40,7 +44,6 @@ export default function CountyCommonsHeatmap({ points }: CountyCommonsHeatmapPro
             <small className="mb-2 block text-[12px] uppercase tracking-wide text-white">{countyName}</small>
             <div className="flex flex-wrap gap-2">
               {countyPoints
-                .sort((a, b) => b.activeCaseCount - a.activeCaseCount)
                 .map((point) => (
                   <div
                     key={`${point.countyId}-${point.zGroup}`}

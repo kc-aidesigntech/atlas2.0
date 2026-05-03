@@ -1,3 +1,7 @@
+/**
+ * Mobile email/password entry point for Supabase auth; keeps route transitions
+ * and error messaging aligned with the web auth contract.
+ */
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, SafeAreaView, Text, TextInput, View } from "react-native";

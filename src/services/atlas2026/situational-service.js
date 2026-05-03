@@ -6,6 +6,7 @@ function average(values) {
 }
 
 export function buildSituationalOverlay({ participants, capacityTopology, phaseReadinessAlertThreshold = 0.45 }) {
+  // Domain pressure and capacity use the same ontology keys so corridor gaps remain comparable.
   const domainPressure = PRESSURE_DOMAINS.map((domain) => {
     const all = participants
       .map((participant) => participant.pressureVectors?.find((vector) => vector.domain === domain.id)?.severity ?? 0)
@@ -49,6 +50,7 @@ export function buildSituationalOverlay({ participants, capacityTopology, phaseR
     priority: corridor.priority,
     pressure: corridor.pressure,
     capacity: corridor.capacity,
+    // Coordinates are deterministic placeholders for UI rendering until GIS integration is live.
     lat: Number((34.05 + index * 0.08).toFixed(3)),
     lng: Number((-118.25 + index * 0.06).toFixed(3))
   }))

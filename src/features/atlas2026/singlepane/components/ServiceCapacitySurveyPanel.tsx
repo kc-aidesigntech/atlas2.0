@@ -182,33 +182,50 @@ export default function ServiceCapacitySurveyPanel({
     })
   }, [sortedSubmissionHistory])
 
+  function openSurveyWithSeed({
+    nextInitialSubmission,
+    nextPersistedDraftOverride,
+    nextLatestSavedSubmission
+  }: {
+    nextInitialSubmission: PartnerServiceCapacitySubmissionRecord | null
+    nextPersistedDraftOverride: PersistedSurveyDraft | null
+    nextLatestSavedSubmission: PartnerServiceCapacitySubmissionRecord | null
+  }) {
+    setInitialSubmission(nextInitialSubmission)
+    setPersistedDraftOverride(nextPersistedDraftOverride)
+    setLatestSavedSubmission(nextLatestSavedSubmission)
+    // Force a fresh form instance so refs/autosave timers do not leak across distinct survey sessions.
+    setSurveySessionKey((current) => current + 1)
+    setActiveView('survey')
+  }
+
   function handleCheckoutNewRecord() {
     persistSurveyDraft(null)
-    setInitialSubmission(null)
-    setPersistedDraftOverride(null)
-    setLatestSavedSubmission(null)
-    setSurveySessionKey((current) => current + 1)
+    openSurveyWithSeed({
+      nextInitialSubmission: null,
+      nextPersistedDraftOverride: null,
+      nextLatestSavedSubmission: null
+    })
     setDraftResolutionKey((current) => current + 1)
-    setActiveView('survey')
   }
 
   function handleEditDraftRecord(record: PartnerServiceCapacitySubmissionRecord) {
     persistSurveyDraft(null)
-    setInitialSubmission(record)
-    setPersistedDraftOverride(null)
-    setLatestSavedSubmission(record)
-    setSurveySessionKey((current) => current + 1)
+    openSurveyWithSeed({
+      nextInitialSubmission: record,
+      nextPersistedDraftOverride: null,
+      nextLatestSavedSubmission: record
+    })
     setDraftResolutionKey((current) => current + 1)
-    setActiveView('survey')
   }
 
   function handleResumeDraft() {
     if (!persistedDraft && !resumeDraftRecord) return
-    setInitialSubmission(resumeDraftRecord)
-    setPersistedDraftOverride(persistedDraft)
-    setLatestSavedSubmission(resumeDraftRecord)
-    setSurveySessionKey((current) => current + 1)
-    setActiveView('survey')
+    openSurveyWithSeed({
+      nextInitialSubmission: resumeDraftRecord,
+      nextPersistedDraftOverride: persistedDraft,
+      nextLatestSavedSubmission: resumeDraftRecord
+    })
   }
 
   function handleReturnToHistory() {
@@ -361,6 +378,7 @@ function ServiceCapacitySurveyForm({
       return
     }
 
+    // Guard async identity lookups so stale responses cannot overwrite newer header edits.
     let isActive = true
     const timeoutId = window.setTimeout(() => {
       setIsSearchingPartnerIdentifiers(true)
@@ -428,6 +446,7 @@ function ServiceCapacitySurveyForm({
 
     return sections.flatMap((section) =>
       section.prompts.flatMap((promptItem) => {
+        // Z59.01/Z59.02 remain hidden until Z59.0 is rated to preserve intended parent-first branching.
         if ((promptItem.normalizedZCode === 'Z59.01' || promptItem.normalizedZCode === 'Z59.02') && !hasRatedHomelessness) {
           return []
         }
@@ -627,6 +646,7 @@ function ServiceCapacitySurveyForm({
       window.clearTimeout(autosaveTimeoutRef.current)
     }
 
+    // Debounce server writes so rapid slider/key edits collapse into a single draft save.
     autosaveTimeoutRef.current = window.setTimeout(() => {
       setAutosaveState('saving')
       setBlockingSaveError(null)

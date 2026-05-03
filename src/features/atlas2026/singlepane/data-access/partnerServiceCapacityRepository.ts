@@ -16,6 +16,14 @@ import type {
 } from '@/features/atlas2026/singlepane/types'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
+/**
+ * Partner service-capacity repository adapter.
+ *
+ * Purpose:
+ * - delegates persistence/search operations to shared contracts.
+ * - enforces single-pane runtime preconditions for Supabase-backed workflows.
+ */
+
 export async function loadPartnerServiceCapacitySurvey(
   organizationName: string,
   draftKey?: string
@@ -25,6 +33,8 @@ export async function loadPartnerServiceCapacitySurvey(
   if (!organizationNameNormalized && !trimmedDraftKey) return null
 
   if (!hasSupabaseConfig || !supabase) {
+    // Survey history is intentionally unavailable in pure local mode because
+    // records are keyed to shared Supabase submissions.
     return null
   }
 

@@ -8,6 +8,7 @@ import {
   normalizeTimelineConfig
 } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
+import { formatDateInputValue } from './timelineDateUtils'
 
 interface StripMapControlOverlayProps {
   isOpen: boolean
@@ -22,21 +23,13 @@ const PHASE_COLORS: Record<StabilizationPhase, string> = {
   renewal: SP_COLORS.deepGreen
 }
 
-function formatDateInputValue(timestampIso: string) {
-  const date = new Date(timestampIso)
-  if (!Number.isFinite(date.getTime())) return ''
-  const year = date.getUTCFullYear()
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getUTCDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 export default function StripMapControlOverlay({
   isOpen,
   timelineConfig,
   onClose,
   onSave
 }: StripMapControlOverlayProps) {
+  // Keep a local draft so users can experiment with timeline geometry and commit as one atomic save.
   const [draftConfig, setDraftConfig] = useState(() => normalizeTimelineConfig(timelineConfig))
 
   useEffect(() => {

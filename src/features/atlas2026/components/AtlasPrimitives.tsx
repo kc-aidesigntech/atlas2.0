@@ -1,3 +1,7 @@
+/**
+ * Shared ATLAS UI primitives used by single-pane screens to keep panel/button
+ * behavior and visual semantics consistent across feature modules.
+ */
 import React from 'react'
 import { X } from 'lucide-react'
 
@@ -93,6 +97,8 @@ export function AtlasStatusPill({
   )
 }
 
+// Button primitives below intentionally share sign-button treatment so hover,
+// focus, and disabled behavior stay uniform across all shell actions.
 export function AtlasIconBadge({
   children,
   color,

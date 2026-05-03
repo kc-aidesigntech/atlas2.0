@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 import type { EnrolleeProfile, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
 import { loadRouteCandidates } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 
+/**
+ * Fetches route candidates scoped to the selected enrollee enrollment.
+ *
+ * Side-effect note:
+ * - stale async responses are discarded via mount guard on enrollee changes.
+ */
+
 export function useRouteCandidates(selectedEnrollee: EnrolleeProfile | null) {
   const [routeCandidates, setRouteCandidates] = useState<RouteCandidateRecord[]>([])
 

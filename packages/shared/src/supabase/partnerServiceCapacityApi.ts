@@ -1,3 +1,7 @@
+/**
+ * Supabase persistence layer for partner service-capacity submissions, including
+ * compatibility fallbacks for partially migrated survey schemas.
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   aggregatePartnerSurveyAnswersByNormalizedZCode,
@@ -18,6 +22,8 @@ import type {
 let supportsDraftSubmissionSchema: boolean | null = null;
 let supportsNotEncounteredAnswerSchema: boolean | null = null;
 
+// Feature probes are memoized at module scope so autosave loops do not repeat
+// failing writes against legacy database schemas on every request.
 function toPostgrestErrorText(error: unknown) {
   const message =
     typeof error === "object" && error && "message" in error ? String((error as { message?: string }).message || "").toLowerCase() : "";

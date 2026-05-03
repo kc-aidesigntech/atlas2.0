@@ -5,17 +5,12 @@ import {
   SRIG_COORDINATION_AREAS
 } from '@/core/atlas2026/canonical-spec'
 import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
+import { isCivicContributionEvent, toMillis } from '@/services/atlas2026/snapshot-helpers'
 import { STEP_STATUS } from '@/services/atlas2026/step-graph'
 
 function average(values = []) {
   if (!values.length) return 0
   return values.reduce((sum, value) => sum + value, 0) / values.length
-}
-
-function toMillis(timestamp) {
-  if (!timestamp) return 0
-  if (typeof timestamp?.toMillis === 'function') return timestamp.toMillis()
-  return (timestamp?.seconds || 0) * 1000
 }
 
 export function buildAscentEngineSnapshot({ participant, routes = [], steps = [], pcfRefinementWeight = 0.6 }) {
@@ -66,11 +61,8 @@ export function buildRenewalSnapshot({
   const completedRoutes = routes.filter((route) => route.status === ROUTE_LIFECYCLE.completed).length
   const completedSteps = steps.filter((step) => step.status === STEP_STATUS.completed).length
   const verifiedEvents = memoryEvents.filter((event) => event.verified)
-  const civicContributionEvents = verifiedEvents.filter((event) =>
-    /(mentor|community|policy|steward|volunteer|restorative|civic|contribute|care plan|impact)/i.test(
-      `${event.label || ''} ${event.eventType || ''}`
-    )
-  )
+  // Event-level classification must match operations dashboards so reciprocity metrics reconcile.
+  const civicContributionEvents = verifiedEvents.filter(isCivicContributionEvent)
   const recentReceipts = [...civicContributionEvents]
     .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
     .slice(0, 6)

@@ -1,7 +1,9 @@
 export function toScope(event, participant, selectedRole) {
+  // Leadership/funder roles always see regional scope to prevent accidental narrowing by participant context.
   if (selectedRole === 'regionalDirector' || selectedRole === 'readOnlyFunder') return 'regional'
   if (selectedRole === 'stationOperator') return 'station'
   if (event?.participantId === participant?.participantId) return 'participant'
+  // Default to station scope for peer workflows when ownership is ambiguous.
   return 'station'
 }
 
@@ -33,6 +35,7 @@ export function buildMemoryView({ events, participant, selectedRole }) {
   const recentWindow = scopedEvents.filter((event) => {
     const seconds = event?.createdAt?.seconds
     if (!seconds) return false
+    // Weekly pulse powers "recent activity" indicators; changing this window impacts trend comparability.
     return Date.now() - seconds * 1000 <= 1000 * 60 * 60 * 24 * 7
   })
 

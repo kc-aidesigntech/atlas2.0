@@ -34,6 +34,7 @@ export default function LocalDateInputBox({
       <input
         type="date"
         value={value}
+        // Keep the control fully controlled so parent editors can validate before committing side effects.
         onChange={(event) => onChange(event.target.value)}
         className="mt-2 w-full rounded-[12px] border px-3 py-2 text-[13px] text-white"
         style={{ borderColor: '#ffffff35', backgroundColor: '#000000' }}

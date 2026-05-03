@@ -7,6 +7,8 @@ export interface AtlasSupabaseConfig {
 }
 
 export function resolveSupabaseConfig(config: AtlasSupabaseConfig) {
+  // Env-based config often carries whitespace from shell exports or CI secrets;
+  // normalize once so all downstream checks share identical behavior.
   return {
     url: config.url?.trim() || "",
     publishableKey: config.publishableKey?.trim() || "",
@@ -23,6 +25,8 @@ export function createAtlasSupabaseClient(
   options?: Parameters<typeof createClient<AtlasDatabase>>[2],
 ): SupabaseClient<AtlasDatabase> | null {
   const resolved = resolveSupabaseConfig(config);
+  // Returning null (instead of throwing) lets app shells decide whether to show
+  // offline/unauthenticated states before network clients are initialized.
   if (!resolved.url || !resolved.publishableKey) {
     return null;
   }

@@ -14,6 +14,7 @@ import type {
 } from '../types'
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
+import { formatDateInputValue } from './timelineDateUtils'
 
 const arrowIconUrl = new URL(
   '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
@@ -95,16 +96,8 @@ function formatPhaseRange(startIso: string, startOffset: number, endOffset: numb
   return `${formatter.format(start)}-${formatter.format(end)}`
 }
 
-function formatDateInputValue(timestampIso: string) {
-  const date = new Date(timestampIso)
-  if (!Number.isFinite(date.getTime())) return ''
-  const year = date.getUTCFullYear()
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getUTCDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 function mergeDateInputWithTime(dateInput: string, currentIso: string) {
+  // Preserve the original time-of-day so date edits do not re-order same-day milestones unexpectedly.
   const date = new Date(currentIso)
   const safeHours = Number.isFinite(date.getTime()) ? date.getUTCHours() : 9
   const safeMinutes = Number.isFinite(date.getTime()) ? date.getUTCMinutes() : 0
@@ -149,6 +142,7 @@ export default function VerticalStripMapTimeline({
   const [isControlOverlayOpen, setIsControlOverlayOpen] = React.useState(false)
   const [activeResolvedMarkerId, setActiveResolvedMarkerId] = React.useState<string | null>(null)
   const sortedEvents = useMemo(
+    // Timeline visuals rely on strict chronological rendering, regardless of upstream order.
     () => [...events].sort((a, b) => new Date(a.timestampIso).getTime() - new Date(b.timestampIso).getTime()),
     [events]
   )

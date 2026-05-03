@@ -1,4 +1,5 @@
 import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
+import { isCivicContributionEvent, toMillis } from '@/services/atlas2026/snapshot-helpers'
 import { STEP_STATUS } from '@/services/atlas2026/step-graph'
 
 function countBy(items, keySelector) {
@@ -18,6 +19,8 @@ export function buildOperationsSnapshot({
   phaseReadinessAlertThreshold = 0.45,
   reciprocityActivationThreshold = 0.6
 }) {
+  // Aggregate snapshots are used for executive monitoring, so each metric intentionally
+  // composes from the same source collections instead of pre-aggregated caches.
   const participantByPhase = countBy(participants, (item) => item.currentPhase || 'Unknown')
   const routesByStatus = countBy(routes, (item) => item.status || ROUTE_LIFECYCLE.pending)
   const stepsByStatus = countBy(steps, (item) => item.status || STEP_STATUS.pending)
@@ -37,10 +40,7 @@ export function buildOperationsSnapshot({
     : 0
 
   const stepAges = steps.map((step) => {
-    const millis =
-      typeof step?.updatedAt?.toMillis === 'function'
-        ? step.updatedAt.toMillis()
-        : (step?.updatedAt?.seconds || step?.createdAt?.seconds || 0) * 1000
+    const millis = toMillis(step?.updatedAt || step?.createdAt)
     const ageHours = millis ? (now - millis) / (1000 * 60 * 60) : 0
     return { ...step, ageHours }
   })
@@ -76,11 +76,7 @@ export function buildOperationsSnapshot({
       currentPhase: participant.currentPhase,
       phaseReadiness: Number((participant.phaseReadiness ?? 0).toFixed(3))
     }))
-  const contributionEvents = memoryEvents.filter((event) =>
-    /(mentor|community|policy|steward|volunteer|restorative|civic|contribute|care plan|impact)/i.test(
-      `${event.label || ''} ${event.eventType || ''}`
-    )
-  ).length
+  const contributionEvents = memoryEvents.filter(isCivicContributionEvent).length
   const routeCompletionRatio = routes.length ? completedRoutes / routes.length : 0
   const contributionRatio = memoryEvents.length ? contributionEvents / memoryEvents.length : 0
   const reciprocityIndex = Number((readinessAvg * 0.45 + routeCompletionRatio * 0.35 + contributionRatio * 0.2).toFixed(3))
@@ -133,10 +129,7 @@ export function buildCountyComparisonSnapshot({ participants, routes, steps, mem
     const completedRoutes = scopedRoutes.filter((route) => route.status === ROUTE_LIFECYCLE.completed).length
     const completedSteps = scopedSteps.filter((step) => step.status === STEP_STATUS.completed).length
     const overdueSteps = scopedSteps.filter((step) => {
-      const millis =
-        typeof step?.updatedAt?.toMillis === 'function'
-          ? step.updatedAt.toMillis()
-          : (step?.updatedAt?.seconds || step?.createdAt?.seconds || 0) * 1000
+      const millis = toMillis(step?.updatedAt || step?.createdAt)
       const ageHours = millis ? (Date.now() - millis) / (1000 * 60 * 60) : 0
       return (
         [STEP_STATUS.pending, STEP_STATUS.inProgress, STEP_STATUS.blocked].includes(step.status) &&

@@ -1,3 +1,7 @@
+/**
+ * Supabase data-access adapter for ATLAS app surfaces. It normalizes mixed
+ * table/view payloads into stable records consumed by web and mobile features.
+ */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AtlasJsonDataset,
@@ -291,6 +295,8 @@ export interface LegacyAtlasRenewalRoleRecord {
   updatedAt: LegacyTimestamp;
 }
 
+// These coercion helpers intentionally absorb backend schema drift so callers
+// can rely on strongly shaped records without per-surface defensive parsing.
 function toTimestamp(value?: string | null): LegacyTimestamp {
   // Legacy consumers expect a Firestore-like timestamp shape; invalid/missing input is
   // normalized to epoch rather than throwing so snapshot reads stay resilient.

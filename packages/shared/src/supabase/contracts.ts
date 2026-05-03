@@ -19,6 +19,8 @@ export interface PartnerServiceCapacityAnswer {
   promptId: string;
   parentCode: string;
   zCode: string;
+  // normalizedZCode is the join-safe key used by scoring queries and historical
+  // rollups; keep it persisted instead of re-deriving to avoid drift across clients.
   normalizedZCode: string;
   title: string;
   description: string;
@@ -56,6 +58,8 @@ export interface PartnerIdentifierRecord {
 }
 
 export interface AtlasDatabase {
+  // Shared DB contract for typed Supabase calls across web/mobile packages.
+  // When schema changes, update this file first so type errors expose cross-layer drift.
   atlas: {
     Tables: {
       partners: {
@@ -103,6 +107,8 @@ export interface AtlasDatabase {
           form_version: string;
           submitted_at: string;
           updated_at: string | null;
+          // raw_payload preserves the original submission envelope for auditing and
+          // replay in case flattened columns evolve over time.
           raw_payload: PartnerServiceCapacitySubmissionInput | null;
         };
         Insert: {

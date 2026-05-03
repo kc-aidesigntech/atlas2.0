@@ -8,6 +8,7 @@ import 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 
 function buildDateStamp() {
+  // ISO date prefix keeps filenames lexicographically sortable across locales.
   return new Date().toISOString().split('T')[0]
 }
 

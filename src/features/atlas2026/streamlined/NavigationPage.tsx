@@ -4,6 +4,8 @@ import type { JourneyAssignment, Participant, RoutingStep } from '@/features/atl
 import { AtlasIconBadge, AtlasInsetCard, AtlasMetricPill, AtlasPanel } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SUBWAY_COLORS } from '@/features/atlas2026/streamlined/theme'
 
+// Navigation page binds participant selection to a journey strip projection.
+// It reads assignment state only and does not mutate route progress directly.
 interface NavigationPageProps {
   participants: Participant[]
   selectedParticipantId: string

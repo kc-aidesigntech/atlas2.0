@@ -1,3 +1,7 @@
+/**
+ * Partner service-capacity domain helpers for survey normalization, scoring,
+ * and deterministic grouping used by API and UI layers.
+ */
 import type {
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,

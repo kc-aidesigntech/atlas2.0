@@ -2,6 +2,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const Textarea = React.forwardRef(({ className, ...props }, ref) => {
+  // Matches Input interaction tokens so multiline and single-line fields feel interchangeable.
   return (
     <textarea
       className={cn(

@@ -13,6 +13,7 @@ interface ContextPanelsProps {
 }
 
 export default function ContextPanels({ role, activeMenu, enrollmentRequests, countyHeatmap, supervisorNavigatorCompetency }: ContextPanelsProps) {
+  // Non-navigator "my profile" intentionally surfaces enrollment intake requests instead of navigator-only profile data.
   if (activeMenu === 'my profile' && role !== 'navigator') {
     return (
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>

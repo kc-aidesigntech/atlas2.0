@@ -1,3 +1,7 @@
+/**
+ * Mobile navigator route shell that hydrates shared ATLAS journey data and
+ * gracefully falls back when live Supabase reads are unavailable.
+ */
 import {
   type AtlasJsonDataset,
   type EnrollmentStationMarker,

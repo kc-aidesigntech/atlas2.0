@@ -141,6 +141,7 @@ export default function MobileRouteBoardPanel({
         <div className="flex flex-wrap items-center justify-end gap-2">{phaseButtons}</div>
       </div>
     )
+  // Memoize action chrome to avoid re-render jitter in the route board list while timeline data stays stable.
   }, [onRegulationTestsClick, onRenewalTestsClick, onRoutePlanningClick, onStartDateChange, onTimelineConfigChange, showRoutePlanningQuickAction, timelineConfig.planStartIso])
 
   return (
@@ -285,6 +286,7 @@ export default function MobileRouteBoardPanel({
         timelineConfig={timelineConfig}
         onClose={() => setIsControlOverlayOpen(false)}
         onSave={(nextConfig) => {
+          // Prefer canonical timeline updates; fall back to start-date-only callback for older call sites.
           onTimelineConfigChange?.(nextConfig)
           if (!onTimelineConfigChange && onStartDateChange && nextConfig.planStartIso !== timelineConfig.planStartIso) {
             onStartDateChange(nextConfig.planStartIso)

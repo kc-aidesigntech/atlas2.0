@@ -13,6 +13,7 @@ interface RadialLoadTableOverlayProps {
 export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClose }: RadialLoadTableOverlayProps) {
   if (!isOpen) return null
 
+  // Snapshot rows immediately so rendering remains stable even if upstream data refreshes while overlay is open.
   const rows = breakdown?.rows || []
   const isPartnerSurvey = breakdown?.sourceKind === 'partnerSurvey'
 

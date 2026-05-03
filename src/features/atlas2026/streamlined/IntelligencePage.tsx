@@ -3,6 +3,8 @@ import type { JourneyAssignment, Participant, RouteTemplate } from '@/features/a
 import { AtlasInsetCard, AtlasMetricPill, AtlasPanel } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SUBWAY_COLORS } from '@/features/atlas2026/streamlined/theme'
 
+// Intelligence page rolls participant/journey/template datasets into regional metrics
+// that help planners tune template coverage before assignment actions.
 interface IntelligencePageProps {
   participants: Participant[]
   templates: RouteTemplate[]

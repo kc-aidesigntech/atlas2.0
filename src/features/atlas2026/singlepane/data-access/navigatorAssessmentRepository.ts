@@ -2,6 +2,16 @@ import type { NavigatorCompetencyAssessmentRecord } from '@/features/atlas2026/s
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 
+/**
+ * Navigator competency assessment repository.
+ *
+ * Purpose:
+ * - resolves person/role identities required by assessment tables.
+ * - maps normalized persistence rows to UI contract records.
+ */
+
+// People-role assignments are validated here to preserve the domain invariant
+// that one staff identity cannot simultaneously represent conflicting roles.
 function splitDisplayName(displayName: string) {
   const parts = displayName.trim().split(/\s+/).filter(Boolean)
   if (parts.length <= 1) {
@@ -134,6 +144,8 @@ export async function loadNavigatorCompetencyAssessments(): Promise<NavigatorCom
       .in('id', personIds)
     if (peopleError) throw peopleError
 
+    // Answers are loaded in a separate query and grouped client-side to keep
+    // the returned record shape stable and avoid nested row coupling.
     const { data: answers, error: answersError } = await supabase
       .schema('atlas')
       .from('navigator_competency_assessment_answers')

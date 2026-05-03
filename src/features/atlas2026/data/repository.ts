@@ -1,3 +1,7 @@
+/**
+ * Route-builder repository facade for feature code. It wraps shared Supabase
+ * APIs and provides safe fallbacks when no client is configured.
+ */
 import {
   assignRouteBuilderTemplate,
   createRouteBuilderBomItem as createRouteBuilderBomItemRecord,
@@ -11,6 +15,8 @@ function createId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+// Dataset loading always returns a complete contract shape so selectors and
+// UIs can avoid null-check branching in disconnected environments.
 export async function loadDataset(): Promise<AtlasJsonDataset> {
   if (!supabase) {
     return {
@@ -71,6 +77,8 @@ export async function assignTemplateToParticipant(
   participantId: string,
   templateId: string
 ): Promise<JourneyAssignment | null> {
+  // Template lookup is the invariant guard; callers only get assignments when
+  // the chosen template still exists in current dataset state.
   const template = dataset.routeTemplates.find((item) => item.id === templateId)
   if (!template) return null
 

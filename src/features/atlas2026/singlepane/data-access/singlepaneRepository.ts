@@ -65,6 +65,14 @@ import {
   DEFAULT_TIMELINE_MAX_DURATION_MONTHS
 } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 
+/**
+ * Single-pane data-access facade.
+ *
+ * Purpose:
+ * - composes per-feature repositories into a single orchestration boundary.
+ * - returns UI-shaped records while insulating callers from backend topology.
+ */
+
 export interface SinglePaneBootstrapData {
   enrollees: import('@/features/atlas2026/singlepane/types').EnrolleeProfile[]
   loads: DomainLoad[]
@@ -142,6 +150,8 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   ])
 
   const shouldLoadEnrolleeDomain = role !== 'partner'
+  // Domain datasets are fetched in one branch so filtering decisions are applied
+  // consistently across profiles, aggregate loads, and breakdown rows.
   const [profiles, loadRows, breakdownRows, navigatorAssignedEnrollees] = shouldLoadEnrolleeDomain
     ? await Promise.all([
         withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),

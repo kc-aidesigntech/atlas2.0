@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { canRolePerform } from '@/core/atlas2026/policy'
 import { downloadCsv } from '@/services/atlas2026/export-service'
 
+// Collective memory turns mutable field activity into verified receipts that can be
+// shared across roles without exposing unverified or speculative events as truth.
 function formatFirestoreTimestamp(value) {
   if (!value) return 'No timestamp'
   const millis = typeof value?.toMillis === 'function' ? value.toMillis() : (value?.seconds || 0) * 1000
@@ -52,6 +54,8 @@ export default function CollectiveMemoryPage({
   const [renewalRoleName, setRenewalRoleName] = useState(selectedRenewalRoleRecord?.roleName || 'peer-mentor')
   const [contributionDomain, setContributionDomain] = useState(selectedRenewalRoleRecord?.contributionDomain || 'community-care')
   const [assignmentNotes, setAssignmentNotes] = useState(selectedRenewalRoleRecord?.notes || '')
+  // Renewal assignment is intentionally gated by reciprocity to prevent role grants
+  // before contribution evidence is visible in memory receipts.
   const renewalActivationOpen = civicBioSnapshot.renewal.reciprocityIndex >= civicBioSnapshot.renewal.threshold
   const renewalRoles = useMemo(
     () => ['peer-mentor', 'community-steward', 'youth-guide', 'policy-advocate', 'stabilization-ambassador'],

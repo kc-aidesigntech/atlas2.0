@@ -1,3 +1,7 @@
+/**
+ * Browser auth context wrapper around Supabase. It standardizes sign-in/up/link
+ * operations and exposes session lifecycle state to the app shell.
+ */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Session, SupabaseClient, UserIdentity } from '@supabase/supabase-js'
 import type { AtlasDatabase } from '@atlas/shared'
@@ -20,6 +24,21 @@ type SupabaseAuthContextValue = {
 const SupabaseAuthContext = createContext<SupabaseAuthContextValue | null>(null)
 
 function authRedirectBaseUrl() {
+  const configuredRedirectUrl = import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL?.trim()
+  if (configuredRedirectUrl) {
+    try {
+      // Prefer an explicit auth callback origin so local sign-up sessions can
+      // still route email confirms and OAuth callbacks to hosted environments.
+      const configured = new URL(configuredRedirectUrl)
+      if (!configured.pathname.endsWith('/')) {
+        configured.pathname = `${configured.pathname}/`
+      }
+      return configured.toString()
+    } catch {
+      // Fall through to runtime-origin redirect when env input is invalid.
+    }
+  }
+
   if (typeof window === 'undefined') return undefined
   const base = import.meta.env.BASE_URL || '/'
   const normalized = base.endsWith('/') ? base.slice(0, -1) : base

@@ -8,6 +8,14 @@ import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { computeAssessmentScoreSummary, isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
 
+/**
+ * Regulation and renewal assessment repository.
+ *
+ * Purpose:
+ * - persists submission + answer rows with compatibility fallbacks.
+ * - keeps local cache synchronized so draft/complete timelines remain resilient.
+ */
+
 const LOCAL_STORAGE_KEY = 'atlas2026.singlepane.regulation-tests.v1'
 
 function computePassThreshold(testType: RegulationTestType, answers: RegulationTestAnswer[]) {
@@ -125,6 +133,8 @@ export async function loadRegulationTestHistory(enrolleeId: string, testType: Re
     }
   }
 
+  // Cloud results replace only the scoped enrollee/test partition in local cache,
+  // preventing unrelated local drafts from being evicted.
   const records = (submissions || []).map((submission: any) => mapSubmissionRow(submission, answersBySubmissionId.get(submission.id) || []))
   const local = loadLocalState().filter((record) => !(record.enrolleeId === enrolleeId && record.testType === testType))
   persistLocalState([...local, ...records])

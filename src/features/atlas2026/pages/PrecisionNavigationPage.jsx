@@ -8,6 +8,8 @@ import { downloadCsv } from '@/services/atlas2026/export-service'
 import { getInterferenceMitigations } from '@/services/atlas2026/route-engine'
 import { canRolePerform } from '@/core/atlas2026/policy'
 
+// Precision navigation translates route-engine diagnostics into operator choices:
+// activate, transition, or hold when interference risk is too high.
 function formatFirestoreTimestamp(value) {
   if (!value) return 'No timestamp'
   const millis = typeof value?.toMillis === 'function' ? value.toMillis() : (value?.seconds || 0) * 1000
@@ -34,6 +36,8 @@ const ROUTE_CLASS_STYLES = {
 }
 
 function resolveRouteClass(routeClass) {
+  // Stabilization is the safe fallback so style and export logic remain deterministic
+  // even when upstream data omits route class.
   return routeClass || 'stabilization'
 }
 

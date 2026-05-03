@@ -1,3 +1,5 @@
+// Role policy boundaries are a hard authorization contract shared by UI affordances
+// and service-side enforcement. Keep action keys stable across both layers.
 export const ATLAS_ROLES = {
   peerNavigator: 'peerNavigator',
   stationOperator: 'stationOperator',
@@ -22,11 +24,13 @@ export const POLICY_BOUNDARIES = {
 }
 
 export function canRolePerform(role, action) {
+  // Unknown actions default to deny-by-default because policy map is the explicit allowlist.
   return Boolean(POLICY_BOUNDARIES[action]?.includes(role))
 }
 
 export function enforcePolicy(role, action) {
   if (!canRolePerform(role, action)) {
+    // Return a structured denial payload so callers can log/audit the same shape.
     return {
       allowed: false,
       reason: `Role "${role}" cannot perform action "${action}".`

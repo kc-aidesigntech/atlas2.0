@@ -7,6 +7,14 @@ import type {
   PartnerSurveyRespondentRole
 } from '@atlas/shared'
 
+/**
+ * Single-pane domain type contracts.
+ *
+ * Purpose:
+ * - centralizes cross-feature interfaces shared by data-access, hooks, and UI.
+ * - preserves compatibility with shared package contracts via explicit re-exports.
+ */
+
 export type AtlasRole = 'navigator' | 'partner' | 'supervisor' | 'administrator'
 
 export interface EnrolleeActiveZCode {
@@ -101,6 +109,7 @@ export interface RouteLogEvent {
   timelinePositionRatio?: number | null
 }
 
+// Navigation config defines role-level menu entitlements consumed by shell routing.
 export interface RoleMenuConfig {
   role: AtlasRole
   topMenus: string[]

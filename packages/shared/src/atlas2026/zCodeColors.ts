@@ -1,3 +1,7 @@
+/**
+ * Canonical Z-code color aliases and parent-code lookup utilities shared across
+ * charts, badges, and timeline markers.
+ */
 export const Z_CODE_COLOR_ALIASES = {
   yellow: "#fcc01a",
   orange: "#ff6319",

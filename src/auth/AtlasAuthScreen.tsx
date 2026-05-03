@@ -41,6 +41,7 @@ export default function AtlasAuthScreen() {
         const { error } = await signInWithPassword(trimmedEmail, password)
         if (error) setMessage(error.message)
       } else {
+        // Sign-up switches back to sign-in so confirmation-email flows do not leave users on a dead-end form.
         const { error } = await signUpWithPassword(trimmedEmail, password, fullName)
         if (error) {
           setMessage(error.message)
@@ -58,6 +59,7 @@ export default function AtlasAuthScreen() {
     setMessage(null)
     setBusy(true)
     try {
+      // Supabase links verified provider identities by email, preserving a single authorization profile.
       const { error } = await signInWithOAuth(provider)
       if (error) setMessage(error.message)
     } finally {

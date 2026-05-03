@@ -1,3 +1,7 @@
+/**
+ * Shared ATLAS 2026 routing contracts consumed by web, mobile, and Supabase
+ * adapters to preserve a consistent in-memory dataset shape.
+ */
 export type JourneyPhase = "regulation" | "readiness" | "renewal";
 
 export interface Participant {

@@ -54,6 +54,7 @@ export default function MtaRouteBoard({
   headerActions,
   emptyMessage = 'No partner specialties currently match this enrollee.'
 }: MtaRouteBoardProps) {
+  // Keep the board interactive even when no explicit selection exists by defaulting to the top-ranked candidate.
   const selectedCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedCandidateId) ?? routeCandidates[0] ?? null
   const summaryCandidate = selectedCandidate ?? routeCandidates[0] ?? null
 
@@ -284,6 +285,7 @@ function StatChip({ label, value }: { label: string; value: string }) {
   React.useEffect(() => {
     if (!isOpen) return
 
+    // Tooltip is rendered fixed; recompute on scroll/resize so chip explanations stay anchored to the trigger.
     function updateTooltipPosition() {
       const rect = buttonRef.current?.getBoundingClientRect()
       if (!rect) return
@@ -312,6 +314,7 @@ function StatChip({ label, value }: { label: string; value: string }) {
   React.useEffect(() => {
     if (!isPinned) return
 
+    // Pinned tooltips close on outside pointer to avoid trapping persistent overlays in dense route rows.
     function handlePointerDown(event: PointerEvent) {
       if (buttonRef.current?.contains(event.target as Node)) return
       setIsPinned(false)

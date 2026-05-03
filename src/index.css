@@ -111,6 +111,7 @@
 
   body,
   body * {
+    /* Brand voice standardizes lowercase copy globally; component text must opt out explicitly if needed. */
     text-transform: lowercase !important;
   }
 
@@ -195,6 +196,7 @@
   }
 
   .text-slate-900 {
+    /* Overrides legacy Tailwind slate palette to preserve contrast on dark atlas surfaces. */
     color: rgba(248, 250, 252, 0.98) !important;
   }
   .text-slate-800 {

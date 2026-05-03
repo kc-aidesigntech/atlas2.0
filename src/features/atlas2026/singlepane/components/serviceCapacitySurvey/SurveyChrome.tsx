@@ -91,6 +91,7 @@ export function BurdenCard({
       return
     }
 
+    // Prefer keyboard re-focus on pointer-fine devices to support rapid score entry without extra taps.
     const shouldAutoFocus =
       shouldRefocusInputRef.current ||
       (typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches)
@@ -133,6 +134,7 @@ export function BurdenCard({
 
   function handleNumericInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (!hasNext || !canAdvance) return
+    // Space/Enter/Tab all advance to mimic spreadsheet-style data entry for survey operators.
     if (event.key === 'Enter' || event.key === 'Tab' || event.key === ' ' || event.key === 'Spacebar') {
       event.preventDefault()
       advanceToNextPrompt()

@@ -37,6 +37,7 @@ export default function ZCodeTaskPane({ zCode, childCodes = [], onClose }: ZCode
     if (!zCode) return []
     const normalized = zCode.trim().toLowerCase()
     const zGroup = normalized.match(/^z?(\d{2})/)?.[1]
+    // Fall back to generic tasks so the pane remains usable for newly introduced Z-groups before copy is curated.
     const taskLabels = (zGroup && TASK_LABELS[`z${zGroup}`]) || ['z-code assessment task', 'resolution checkpoint']
     return taskLabels.map((label, index) => ({
       id: `${normalized}-${index}`,

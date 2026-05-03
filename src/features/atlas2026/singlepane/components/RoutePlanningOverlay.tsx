@@ -40,6 +40,7 @@ export default function RoutePlanningOverlay({
   onClose
 }: RoutePlanningOverlayProps) {
   if (!isOpen || !enrollee) return null
+  // Default selection mirrors board ranking so assign/done actions are always available on first open.
   const selectedCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedCandidateId) ?? routeCandidates[0] ?? null
 
   return (

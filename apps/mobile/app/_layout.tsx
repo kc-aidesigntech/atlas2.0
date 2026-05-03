@@ -1,3 +1,7 @@
+/**
+ * Expo Router root layout that defines the mobile auth boundary and the only
+ * route groups rendered inside the shared AuthProvider session context.
+ */
 import { Stack } from "expo-router";
 import { AuthProvider } from "../src/auth/AuthProvider";
 

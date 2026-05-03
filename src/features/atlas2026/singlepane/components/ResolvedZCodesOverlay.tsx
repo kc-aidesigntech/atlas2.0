@@ -70,6 +70,7 @@ export default function ResolvedZCodesOverlay({
     if (!isOpen) return
     setSavingIds([])
     setValidationMessage(null)
+    // Route-board launches carry implicit partner attribution; manual launches must collect partner/note per run.
     if (isRouteBoardLaunch && candidate?.partnerId) {
       setSelectedPartnerId(candidate.partnerId)
       setResolutionNote('')
@@ -82,6 +83,7 @@ export default function ResolvedZCodesOverlay({
   if (!isOpen || !enrollee) return null
 
   async function handleToggle(enrolleeZCodeId: string, isResolved: boolean) {
+    // Manual resolutions require attribution context to keep downstream audit/history screens actionable.
     if (isResolved && !isRouteBoardLaunch && !selectedPartnerId && !trimmedNote) {
       setValidationMessage('Select a partner station or add a note before marking a Z-code resolved.')
       return

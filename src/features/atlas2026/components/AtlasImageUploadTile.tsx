@@ -1,3 +1,7 @@
+/**
+ * Reusable ATLAS image tile primitive that centralizes upload affordances and
+ * status/error messaging for avatar-style image surfaces.
+ */
 import React from 'react'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 

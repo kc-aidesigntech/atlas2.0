@@ -5,6 +5,14 @@ import type { PartnerServiceCapacityScaleOption, ZCodeSurveySection } from '@/fe
 import { isOptionalSupabaseDataError, withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
+/**
+ * Hydrates service-capacity survey definition for partner workflows.
+ *
+ * Contract:
+ * - prefers Supabase-hosted definition.
+ * - guarantees fallback to static catalog when optional schemas are unavailable.
+ */
+
 export function useServiceCapacitySurveyCatalog() {
   const [scale, setScale] = useState<PartnerServiceCapacityScaleOption[]>([])
   const [sections, setSections] = useState<ZCodeSurveySection[]>([])
@@ -29,6 +37,7 @@ export function useServiceCapacitySurveyCatalog() {
           DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION
         )
         if (!isMounted) return
+        // Guard against partially-configured definitions by preserving non-empty defaults.
         setScale(definition.scale.length ? definition.scale : DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION.scale)
         setSections(definition.sections.length ? definition.sections : DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION.sections)
       } catch (error) {

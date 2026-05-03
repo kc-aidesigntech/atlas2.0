@@ -337,6 +337,7 @@ export function analyzeByCohort(enrollees, cohortType) {
     case 'zcode':
       return analyzeByZCode(enrollees)
     default:
+      // Unknown cohort keys resolve to an empty shape to keep chart callers fail-soft.
       return {}
   }
 }
@@ -458,6 +459,7 @@ export function predictRiskTrend(enrollee) {
 
 function predictRecommendedTier(wellness, zCodeCount, currentTier) {
   // Simple tier recommendation logic
+  // Current tier is passed for future policy-aware tuning; keep param for API stability.
   if (wellness > 70 && zCodeCount <= 2) return 1
   if (wellness < 40 || zCodeCount >= 5) return 3
   return 2

@@ -29,6 +29,14 @@ import {
   loadSinglePaneBootstrap
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 
+/**
+ * Bootstraps role-scoped single-pane state.
+ *
+ * Purpose:
+ * - coordinates primary bootstrap payload with auxiliary datasets.
+ * - exposes one cohesive state object for screen-level consumers.
+ */
+
 export interface SinglePaneBootstrapState {
   isLoading: boolean
   enrollees: EnrolleeProfile[]
@@ -106,6 +114,8 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
         // Bootstrap aggregates role-scoped domain data, then this hook enriches it
         // with ancillary records used by secondary panels and workflows.
         const data = await loadSinglePaneBootstrap(role)
+        // Fetch companion datasets in parallel so first paint includes all side panels
+        // without triggering sequential spinner churn.
         const [
           requests,
           heatmap,

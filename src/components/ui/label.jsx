@@ -2,6 +2,7 @@ import * as React from "react"
 import * as LabelPrimitive from "@radix-ui/react-label"
 import { cn } from "@/lib/utils"
 
+// Label wrapper keeps peer-disabled styling coupled to inputs without repeating utility classes.
 const Label = React.forwardRef(({ className, ...props }, ref) => (
   <LabelPrimitive.Root
     ref={ref}

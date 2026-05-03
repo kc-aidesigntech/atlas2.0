@@ -1,3 +1,7 @@
+/**
+ * Mobile Supabase client factory with React Native auth persistence settings.
+ * This file is the single source of truth for Expo env-based connectivity.
+ */
 import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAtlasSupabaseClient, hasSupabaseConfig } from "@atlas/shared";

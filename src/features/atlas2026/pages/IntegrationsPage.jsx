@@ -1,6 +1,8 @@
 import React from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
+// Integrations page tracks cross-institution contract readiness. It does not trigger
+// side effects itself; it exposes where external coordination is still pending.
 export default function IntegrationsPage({ ecosystemSnapshot }) {
   const status = ecosystemSnapshot?.ecosystem?.every((node) => node.status === 'active') ? 'connected' : 'pending'
 

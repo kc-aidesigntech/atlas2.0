@@ -25,6 +25,8 @@ import type {
   SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/singlepane/types'
 
+// Admin control panel composes multiple registry contracts (people, organizations,
+// enrollee drafts, interval rules) into one operator console with explicit save paths.
 type AdminPortalSection = 'overview' | 'enrollees' | 'directory' | 'organizations' | 'relationships' | 'assessments'
 type CombinedEnrolleeRow =
   | { kind: 'existing'; id: string; profile: EnrolleeProfile; intake: EnrolleeIntakeRecord }

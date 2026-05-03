@@ -30,6 +30,7 @@ export function RecordManagementView({
   onEditDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
   onDeleteDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
 }) {
+  // Keep resume CTA visible during resolution/loading/error so users understand draft recovery status immediately.
   const showResumeRegion = isResolvingResumeDraft || hasPersistedDraft || resumeDraftError
   const canResumeFromBrowser = hasPersistedDraft && !resumeDraftError
 

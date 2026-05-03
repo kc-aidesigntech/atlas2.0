@@ -11,6 +11,14 @@ import {
 } from '@/features/atlas2026/singlepane/components/serviceCapacitySurvey/draft'
 import { loadPartnerServiceCapacitySurvey } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
 
+/**
+ * Resolves resumable partner survey draft state.
+ *
+ * Contract:
+ * - emits a best available draft immediately from local/history sources.
+ * - reconciles with server state without blocking editing.
+ */
+
 interface PartnerServiceCapacityDraftResolverState {
   persistedDraft: PersistedSurveyDraft | null
   resumeDraftRecord: PartnerServiceCapacitySubmissionRecord | null

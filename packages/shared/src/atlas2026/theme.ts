@@ -1,6 +1,8 @@
 import { Z_CODE_COLOR_ALIASES } from "./zCodeColors";
 
 export const ATLAS_SIGNAL_COLORS = {
+  // Signal color keys are reused by persisted payloads and analytics labels, so
+  // we spread aliases directly to preserve stable semantic names across layers.
   ...Z_CODE_COLOR_ALIASES,
 } as const;
 
@@ -15,6 +17,7 @@ export const ATLAS_NEUTRAL_COLORS = {
 } as const;
 
 export const ATLAS_PHASE_COLORS = {
+  // These keys mirror workflow phase enums used by API/view contracts.
   regulation: ATLAS_SIGNAL_COLORS.red,
   readiness: ATLAS_SIGNAL_COLORS.yellow,
   renewal: ATLAS_SIGNAL_COLORS.deepGreen,

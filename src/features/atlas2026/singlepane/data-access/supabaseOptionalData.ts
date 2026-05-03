@@ -1,5 +1,13 @@
 const optionalSupabaseFallbackCache = new Map<string, unknown>()
 
+/**
+ * Optional-Supabase fallback utilities.
+ *
+ * Purpose:
+ * - classifies permission/schema errors that should degrade gracefully.
+ * - memoizes fallback payloads to avoid repeated failing network calls.
+ */
+
 export function isOptionalSupabaseDataError(error: unknown) {
   if (!error || typeof error !== 'object') return false
   const candidate = error as { status?: number; code?: string; message?: string; details?: string }
@@ -27,6 +35,8 @@ export async function withOptionalSupabaseFallback<T>(key: string, loader: () =>
     return await loader()
   } catch (error) {
     if (isOptionalSupabaseDataError(error)) {
+      // Cache fallback by key once a dependency is known-optional so repeated
+      // UI hydration paths avoid noisy retries.
       if (import.meta.env.DEV) {
         const candidate = error as { message?: string; code?: string }
         console.warn(`[singlepane] optional supabase fallback for ${key}`, candidate.code || '', candidate.message || '')

@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { downloadCsv } from '@/services/atlas2026/export-service'
 
+// Execution timeline reconciles step-level transitions with macro route progress so
+// operators can reason about dependencies and operational drift in one place.
 function formatTime(millis) {
   if (!millis) return 'No timestamp'
   return new Date(millis).toLocaleString()
@@ -16,9 +18,11 @@ export default function ExecutionTimelinePage({
   updatingStep
 }) {
   const [selectedStepId, setSelectedStepId] = useState(null)
+  // Lane positions are fixed to preserve visual continuity across renders and exports.
   const laneY = { route: 36, step: 80, memory: 124 }
   const latest = executionSnapshot.timeline[0]?.at || 0
   const oldest = executionSnapshot.timeline[executionSnapshot.timeline.length - 1]?.at || 0
+  // Guard zero-width timelines so plotting math never divides by zero.
   const spread = Math.max(1, latest - oldest)
   const selectedStep = useMemo(
     () => selectedRouteSteps.find((step) => step.id === selectedStepId) ?? null,

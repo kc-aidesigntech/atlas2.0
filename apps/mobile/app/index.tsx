@@ -1,3 +1,7 @@
+/**
+ * Root index gate that resolves persisted auth state before redirecting users
+ * into either mobile sign-in flow or the authenticated app route group.
+ */
 import { Redirect } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../src/auth/AuthProvider";

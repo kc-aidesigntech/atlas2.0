@@ -92,6 +92,7 @@ function getVisibleRenewalEntries(
   definition: AssessmentDefinition,
   answersByPromptId: Map<string, RegulationTestAnswer>
 ): RenewalPromptEntry[] {
+  // Applicability controls dynamic visibility; hidden prompts are intentionally excluded from completion gating.
   return definition.sections.flatMap((section) => {
     const applicabilityValue = section.applicabilityPromptId
       ? answersByPromptId.get(section.applicabilityPromptId)?.responseValue ?? null
@@ -252,6 +253,7 @@ export default function RegulationTestsOverlay({
       answers
     })
 
+    // Completed submissions always return to history to enforce read-only review flow for finalized records.
     if (status === 'completed' || saved.status === 'completed') {
       setPanelView('history')
       setActiveRecord(null)
@@ -547,6 +549,7 @@ function RenewalAssessmentSurvey({
     const currentValue = currentAnswer?.responseValue ?? null
 
     if (prompt.kind === 'applicability') {
+      // Applicability cards act as branch points: they decide whether later prompts in the section are shown at all.
       return (
         <AtlasInsetCard className="rounded-[20px] border-white/20 bg-[#0a0a0a] px-5 py-5">
           <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>

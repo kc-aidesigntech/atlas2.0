@@ -1,5 +1,13 @@
 import type { RegulationTestType } from '@/features/atlas2026/singlepane/types'
 
+/**
+ * Assessment catalog + scoring engine.
+ *
+ * Purpose:
+ * - defines instrument metadata/prompt contracts for regulation and renewal stages.
+ * - computes both app-gate and official scoring summaries from response payloads.
+ */
+
 export type AssessmentStage = 'regulation' | 'renewal'
 export type AssessmentPromptKind = 'number' | 'applicability'
 export type AssessmentScoringDirection = 'functioning' | 'impairment' | 'none'
@@ -157,6 +165,8 @@ function bipfPrompt(id: string, label: string, description: string, sectionId: s
 }
 
 export const ASSESSMENT_DEFINITIONS: AssessmentDefinition[] = [
+  // Regulation instruments are currently placeholder-compatible and intentionally
+  // minimal, while renewal instruments preserve richer official scoring semantics.
   {
     type: 'mh_sca',
     stage: 'regulation',
@@ -522,6 +532,8 @@ function computeRegulationScoreSummary(definition: AssessmentDefinition, answerM
 }
 
 function computeIpfScoreSummary(definition: AssessmentDefinition, answerMap: Map<string, number | null>): AssessmentScoreSummary {
+  // Section-level detail metrics preserve official PTSD scoring constraints while
+  // also providing app-gate values used by ATLAS routing decisions.
   const detailMetrics = definition.sections.map((section) => {
     const sectionPrompts = section.prompts.filter((prompt) => prompt.kind === 'number')
     const applicabilityPrompt = section.applicabilityPromptId

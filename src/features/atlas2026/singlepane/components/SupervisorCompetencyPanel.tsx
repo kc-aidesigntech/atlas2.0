@@ -19,6 +19,7 @@ export default function SupervisorCompetencyPanel({ competencyByNavigator }: Sup
     <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
       <small className="mb-2 block text-[13px] text-white">assigned navigators competency</small>
       <small className="mb-3 block text-[11px] text-[#cfcfcf]">
+        {/* Weighting is intentionally front-loaded so supervisors react to recent changes without discarding trend context. */}
         Rolling weighted average uses the last three assessments: 3x most recent, 2x previous, 1x third.
       </small>
       <div className="space-y-2">

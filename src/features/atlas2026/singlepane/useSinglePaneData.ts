@@ -80,6 +80,14 @@ import {
   saveRegulationTestSubmission
 } from '@/features/atlas2026/singlepane/data-access/regulationTestsRepository'
 
+/**
+ * Primary single-pane orchestration hook.
+ *
+ * Purpose:
+ * - composes bootstrap state, role workflows, and persistence writes.
+ * - provides a stable API consumed by single-pane UI surfaces.
+ */
+
 const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'route planning': ['housing', 'work'],
   'log contact': ['social'],

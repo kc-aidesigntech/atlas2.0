@@ -26,6 +26,7 @@ export default function TopNav({
   onOpenAccountSettings
 }: TopNavProps) {
   const firstMenu = roleConfig.topMenus[0] || ''
+  // Enrollee picker is intentionally scoped to the primary enrollees menu to keep top-nav interactions predictable.
   const showEnrolleeSelector = firstMenu === 'enrollees' && enrollees.length > 0
   const rolePillLabel = `atlas ${role}`
 

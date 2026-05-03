@@ -1,3 +1,7 @@
+/**
+ * Web root shell that decides whether to render auth, standalone survey, or
+ * the authenticated single-pane application based on route + session state.
+ */
 import React from 'react'
 import AtlasAuthScreen from '@/auth/AtlasAuthScreen'
 import { SupabaseAuthProvider, useSupabaseAuth } from '@/auth/SupabaseAuthProvider'

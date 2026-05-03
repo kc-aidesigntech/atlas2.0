@@ -1,3 +1,7 @@
+/**
+ * Mobile auth context bridge for Supabase sessions. It centralizes bootstrap
+ * and subscription updates so route-level screens can stay declarative.
+ */
 import type { Session } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";

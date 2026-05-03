@@ -92,6 +92,7 @@ class AlayaCareClient {
 
     if (!response.ok) {
       const error = await response.text()
+      // Surface raw body text because AlayaCare returns useful diagnostics outside JSON envelopes.
       throw new Error(`API request failed: ${response.status} ${error}`)
     }
 
@@ -151,6 +152,7 @@ class AlayaCareClient {
     const queryString = params.toString()
     const endpoint = `/clients/${clientId}/assessments${queryString ? `?${queryString}` : ''}`
     
+    // Always return arrays to keep caller rendering logic null-safe.
     const data = await this.request(endpoint)
     return data.assessments || []
   }
