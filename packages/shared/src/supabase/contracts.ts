@@ -5,6 +5,10 @@ export type PartnerSurveyRespondentRole =
 
 export type PartnerServiceCapacitySubmissionStatus = "draft" | "completed";
 
+export type EnrolleeBurdenSurveyRespondentRole = "navigator" | "supervisor";
+
+export type EnrolleeBurdenSurveySubmissionStatus = "draft" | "completed";
+
 export interface PartnerServiceCapacityHeader {
   firstName: string;
   lastName: string;
@@ -46,6 +50,46 @@ export interface PartnerServiceCapacitySubmissionRecord
   updatedAtIso: string;
   draftKey: string;
   status: PartnerServiceCapacitySubmissionStatus;
+  completedAtIso: string | null;
+}
+
+export interface EnrolleeBurdenSurveyHeader {
+  enrolleeId: string;
+  enrollmentId: string;
+  enrolleeName: string;
+  enrolleeCaseId: string;
+  respondentPersonId: string | null;
+  respondentName: string;
+  respondentRole: EnrolleeBurdenSurveyRespondentRole;
+  organizationName: string;
+}
+
+export interface EnrolleeBurdenSurveyAnswer {
+  promptId: string;
+  parentCode: string;
+  zCode: string;
+  normalizedZCode: string;
+  title: string;
+  description: string;
+  score: number | null;
+  notEncountered: boolean;
+}
+
+export interface EnrolleeBurdenSurveySubmissionInput {
+  header: EnrolleeBurdenSurveyHeader;
+  answers: EnrolleeBurdenSurveyAnswer[];
+  formVersion: string;
+  draftKey?: string;
+  status?: EnrolleeBurdenSurveySubmissionStatus;
+  completedAtIso?: string | null;
+}
+
+export interface EnrolleeBurdenSurveySubmissionRecord extends EnrolleeBurdenSurveySubmissionInput {
+  id: string;
+  submittedAtIso: string;
+  updatedAtIso: string;
+  draftKey: string;
+  status: EnrolleeBurdenSurveySubmissionStatus;
   completedAtIso: string | null;
 }
 
@@ -169,6 +213,93 @@ export interface AtlasDatabase {
         }>;
       };
       partner_service_capacity_answers: {
+        Row: {
+          id: string;
+          submission_id: string;
+          prompt_id: string;
+          parent_code: string;
+          z_code: string;
+          normalized_z_code: string;
+          title: string;
+          description: string | null;
+          burden_score: number | null;
+          not_encountered: boolean;
+          created_at: string;
+        };
+        Insert: {
+          submission_id: string;
+          prompt_id: string;
+          parent_code: string;
+          z_code: string;
+          normalized_z_code: string;
+          title: string;
+          description?: string | null;
+          burden_score?: number | null;
+          not_encountered?: boolean;
+        };
+        Update: Partial<{
+          prompt_id: string;
+          parent_code: string;
+          z_code: string;
+          normalized_z_code: string;
+          title: string;
+          description: string | null;
+          burden_score: number | null;
+          not_encountered: boolean;
+        }>;
+      };
+      enrollee_burden_survey_submissions: {
+        Row: {
+          id: string;
+          draft_key: string;
+          status: EnrolleeBurdenSurveySubmissionStatus;
+          completed_at: string | null;
+          enrollee_id: string;
+          enrollment_id: string;
+          enrollee_name: string;
+          enrollee_case_id: string | null;
+          respondent_person_id: string | null;
+          respondent_name: string;
+          respondent_role: EnrolleeBurdenSurveyRespondentRole;
+          organization_name: string | null;
+          form_version: string;
+          submitted_at: string;
+          updated_at: string | null;
+          raw_payload: EnrolleeBurdenSurveySubmissionInput | null;
+        };
+        Insert: {
+          draft_key?: string;
+          status?: EnrolleeBurdenSurveySubmissionStatus;
+          completed_at?: string | null;
+          enrollee_id: string;
+          enrollment_id: string;
+          enrollee_name: string;
+          enrollee_case_id?: string | null;
+          respondent_person_id?: string | null;
+          respondent_name: string;
+          respondent_role: EnrolleeBurdenSurveyRespondentRole;
+          organization_name?: string | null;
+          form_version: string;
+          raw_payload?: EnrolleeBurdenSurveySubmissionInput | null;
+        };
+        Update: Partial<{
+          draft_key: string;
+          status: EnrolleeBurdenSurveySubmissionStatus;
+          completed_at: string | null;
+          enrollee_id: string;
+          enrollment_id: string;
+          enrollee_name: string;
+          enrollee_case_id: string | null;
+          respondent_person_id: string | null;
+          respondent_name: string;
+          respondent_role: EnrolleeBurdenSurveyRespondentRole;
+          organization_name: string | null;
+          form_version: string;
+          updated_at: string | null;
+          raw_payload: EnrolleeBurdenSurveySubmissionInput | null;
+        }>;
+      };
+      enrollee_burden_survey_answers: {
         Row: {
           id: string;
           submission_id: string;

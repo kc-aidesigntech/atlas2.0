@@ -77,6 +77,7 @@ import {
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake,
   assignNavigatorEnrollmentToSelf as persistAssignNavigatorEnrollmentToSelf,
+  unassignNavigatorEnrollmentFromSelf as persistUnassignNavigatorEnrollmentFromSelf,
   loadAccessMatrixDataset
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/useJourneyStationMarkers'
@@ -626,18 +627,23 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   )
   const effectivePartnerStationProfile = remoteSession?.targetRole === 'partner' ? remotePartnerStationProfile : partnerStationProfile
   const scopedEnrollmentIds = useMemo(() => {
-    if (!remoteSession || !accessMatrixDataset) return null
-    if (remoteSession.targetRole === 'navigator') {
+    if (!accessMatrixDataset) return null
+    const scopedRole = remoteSession?.targetRole || role
+    if (scopedRole === 'navigator') {
+      const navigatorPersonId = remoteSession?.targetRole === 'navigator' ? remoteSession.targetPersonId : viewerPerson?.id
+      if (!navigatorPersonId) return new Set<string>()
       return new Set(
         accessMatrixDataset.enrollmentAssignments
-          .filter((assignment) => assignment.navigatorPersonIds.includes(remoteSession.targetPersonId))
+          .filter((assignment) => assignment.navigatorPersonIds.includes(navigatorPersonId))
           .map((assignment) => assignment.enrollmentId)
       )
     }
-    if (remoteSession.targetRole === 'supervisor') {
+    if (scopedRole === 'supervisor') {
+      const supervisorPersonId = remoteSession?.targetRole === 'supervisor' ? remoteSession.targetPersonId : viewerPerson?.id
+      if (!supervisorPersonId) return new Set<string>()
       const navigatorIds = new Set(
         accessMatrixDataset.supervisorAssignments
-          .filter((assignment) => assignment.supervisorPersonIds.includes(remoteSession.targetPersonId))
+          .filter((assignment) => assignment.supervisorPersonIds.includes(supervisorPersonId))
           .map((assignment) => assignment.navigatorPersonId)
       )
       return new Set(
@@ -646,9 +652,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           .map((assignment) => assignment.enrollmentId)
       )
     }
-    if (remoteSession.targetRole === 'partner') return new Set<string>()
+    if (scopedRole === 'partner') return new Set<string>()
     return null
-  }, [accessMatrixDataset, remoteSession])
+  }, [accessMatrixDataset, remoteSession, role, viewerPerson?.id])
   const scopedEnrollees = useMemo(
     () =>
       scopedEnrollmentIds
@@ -1755,11 +1761,15 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     await saveAccessMatrixSupervisorAssignments(navigatorPersonId, nextSupervisorIds)
   }
 
-  async function assignNavigatorEnrollmentToSelf(enrollmentId: string) {
+  async function assignNavigatorEnrollmentToSelf(enrollmentId: string, mode: 'assign' | 'unassign' = 'assign') {
     setAssigningNavigatorEnrollmentId(enrollmentId)
     setNavigatorEnrollmentAssignmentsError(null)
     try {
-      await persistAssignNavigatorEnrollmentToSelf(enrollmentId)
+      if (mode === 'unassign') {
+        await persistUnassignNavigatorEnrollmentFromSelf(enrollmentId)
+      } else {
+        await persistAssignNavigatorEnrollmentToSelf(enrollmentId)
+      }
       await Promise.all([
         loadNavigatorEnrollmentAssignments().then((rows) => setNavigatorEnrollmentAssignments(rows)),
         reloadBootstrapState()
@@ -1768,12 +1778,18 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       const databaseErrorCode = (error as { code?: string } | null)?.code
       if (databaseErrorCode === 'PGRST202') {
         setNavigatorEnrollmentAssignmentsError(
-          'Navigator self-assignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
+          mode === 'unassign'
+            ? 'Navigator self-unassignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
+            : 'Navigator self-assignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
         )
         return
       }
       setNavigatorEnrollmentAssignmentsError(
-        error instanceof Error ? error.message : 'Unable to assign enrollee to navigator.'
+        error instanceof Error
+          ? error.message
+          : mode === 'unassign'
+            ? 'Unable to unassign enrollee from navigator.'
+            : 'Unable to assign enrollee to navigator.'
       )
     } finally {
       setAssigningNavigatorEnrollmentId(null)

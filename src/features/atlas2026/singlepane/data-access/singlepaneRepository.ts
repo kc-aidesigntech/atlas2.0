@@ -54,6 +54,13 @@ import {
   saveNavigatorCompetencyAssessment
 } from '@/features/atlas2026/singlepane/data-access/navigatorAssessmentRepository'
 import {
+  deleteEnrolleeBurdenSurveyDraftRecord,
+  loadEnrolleeBurdenSurvey,
+  loadEnrolleeBurdenSurveyHistory,
+  loadLatestEnrolleeBurdenSurveySubmissions,
+  saveEnrolleeBurdenSurvey
+} from '@/features/atlas2026/singlepane/data-access/enrolleeBurdenSurveyRepository'
+import {
   deletePartnerServiceCapacityDraftRecord,
   ensurePartnerIdentifierRecordForSurvey,
   loadPartnerServiceCapacitySurvey,
@@ -231,7 +238,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     role === 'navigator'
       ? new Set(
           navigatorAssignedEnrollees
-            .filter((record) => (navigatorPersonId ? record.navigatorPersonId === navigatorPersonId : true))
+            .filter((record) => (navigatorPersonId ? record.navigatorPersonId === navigatorPersonId : false))
             .map((record) => record.enrollmentId)
         )
       : null
@@ -422,6 +429,14 @@ export async function loadNavigatorEnrollmentAssignments(): Promise<NavigatorEnr
 export async function assignNavigatorEnrollmentToSelf(enrollmentId: string) {
   if (!enrollmentId || !hasSupabaseConfig || !supabase) return
   const { error } = await (supabase as any).rpc('fn_navigator_assign_enrollment_to_self', {
+    target_enrollment_id: enrollmentId
+  })
+  if (error) throw error
+}
+
+export async function unassignNavigatorEnrollmentFromSelf(enrollmentId: string) {
+  if (!enrollmentId || !hasSupabaseConfig || !supabase) return
+  const { error } = await (supabase as any).rpc('fn_navigator_unassign_enrollment_from_self', {
     target_enrollment_id: enrollmentId
   })
   if (error) throw error
@@ -788,6 +803,9 @@ export {
   appendRouteLog,
   loadAdminPortalRegistry,
   loadAccountSettings,
+  loadEnrolleeBurdenSurvey,
+  loadEnrolleeBurdenSurveyHistory,
+  loadLatestEnrolleeBurdenSurveySubmissions,
   loadPartnerTroubleshootingGrants,
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
@@ -798,6 +816,7 @@ export {
   loadRouteAssignments,
   saveAdminPortalRegistry,
   saveAccountSettings,
+  saveEnrolleeBurdenSurvey,
   savePartnerTroubleshootingGrant,
   saveEnrolleeIntake,
   saveNavigatorCompetencyAssessment,
@@ -811,6 +830,7 @@ export {
   saveAccessMatrixEnrollmentNavigators,
   saveAccessMatrixSupervisorAssignments,
   saveAccessMatrixPartnerPrimaryContacts,
+  deleteEnrolleeBurdenSurveyDraftRecord,
   ensurePartnerIdentifierRecordForSurvey,
   searchPartnerIdentifierRecordMatches
 }

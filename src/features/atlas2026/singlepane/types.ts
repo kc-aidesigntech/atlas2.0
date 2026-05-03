@@ -1,4 +1,9 @@
 import type {
+  EnrolleeBurdenSurveyAnswer,
+  EnrolleeBurdenSurveyHeader,
+  EnrolleeBurdenSurveySubmissionInput,
+  EnrolleeBurdenSurveySubmissionRecord,
+  EnrolleeBurdenSurveyRespondentRole,
   PartnerIdentifierRecord,
   PartnerServiceCapacityAnswer,
   PartnerServiceCapacityHeader,
@@ -68,13 +73,14 @@ export interface DomainLoad {
 }
 
 export type DomainLoadBucket = 'habitat' | 'work' | 'socialNetworks'
-export type DomainLoadSourceKind = 'partnerSurvey' | 'enrolleeRecords'
+export type DomainLoadSourceKind = 'partnerSurvey' | 'enrolleeRecords' | 'enrolleeSurvey'
 
 export interface DomainLoadBreakdownRow {
   id: string
   zCodeGroup: string
   mappedDomain: DomainLoadBucket
   rawCount: number
+  responseCount?: number
   specializeCount?: number
   interfereCount?: number
 }
@@ -167,6 +173,11 @@ export interface RouteCandidateParentSummary {
 }
 
 export type {
+  EnrolleeBurdenSurveyAnswer,
+  EnrolleeBurdenSurveyHeader,
+  EnrolleeBurdenSurveySubmissionInput,
+  EnrolleeBurdenSurveySubmissionRecord,
+  EnrolleeBurdenSurveyRespondentRole,
   PartnerIdentifierRecord,
   PartnerServiceCapacityAnswer,
   PartnerServiceCapacityHeader,
