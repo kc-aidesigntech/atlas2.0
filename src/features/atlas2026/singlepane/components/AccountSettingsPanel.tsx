@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react'
 import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { AccountSettings, AtlasRole } from '@/features/atlas2026/singlepane/types'
+import type { AccountSettings, AtlasRole, PartnerTroubleshootingGrant } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
 export type AccountSecurityAuthProvider = 'google' | 'apple'
@@ -26,6 +26,8 @@ interface AccountSettingsPanelProps {
   onRoleChange: (role: AtlasRole) => void
   onSave: (settings: AccountSettings) => void
   security?: AccountSecurityPanelProps | null
+  partnerTroubleshootingGrant?: PartnerTroubleshootingGrant | null
+  onSavePartnerTroubleshootingGrant?: (grant: PartnerTroubleshootingGrant) => Promise<unknown> | unknown
 }
 
 const ROLE_OPTIONS: AtlasRole[] = ['administrator', 'supervisor', 'partner', 'navigator']
@@ -37,15 +39,22 @@ export default function AccountSettingsPanel({
   onClose,
   onRoleChange,
   onSave,
-  security
+  security,
+  partnerTroubleshootingGrant = null,
+  onSavePartnerTroubleshootingGrant
 }: AccountSettingsPanelProps) {
   const [draft, setDraft] = useState<AccountSettings>(settings)
+  const [grantDraft, setGrantDraft] = useState<PartnerTroubleshootingGrant | null>(partnerTroubleshootingGrant)
 
   useEffect(() => {
     // Reset draft state whenever panel opens or upstream settings change so
     // unsaved edits from previous sessions do not leak into new opens.
     setDraft(settings)
   }, [settings, isOpen])
+
+  useEffect(() => {
+    setGrantDraft(partnerTroubleshootingGrant)
+  }, [partnerTroubleshootingGrant, isOpen])
 
   const enabledRoleSet = useMemo(() => new Set(draft.enabledRoles), [draft.enabledRoles])
 
@@ -70,6 +79,18 @@ export default function AccountSettingsPanel({
       enabledRoles: sanitizedRoles
     })
     onClose()
+  }
+
+  function togglePartnerMenu(menu: string) {
+    if (!grantDraft) return
+    const allowedMenus = grantDraft.allowedMenus.includes(menu)
+      ? grantDraft.allowedMenus.filter((item) => item !== menu)
+      : [...grantDraft.allowedMenus, menu]
+    setGrantDraft({
+      ...grantDraft,
+      allowedMenus,
+      updatedAtIso: new Date().toISOString()
+    })
   }
 
   return (
@@ -227,6 +248,53 @@ export default function AccountSettingsPanel({
               ))}
             </div>
           </section>
+
+          {role === 'partner' && grantDraft && onSavePartnerTroubleshootingGrant ? (
+            <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff30' }}>
+              <small className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.12em] text-white">
+                admin troubleshooting grant
+              </small>
+              <small className="mb-3 block text-[12px] text-[#bcbcbc]">
+                Choose what an administrator can open while troubleshooting this partner shell. Write access is off by
+                default until you explicitly enable it.
+              </small>
+              <div className="space-y-2">
+                {['referral portal', 'my station', 'service capacity', 'county commons'].map((menu) => (
+                  <label key={menu} className="flex items-center justify-between rounded-2xl border px-3 py-2" style={{ borderColor: '#ffffff20' }}>
+                    <span className="text-[13px] text-white">{menu}</span>
+                    <input
+                      type="checkbox"
+                      checked={grantDraft.allowedMenus.includes(menu)}
+                      onChange={() => togglePartnerMenu(menu)}
+                      className="h-4 w-4 accent-white"
+                    />
+                  </label>
+                ))}
+                <label className="mt-3 flex items-center justify-between rounded-2xl border px-3 py-2" style={{ borderColor: '#ffffff20' }}>
+                  <span className="text-[13px] text-white">Allow write access during troubleshooting</span>
+                  <input
+                    type="checkbox"
+                    checked={grantDraft.allowWrite}
+                    onChange={() =>
+                      setGrantDraft({
+                        ...grantDraft,
+                        allowWrite: !grantDraft.allowWrite,
+                        updatedAtIso: new Date().toISOString()
+                      })
+                    }
+                    className="h-4 w-4 accent-white"
+                  />
+                </label>
+              </div>
+              <AtlasTextButton
+                onClick={() => void onSavePartnerTroubleshootingGrant(grantDraft)}
+                className="mt-4 w-full px-4 py-2 text-[12px] font-medium text-white"
+                style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+              >
+                save admin troubleshooting grant
+              </AtlasTextButton>
+            </section>
+          ) : null}
         </div>
 
         <div className="mt-auto flex items-center justify-end gap-3 pt-5">

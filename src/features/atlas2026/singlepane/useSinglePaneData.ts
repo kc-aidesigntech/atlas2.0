@@ -20,6 +20,7 @@ import type {
   NavigatorProgramState,
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
+  PartnerTroubleshootingGrant,
   PartnerIdentifierRecord,
   PartnerReferralSubmissionInput,
   PartnerServiceCapacityHeader,
@@ -37,6 +38,7 @@ import type {
   RouteLogEvent,
   StabilizationPhase,
   SupervisionSessionRecord,
+  TroubleshootingSessionState,
   TimelineConfig,
   UnassignedEnrolleePickupRecord,
   ZDomain
@@ -51,16 +53,18 @@ import {
   loadPartnerServiceCapacitySurveyHistory,
   loadPartnerStationProfile,
   loadNavigatorProgramState,
+  loadPartnerTroubleshootingGrants,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
   uploadEnrolleeProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
   saveAccountSettings as persistAccountSettings,
-  saveAccessMatrixEnrollmentNavigator as persistAccessMatrixEnrollmentNavigator,
-  saveAccessMatrixPartnerPrimaryContact as persistAccessMatrixPartnerPrimaryContact,
+  saveAccessMatrixEnrollmentNavigators as persistAccessMatrixEnrollmentNavigators,
+  saveAccessMatrixPartnerPrimaryContacts as persistAccessMatrixPartnerPrimaryContacts,
   saveAccessMatrixPersonRoles as persistAccessMatrixPersonRoles,
-  saveAccessMatrixSupervisorAssignment as persistAccessMatrixSupervisorAssignment,
+  saveAccessMatrixSupervisorAssignments as persistAccessMatrixSupervisorAssignments,
   saveNavigatorProgramState as persistNavigatorProgramState,
+  savePartnerTroubleshootingGrant as persistPartnerTroubleshootingGrant,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
@@ -92,6 +96,8 @@ import {
   saveRegulationTestSubmission
 } from '@/features/atlas2026/singlepane/data-access/regulationTestsRepository'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
+import { loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
+import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 /**
  * Primary single-pane orchestration hook.
@@ -176,6 +182,15 @@ function haveSameRoles(left: AtlasRole[], right: AtlasRole[]) {
   const a = [...left].sort()
   const b = [...right].sort()
   return a.every((value, index) => value === b[index])
+}
+
+function dedupeMenus(menus: string[]) {
+  return Array.from(new Set(menus.map((menu) => menu.trim()).filter(Boolean)))
+}
+
+function toRemoteSessionErrorMessage(role: AtlasRole) {
+  if (role === 'partner') return 'Partner troubleshooting is unavailable until the partner grants access.'
+  return 'Unable to start troubleshooting session.'
 }
 
 function toMidnightIso(date: Date) {
@@ -295,13 +310,17 @@ function buildSeedIntervalRules(navigatorName: string): IntervalAssessmentRule[]
 function mergeNavigatorProgramState(
   rawState: NavigatorProgramState | null,
   navigatorName: string,
-  enrollmentRequests: EnrollmentRequestRecord[]
+  enrollmentRequests: EnrollmentRequestRecord[],
+  publicQueueRecords: UnassignedEnrolleePickupRecord[]
 ): NavigatorProgramState {
   // Preserve previously persisted records, but seed deterministic starter data when
   // no state exists yet so navigator dashboards always have actionable baseline rows.
   const base = rawState || createNavigatorProgramState()
+  const mergedPickupQueue = [...publicQueueRecords, ...base.pickupQueue]
+    .filter(Boolean)
+    .filter((record, index, records) => records.findIndex((candidate) => candidate.id === record.id) === index)
   return {
-    pickupQueue: base.pickupQueue.length ? base.pickupQueue : buildSeedPickupQueue(enrollmentRequests),
+    pickupQueue: mergedPickupQueue.length ? mergedPickupQueue : buildSeedPickupQueue(enrollmentRequests),
     selfAssessments: base.selfAssessments.length ? base.selfAssessments : buildSeedSelfAssessments(navigatorName),
     supervisionSessions: base.supervisionSessions.length ? base.supervisionSessions : buildSeedSupervisionSessions(navigatorName),
     intervalAssessmentRules: base.intervalAssessmentRules.length ? base.intervalAssessmentRules : buildSeedIntervalRules(navigatorName),
@@ -350,6 +369,21 @@ function cadenceDays(cadence: IntervalAssessmentRule['cadence']) {
   if (cadence === 'weekly') return 7
   if (cadence === 'monthly') return 30
   return 90
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+      reject(new Error('Unable to read image file.'))
+    }
+    reader.onerror = () => reject(reader.error || new Error('Unable to read image file.'))
+    reader.readAsDataURL(file)
+  })
 }
 
 function buildIntervalDueItems(
@@ -443,6 +477,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [adminPortalRegistry, setAdminPortalRegistry] = useState<AdminPortalRegistry | null>(null)
   const [accessMatrixDataset, setAccessMatrixDataset] = useState<AccessMatrixDataset | null>(null)
   const [navigatorProgramState, setNavigatorProgramState] = useState<NavigatorProgramState>(createNavigatorProgramState())
+  const [partnerTroubleshootingGrants, setPartnerTroubleshootingGrants] = useState<Record<string, PartnerTroubleshootingGrant>>({})
+  const [remoteSession, setRemoteSession] = useState<TroubleshootingSessionState | null>(null)
+  const [remotePartnerStationProfile, setRemotePartnerStationProfile] = useState<Awaited<ReturnType<typeof loadPartnerStationProfile>> | null>(null)
   const [isSavingAdminPortalRegistry, setIsSavingAdminPortalRegistry] = useState(false)
   const [isSavingAccessMatrix, setIsSavingAccessMatrix] = useState(false)
   const [adminPortalRegistryError, setAdminPortalRegistryError] = useState<string | null>(null)
@@ -451,9 +488,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
+  const [isUploadingAccountProfileImage, setIsUploadingAccountProfileImage] = useState(false)
+  const [accountProfileImageUploadError, setAccountProfileImageUploadError] = useState<string | null>(null)
+  const [sessionEmail, setSessionEmail] = useState('')
   const [regulationTestHistory, setRegulationTestHistory] = useState<RegulationTestSubmissionRecord[]>([])
   const [isSavingRegulationTest, setIsSavingRegulationTest] = useState(false)
   const [regulationTestError, setRegulationTestError] = useState<string | null>(null)
+  const publicQueueRecords = useMemo(() => loadPublicReferralQueueRecords(), [])
   const {
     state: {
       isLoading,
@@ -478,25 +519,105 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setState: setBootstrapState
   } = useSinglePaneBootstrapState(role)
 
+  const viewerRole = remoteSession?.targetRole || role
+  const viewerPerson = useMemo(() => {
+    if (!accessMatrixDataset) return null
+    const normalizedCandidates = new Set(
+      [sessionEmail, accountSettings.email]
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+    )
+    if (!normalizedCandidates.size) return null
+    return accessMatrixDataset.people.find((person) => normalizedCandidates.has(person.email.trim().toLowerCase())) || null
+  }, [accessMatrixDataset, accountSettings.email, sessionEmail])
+  const remotePartnerAssignment =
+    remoteSession?.targetRole === 'partner' && accessMatrixDataset
+      ? accessMatrixDataset.partnerAssignments.find((partner) => partner.primaryContactPersonIds.includes(remoteSession.targetPersonId)) || null
+      : null
+  const effectivePartnerOrganizationName =
+    remoteSession?.targetRole === 'partner'
+      ? remotePartnerAssignment?.organizationName || remoteSession.targetOrganizationName || ''
+      : accountSettings.organization
+  const effectiveAccountSettings = useMemo<AccountSettings>(
+    () =>
+      remoteSession
+        ? {
+            ...accountSettings,
+            fullName: remoteSession.targetDisplayName || accountSettings.fullName,
+            email: remoteSession.targetEmail || accountSettings.email,
+            organization: remoteSession.targetOrganizationName || accountSettings.organization
+          }
+        : accountSettings,
+    [accountSettings, remoteSession]
+  )
+  const effectivePartnerStationProfile = remoteSession?.targetRole === 'partner' ? remotePartnerStationProfile : partnerStationProfile
+  const scopedEnrollmentIds = useMemo(() => {
+    if (!remoteSession || !accessMatrixDataset) return null
+    if (remoteSession.targetRole === 'navigator') {
+      return new Set(
+        accessMatrixDataset.enrollmentAssignments
+          .filter((assignment) => assignment.navigatorPersonIds.includes(remoteSession.targetPersonId))
+          .map((assignment) => assignment.enrollmentId)
+      )
+    }
+    if (remoteSession.targetRole === 'supervisor') {
+      const navigatorIds = new Set(
+        accessMatrixDataset.supervisorAssignments
+          .filter((assignment) => assignment.supervisorPersonIds.includes(remoteSession.targetPersonId))
+          .map((assignment) => assignment.navigatorPersonId)
+      )
+      return new Set(
+        accessMatrixDataset.enrollmentAssignments
+          .filter((assignment) => assignment.navigatorPersonIds.some((navigatorPersonId) => navigatorIds.has(navigatorPersonId)))
+          .map((assignment) => assignment.enrollmentId)
+      )
+    }
+    if (remoteSession.targetRole === 'partner') return new Set<string>()
+    return null
+  }, [accessMatrixDataset, remoteSession])
+  const scopedEnrollees = useMemo(
+    () =>
+      scopedEnrollmentIds
+        ? enrollees.filter((enrollee) => enrollee.enrollmentId && scopedEnrollmentIds.has(enrollee.enrollmentId))
+        : enrollees,
+    [enrollees, scopedEnrollmentIds]
+  )
+  const scopedEnrolleeIdSet = useMemo(() => new Set(scopedEnrollees.map((enrollee) => enrollee.id)), [scopedEnrollees])
+  const scopedLoads = useMemo(
+    () => loads.filter((item) => scopedEnrolleeIdSet.has(item.enrolleeId)),
+    [loads, scopedEnrolleeIdSet]
+  )
+  const scopedLoadBreakdownsByEnrolleeId = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(loadBreakdownsByEnrolleeId).filter(([enrolleeId]) => scopedEnrolleeIdSet.has(enrolleeId))
+      ),
+    [loadBreakdownsByEnrolleeId, scopedEnrolleeIdSet]
+  )
+
   const selectedEnrollee = useMemo(
-    () => enrollees.find((item) => item.id === selectedEnrolleeId) || enrollees[0] || null,
-    [enrollees, selectedEnrolleeId]
+    () => scopedEnrollees.find((item) => item.id === selectedEnrolleeId) || scopedEnrollees[0] || null,
+    [scopedEnrollees, selectedEnrolleeId]
   )
 
   const selectedLoad = useMemo(
     () => {
-      if ((role === 'partner' || role === 'supervisor') && partnerLoad) return partnerLoad
-      return loads.find((item) => item.enrolleeId === selectedEnrollee?.id) || loads[0] || null
+      if ((viewerRole === 'partner' || viewerRole === 'supervisor') && partnerLoad) return partnerLoad
+      return scopedLoads.find((item) => item.enrolleeId === selectedEnrollee?.id) || scopedLoads[0] || null
     },
-    [loads, partnerLoad, role, selectedEnrollee]
+    [partnerLoad, scopedLoads, selectedEnrollee, viewerRole]
   )
 
   const selectedLoadBreakdown = useMemo(
     () => {
-      if ((role === 'partner' || role === 'supervisor') && partnerLoadBreakdown) return partnerLoadBreakdown
-      return loadBreakdownsByEnrolleeId[selectedEnrollee?.id || ''] || Object.values(loadBreakdownsByEnrolleeId)[0] || null
+      if ((viewerRole === 'partner' || viewerRole === 'supervisor') && partnerLoadBreakdown) return partnerLoadBreakdown
+      return (
+        scopedLoadBreakdownsByEnrolleeId[selectedEnrollee?.id || ''] ||
+        Object.values(scopedLoadBreakdownsByEnrolleeId)[0] ||
+        null
+      )
     },
-    [loadBreakdownsByEnrolleeId, partnerLoadBreakdown, role, selectedEnrollee]
+    [partnerLoadBreakdown, scopedLoadBreakdownsByEnrolleeId, selectedEnrollee, viewerRole]
   )
 
   const selectedTimelineConfig = useMemo(
@@ -529,8 +650,17 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   )
 
   const selectedRoleConfig = useMemo(
-    () => roleConfigs.find((item) => item.role === role) || roleConfigs[0] || { role, topMenus: [], actionMenus: [] },
-    [role, roleConfigs]
+    () => {
+      const baseConfig =
+        roleConfigs.find((item) => item.role === viewerRole) || roleConfigs[0] || { role: viewerRole, topMenus: [], actionMenus: [] }
+      if (remoteSession?.targetRole !== 'partner') return baseConfig
+      const allowedMenus = dedupeMenus(remoteSession.partnerGrant?.allowedMenus || [])
+      return {
+        ...baseConfig,
+        topMenus: allowedMenus.length ? baseConfig.topMenus.filter((menu) => allowedMenus.includes(menu)) : []
+      }
+    },
+    [remoteSession?.partnerGrant?.allowedMenus, remoteSession?.targetRole, roleConfigs, viewerRole]
   )
 
   useEffect(() => {
@@ -546,11 +676,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   useEffect(() => {
     // Maintain a stable selected enrollee pointer after bootstrap reloads
     // and role changes that may swap the visible enrollee list.
-    if (!enrollees[0]?.id) return
-    if (!selectedEnrolleeId || !enrollees.some((enrollee) => enrollee.id === selectedEnrolleeId)) {
-      setSelectedEnrolleeId(enrollees[0].id)
+    if (!scopedEnrollees[0]?.id) return
+    if (!selectedEnrolleeId || !scopedEnrollees.some((enrollee) => enrollee.id === selectedEnrolleeId)) {
+      setSelectedEnrolleeId(scopedEnrollees[0].id)
     }
-  }, [enrollees, selectedEnrolleeId])
+  }, [scopedEnrollees, selectedEnrolleeId])
 
   const selectedLogs = useMemo(
     () =>
@@ -572,21 +702,24 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   )
 
   const partnerServiceCapacityDefaultHeader = useMemo<PartnerServiceCapacityHeader>(
-    () => buildPartnerServiceCapacityDefaultHeader(accountSettings, role),
-    [accountSettings, role]
+    () => buildPartnerServiceCapacityDefaultHeader(effectiveAccountSettings, viewerRole),
+    [effectiveAccountSettings, viewerRole]
   )
   const currentNavigatorName = useMemo(
-    () => accountSettings.fullName.trim() || selectedEnrollee?.assignedNavigator || 'atlas navigator',
-    [accountSettings.fullName, selectedEnrollee?.assignedNavigator]
+    () =>
+      (remoteSession?.targetRole === 'navigator' ? remoteSession.targetDisplayName : effectiveAccountSettings.fullName).trim() ||
+      selectedEnrollee?.assignedNavigator ||
+      'atlas navigator',
+    [effectiveAccountSettings.fullName, remoteSession?.targetDisplayName, remoteSession?.targetRole, selectedEnrollee?.assignedNavigator]
   )
 
   const supervisorNavigatorCompetency = useMemo<SupervisorNavigatorCompetencySummary[]>(
-    () => buildSupervisorNavigatorCompetencySummaries(enrollees, navigatorCompetencyAssessments),
-    [enrollees, navigatorCompetencyAssessments]
+    () => buildSupervisorNavigatorCompetencySummaries(scopedEnrollees, navigatorCompetencyAssessments),
+    [navigatorCompetencyAssessments, scopedEnrollees]
   )
   const mergedNavigatorProgramState = useMemo(
-    () => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, enrollmentRequests),
-    [currentNavigatorName, enrollmentRequests, navigatorProgramState]
+    () => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, enrollmentRequests, publicQueueRecords),
+    [currentNavigatorName, enrollmentRequests, navigatorProgramState, publicQueueRecords]
   )
   const navigatorSelfAssessments = useMemo(
     () =>
@@ -632,10 +765,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       null,
     [currentNavigatorName, supervisorNavigatorCompetency]
   )
-  const navigatorAggregateLoad = useMemo(() => deriveNavigatorLoad(loads), [loads])
+  const navigatorAggregateLoad = useMemo(() => deriveNavigatorLoad(scopedLoads), [scopedLoads])
   const navigatorAggregateLoadBreakdown = useMemo(
-    () => deriveNavigatorLoadBreakdown(loadBreakdownsByEnrolleeId, currentNavigatorName),
-    [currentNavigatorName, loadBreakdownsByEnrolleeId]
+    () => deriveNavigatorLoadBreakdown(scopedLoadBreakdownsByEnrolleeId, currentNavigatorName),
+    [currentNavigatorName, scopedLoadBreakdownsByEnrolleeId]
   )
   const pickupQueue = useMemo(
     () =>
@@ -652,7 +785,24 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     partnerServiceCapacitySurveyError,
     setPartnerServiceCapacitySurveyHistory,
     setPartnerServiceCapacitySurveyError
-  } = usePartnerServiceCapacityHistory(role, accountSettings.organization)
+  } = usePartnerServiceCapacityHistory(viewerRole, effectivePartnerOrganizationName)
+
+  useEffect(() => {
+    if (!hasSupabaseConfig || !supabase) {
+      setSessionEmail('')
+      return
+    }
+    let isMounted = true
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!isMounted || error) return
+      // Resolve identity linkage from live auth session first so role propagation
+      // does not depend on potentially stale local account-settings email values.
+      setSessionEmail(data.session?.user?.email?.trim() || '')
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -710,9 +860,25 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [])
 
   useEffect(() => {
+    let isMounted = true
+    loadPartnerTroubleshootingGrants()
+      .then((grants) => {
+        if (!isMounted) return
+        setPartnerTroubleshootingGrants(grants)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        console.warn('Unable to load partner troubleshooting grants.', error)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
     // Regulation history is navigator + enrollee scoped; clear stale records eagerly
     // when either dimension changes to avoid rendering prior enrollee results.
-    if (role !== 'navigator' || !selectedEnrollee?.id) {
+    if (viewerRole !== 'navigator' || !selectedEnrollee?.id) {
       setRegulationTestHistory([])
       setRegulationTestError(null)
       return
@@ -736,15 +902,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return () => {
       isMounted = false
     }
-  }, [role, selectedEnrollee?.id])
+  }, [selectedEnrollee?.id, viewerRole])
 
   useEffect(() => {
-    if (!accessMatrixDataset || !accountSettings.email.trim()) return
-    const matchedPerson = accessMatrixDataset.people.find(
-      (person) => person.email.trim().toLowerCase() === accountSettings.email.trim().toLowerCase()
-    )
-    if (!matchedPerson) return
-    const derivedRoles = normalizeAtlasRoleKeys(matchedPerson.roleKeys)
+    if (remoteSession || !viewerPerson) return
+    const derivedRoles = normalizeAtlasRoleKeys(viewerPerson.roleKeys)
     if (!derivedRoles.length || haveSameRoles(derivedRoles, accountSettings.enabledRoles)) return
     // Keep UI role options aligned to live role assignments for the signed-in identity.
     setBootstrapState((current) => ({
@@ -757,7 +919,56 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     if (!derivedRoles.includes(role)) {
       setRole(derivedRoles[0] || 'navigator')
     }
-  }, [accessMatrixDataset, accountSettings.email, accountSettings.enabledRoles, role, setBootstrapState])
+  }, [accountSettings.enabledRoles, remoteSession, role, setBootstrapState, viewerPerson])
+
+  useEffect(() => {
+    if (remoteSession?.targetRole !== 'partner') {
+      setRemotePartnerStationProfile(null)
+      return
+    }
+    const organizationName = remotePartnerAssignment?.organizationName || remoteSession.targetOrganizationName || ''
+    if (!organizationName.trim()) {
+      setRemotePartnerStationProfile(null)
+      return
+    }
+    let isMounted = true
+    loadPartnerStationProfile(organizationName, {
+      fullName: remoteSession.targetDisplayName,
+      email: remoteSession.targetEmail
+    })
+      .then((profile) => {
+        if (isMounted) setRemotePartnerStationProfile(profile)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        console.warn('Unable to load remote partner station profile.', error)
+        setRemotePartnerStationProfile(null)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [remotePartnerAssignment?.organizationName, remoteSession?.targetDisplayName, remoteSession?.targetEmail, remoteSession?.targetOrganizationName, remoteSession?.targetRole])
+
+  useEffect(() => {
+    if (viewerRole !== 'navigator' || role === 'navigator') return
+    let isMounted = true
+    loadEnrollmentRequests('navigator')
+      .then((requests) => {
+        if (!isMounted) return
+        setBootstrapState((current) => ({
+          ...current,
+          enrollmentRequests: requests
+        }))
+      })
+      .catch((error) => {
+        if (isMounted) {
+          console.warn('Unable to load navigator enrollment requests for troubleshooting.', error)
+        }
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [role, setBootstrapState, viewerRole])
 
   const completedRegulationTests = useMemo(
     () =>
@@ -822,7 +1033,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     const domains = DOMAIN_BY_ACTION[label.trim().toLowerCase()] || ['social']
 
     if (last && last.status === 'active') {
-      const updatedLogs = logs.map((item) => (item.id === last.id ? { ...item, status: 'completed' } : item))
+      const updatedLogs: RouteLogEvent[] = logs.map((item) => (item.id === last.id ? { ...item, status: 'completed' as const } : item))
       const next: RouteLogEvent = {
         id: `log-${Date.now().toString(36)}`,
         enrolleeId: selectedEnrollee.id,
@@ -940,6 +1151,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveAccountSettings(nextSettings: AccountSettings) {
+    if (remoteSession) {
+      throw new Error('Exit troubleshooting mode before editing account settings.')
+    }
     const enabledRoles = nextSettings.enabledRoles.length ? nextSettings.enabledRoles : [role]
     const finalSettings = { ...nextSettings, enabledRoles }
     try {
@@ -961,7 +1175,61 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function replaceAccountProfileImage(file: File) {
+    if (remoteSession) {
+      throw new Error('Exit troubleshooting mode before editing account settings.')
+    }
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Please select an image file.')
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    const previousAvatarUrl = accountSettings.avatarUrl || null
+    setIsUploadingAccountProfileImage(true)
+    setAccountProfileImageUploadError(null)
+    setBootstrapState((current) => ({
+      ...current,
+      accountSettings: {
+        ...current.accountSettings,
+        avatarUrl: previewUrl
+      }
+    }))
+
+    try {
+      const avatarUrl = await readFileAsDataUrl(file)
+      const saved = await persistAccountSettings({
+        ...accountSettings,
+        avatarUrl
+      })
+      const stationProfile = await loadPartnerStationProfile(saved.organization, {
+        fullName: saved.fullName,
+        email: saved.email
+      })
+      setBootstrapState((current) => ({
+        ...current,
+        accountSettings: saved,
+        partnerStationProfile: stationProfile
+      }))
+      return { avatarUrl }
+    } catch (error) {
+      setBootstrapState((current) => ({
+        ...current,
+        accountSettings: {
+          ...current.accountSettings,
+          avatarUrl: previousAvatarUrl
+        }
+      }))
+      const message = error instanceof Error ? error.message : 'Unable to upload profile image.'
+      setAccountProfileImageUploadError(message)
+      throw error
+    } finally {
+      URL.revokeObjectURL(previewUrl)
+      setIsUploadingAccountProfileImage(false)
+    }
+  }
+
   async function replaceSelectedEnrolleeProfileImage(file: File) {
+    ensureWriteAllowed()
     if (!selectedEnrollee) {
       throw new Error('Select an enrollee profile before uploading an image.')
     }
@@ -1006,6 +1274,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
+    ensureWriteAllowed()
     // Intake edits are a cross-surface source of truth: they update the intake record
     // and denormalized enrollee header fields consumed across profile and timeline views.
     persistEnrolleeIntake(nextIntake).then((saved) => {
@@ -1039,6 +1308,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function saveRouteAssignment(candidate: RouteCandidateRecord, phase: StabilizationPhase) {
+    ensureWriteAllowed()
     if (!selectedEnrollee) return
     const assignment: RouteAssignmentRecord = {
       enrolleeId: selectedEnrollee.id,
@@ -1064,6 +1334,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isResolved: boolean,
     input: EnrolleeZCodeResolutionInput = {}
   ) {
+    ensureWriteAllowed()
     if (!selectedEnrollee || !enrolleeZCodeId) return null
     // Persist first, then project the response into enrollee state so completed parent
     // code badges remain consistent with the resolved child-code set.
@@ -1095,6 +1366,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function savePartnerServiceCapacitySurvey(input: PartnerServiceCapacitySubmissionInput) {
+    ensureWriteAllowed()
     setIsSavingPartnerServiceCapacitySurvey(true)
     setPartnerServiceCapacitySurveyError(null)
     try {
@@ -1123,8 +1395,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function reloadPartnerServiceCapacitySurveyHistory() {
-    if (role !== 'partner') return
-    const organizationName = accountSettings.organization?.trim()
+    if (viewerRole !== 'partner') return
+    const organizationName = effectivePartnerOrganizationName?.trim()
     if (!organizationName) return
     setPartnerServiceCapacitySurveyError(null)
     try {
@@ -1138,6 +1410,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function deletePartnerServiceCapacityDraft(submissionId: string) {
+    ensureWriteAllowed()
     setIsSavingPartnerServiceCapacitySurvey(true)
     setPartnerServiceCapacitySurveyError(null)
     try {
@@ -1160,6 +1433,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     formVersion: string
     answers: NavigatorCompetencyAssessmentRecord['answers']
   }) {
+    ensureWriteAllowed()
     // Insert newest-first to keep supervisor views sorted without recomputing entire list.
     const saved = await persistNavigatorCompetencyAssessment(input)
     setBootstrapState((current) => ({
@@ -1190,6 +1464,55 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return dataset
   }
 
+  async function savePartnerGrant(grant: PartnerTroubleshootingGrant) {
+    const saved = await persistPartnerTroubleshootingGrant(grant)
+    setPartnerTroubleshootingGrants((current) => ({
+      ...current,
+      [saved.partnerId]: saved
+    }))
+    setRemoteSession((current) =>
+      current?.targetRole === 'partner' && current.partnerGrant?.partnerId === saved.partnerId
+        ? { ...current, partnerGrant: saved }
+        : current
+    )
+    return saved
+  }
+
+  async function startTroubleshootingSession(targetPersonId: string, targetRole: AtlasRole) {
+    const targetPerson = accessMatrixDataset?.people.find((person) => person.id === targetPersonId) || null
+    if (!targetPerson) {
+      throw new Error(toRemoteSessionErrorMessage(targetRole))
+    }
+    const partnerAssignment =
+      targetRole === 'partner'
+        ? accessMatrixDataset?.partnerAssignments.find((partner) => partner.primaryContactPersonIds.includes(targetPersonId)) || null
+        : null
+    const partnerGrant = partnerAssignment ? partnerTroubleshootingGrants[partnerAssignment.partnerId] || null : null
+    if (targetRole === 'partner' && (!partnerAssignment || !partnerGrant || !partnerGrant.allowedMenus.length)) {
+      throw new Error(toRemoteSessionErrorMessage(targetRole))
+    }
+    setRemoteSession({
+      isActive: true,
+      targetPersonId,
+      targetRole,
+      targetDisplayName: targetPerson.fullName,
+      targetEmail: targetPerson.email,
+      targetOrganizationName: partnerAssignment?.organizationName || null,
+      startedAtIso: new Date().toISOString(),
+      partnerGrant
+    })
+  }
+
+  function stopTroubleshootingSession() {
+    setRemoteSession(null)
+  }
+
+  function ensureWriteAllowed() {
+    if (remoteSession?.targetRole === 'partner' && !remoteSession.partnerGrant?.allowWrite) {
+      throw new Error('This partner troubleshooting session is read-only until the partner grants write access.')
+    }
+  }
+
   async function saveAccessMatrixPersonRoles(personId: string, roleKeys: AdminPortalPersonRole[]) {
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
@@ -1204,42 +1527,42 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
-  async function saveAccessMatrixEnrollmentNavigator(enrollmentId: string, navigatorPersonId: string | null) {
+  async function saveAccessMatrixEnrollmentNavigators(enrollmentId: string, navigatorPersonIds: string[]) {
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
     try {
-      await persistAccessMatrixEnrollmentNavigator(enrollmentId, navigatorPersonId)
+      await persistAccessMatrixEnrollmentNavigators(enrollmentId, navigatorPersonIds)
       await refreshAccessMatrixDataset()
     } catch (error) {
-      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save navigator enrollment assignment.')
+      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save navigator enrollment assignments.')
       throw error
     } finally {
       setIsSavingAccessMatrix(false)
     }
   }
 
-  async function saveAccessMatrixSupervisorAssignment(navigatorPersonId: string, supervisorPersonId: string | null) {
+  async function saveAccessMatrixSupervisorAssignments(navigatorPersonId: string, supervisorPersonIds: string[]) {
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
     try {
-      await persistAccessMatrixSupervisorAssignment(navigatorPersonId, supervisorPersonId)
+      await persistAccessMatrixSupervisorAssignments(navigatorPersonId, supervisorPersonIds)
       await refreshAccessMatrixDataset()
     } catch (error) {
-      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save supervisor assignment.')
+      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save supervisor assignments.')
       throw error
     } finally {
       setIsSavingAccessMatrix(false)
     }
   }
 
-  async function saveAccessMatrixPartnerPrimaryContact(partnerId: string, primaryContactPersonId: string | null) {
+  async function saveAccessMatrixPartnerPrimaryContacts(partnerId: string, primaryContactPersonIds: string[]) {
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
     try {
-      await persistAccessMatrixPartnerPrimaryContact(partnerId, primaryContactPersonId)
+      await persistAccessMatrixPartnerPrimaryContacts(partnerId, primaryContactPersonIds)
       await refreshAccessMatrixDataset()
     } catch (error) {
-      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save partner ownership assignment.')
+      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save partner ownership assignments.')
       throw error
     } finally {
       setIsSavingAccessMatrix(false)
@@ -1260,6 +1583,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function claimPickupQueueRecord(recordId: string) {
+    ensureWriteAllowed()
     const nextState = {
       ...mergedNavigatorProgramState,
       pickupQueue: mergedNavigatorProgramState.pickupQueue.map((record) =>
@@ -1277,6 +1601,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveNavigatorSelfAssessment(record: NavigatorSelfAssessmentRecord) {
+    ensureWriteAllowed()
     const nextState = {
       ...mergedNavigatorProgramState,
       selfAssessments: [
@@ -1288,6 +1613,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveSupervisionSession(record: SupervisionSessionRecord) {
+    ensureWriteAllowed()
     const nextState = {
       ...mergedNavigatorProgramState,
       supervisionSessions: [
@@ -1299,6 +1625,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveIntervalAssessmentRule(rule: IntervalAssessmentRule) {
+    ensureWriteAllowed()
     const nextState = {
       ...mergedNavigatorProgramState,
       intervalAssessmentRules: [
@@ -1310,18 +1637,22 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function submitPartnerReferral(input: PartnerReferralSubmissionInput) {
+    ensureWriteAllowed()
     // Shared mapper keeps referral normalization logic consistent regardless of
     // where referral submissions are initiated in the product.
     const { nextRecord, nextState } = buildReferralQueueUpdate(input, mergedNavigatorProgramState, {
       accountFullName: accountSettings.fullName,
-      accountOrganization: accountSettings.organization,
-      partnerStationOrganizationName: partnerStationProfile?.organizationName || null
+      accountOrganization: effectiveAccountSettings.organization,
+      partnerStationOrganizationName: effectivePartnerStationProfile?.organizationName || null,
+      actorRoleLabel: role,
+      sourceLabel: 'single-pane referral portal'
     })
     await saveNavigatorProgramState(nextState)
     return nextRecord
   }
 
   async function saveNavigatorRegulationTest(input: RegulationTestSubmissionInput) {
+    ensureWriteAllowed()
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
     try {
@@ -1338,6 +1669,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function deleteNavigatorRegulationTestDraft(submissionId: string) {
+    ensureWriteAllowed()
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
     try {
@@ -1370,13 +1702,16 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   return {
     role,
+    viewerRole,
     setRole,
+    remoteSession,
+    partnerTroubleshootingGrants,
     selectedEnrolleeId,
     setSelectedEnrolleeId,
     activeMenu,
     setActiveMenu,
     isLoading,
-    enrollees,
+    enrollees: scopedEnrollees,
     selectedEnrollee,
     selectedLoad,
     selectedLoadBreakdown,
@@ -1411,6 +1746,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     regulationTestError,
     isUploadingProfileImage,
     profileImageUploadError,
+    isUploadingAccountProfileImage,
+    accountProfileImageUploadError,
     currentNavigatorName,
     navigatorAggregateLoad,
     navigatorAggregateLoadBreakdown,
@@ -1433,25 +1770,30 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     updateTimelineStartDate,
     updateTimelinePhaseDuration,
     updateTimelineConfig,
-    accountSettings,
-    partnerStationProfile,
+    accountSettings: effectiveAccountSettings,
+    partnerStationProfile: effectivePartnerStationProfile,
     intakeFormsByEnrolleeId,
     selectedIntake,
     hasSavedIntake,
     isSavingAdminPortalRegistry,
     isSavingAccessMatrix,
+    viewerCanWrite: remoteSession?.targetRole === 'partner' ? Boolean(remoteSession.partnerGrant?.allowWrite) : true,
     saveAccountSettings,
     saveAdminPortalRegistry,
     saveAccessMatrixPersonRoles,
-    saveAccessMatrixEnrollmentNavigator,
-    saveAccessMatrixSupervisorAssignment,
-    saveAccessMatrixPartnerPrimaryContact,
+    saveAccessMatrixEnrollmentNavigators,
+    saveAccessMatrixSupervisorAssignments,
+    saveAccessMatrixPartnerPrimaryContacts,
+    startTroubleshootingSession,
+    stopTroubleshootingSession,
+    savePartnerTroubleshootingGrant: savePartnerGrant,
     saveNavigatorProgramState,
     claimPickupQueueRecord,
     saveNavigatorSelfAssessment,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,
+    replaceAccountProfileImage,
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,

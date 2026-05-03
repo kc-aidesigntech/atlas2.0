@@ -11,7 +11,7 @@
   },
   {
     "role": "supervisor",
-    "topMenus": ["assigned navigators", "navigator assessments", "route planning", "team burden", "county commons"],
+    "topMenus": ["assigned navigators", "navigator assessments", "referral portal", "route planning", "team burden", "county commons"],
     "actionMenus": []
   },
   {

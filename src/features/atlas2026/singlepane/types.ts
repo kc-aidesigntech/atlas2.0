@@ -268,19 +268,19 @@ export interface AccessMatrixEnrollmentRecord {
   enrolleeId: string
   enrolleeName: string
   caseId: string
-  navigatorPersonId: string | null
+  navigatorPersonIds: string[]
 }
 
 export interface AccessMatrixSupervisorRecord {
   navigatorPersonId: string
-  supervisorPersonId: string | null
+  supervisorPersonIds: string[]
 }
 
 export interface AccessMatrixPartnerRecord {
   partnerId: string
   organizationName: string
-  primaryContactPersonId: string | null
-  primaryContactEmail: string | null
+  primaryContactPersonIds: string[]
+  primaryContactEmails: string[]
 }
 
 export interface AccessMatrixDataset {
@@ -290,6 +290,25 @@ export interface AccessMatrixDataset {
   supervisorAssignments: AccessMatrixSupervisorRecord[]
   partnerAssignments: AccessMatrixPartnerRecord[]
   updatedAtIso: string
+}
+
+export interface PartnerTroubleshootingGrant {
+  partnerId: string
+  organizationName: string
+  allowedMenus: string[]
+  allowWrite: boolean
+  updatedAtIso: string
+}
+
+export interface TroubleshootingSessionState {
+  isActive: boolean
+  targetPersonId: string
+  targetRole: AtlasRole
+  targetDisplayName: string
+  targetEmail: string
+  targetOrganizationName: string | null
+  startedAtIso: string
+  partnerGrant: PartnerTroubleshootingGrant | null
 }
 
 export interface JourneyStationMarker {
@@ -305,6 +324,7 @@ export interface AccountSettings {
   fullName: string
   email: string
   organization: string
+  avatarUrl?: string | null
   enabledRoles: AtlasRole[]
 }
 

@@ -3,6 +3,7 @@
  * queue operations, self-assessment capture, and supervision notes.
  */
 import React from 'react'
+import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
 import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
 import type {
   AccountSettings,
@@ -31,6 +32,9 @@ interface NavigatorMyProfilePanelProps {
   dueItems: IntervalAssessmentDueItem[]
   programError?: string | null
   onOpenLoadTable?: () => void
+  isUploadingAvatar?: boolean
+  avatarUploadError?: string | null
+  onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onClaimPickupQueueRecord: (recordId: string) => Promise<unknown> | unknown
   onSaveSelfAssessment: (record: NavigatorSelfAssessmentRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
@@ -60,13 +64,15 @@ export default function NavigatorMyProfilePanel({
   dueItems,
   programError = null,
   onOpenLoadTable,
+  isUploadingAvatar = false,
+  avatarUploadError = null,
+  onReplaceAvatar,
   onClaimPickupQueueRecord,
   onSaveSelfAssessment,
   onSaveSupervisionSession
 }: NavigatorMyProfilePanelProps) {
-  // Avatar rendering intentionally stays local-only for this panel; persisted
-  // profile image uploads are managed in enrollee-facing profile workflows.
-  const avatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(currentNavigatorName), [currentNavigatorName])
+  const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(currentNavigatorName), [currentNavigatorName])
+  const avatarSrc = accountSettings.avatarUrl || fallbackAvatarSrc
   const [draftAssessment, setDraftAssessment] = React.useState(() => {
     const now = new Date().toISOString()
     return {
@@ -96,13 +102,21 @@ export default function NavigatorMyProfilePanel({
       >
         <div className="min-w-0 flex-1 basis-[520px]">
           <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
-            <div className="mx-auto flex w-[150px] shrink-0 flex-col items-start sm:mx-0">
-              <div
-                className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-white"
-                style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
-              >
-                <img src={avatarSrc} alt={`${currentNavigatorName} profile`} className="h-full w-full object-cover" />
-              </div>
+            <div>
+              <AtlasImageUploadTile
+                imageSrc={avatarSrc}
+                alt={`${currentNavigatorName} profile`}
+                onSelectFile={onReplaceAvatar}
+                disabled={!onReplaceAvatar}
+                buttonTitle={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
+                statusText={isUploadingAvatar ? 'uploading image...' : null}
+                errorText={avatarUploadError}
+                onImageError={(event) => {
+                  if (event.currentTarget.src !== fallbackAvatarSrc) {
+                    event.currentTarget.src = fallbackAvatarSrc
+                  }
+                }}
+              />
               <div className="mt-4 flex flex-wrap items-center gap-[10px]">
                 <span className="inline-flex h-11 items-center rounded-full border px-4 text-[15px] font-medium text-white" style={{ borderColor: '#ffffff35' }}>
                   navigator

@@ -32,12 +32,14 @@ import {
   loadAccountSettings,
   loadEnrolleeIntakes,
   loadNavigatorProgramState,
+  loadPartnerTroubleshootingGrants,
   loadRouteAssignments,
   loadTimelineConfigs,
   saveAdminPortalRegistry,
   saveAccountSettings,
   saveEnrolleeIntake,
   saveNavigatorProgramState,
+  savePartnerTroubleshootingGrant,
   saveRouteAssignment,
   saveTimelineConfig
 } from '@/features/atlas2026/singlepane/data-access/localStateRepository'
@@ -60,10 +62,10 @@ import {
 } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
 import {
   loadAccessMatrixDataset,
-  saveAccessMatrixEnrollmentNavigator,
-  saveAccessMatrixPartnerPrimaryContact,
+  saveAccessMatrixEnrollmentNavigators,
+  saveAccessMatrixPartnerPrimaryContacts,
   saveAccessMatrixPersonRoles,
-  saveAccessMatrixSupervisorAssignment
+  saveAccessMatrixSupervisorAssignments
 } from '@/features/atlas2026/singlepane/data-access/accessMatrixRepository'
 import { toNormalizedRadialDomainLoad } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
@@ -113,6 +115,36 @@ function normalizeNavigatorTopMenus(menus: string[]) {
   return normalized
 }
 
+function normalizeRoleTopMenus(roleKey: string, menus: string[]) {
+  if (roleKey === 'navigator') return normalizeNavigatorTopMenus(menus)
+  if (roleKey === 'partner') return ['referral portal', 'my station', 'service capacity', 'county commons']
+  if (roleKey === 'supervisor') {
+    const normalized = menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+    return normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]
+  }
+  return menus
+}
+
+function buildAdminSupersetMenus(roleConfigs: Array<{ role: AtlasRole; topMenus: string[]; actionMenus: string[] }>) {
+  const topMenus = new Set<string>()
+  const actionMenus = new Set<string>()
+  const orderedRolePriority: AtlasRole[] = ['navigator', 'partner', 'supervisor', 'administrator']
+  for (const roleKey of orderedRolePriority) {
+    const config = roleConfigs.find((item) => item.role === roleKey)
+    if (!config) continue
+    for (const menu of config.topMenus) {
+      topMenus.add(menu)
+    }
+    for (const action of config.actionMenus) {
+      actionMenus.add(action)
+    }
+  }
+  return {
+    topMenus: Array.from(topMenus),
+    actionMenus: Array.from(actionMenus)
+  }
+}
+
 function dedupeProfilesByEnrollmentId<T extends { enrollmentId?: string; enrolleeId?: string }>(profiles: T[]) {
   const seen = new Set<string>()
   return profiles.filter((profile) => {
@@ -133,6 +165,40 @@ function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/type
     timelineConfigsByEnrolleeId: {},
     logs
   }
+}
+
+async function resolveCurrentPersonId() {
+  if (!supabase) return null
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+  const authUserId = sessionData.session?.user?.id || ''
+  const authEmail = sessionData.session?.user?.email?.trim() || ''
+  if (!authUserId && !authEmail) return null
+
+  // Prefer auth user id linkage (`external_ref`) so role-based scoping remains stable
+  // even if account profile email text changes in local settings payloads.
+  if (authUserId) {
+    const { data: personByExternalRef, error: personByExternalRefError } = await (supabase as any)
+      .schema('atlas')
+      .from('people')
+      .select('id')
+      .eq('external_ref', authUserId)
+      .limit(1)
+      .maybeSingle()
+    if (personByExternalRefError) throw personByExternalRefError
+    if (personByExternalRef?.id) return String(personByExternalRef.id)
+  }
+
+  if (!authEmail) return null
+  const { data: personByEmail, error: personByEmailError } = await (supabase as any)
+    .schema('atlas')
+    .from('people')
+    .select('id')
+    .ilike('email', authEmail)
+    .limit(1)
+    .maybeSingle()
+  if (personByEmailError) throw personByEmailError
+  return personByEmail?.id ? String(personByEmail.id) : null
 }
 
 export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePaneBootstrapData> {
@@ -158,7 +224,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   const shouldLoadEnrolleeDomain = role !== 'partner'
   // Domain datasets are fetched in one branch so filtering decisions are applied
   // consistently across profiles, aggregate loads, and breakdown rows.
-  const [profiles, loadRows, breakdownRows, navigatorAssignedEnrollees] = shouldLoadEnrolleeDomain
+  const [profiles, loadRows, breakdownRows, navigatorAssignedEnrollees, navigatorPersonId] = shouldLoadEnrolleeDomain
     ? await Promise.all([
         withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
         withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), []),
@@ -169,26 +235,35 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
         ),
         role === 'navigator'
           ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
-          : Promise.resolve([])
+          : Promise.resolve([]),
+        role === 'navigator'
+          ? withOptionalSupabaseFallback('singlepane.navigatorPerson', () => resolveCurrentPersonId(), null)
+          : Promise.resolve(null)
       ])
-    : [[], [], [], []]
+    : [[], [], [], [], null]
 
   const navigatorEnrollmentIds =
-    role === 'navigator' ? new Set(navigatorAssignedEnrollees.map((record) => record.enrollmentId)) : null
-  // Navigator role is intentionally constrained to assigned enrollments, while other
-  // roles keep full visibility over the fetched profile set.
+    role === 'navigator'
+      ? new Set(
+          navigatorAssignedEnrollees
+            .filter((record) => navigatorPersonId && record.navigatorPersonId === navigatorPersonId)
+            .map((record) => record.enrollmentId)
+        )
+      : null
+  // Navigator scope is always assignment-bound: if identity linkage fails or no active
+  // assignments exist, return an empty profile set instead of leaking global enrollee rows.
   const visibleProfiles =
-    navigatorEnrollmentIds && navigatorEnrollmentIds.size
-      ? profiles.filter((profile) => navigatorEnrollmentIds.has(profile.enrollmentId))
+    role === 'navigator'
+      ? profiles.filter((profile) => navigatorEnrollmentIds?.has(profile.enrollmentId))
       : profiles
   const uniqueVisibleProfiles = dedupeProfilesByEnrollmentId(visibleProfiles)
   const visibleLoadRows =
-    navigatorEnrollmentIds && navigatorEnrollmentIds.size
-      ? loadRows.filter((row) => navigatorEnrollmentIds.has(row.enrollmentId))
+    role === 'navigator'
+      ? loadRows.filter((row) => navigatorEnrollmentIds?.has(row.enrollmentId))
       : loadRows
   const visibleBreakdownRows =
-    navigatorEnrollmentIds && navigatorEnrollmentIds.size
-      ? breakdownRows.filter((row) => navigatorEnrollmentIds.has(row.enrollmentId))
+    role === 'navigator'
+      ? breakdownRows.filter((row) => navigatorEnrollmentIds?.has(row.enrollmentId))
       : breakdownRows
 
   const bootstrapEnrollees = uniqueVisibleProfiles.map((profile) => ({
@@ -205,16 +280,21 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     completedParentCodes: profile.completedParentCodes
   }))
 
-  const roleConfigs = roleNavigation.map((item) => ({
+  const normalizedRoleConfigs = roleNavigation.map((item) => ({
     role: item.roleKey as AtlasRole,
-    topMenus:
-      item.roleKey === 'navigator'
-        ? normalizeNavigatorTopMenus(item.topMenus)
-        : item.roleKey === 'partner'
-          ? ['referral portal', 'my station', 'service capacity', 'county commons']
-          : item.topMenus,
+    topMenus: normalizeRoleTopMenus(item.roleKey, item.topMenus),
     actionMenus: item.actionMenus
   }))
+  const adminSuperset = buildAdminSupersetMenus(normalizedRoleConfigs)
+  const roleConfigs = normalizedRoleConfigs.map((item) =>
+    item.role === 'administrator'
+      ? {
+          ...item,
+          topMenus: adminSuperset.topMenus,
+          actionMenus: adminSuperset.actionMenus
+        }
+      : item
+  )
 
   const loads = visibleLoadRows.map((row) => ({
     enrolleeId: uniqueVisibleProfiles.find((profile) => profile.enrollmentId === row.enrollmentId)?.enrolleeId || row.enrollmentId,
@@ -636,6 +716,7 @@ export {
   appendRouteLog,
   loadAdminPortalRegistry,
   loadAccountSettings,
+  loadPartnerTroubleshootingGrants,
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
   loadNavigatorProgramState,
@@ -645,6 +726,7 @@ export {
   loadRouteAssignments,
   saveAdminPortalRegistry,
   saveAccountSettings,
+  savePartnerTroubleshootingGrant,
   saveEnrolleeIntake,
   saveNavigatorCompetencyAssessment,
   saveNavigatorProgramState,
@@ -654,9 +736,9 @@ export {
   saveRouteLogs,
   loadAccessMatrixDataset,
   saveAccessMatrixPersonRoles,
-  saveAccessMatrixEnrollmentNavigator,
-  saveAccessMatrixSupervisorAssignment,
-  saveAccessMatrixPartnerPrimaryContact,
+  saveAccessMatrixEnrollmentNavigators,
+  saveAccessMatrixSupervisorAssignments,
+  saveAccessMatrixPartnerPrimaryContacts,
   ensurePartnerIdentifierRecordForSurvey,
   searchPartnerIdentifierRecordMatches
 }

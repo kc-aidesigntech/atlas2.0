@@ -46,7 +46,7 @@ Latest verified state after rollout:
    - `atlas.navigator_assignments` -> enrollee coverage
    - `atlas.supervisor_navigator_assignments` -> reporting and supervision coverage
    - `atlas.partners` primary contact fields -> partner ownership mapping
-5. Admin UI (`LiveAccessMatrixPanel`) writes directly to those tables.
+5. Admin UI (`LiveAccessMatrixPanel`) writes through guarded Supabase RPC functions that enforce administrator claims server-side.
 6. Runtime hook syncs UI-enabled roles from live identity role assignments (email match), so role switching reflects actual assigned roles.
 
 ## Troubleshooting
@@ -113,4 +113,4 @@ where lower(email) = lower('kchristianson@ai-designtech.com');
 
 - Keep the migration and live matrix UI logic aligned. If role keys change in `atlas.roles`, update the known role list in `accessMatrixRepository.ts`.
 - Keep one active primary role for every active person to avoid ambiguous role defaults in UI and policy checks.
-- If stricter production governance is required, move matrix writes behind a service-role edge function and limit direct table writes from browser clients.
+- Matrix writes now use guarded RPC functions (`fn_access_matrix_save_*`). Keep direct table mutation paths disabled for browser clients.

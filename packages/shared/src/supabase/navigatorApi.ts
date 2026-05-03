@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AtlasDatabase } from "./contracts";
 
 export interface NavigatorAssignedEnrollee {
+  navigatorPersonId: string;
   enrollmentId: string;
   enrolleeId: string;
   enrolleeName: string;
@@ -31,6 +32,7 @@ function mapNavigatorAssignedEnrolleeRow(
   // Keep the snake_case -> camelCase contract in one place so DB view changes
   // are easy to audit without hunting through query call sites.
   return {
+    navigatorPersonId: row.navigator_person_id,
     enrollmentId: row.enrollment_id,
     enrolleeId: row.enrollee_id,
     enrolleeName: row.enrollee_name,
@@ -59,7 +61,7 @@ export async function fetchNavigatorAssignedEnrollees(
     .schema("atlas")
     .from("v_navigator_assigned_enrollees")
     .select(
-      "enrollment_id,enrollee_id,enrollee_name,case_id,current_phase,avatar_url",
+      "navigator_person_id,enrollment_id,enrollee_id,enrollee_name,case_id,current_phase,avatar_url",
     )
     .order("enrollee_name", { ascending: true });
 

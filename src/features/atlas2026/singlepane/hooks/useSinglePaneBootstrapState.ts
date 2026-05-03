@@ -64,6 +64,7 @@ const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   fullName: 'atlas operator',
   email: 'operator@atlas.local',
   organization: 'atlas operations',
+  avatarUrl: null,
   enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
 }
 

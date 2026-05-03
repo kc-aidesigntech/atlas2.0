@@ -44,7 +44,10 @@ interface ResolutionOverlayState {
 export default function SinglePaneApp() {
   const {
     role,
+    viewerRole,
     setRole,
+    remoteSession,
+    partnerTroubleshootingGrants,
     selectedEnrolleeId,
     setSelectedEnrolleeId,
     activeMenu,
@@ -93,6 +96,7 @@ export default function SinglePaneApp() {
     hasSavedIntake,
     isSavingAdminPortalRegistry,
     isSavingAccessMatrix,
+    viewerCanWrite,
     supervisorNavigatorCompetency,
     regulationTestHistory,
     regulationTestStripMarkers,
@@ -102,17 +106,23 @@ export default function SinglePaneApp() {
     regulationTestError,
     isUploadingProfileImage,
     profileImageUploadError,
+    isUploadingAccountProfileImage,
+    accountProfileImageUploadError,
     saveAccountSettings,
     saveAdminPortalRegistry,
     saveAccessMatrixPersonRoles,
-    saveAccessMatrixEnrollmentNavigator,
-    saveAccessMatrixSupervisorAssignment,
-    saveAccessMatrixPartnerPrimaryContact,
+    saveAccessMatrixEnrollmentNavigators,
+    saveAccessMatrixSupervisorAssignments,
+    saveAccessMatrixPartnerPrimaryContacts,
+    startTroubleshootingSession,
+    stopTroubleshootingSession,
+    savePartnerTroubleshootingGrant,
     claimPickupQueueRecord,
     saveNavigatorSelfAssessment,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,
+    replaceAccountProfileImage,
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
@@ -138,6 +148,7 @@ export default function SinglePaneApp() {
   const transitionBootstrappedRef = React.useRef(false)
   const hashSyncBootstrappedRef = React.useRef(false)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
+  const uiRole = viewerRole
   const standaloneSurveyUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '/service-capacity-survey'
     return new URL('service-capacity-survey', window.location.href.split('#')[0]).toString()
@@ -247,10 +258,10 @@ export default function SinglePaneApp() {
   }, [enrollees, selectedEnrolleeId])
 
   React.useEffect(() => {
-    if (role === 'partner' && activeMenu === 'service capacity') {
+    if (!remoteSession?.isActive && uiRole === 'partner' && activeMenu === 'service capacity') {
       window.location.assign(standaloneSurveyUrl)
     }
-  }, [activeMenu, role, standaloneSurveyUrl])
+  }, [activeMenu, remoteSession?.isActive, standaloneSurveyUrl, uiRole])
 
   React.useEffect(() => {
     if (!isRoutePlanningOpen) {
@@ -271,29 +282,30 @@ export default function SinglePaneApp() {
   }, [isRoutePlanningOpen, routeCandidates, selectedRouteAssignment])
 
   React.useEffect(() => {
-    if (role !== 'navigator' || isRegulationCleared || !isRoutePlanningOpen) return
+    if (uiRole !== 'navigator' || isRegulationCleared || !isRoutePlanningOpen) return
     setIsRoutePlanningOpen(false)
     setSelectedRouteCandidateId(null)
-  }, [isRegulationCleared, isRoutePlanningOpen, role])
+  }, [isRegulationCleared, isRoutePlanningOpen, uiRole])
 
   const activeAction = actionMenus[0] || ''
-  const isPartnerRole = role === 'partner'
-  const isAdminSection = role === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
-  const isServiceCapacitySection = role === 'partner' && activeMenu === 'service capacity'
-  const isPartnerReferralPortal = role === 'partner' && activeMenu === 'referral portal'
-  const isNavigatorMyProfile = role === 'navigator' && activeMenu === 'my profile'
+  const isPartnerRole = uiRole === 'partner'
+  const isAdminSection = uiRole === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
+  const isServiceCapacitySection = uiRole === 'partner' && activeMenu === 'service capacity'
+  const isReferralPortalMenu = activeMenu === 'referral portal' || activeMenu === 'refer'
+  const canUseReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
+  const isNavigatorMyProfile = uiRole === 'navigator' && activeMenu === 'my profile'
   const isReady = isPartnerRole ? true : isNavigatorMyProfile ? true : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const visibleLogs = React.useMemo(
-    () => (role === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
-    [role, selectedLogs, shouldHideReadinessProgress]
+    () => (uiRole === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
+    [selectedLogs, shouldHideReadinessProgress, uiRole]
   )
   const visibleJourneyStationMarkers = React.useMemo(
     () =>
-      role === 'navigator' && shouldHideReadinessProgress
+      uiRole === 'navigator' && shouldHideReadinessProgress
         ? journeyStationMarkers.filter((marker) => marker.phase === 'regulation')
         : journeyStationMarkers,
-    [journeyStationMarkers, role, shouldHideReadinessProgress]
+    [journeyStationMarkers, shouldHideReadinessProgress, uiRole]
   )
   const historyOnlyLogs = React.useMemo(() => visibleLogs.filter((log) => log.status === 'completed'), [visibleLogs])
   const readinessParentCodes = React.useMemo(
@@ -315,7 +327,7 @@ export default function SinglePaneApp() {
         label: candidate.stationName
       }))
   }, [routeCandidates])
-  const showRoutePlanningQuickAction = role === 'navigator' ? isRegulationCleared : false
+  const showRoutePlanningQuickAction = uiRole === 'navigator' ? isRegulationCleared : false
   const nextSuggestedPhase = React.useMemo(
     () => getNextSuggestedPhase(selectedLogs, isRegulationCleared),
     [isRegulationCleared, selectedLogs]
@@ -338,12 +350,12 @@ export default function SinglePaneApp() {
   }, [accountSettings.fullName, partnerStationProfile?.primaryContactFirstName, partnerStationProfile?.primaryContactLastName])
 
   function handleMenuSelect(menu: string) {
-    if (role === 'partner' && menu === 'service capacity') {
+    if (!remoteSession?.isActive && uiRole === 'partner' && menu === 'service capacity') {
       window.location.assign(standaloneSurveyUrl)
       return
     }
     if (menu === 'route planning') {
-      if (role === 'navigator' && !isRegulationCleared) {
+      if (uiRole === 'navigator' && !isRegulationCleared) {
         setAssessmentInitialTestType('mh_sca')
         setIsRegulationTestsOpen(true)
         return
@@ -360,7 +372,7 @@ export default function SinglePaneApp() {
       return
     }
     if (label.trim().toLowerCase() === 'route planning') {
-      if (role === 'navigator' && !isRegulationCleared) {
+      if (uiRole === 'navigator' && !isRegulationCleared) {
         setAssessmentInitialTestType('mh_sca')
         setIsRegulationTestsOpen(true)
         return
@@ -369,7 +381,7 @@ export default function SinglePaneApp() {
       setIsRoutePlanningOpen(true)
       return
     }
-    if (role === 'supervisor' && label.trim().toLowerCase() === 'record navigator assessment') {
+    if (uiRole === 'supervisor' && label.trim().toLowerCase() === 'record navigator assessment') {
       if (!selectedEnrollee || !selectedLoadBreakdown) return
       // Derive a compact score payload from current breakdown rows so supervisors
       // can capture an assessment without leaving the workflow panel.
@@ -434,7 +446,7 @@ export default function SinglePaneApp() {
       style={{ backgroundColor: SP_COLORS.bg, color: SP_COLORS.text, fontFamily: 'Helvetica, Arial, sans-serif' }}
     >
       <TopNav
-        role={role}
+        role={uiRole}
         roleConfig={selectedRoleConfig}
         activeMenu={activeMenu}
         onMenuSelect={handleMenuSelect}
@@ -449,6 +461,31 @@ export default function SinglePaneApp() {
           className="relative mx-auto min-h-[calc(100vh-112px)] w-full rounded-[38px] border bg-black px-[20px] pb-[12px] pt-[14px]"
           style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
         >
+          {remoteSession?.isActive ? (
+            <div
+              className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-[22px] border px-4 py-3"
+              style={{ borderColor: '#ffffff40', backgroundColor: '#0f0f0f' }}
+            >
+              <div>
+                <small className="block text-[11px] uppercase tracking-[0.14em] text-[#cfcfcf]">troubleshooting session</small>
+                <div className="text-[15px] font-medium text-white">
+                  Viewing {remoteSession.targetDisplayName} as `{remoteSession.targetRole}`
+                </div>
+                <small className="text-[12px] text-[#b7b7b7]">
+                  {remoteSession.targetRole === 'partner'
+                    ? `${viewerCanWrite ? 'write enabled' : 'read only'}${remoteSession.partnerGrant?.allowedMenus.length ? `, ${remoteSession.partnerGrant.allowedMenus.length} granted menu(s)` : ''}`
+                    : 'full act-as enabled'}
+                </small>
+              </div>
+              <AtlasTextButton
+                onClick={stopTroubleshootingSession}
+                className="px-4 py-2 text-[12px] font-medium text-white"
+                style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+              >
+                exit troubleshooting
+              </AtlasTextButton>
+            </div>
+          ) : null}
           <AccountSettingsPanel
             isOpen={isAccountSettingsOpen}
             role={role}
@@ -456,6 +493,20 @@ export default function SinglePaneApp() {
             onClose={() => setIsAccountSettingsOpen(false)}
             onRoleChange={setRole}
             onSave={saveAccountSettings}
+            partnerTroubleshootingGrant={
+              role === 'partner' && partnerStationProfile?.partnerId
+                ? partnerTroubleshootingGrants[partnerStationProfile.partnerId] || {
+                    partnerId: partnerStationProfile.partnerId,
+                    organizationName: partnerStationProfile.organizationName,
+                    allowedMenus: [],
+                    allowWrite: false,
+                    updatedAtIso: new Date().toISOString()
+                  }
+                : null
+            }
+            onSavePartnerTroubleshootingGrant={
+              role === 'partner' && partnerStationProfile?.partnerId ? savePartnerTroubleshootingGrant : undefined
+            }
             security={
               showLiveAuthSecurity
                 ? {
@@ -602,6 +653,9 @@ export default function SinglePaneApp() {
                     dueItems={navigatorIntervalDueItems}
                     programError={navigatorProgramError}
                     onOpenLoadTable={() => setIsLoadTableOpen(true)}
+                    isUploadingAvatar={isUploadingAccountProfileImage}
+                    avatarUploadError={accountProfileImageUploadError}
+                    onReplaceAvatar={replaceAccountProfileImage}
                     onClaimPickupQueueRecord={claimPickupQueueRecord}
                     onSaveSelfAssessment={saveNavigatorSelfAssessment}
                     onSaveSupervisionSession={saveSupervisionSession}
@@ -627,13 +681,35 @@ export default function SinglePaneApp() {
                   </div>
                 )}
 
-                {role !== 'navigator' && !showRoutePlanningQuickAction && actionMenus.length > 0 ? (
+                {uiRole !== 'navigator' && !showRoutePlanningQuickAction && actionMenus.length > 0 ? (
                   <div className="flex items-center justify-center py-1">
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
                   </div>
                 ) : null}
 
-                {isAdminSection ? (
+                {canUseReferralPortal && !isReferralPortalMenu ? (
+                  <div className="flex items-center justify-center py-1">
+                    <AtlasTextButton
+                      onClick={() => setActiveMenu('referral portal')}
+                      className="px-4 py-1 text-[12px] text-white"
+                      style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                      title="Open referral portal."
+                    >
+                      refer
+                    </AtlasTextButton>
+                  </div>
+                ) : null}
+
+                {isReferralPortalMenu && canUseReferralPortal ? (
+                  <PartnerReferralWorkflowPanel
+                    defaultReferrerName={accountSettings.fullName}
+                    defaultPartnerOrganizationName={
+                      partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
+                    }
+                    recentReferrals={pickupQueue}
+                    onSubmit={submitPartnerReferral}
+                  />
+                ) : isAdminSection ? (
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
                     <div className="w-full space-y-4">
                       <LiveAccessMatrixPanel
@@ -641,9 +717,13 @@ export default function SinglePaneApp() {
                         error={accessMatrixError}
                         isSaving={isSavingAccessMatrix}
                         onSavePersonRoles={saveAccessMatrixPersonRoles}
-                        onSaveEnrollmentNavigator={saveAccessMatrixEnrollmentNavigator}
-                        onSaveSupervisorAssignment={saveAccessMatrixSupervisorAssignment}
-                        onSavePartnerPrimaryContact={saveAccessMatrixPartnerPrimaryContact}
+                        onSaveEnrollmentNavigator={saveAccessMatrixEnrollmentNavigators}
+                        onSaveSupervisorAssignment={saveAccessMatrixSupervisorAssignments}
+                        onSavePartnerPrimaryContact={saveAccessMatrixPartnerPrimaryContacts}
+                        remoteSession={remoteSession}
+                        partnerTroubleshootingGrants={partnerTroubleshootingGrants}
+                        onStartTroubleshooting={startTroubleshootingSession}
+                        onStopTroubleshooting={stopTroubleshootingSession}
                       />
                       <AdminDataControlPanel
                         metrics={adminMetrics}
@@ -664,63 +744,61 @@ export default function SinglePaneApp() {
                       />
                     </div>
                   </div>
-                ) : isServiceCapacitySection || isNavigatorMyProfile ? null : isPartnerRole ? (
+                ) : isServiceCapacitySection ? (
+                  remoteSession?.isActive ? (
+                    <div className="rounded-[24px] border px-5 py-5 text-white" style={{ borderColor: '#ffffff30' }}>
+                      <small className="block text-[12px] uppercase tracking-[0.14em] text-[#bcbcbc]">service capacity</small>
+                      <div className="mt-2 text-[18px] font-medium">Partner service-capacity troubleshooting view</div>
+                      <small className="mt-2 block text-[12px] text-[#bcbcbc]">
+                        The standalone survey flow stays outside the single-pane shell, so remote-view keeps this section
+                        in-place rather than navigating away from the active troubleshooting session.
+                      </small>
+                    </div>
+                  ) : null
+                ) : isNavigatorMyProfile ? null : isPartnerRole ? (
                   <>
-                    {isPartnerReferralPortal ? (
-                      <PartnerReferralWorkflowPanel
-                        defaultReferrerName={accountSettings.fullName}
-                        defaultPartnerOrganizationName={
-                          partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
-                        }
-                        recentReferrals={pickupQueue}
-                        onSubmit={submitPartnerReferral}
-                      />
-                    ) : (
+                    {timelineConfig ? (
                       <>
-                        {timelineConfig ? (
-                          <>
-                            <div className="hidden min-h-[220px] flex-1 items-start md:flex">
-                              <StripMapTimeline
-                                events={historyOnlyLogs}
-                                timelineConfig={timelineConfig}
-                                completedParentCodes={completedParentCodes}
-                                resolvedZCodeMarkers={resolvedZCodeStripMarkers}
-                                stationMarkers={visibleJourneyStationMarkers}
-                                highlightedStationName={highlightedStationName}
-                                onEventDelete={deleteRouteLog}
-                                onEventPositionChange={updateRouteLogTimelinePosition}
-                                onEventDateChange={updateRouteLogDate}
-                                onStartDateChange={updateTimelineStartDate}
-                              />
-                            </div>
-                            <div className="flex min-h-[220px] flex-1 items-start md:hidden">
-                              <VerticalStripMapTimeline
-                                events={historyOnlyLogs}
-                                timelineConfig={timelineConfig}
-                                completedParentCodes={completedParentCodes}
-                                resolvedZCodeMarkers={resolvedZCodeStripMarkers}
-                                stationMarkers={visibleJourneyStationMarkers}
-                                highlightedStationName={highlightedStationName}
-                                onEventDelete={deleteRouteLog}
-                                onEventDateChange={updateRouteLogDate}
-                                onStartDateChange={updateTimelineStartDate}
-                              />
-                            </div>
-                          </>
-                        ) : (
-                          <div className="mt-3 rounded-[18px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff28', color: SP_COLORS.muted }}>
-                            Timeline configuration is not available yet.
-                          </div>
-                        )}
-                        <ContextPanels
-                          role={role}
-                          activeMenu={activeMenu}
-                          enrollmentRequests={enrollmentRequests}
-                          countyHeatmap={countyHeatmap}
-                          supervisorNavigatorCompetency={supervisorNavigatorCompetency}
-                        />
+                        <div className="hidden min-h-[220px] flex-1 items-start md:flex">
+                          <StripMapTimeline
+                            events={historyOnlyLogs}
+                            timelineConfig={timelineConfig}
+                            completedParentCodes={completedParentCodes}
+                            resolvedZCodeMarkers={resolvedZCodeStripMarkers}
+                            stationMarkers={visibleJourneyStationMarkers}
+                            highlightedStationName={highlightedStationName}
+                            onEventDelete={deleteRouteLog}
+                            onEventPositionChange={updateRouteLogTimelinePosition}
+                            onEventDateChange={updateRouteLogDate}
+                            onStartDateChange={updateTimelineStartDate}
+                          />
+                        </div>
+                        <div className="flex min-h-[220px] flex-1 items-start md:hidden">
+                          <VerticalStripMapTimeline
+                            events={historyOnlyLogs}
+                            timelineConfig={timelineConfig}
+                            completedParentCodes={completedParentCodes}
+                            resolvedZCodeMarkers={resolvedZCodeStripMarkers}
+                            stationMarkers={visibleJourneyStationMarkers}
+                            highlightedStationName={highlightedStationName}
+                            onEventDelete={deleteRouteLog}
+                            onEventDateChange={updateRouteLogDate}
+                            onStartDateChange={updateTimelineStartDate}
+                          />
+                        </div>
                       </>
+                    ) : (
+                      <div className="mt-3 rounded-[18px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff28', color: SP_COLORS.muted }}>
+                        Timeline configuration is not available yet.
+                      </div>
                     )}
+                    <ContextPanels
+                      role={uiRole}
+                      activeMenu={activeMenu}
+                      enrollmentRequests={enrollmentRequests}
+                      countyHeatmap={countyHeatmap}
+                      supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                    />
                   </>
                 ) : (
                   <>
@@ -780,7 +858,7 @@ export default function SinglePaneApp() {
                       />
                     </div>
                     <ContextPanels
-                      role={role}
+                      role={uiRole}
                       activeMenu={activeMenu}
                       enrollmentRequests={enrollmentRequests}
                       countyHeatmap={countyHeatmap}

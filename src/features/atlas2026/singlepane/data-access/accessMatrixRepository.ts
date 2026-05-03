@@ -34,64 +34,27 @@ function normalizeRoles(values: string[]): AdminPortalPersonRole[] {
   return values.filter((value): value is AdminPortalPersonRole => KNOWN_ROLE_KEYS.includes(value as AdminPortalPersonRole))
 }
 
-function getIsoDateOnly() {
-  return new Date().toISOString().slice(0, 10)
-}
-
-async function replaceActiveAssignmentRow(params: {
-  table: 'navigator_assignments' | 'supervisor_navigator_assignments'
-  identityColumn: 'enrollment_id' | 'navigator_person_id'
-  identityValue: string
-  assigneeColumn: 'navigator_person_id' | 'supervisor_person_id'
-  assigneeValue: string | null
-  buildInsert: () => Record<string, unknown>
-}) {
-  if (!supabase) return
-  // Both assignment tables are date-ranged histories, so "replace" means:
-  // end non-matching active rows first, then insert only when target row is absent.
-  const nowDate = getIsoDateOnly()
-  if (!params.assigneeValue) {
-    const { error } = await (supabase as any)
-      .schema('atlas')
-      .from(params.table)
-      .update({ ends_on: nowDate })
-      .eq(params.identityColumn, params.identityValue)
-      .is('ends_on', null)
-    if (error) throw error
-    return
-  }
-
-  const { error: clearError } = await (supabase as any)
-    .schema('atlas')
-    .from(params.table)
-    .update({ ends_on: nowDate })
-    .eq(params.identityColumn, params.identityValue)
-    .is('ends_on', null)
-    .neq(params.assigneeColumn, params.assigneeValue)
-  if (clearError) throw clearError
-
-  const { data: existing, error: existingError } = await (supabase as any)
-    .schema('atlas')
-    .from(params.table)
-    .select('id')
-    .eq(params.identityColumn, params.identityValue)
-    .eq(params.assigneeColumn, params.assigneeValue)
-    .is('ends_on', null)
-    .limit(1)
-  if (existingError) throw existingError
-  if (existing?.length) return
-
-  const { error: insertError } = await (supabase as any)
-    .schema('atlas')
-    .from(params.table)
-    .insert(params.buildInsert())
-  if (insertError) throw insertError
+function normalizePersonIds(values: Array<string | null | undefined>) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+  )
 }
 
 export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
   if (!hasSupabaseConfig || !supabase) return createEmptyDataset()
   try {
-    const [peopleResult, rolesResult, activeAssignmentsResult, enrollmentResult, navigatorResult, supervisorResult, partnerResult] =
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError) throw sessionError
+    const atlasRole = sessionData.session?.user?.app_metadata?.atlas_role
+    // Access matrix endpoints hit admin-only tables; skip requests until the
+    // browser session is authenticated with an administrator claim.
+    if (atlasRole !== 'administrator') return createEmptyDataset()
+
+    const [peopleResult, rolesResult, activeAssignmentsResult, enrollmentResult, navigatorResult, supervisorResult, partnerResult, partnerContactResult] =
       await Promise.all([
         (supabase as any)
           .schema('atlas')
@@ -126,7 +89,12 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
           .schema('atlas')
           .from('partners')
           .select('id, organization_name, primary_contact_email')
-          .eq('is_active', true)
+          .eq('is_active', true),
+        (supabase as any)
+          .schema('atlas')
+          .from('partner_contact_assignments')
+          .select('partner_id, person_id')
+          .is('ends_on', null)
       ])
 
     const firstError =
@@ -136,7 +104,8 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
       enrollmentResult.error ||
       navigatorResult.error ||
       supervisorResult.error ||
-      partnerResult.error
+      partnerResult.error ||
+      partnerContactResult.error
 
     if (firstError) throw firstError
 
@@ -165,12 +134,12 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
       }
     }
 
-    const navigatorByEnrollment = new Map<string, string>()
+    const navigatorIdsByEnrollment = new Map<string, Set<string>>()
     for (const row of navigatorResult.data || []) {
       const candidate = row as { enrollment_id: string; navigator_person_id: string }
-      if (!navigatorByEnrollment.has(candidate.enrollment_id)) {
-        navigatorByEnrollment.set(candidate.enrollment_id, candidate.navigator_person_id)
-      }
+      const current = navigatorIdsByEnrollment.get(candidate.enrollment_id) || new Set<string>()
+      current.add(candidate.navigator_person_id)
+      navigatorIdsByEnrollment.set(candidate.enrollment_id, current)
     }
 
     const enrollmentAssignments: AccessMatrixEnrollmentRecord[] = (enrollmentResult.data || []).map((row: any) => ({
@@ -178,31 +147,50 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
       enrolleeId: row.enrollee_id,
       enrolleeName: row.full_name || 'unnamed enrollee',
       caseId: row.case_id || '',
-      navigatorPersonId: navigatorByEnrollment.get(row.enrollment_id) || null
+      navigatorPersonIds: normalizePersonIds(Array.from(navigatorIdsByEnrollment.get(row.enrollment_id) || []))
     }))
 
-    const supervisorByNavigator = new Map<string, string>()
+    const supervisorIdsByNavigator = new Map<string, Set<string>>()
     for (const row of supervisorResult.data || []) {
       const candidate = row as { navigator_person_id: string; supervisor_person_id: string }
-      if (!supervisorByNavigator.has(candidate.navigator_person_id)) {
-        supervisorByNavigator.set(candidate.navigator_person_id, candidate.supervisor_person_id)
-      }
+      const current = supervisorIdsByNavigator.get(candidate.navigator_person_id) || new Set<string>()
+      current.add(candidate.supervisor_person_id)
+      supervisorIdsByNavigator.set(candidate.navigator_person_id, current)
     }
 
     const supervisorAssignments: AccessMatrixSupervisorRecord[] = people
       .filter((person) => person.roleKeys.includes('navigator'))
       .map((person) => ({
         navigatorPersonId: person.id,
-        supervisorPersonId: supervisorByNavigator.get(person.id) || null
+        supervisorPersonIds: normalizePersonIds(Array.from(supervisorIdsByNavigator.get(person.id) || []))
       }))
+
+    const partnerContactIdsByPartnerId = new Map<string, Set<string>>()
+    for (const row of partnerContactResult.data || []) {
+      const candidate = row as { partner_id: string; person_id: string }
+      const current = partnerContactIdsByPartnerId.get(candidate.partner_id) || new Set<string>()
+      current.add(candidate.person_id)
+      partnerContactIdsByPartnerId.set(candidate.partner_id, current)
+    }
 
     const partnerAssignments: AccessMatrixPartnerRecord[] = (partnerResult.data || []).map((row: any) => ({
       partnerId: row.id,
       organizationName: row.organization_name || 'unnamed partner',
-      primaryContactEmail: row.primary_contact_email || null,
-      primaryContactPersonId: row.primary_contact_email
-        ? personIdByEmail.get(String(row.primary_contact_email).toLowerCase()) || null
-        : null
+      primaryContactPersonIds: normalizePersonIds([
+        ...(row.primary_contact_email
+          ? [personIdByEmail.get(String(row.primary_contact_email).toLowerCase()) || null]
+          : []),
+        ...Array.from(partnerContactIdsByPartnerId.get(row.id) || [])
+      ]),
+      primaryContactEmails: normalizePersonIds(
+        (
+          normalizePersonIds([
+            ...(row.primary_contact_email ? [String(row.primary_contact_email)] : []),
+            ...Array.from(partnerContactIdsByPartnerId.get(row.id) || [])
+              .map((personId) => people.find((person) => person.id === personId)?.email || '')
+          ])
+        ).map((value) => value.toLowerCase())
+      )
     }))
 
     return {
@@ -222,151 +210,36 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
 export async function saveAccessMatrixPersonRoles(personId: string, roleKeys: AdminPortalPersonRole[]) {
   if (!hasSupabaseConfig || !supabase) return
   const nextRoleKeys = normalizeRoles(Array.from(new Set(roleKeys)))
-  const { data: roleRows, error: roleError } = await (supabase as any)
-    .schema('atlas')
-    .from('roles')
-    .select('id, role_key')
-    .in('role_key', nextRoleKeys)
-  if (roleError) throw roleError
-
-  const roleIdByKey = new Map<string, string>((roleRows || []).map((row: { id: string; role_key: string }) => [row.role_key, row.id]))
-  const nextRoleIds = new Set<string>(Array.from(roleIdByKey.values()))
-
-  const { data: currentRows, error: currentError } = await (supabase as any)
-    .schema('atlas')
-    .from('people_role_assignments')
-    .select('id, role_id')
-    .eq('person_id', personId)
-    .is('ends_on', null)
-  if (currentError) throw currentError
-
-  const current = currentRows || []
-  const nowDate = getIsoDateOnly()
-  const toDeactivate = current.filter((row: { role_id: string }) => !nextRoleIds.has(row.role_id)).map((row: { id: string }) => row.id)
-  if (toDeactivate.length) {
-    const { error } = await (supabase as any)
-      .schema('atlas')
-      .from('people_role_assignments')
-      .update({ ends_on: nowDate, is_primary: false })
-      .in('id', toDeactivate)
-    if (error) throw error
-  }
-
-  const currentRoleIds = new Set<string>(current.map((row: { role_id: string }) => row.role_id))
-  const inserts = Array.from(nextRoleIds)
-    .filter((roleId) => !currentRoleIds.has(roleId))
-    .map((roleId) => ({
-      id: crypto.randomUUID(),
-      person_id: personId,
-      role_id: roleId,
-      is_primary: false,
-      starts_on: nowDate,
-      ends_on: null
-    }))
-
-  if (inserts.length) {
-    const { error } = await (supabase as any)
-      .schema('atlas')
-      .from('people_role_assignments')
-      .insert(inserts)
-    if (error) throw error
-  }
-
-  const primaryRoleKey = nextRoleKeys.includes('administrator') ? 'administrator' : nextRoleKeys[0] || null
-  const primaryRoleId = primaryRoleKey ? roleIdByKey.get(primaryRoleKey) || null : null
-  const { error: clearPrimaryError } = await (supabase as any)
-    .schema('atlas')
-    .from('people_role_assignments')
-    .update({ is_primary: false })
-    .eq('person_id', personId)
-    .is('ends_on', null)
-  if (clearPrimaryError) throw clearPrimaryError
-
-  if (primaryRoleId) {
-    const { error: setPrimaryError } = await (supabase as any)
-      .schema('atlas')
-      .from('people_role_assignments')
-      .update({ is_primary: true })
-      .eq('person_id', personId)
-      .eq('role_id', primaryRoleId)
-      .is('ends_on', null)
-    if (setPrimaryError) throw setPrimaryError
-  }
-}
-
-export async function saveAccessMatrixEnrollmentNavigator(enrollmentId: string, navigatorPersonId: string | null) {
-  if (!hasSupabaseConfig || !supabase) return
-  await replaceActiveAssignmentRow({
-    table: 'navigator_assignments',
-    identityColumn: 'enrollment_id',
-    identityValue: enrollmentId,
-    assigneeColumn: 'navigator_person_id',
-    assigneeValue: navigatorPersonId,
-    buildInsert: () => ({
-      id: crypto.randomUUID(),
-      enrollment_id: enrollmentId,
-      navigator_person_id: navigatorPersonId,
-      starts_on: getIsoDateOnly(),
-      ends_on: null,
-      station_id: null
-    })
+  const { error } = await (supabase as any).rpc('fn_access_matrix_save_person_roles', {
+    target_person_id: personId,
+    target_role_keys: nextRoleKeys
   })
+  if (error) throw error
 }
 
-export async function saveAccessMatrixSupervisorAssignment(navigatorPersonId: string, supervisorPersonId: string | null) {
+export async function saveAccessMatrixEnrollmentNavigators(enrollmentId: string, navigatorPersonIds: string[]) {
   if (!hasSupabaseConfig || !supabase) return
-  await replaceActiveAssignmentRow({
-    table: 'supervisor_navigator_assignments',
-    identityColumn: 'navigator_person_id',
-    identityValue: navigatorPersonId,
-    assigneeColumn: 'supervisor_person_id',
-    assigneeValue: supervisorPersonId,
-    buildInsert: () => ({
-      id: crypto.randomUUID(),
-      navigator_person_id: navigatorPersonId,
-      supervisor_person_id: supervisorPersonId,
-      starts_on: getIsoDateOnly(),
-      ends_on: null
-    })
+  const { error } = await (supabase as any).rpc('fn_access_matrix_save_enrollment_navigators', {
+    target_enrollment_id: enrollmentId,
+    target_navigator_person_ids: normalizePersonIds(navigatorPersonIds)
   })
+  if (error) throw error
 }
 
-export async function saveAccessMatrixPartnerPrimaryContact(partnerId: string, primaryContactPersonId: string | null) {
+export async function saveAccessMatrixSupervisorAssignments(navigatorPersonId: string, supervisorPersonIds: string[]) {
   if (!hasSupabaseConfig || !supabase) return
-  if (!primaryContactPersonId) {
-    const { error } = await (supabase as any)
-      .schema('atlas')
-      .from('partners')
-      .update({
-        primary_contact_first_name: null,
-        primary_contact_last_name: null,
-        primary_contact_email: null,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', partnerId)
-    if (error) throw error
-    return
-  }
+  const { error } = await (supabase as any).rpc('fn_access_matrix_save_navigator_supervisors', {
+    target_navigator_person_id: navigatorPersonId,
+    target_supervisor_person_ids: normalizePersonIds(supervisorPersonIds)
+  })
+  if (error) throw error
+}
 
-  const { data: personRows, error: personError } = await (supabase as any)
-    .schema('atlas')
-    .from('people')
-    .select('first_name, last_name, email')
-    .eq('id', primaryContactPersonId)
-    .limit(1)
-  if (personError) throw personError
-
-  const person = personRows?.[0]
-  if (!person) return
-  const { error } = await (supabase as any)
-    .schema('atlas')
-    .from('partners')
-    .update({
-      primary_contact_first_name: person.first_name || null,
-      primary_contact_last_name: person.last_name || null,
-      primary_contact_email: person.email || null,
-      updated_at: new Date().toISOString()
-    })
-    .eq('id', partnerId)
+export async function saveAccessMatrixPartnerPrimaryContacts(partnerId: string, primaryContactPersonIds: string[]) {
+  if (!hasSupabaseConfig || !supabase) return
+  const { error } = await (supabase as any).rpc('fn_access_matrix_save_partner_contacts', {
+    target_partner_id: partnerId,
+    target_primary_contact_person_ids: normalizePersonIds(primaryContactPersonIds)
+  })
   if (error) throw error
 }

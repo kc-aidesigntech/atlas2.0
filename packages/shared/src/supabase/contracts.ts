@@ -89,6 +89,29 @@ export interface AtlasDatabase {
           updated_at: string;
         }>;
       };
+      partner_contact_assignments: {
+        Row: {
+          id: string;
+          partner_id: string;
+          person_id: string;
+          starts_on: string;
+          ends_on: string | null;
+          is_primary: boolean;
+          created_at: string;
+        };
+        Insert: {
+          partner_id: string;
+          person_id: string;
+          starts_on?: string;
+          ends_on?: string | null;
+          is_primary?: boolean;
+        };
+        Update: Partial<{
+          starts_on: string;
+          ends_on: string | null;
+          is_primary: boolean;
+        }>;
+      };
       partner_service_capacity_submissions: {
         Row: {
           id: string;
@@ -179,6 +202,40 @@ export interface AtlasDatabase {
           description: string | null;
           burden_score: number | null;
           not_encountered: boolean;
+        }>;
+      };
+      partner_service_capacity_submission_subjects: {
+        Row: {
+          id: string;
+          submission_id: string;
+          subject_person_id: string;
+          subject_role: string;
+          created_at: string;
+        };
+        Insert: {
+          submission_id: string;
+          subject_person_id: string;
+          subject_role?: string;
+        };
+        Update: Partial<{
+          subject_role: string;
+        }>;
+      };
+      partner_service_capacity_submission_reviewers: {
+        Row: {
+          id: string;
+          submission_id: string;
+          reviewer_person_id: string;
+          reviewer_role: string;
+          created_at: string;
+        };
+        Insert: {
+          submission_id: string;
+          reviewer_person_id: string;
+          reviewer_role?: string;
+        };
+        Update: Partial<{
+          reviewer_role: string;
         }>;
       };
       z_codes: {
@@ -343,6 +400,74 @@ export interface AtlasDatabase {
           title: string;
           description: string | null;
           competency_score: number;
+        }>;
+      };
+      navigator_competency_assessment_subjects: {
+        Row: {
+          id: string;
+          assessment_id: string;
+          subject_person_id: string;
+          subject_role: string;
+          created_at: string;
+        };
+        Insert: {
+          assessment_id: string;
+          subject_person_id: string;
+          subject_role?: string;
+        };
+        Update: Partial<{
+          subject_role: string;
+        }>;
+      };
+      navigator_competency_assessment_reviewers: {
+        Row: {
+          id: string;
+          assessment_id: string;
+          reviewer_person_id: string;
+          reviewer_role: string;
+          created_at: string;
+        };
+        Insert: {
+          assessment_id: string;
+          reviewer_person_id: string;
+          reviewer_role?: string;
+        };
+        Update: Partial<{
+          reviewer_role: string;
+        }>;
+      };
+      navigator_regulation_test_submission_subjects: {
+        Row: {
+          id: string;
+          submission_id: string;
+          subject_person_id: string;
+          subject_role: string;
+          created_at: string;
+        };
+        Insert: {
+          submission_id: string;
+          subject_person_id: string;
+          subject_role?: string;
+        };
+        Update: Partial<{
+          subject_role: string;
+        }>;
+      };
+      navigator_regulation_test_submission_reviewers: {
+        Row: {
+          id: string;
+          submission_id: string;
+          reviewer_person_id: string;
+          reviewer_role: string;
+          created_at: string;
+        };
+        Insert: {
+          submission_id: string;
+          reviewer_person_id: string;
+          reviewer_role?: string;
+        };
+        Update: Partial<{
+          reviewer_role: string;
         }>;
       };
     };

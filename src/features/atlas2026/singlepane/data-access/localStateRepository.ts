@@ -5,6 +5,7 @@ import type {
   EnrolleeIntakeRecord,
   EnrolleeProfile,
   NavigatorProgramState,
+  PartnerTroubleshootingGrant,
   RouteAssignmentRecord,
   TimelineConfig
 } from '@/features/atlas2026/singlepane/types'
@@ -39,12 +40,15 @@ const LOCAL_TIMELINE_CONFIGS_KEY = 'atlas2026.singlepane.timeline-configs.v1'
 const LOCAL_ADMIN_PORTAL_REGISTRY_KEY = 'atlas2026.singlepane.admin-portal-registry.v1'
 const NAVIGATOR_PROGRAM_STATE_CONFIG_KEY = 'navigator_program_state'
 const LOCAL_NAVIGATOR_PROGRAM_STATE_KEY = 'atlas2026.singlepane.navigator-program-state.v1'
+const PARTNER_TROUBLESHOOTING_GRANT_CONFIG_KEY_PREFIX = 'partner_troubleshooting_grant:'
+const LOCAL_PARTNER_TROUBLESHOOTING_GRANTS_KEY = 'atlas2026.singlepane.partner-troubleshooting-grants.v1'
+const ALLOW_SENSITIVE_LOCAL_CACHE = import.meta.env.VITE_ALLOW_SENSITIVE_LOCAL_CACHE === 'true'
 
 /**
  * Persistence strategy:
- * - localStorage is always updated first for offline continuity.
- * - Supabase writes are attempted second when configured.
- * - optional-data failures intentionally degrade to local-only mode.
+ * - account-level preferences can use localStorage for UX continuity.
+ * - sensitive clinical/program payloads are local-cached only when explicitly enabled.
+ * - Supabase writes are attempted for all config domains when configured.
  */
 
 function getDefaultAccountSettings(): AccountSettings {
@@ -52,6 +56,7 @@ function getDefaultAccountSettings(): AccountSettings {
     fullName: 'atlas operator',
     email: 'operator@atlas.local',
     organization: 'atlas operations',
+    avatarUrl: null,
     enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
   }
 }
@@ -64,6 +69,7 @@ function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | nul
     fullName: payload?.fullName || getDefaultAccountSettings().fullName,
     email: payload?.email || getDefaultAccountSettings().email,
     organization: payload?.organization || getDefaultAccountSettings().organization,
+    avatarUrl: typeof payload?.avatarUrl === 'string' ? payload.avatarUrl : null,
     enabledRoles: enabledRoles.length ? enabledRoles : getDefaultAccountSettings().enabledRoles
   } satisfies AccountSettings
 }
@@ -81,6 +87,7 @@ function persistLocalAccountSettingsState(settings: AccountSettings) {
 }
 
 function loadLocalEnrolleeIntakeState(): Record<string, EnrolleeIntakeRecord> {
+  if (!ALLOW_SENSITIVE_LOCAL_CACHE) return {}
   return loadLocalStorageState(LOCAL_ENROLLEE_INTAKES_KEY, {}, (parsed) => {
     if (!parsed || typeof parsed !== 'object') return {}
     return parsed
@@ -88,10 +95,12 @@ function loadLocalEnrolleeIntakeState(): Record<string, EnrolleeIntakeRecord> {
 }
 
 function persistLocalEnrolleeIntakeState(state: Record<string, EnrolleeIntakeRecord>) {
+  if (!ALLOW_SENSITIVE_LOCAL_CACHE) return
   persistLocalStorageState(LOCAL_ENROLLEE_INTAKES_KEY, state)
 }
 
 function loadLocalRouteAssignmentState(): Record<string, RouteAssignmentRecord> {
+  if (!ALLOW_SENSITIVE_LOCAL_CACHE) return {}
   return loadLocalStorageState(LOCAL_ROUTE_ASSIGNMENTS_KEY, {}, (parsed) => {
     if (!parsed || typeof parsed !== 'object') return {}
     return parsed
@@ -99,10 +108,12 @@ function loadLocalRouteAssignmentState(): Record<string, RouteAssignmentRecord> 
 }
 
 function persistLocalRouteAssignmentState(state: Record<string, RouteAssignmentRecord>) {
+  if (!ALLOW_SENSITIVE_LOCAL_CACHE) return
   persistLocalStorageState(LOCAL_ROUTE_ASSIGNMENTS_KEY, state)
 }
 
 function loadLocalTimelineConfigState(): Record<string, TimelineConfig> {
+  if (!ALLOW_SENSITIVE_LOCAL_CACHE) return {}
   return loadLocalStorageState(LOCAL_TIMELINE_CONFIGS_KEY, {}, (parsed) => {
     if (!parsed || typeof parsed !== 'object') return {}
     return parsed
@@ -110,6 +121,7 @@ function loadLocalTimelineConfigState(): Record<string, TimelineConfig> {
 }
 
 function persistLocalTimelineConfigState(state: Record<string, TimelineConfig>) {
+  if (!ALLOW_SENSITIVE_LOCAL_CACHE) return
   persistLocalStorageState(LOCAL_TIMELINE_CONFIGS_KEY, state)
 }
 
@@ -176,6 +188,7 @@ function normalizeNavigatorProgramState(payload: Partial<NavigatorProgramState> 
 }
 
 function loadLocalNavigatorProgramState(): NavigatorProgramState {
+  if (!ALLOW_SENSITIVE_LOCAL_CACHE) return getDefaultNavigatorProgramState()
   return loadLocalStorageState(
     LOCAL_NAVIGATOR_PROGRAM_STATE_KEY,
     getDefaultNavigatorProgramState(),
@@ -184,7 +197,37 @@ function loadLocalNavigatorProgramState(): NavigatorProgramState {
 }
 
 function persistLocalNavigatorProgramState(state: NavigatorProgramState) {
+  if (!ALLOW_SENSITIVE_LOCAL_CACHE) return
   persistLocalStorageState(LOCAL_NAVIGATOR_PROGRAM_STATE_KEY, state)
+}
+
+function normalizePartnerTroubleshootingGrant(
+  payload: Partial<PartnerTroubleshootingGrant> | null | undefined,
+  partnerId: string
+): PartnerTroubleshootingGrant {
+  return {
+    partnerId,
+    organizationName: payload?.organizationName?.trim() || '',
+    allowedMenus: Array.isArray(payload?.allowedMenus) ? payload!.allowedMenus.map((value) => String(value)).filter(Boolean) : [],
+    allowWrite: Boolean(payload?.allowWrite),
+    updatedAtIso: payload?.updatedAtIso || new Date().toISOString()
+  }
+}
+
+function loadLocalPartnerTroubleshootingGrantState(): Record<string, PartnerTroubleshootingGrant> {
+  return loadLocalStorageState(LOCAL_PARTNER_TROUBLESHOOTING_GRANTS_KEY, {}, (parsed) => {
+    if (!parsed || typeof parsed !== 'object') return {}
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, Partial<PartnerTroubleshootingGrant>>).map(([partnerId, payload]) => [
+        partnerId,
+        normalizePartnerTroubleshootingGrant(payload, partnerId)
+      ])
+    )
+  })
+}
+
+function persistLocalPartnerTroubleshootingGrantState(state: Record<string, PartnerTroubleshootingGrant>) {
+  persistLocalStorageState(LOCAL_PARTNER_TROUBLESHOOTING_GRANTS_KEY, state)
 }
 
 export function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrides: Record<string, EnrolleeIntakeRecord>) {
@@ -225,6 +268,39 @@ export async function saveAccountSettings(settings: AccountSettings): Promise<Ac
   return normalized
 }
 
+export async function loadPartnerTroubleshootingGrants(): Promise<Record<string, PartnerTroubleshootingGrant>> {
+  const { rows: data, error } = await loadConfigPayloadMapByPrefix<PartnerTroubleshootingGrant>(PARTNER_TROUBLESHOOTING_GRANT_CONFIG_KEY_PREFIX)
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return loadLocalPartnerTroubleshootingGrantState()
+    throw error
+  }
+  const normalized = Object.fromEntries(
+    (data || [])
+      .map((row: { config_key?: string; payload?: unknown }) => {
+        const partnerId = row.config_key?.replace(PARTNER_TROUBLESHOOTING_GRANT_CONFIG_KEY_PREFIX, '')
+        if (!partnerId) return null
+        return [partnerId, normalizePartnerTroubleshootingGrant(row.payload as Partial<PartnerTroubleshootingGrant>, partnerId)] as const
+      })
+      .filter((entry): entry is readonly [string, PartnerTroubleshootingGrant] => Boolean(entry))
+  )
+  persistLocalPartnerTroubleshootingGrantState(normalized)
+  return normalized
+}
+
+export async function savePartnerTroubleshootingGrant(grant: PartnerTroubleshootingGrant): Promise<PartnerTroubleshootingGrant> {
+  const normalized = normalizePartnerTroubleshootingGrant(grant, grant.partnerId)
+  persistLocalPartnerTroubleshootingGrantState({
+    ...loadLocalPartnerTroubleshootingGrantState(),
+    [normalized.partnerId]: normalized
+  })
+  const error = await upsertConfigPayload(`${PARTNER_TROUBLESHOOTING_GRANT_CONFIG_KEY_PREFIX}${normalized.partnerId}`, normalized)
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return normalized
+    throw error
+  }
+  return normalized
+}
+
 export async function loadEnrolleeIntakes(): Promise<Record<string, EnrolleeIntakeRecord>> {
   const { rows: data, error } = await loadConfigPayloadMapByPrefix<EnrolleeIntakeRecord>(ENROLLEE_INTAKE_CONFIG_KEY_PREFIX)
   if (error) {
@@ -245,8 +321,8 @@ export async function loadEnrolleeIntakes(): Promise<Record<string, EnrolleeInta
   return normalized
 }
 
-// Intake/route/timeline writes intentionally update local state first so editing
-// remains resilient during transient Supabase permission/network failures.
+// Intake/route/timeline writes optionally update local cache first when enabled
+// for controlled non-production/offline workflows.
 export async function saveEnrolleeIntake(intake: EnrolleeIntakeRecord): Promise<EnrolleeIntakeRecord> {
   persistLocalEnrolleeIntakeState({
     ...loadLocalEnrolleeIntakeState(),

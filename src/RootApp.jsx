@@ -5,6 +5,7 @@
 import React from 'react'
 import AtlasAuthScreen from '@/auth/AtlasAuthScreen'
 import { SupabaseAuthProvider, useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
+import PublicAtlasLandingPage from '@/features/atlas2026/public/PublicAtlasLandingPage'
 import SinglePaneApp from '@/features/atlas2026/singlepane/SinglePaneApp'
 import StandaloneServiceCapacitySurveyPage from '@/features/atlas2026/singlepane/StandaloneServiceCapacitySurveyPage'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
@@ -26,20 +27,30 @@ function isStandaloneServiceCapacityPath(pathname) {
   )
 }
 
+function isWorkspacePath(pathname) {
+  const normalizedPath = normalizePathname(pathname)
+  return normalizedPath === '/app' || normalizedPath.startsWith('/app/')
+}
+
 function RootAppInner() {
   const { session, isLoading } = useSupabaseAuth()
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+  const isWorkspaceRoute = isWorkspacePath(pathname)
   const needsSupabaseSession =
     typeof window !== 'undefined' &&
     hasSupabaseConfig &&
     Boolean(supabase) &&
     isSinglePaneSupabaseBootstrapEnabled &&
-    !isStandaloneServiceCapacityPath(pathname)
+    isWorkspaceRoute
 
   // Standalone survey routes intentionally bypass sign-in gating so partner
   // completions remain accessible even when the main app requires auth.
   if (typeof window !== 'undefined' && isStandaloneServiceCapacityPath(pathname)) {
     return <StandaloneServiceCapacitySurveyPage />
+  }
+
+  if (!isWorkspaceRoute) {
+    return <PublicAtlasLandingPage />
   }
 
   if (needsSupabaseSession && isLoading) {

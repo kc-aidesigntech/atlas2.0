@@ -4,11 +4,21 @@ interface ReferralContext {
   accountFullName: string
   accountOrganization: string
   partnerStationOrganizationName: string | null
+  actorRoleLabel?: string | null
+  sourceLabel?: string | null
 }
 
 interface ReferralQueueBuildResult {
   nextRecord: UnassignedEnrolleePickupRecord
   nextState: NavigatorProgramState
+}
+
+export interface PartnerInquirySubmissionInput {
+  contactName: string
+  organizationName: string
+  contactEmail: string
+  contactPhone: string
+  inquiryMessage: string
 }
 
 function createPickupCaseId() {
@@ -40,8 +50,10 @@ export function buildReferralQueueUpdate(
         .join(' · ')
     : ''
   const referralMessage = [
+    context.actorRoleLabel ? `submitted by ${context.actorRoleLabel}` : '',
     input.referralReason.trim(),
-    !input.existingPartner && partnerContactSummary ? `new partner contact: ${partnerContactSummary}` : ''
+    !input.existingPartner && partnerContactSummary ? `new partner contact: ${partnerContactSummary}` : '',
+    context.sourceLabel || ''
   ]
     .filter(Boolean)
     .join(' | ')
@@ -66,6 +78,48 @@ export function buildReferralQueueUpdate(
     claimedAtIso: null
   }
 
+  return {
+    nextRecord,
+    nextState: {
+      ...currentState,
+      pickupQueue: [nextRecord, ...currentState.pickupQueue.filter((record) => record.id !== nextRecord.id)]
+    }
+  }
+}
+
+/**
+ * Maps public partner inquiry submissions into the shared navigator queue
+ * contract so supervisors/navigators can triage outreach in one place.
+ */
+export function buildPartnerInquiryQueueUpdate(
+  input: PartnerInquirySubmissionInput,
+  currentState: NavigatorProgramState,
+  context: ReferralContext
+): ReferralQueueBuildResult {
+  const submittedAtIso = new Date().toISOString()
+  const contactName = input.contactName.trim() || 'partner inquiry contact'
+  const organizationName =
+    input.organizationName.trim() || context.partnerStationOrganizationName?.trim() || context.accountOrganization.trim() || 'community partner'
+  const contactLines = [input.contactEmail.trim(), input.contactPhone.trim()].filter(Boolean).join(' · ')
+  const nextRecord: UnassignedEnrolleePickupRecord = {
+    id: `pickup-inquiry-${Date.now().toString(36)}`,
+    fullName: contactName,
+    dob: '',
+    caseId: createPickupCaseId(),
+    email: input.contactEmail.trim(),
+    phone: input.contactPhone.trim(),
+    demographicsSummary: 'Partner outreach inquiry from public landing page.',
+    referredAtIso: submittedAtIso,
+    referrerName: contactName,
+    referrerOrganization: organizationName,
+    referrerMessage: [context.actorRoleLabel ? `submitted by ${context.actorRoleLabel}` : '', input.inquiryMessage.trim(), contactLines, context.sourceLabel || 'public partner inquiry']
+      .filter(Boolean)
+      .join(' | '),
+    zCodeTags: [],
+    status: 'available',
+    claimedByNavigatorName: null,
+    claimedAtIso: null
+  }
   return {
     nextRecord,
     nextState: {
