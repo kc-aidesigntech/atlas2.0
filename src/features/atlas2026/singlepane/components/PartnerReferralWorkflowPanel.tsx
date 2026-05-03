@@ -27,6 +27,7 @@ function buildInitialDraft(defaultReferrerName: string, defaultPartnerOrganizati
     participantEmail: '',
     participantPhone: '',
     referralReason: '',
+    backgroundNotes: '',
     selfReferring: false,
     referrerName: defaultReferrerName,
     existingPartner: Boolean(defaultPartnerOrganizationName.trim()),
@@ -80,6 +81,7 @@ export default function PartnerReferralWorkflowPanel({
     setError(null)
     const normalizedName = draft.referredParticipantName.trim()
     const normalizedReason = draft.referralReason.trim()
+    const normalizedBackgroundNotes = draft.backgroundNotes.trim()
     const normalizedEmail = draft.participantEmail.trim()
     const normalizedPhone = draft.participantPhone.trim()
     const normalizedReferrer = draft.referrerName.trim()
@@ -91,19 +93,19 @@ export default function PartnerReferralWorkflowPanel({
     // Keep validation messages tightly aligned with form wording so
     // partner users can resolve issues without guesswork.
     if (!normalizedName) {
-      setError('add who is being referred.')
+      setError("add the participant's name.")
       return
     }
     if (!normalizedReason) {
-      setError('add why they are being referred.')
+      setError("add this person's situation.")
+      return
+    }
+    if (!normalizedReferrer) {
+      setError('add the name of the person entering this referral.')
       return
     }
     if (!normalizedEmail && !normalizedPhone) {
       setError('add at least one way to contact the participant.')
-      return
-    }
-    if (!draft.selfReferring && !normalizedReferrer) {
-      setError('add who is making this referral.')
       return
     }
     if (!normalizedPartnerOrg) {
@@ -124,6 +126,7 @@ export default function PartnerReferralWorkflowPanel({
           ...draft,
           referredParticipantName: normalizedName,
           referralReason: normalizedReason,
+          backgroundNotes: normalizedBackgroundNotes,
           participantEmail: normalizedEmail,
           participantPhone: normalizedPhone,
           referrerName: normalizedReferrer,
@@ -172,18 +175,62 @@ export default function PartnerReferralWorkflowPanel({
           <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
             referral portal
           </small>
-          <div className="text-[24px] font-medium text-white">submit referral</div>
+          <div className="text-[24px] font-medium text-white">referral form</div>
           <small className="block text-[13px] text-[var(--foreground-secondary)]">
-            capture who is being referred, why support is needed, and contact information in one pass.
+            Thank you for initiating this referral form. Please provide any contact information and details about the
+            situation that you are able to share.
           </small>
           <small className="block text-[13px] text-white">Partner org: {draft.partnerOrganizationName || 'not provided'}</small>
-          <small className="block text-[13px] text-white">Referrer: {draft.referrerName || 'self referral'}</small>
+          <small className="block text-[13px] text-white">
+            Source: {draft.selfReferring ? "Self - I'm Referring the Participant" : 'Someone/something else is the source of referral'}
+          </small>
         </div>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
+        <Field label="Name of Person Entering*">
+          <input
+            value={draft.referrerName}
+            onChange={(event) => setDraft((current) => ({ ...current, referrerName: event.target.value }))}
+            className="atlas-admin-input"
+            placeholder="name of person entering"
+          />
+        </Field>
+
+        <div className="space-y-2">
+          <span className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+            Are you referring the participant? Or Did Someone Else?*
+          </span>
+          <AtlasTextButton
+            type="button"
+            onClick={() => setDraft((current) => ({ ...current, selfReferring: true }))}
+            className="w-full px-3 py-2 text-[14px]"
+            style={
+              {
+                ['--button-border-color' as const]: draft.selfReferring ? SP_COLORS.yellow : '#ffffff40',
+                color: draft.selfReferring ? SP_COLORS.yellow : SP_COLORS.white
+              } as React.CSSProperties
+            }
+          >
+            Self - I&apos;m Referring the Participant
+          </AtlasTextButton>
+          <AtlasTextButton
+            type="button"
+            onClick={() => setDraft((current) => ({ ...current, selfReferring: false }))}
+            className="w-full px-3 py-2 text-[14px]"
+            style={
+              {
+                ['--button-border-color' as const]: !draft.selfReferring ? SP_COLORS.yellow : '#ffffff40',
+                color: !draft.selfReferring ? SP_COLORS.yellow : SP_COLORS.white
+              } as React.CSSProperties
+            }
+          >
+            Someone/something else is the source of referral
+          </AtlasTextButton>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="who is being referred">
+          <Field label="Participant&apos;s Name*">
             <input
               value={draft.referredParticipantName}
               onChange={(event) => setDraft((current) => ({ ...current, referredParticipantName: event.target.value }))}
@@ -191,14 +238,24 @@ export default function PartnerReferralWorkflowPanel({
               placeholder="participant full name"
             />
           </Field>
-          <Field label="why are they being referred">
+          <Field label="Share this person&apos;s situation">
             <input
               value={draft.referralReason}
               onChange={(event) => setDraft((current) => ({ ...current, referralReason: event.target.value }))}
               className="atlas-admin-input"
-              placeholder="brief reason for referral"
+              placeholder="brief situation details"
             />
           </Field>
+          <div className="md:col-span-2">
+            <Field label="additional context (optional)">
+              <textarea
+                value={draft.backgroundNotes}
+                onChange={(event) => setDraft((current) => ({ ...current, backgroundNotes: event.target.value }))}
+                className="atlas-admin-input min-h-[140px] py-2"
+                placeholder="Add any additional context, risks, history, needs, or related details."
+              />
+            </Field>
+          </div>
           <Field label="participant email">
             <input
               value={draft.participantEmail}
@@ -216,26 +273,6 @@ export default function PartnerReferralWorkflowPanel({
             />
           </Field>
         </div>
-
-        <label className="flex items-center gap-2 text-[13px] text-white">
-          <input
-            type="checkbox"
-            checked={draft.selfReferring}
-            onChange={(event) => setDraft((current) => ({ ...current, selfReferring: event.target.checked }))}
-          />
-          self-referral
-        </label>
-
-        {!draft.selfReferring ? (
-          <Field label="referred by">
-            <input
-              value={draft.referrerName}
-              onChange={(event) => setDraft((current) => ({ ...current, referrerName: event.target.value }))}
-              className="atlas-admin-input"
-              placeholder="referrer name"
-            />
-          </Field>
-        ) : null}
 
         <div className="rounded-[16px] border border-white/10 bg-white/5 p-4">
           <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">partner details</small>
@@ -321,6 +358,9 @@ export default function PartnerReferralWorkflowPanel({
           >
             {isSubmitting ? 'submitting...' : 'submit referral'}
           </AtlasTextButton>
+        </div>
+        <div className="rounded-[14px] border border-white/20 bg-black/30 px-3 py-2 text-[13px] text-[#cfcfcf]">
+          If you need assistance with this form, call (360) 539-8899
         </div>
       </form>
 

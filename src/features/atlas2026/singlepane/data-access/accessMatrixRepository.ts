@@ -54,7 +54,7 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
     // browser session is authenticated with an administrator claim.
     if (atlasRole !== 'administrator') return createEmptyDataset()
 
-    const [peopleResult, rolesResult, activeAssignmentsResult, enrollmentResult, navigatorResult, supervisorResult, partnerResult, partnerContactResult] =
+    const [peopleResult, rolesResult, activeAssignmentsResult, enrollmentResult, navigatorResult, supervisorResult, partnerResult] =
       await Promise.all([
         (supabase as any)
           .schema('atlas')
@@ -89,12 +89,7 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
           .schema('atlas')
           .from('partners')
           .select('id, organization_name, primary_contact_email')
-          .eq('is_active', true),
-        (supabase as any)
-          .schema('atlas')
-          .from('partner_contact_assignments')
-          .select('partner_id, person_id')
-          .is('ends_on', null)
+          .eq('is_active', true)
       ])
 
     const firstError =
@@ -104,8 +99,7 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
       enrollmentResult.error ||
       navigatorResult.error ||
       supervisorResult.error ||
-      partnerResult.error ||
-      partnerContactResult.error
+      partnerResult.error
 
     if (firstError) throw firstError
 
@@ -165,29 +159,18 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
         supervisorPersonIds: normalizePersonIds(Array.from(supervisorIdsByNavigator.get(person.id) || []))
       }))
 
-    const partnerContactIdsByPartnerId = new Map<string, Set<string>>()
-    for (const row of partnerContactResult.data || []) {
-      const candidate = row as { partner_id: string; person_id: string }
-      const current = partnerContactIdsByPartnerId.get(candidate.partner_id) || new Set<string>()
-      current.add(candidate.person_id)
-      partnerContactIdsByPartnerId.set(candidate.partner_id, current)
-    }
-
     const partnerAssignments: AccessMatrixPartnerRecord[] = (partnerResult.data || []).map((row: any) => ({
       partnerId: row.id,
       organizationName: row.organization_name || 'unnamed partner',
       primaryContactPersonIds: normalizePersonIds([
         ...(row.primary_contact_email
           ? [personIdByEmail.get(String(row.primary_contact_email).toLowerCase()) || null]
-          : []),
-        ...Array.from(partnerContactIdsByPartnerId.get(row.id) || [])
+          : [])
       ]),
       primaryContactEmails: normalizePersonIds(
         (
           normalizePersonIds([
-            ...(row.primary_contact_email ? [String(row.primary_contact_email)] : []),
-            ...Array.from(partnerContactIdsByPartnerId.get(row.id) || [])
-              .map((personId) => people.find((person) => person.id === personId)?.email || '')
+            ...(row.primary_contact_email ? [String(row.primary_contact_email)] : [])
           ])
         ).map((value) => value.toLowerCase())
       )

@@ -26,7 +26,7 @@ export default function PublicAtlasLandingPage() {
     organizationName: '',
     contactEmail: '',
     contactPhone: '',
-    inquiryMessage: ''
+    backgroundNotes: ''
   })
 
   React.useEffect(() => {
@@ -58,7 +58,7 @@ export default function PublicAtlasLandingPage() {
     const trimmedOrganization = inquiryDraft.organizationName.trim()
     const trimmedEmail = inquiryDraft.contactEmail.trim()
     const trimmedPhone = inquiryDraft.contactPhone.trim()
-    const trimmedMessage = inquiryDraft.inquiryMessage.trim()
+    const trimmedBackgroundNotes = inquiryDraft.backgroundNotes.trim()
     if (!trimmedName) {
       setInquiryError('Please include your name.')
       return
@@ -71,8 +71,8 @@ export default function PublicAtlasLandingPage() {
       setInquiryError('Please include at least one contact method.')
       return
     }
-    if (!trimmedMessage) {
-      setInquiryError('Please include a short inquiry message.')
+    if (!trimmedBackgroundNotes) {
+      setInquiryError('Please include background notes.')
       return
     }
     setIsSubmittingInquiry(true)
@@ -83,7 +83,7 @@ export default function PublicAtlasLandingPage() {
           organizationName: trimmedOrganization,
           contactEmail: trimmedEmail,
           contactPhone: trimmedPhone,
-          inquiryMessage: trimmedMessage
+          backgroundNotes: trimmedBackgroundNotes
         },
         EMPTY_PROGRAM_STATE,
         {
@@ -101,7 +101,7 @@ export default function PublicAtlasLandingPage() {
         organizationName: trimmedOrganization,
         contactEmail: '',
         contactPhone: '',
-        inquiryMessage: ''
+        backgroundNotes: ''
       })
     } catch (error) {
       setInquiryError(error instanceof Error ? error.message : 'Unable to submit inquiry right now.')
@@ -198,12 +198,12 @@ export default function PublicAtlasLandingPage() {
                   />
                 </Field>
               </div>
-              <Field label="how can we support your organization?">
+              <Field label="background notes">
                 <textarea
-                  value={inquiryDraft.inquiryMessage}
-                  onChange={(event) => setInquiryDraft((current) => ({ ...current, inquiryMessage: event.target.value }))}
+                  value={inquiryDraft.backgroundNotes}
+                  onChange={(event) => setInquiryDraft((current) => ({ ...current, backgroundNotes: event.target.value }))}
                   className="atlas-admin-input min-h-[120px] py-2"
-                  placeholder="Briefly describe your partnership interest."
+                  placeholder="Add the substantive context, needs, current barriers, and the reason Atlas should follow up."
                 />
               </Field>
               {inquiryError ? <p className="text-[13px]" style={{ color: SP_COLORS.red }}>{inquiryError}</p> : null}

@@ -90,6 +90,11 @@ export interface SinglePaneBootstrapData {
   logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]
 }
 
+const routeCandidatesCache = new Map<string, RouteCandidateRecord[]>()
+const routeCandidatesInFlight = new Map<string, Promise<RouteCandidateRecord[]>>()
+const journeyStationMarkersCache = new Map<string, JourneyStationMarker[]>()
+const journeyStationMarkersInFlight = new Map<string, Promise<JourneyStationMarker[]>>()
+
 /**
  * Repository facade for single-pane orchestration.
  *
@@ -173,6 +178,10 @@ async function resolveCurrentPersonId() {
   if (sessionError) throw sessionError
   const authUserId = sessionData.session?.user?.id || ''
   const authEmail = sessionData.session?.user?.email?.trim() || ''
+  const appMetadata = sessionData.session?.user?.app_metadata || {}
+  const metadataPersonId =
+    String((appMetadata as Record<string, unknown>).person_id || (appMetadata as Record<string, unknown>).atlas_person_id || '').trim()
+  if (metadataPersonId) return metadataPersonId
   if (!authUserId && !authEmail) return null
 
   // Prefer auth user id linkage (`external_ref`) so role-based scoping remains stable
@@ -185,7 +194,10 @@ async function resolveCurrentPersonId() {
       .eq('external_ref', authUserId)
       .limit(1)
       .maybeSingle()
-    if (personByExternalRefError) throw personByExternalRefError
+    if (personByExternalRefError) {
+      if (isOptionalSupabaseDataError(personByExternalRefError)) return null
+      throw personByExternalRefError
+    }
     if (personByExternalRef?.id) return String(personByExternalRef.id)
   }
 
@@ -197,7 +209,10 @@ async function resolveCurrentPersonId() {
     .ilike('email', authEmail)
     .limit(1)
     .maybeSingle()
-  if (personByEmailError) throw personByEmailError
+  if (personByEmailError) {
+    if (isOptionalSupabaseDataError(personByEmailError)) return null
+    throw personByEmailError
+  }
   return personByEmail?.id ? String(personByEmail.id) : null
 }
 
@@ -407,22 +422,44 @@ export async function loadEnrollmentRequests(role: AtlasRole): Promise<Enrollmen
 
 export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteCandidateRecord[]> {
   if (!enrollmentId || !hasSupabaseConfig || !supabase) return []
-  const rows = await withOptionalSupabaseFallback(
+  const cached = routeCandidatesCache.get(enrollmentId)
+  if (cached) return cached
+  const existingRequest = routeCandidatesInFlight.get(enrollmentId)
+  if (existingRequest) return existingRequest
+
+  const request = withOptionalSupabaseFallback(
     `singlepane.routeCandidates:${enrollmentId}`,
     () => fetchSinglePaneRouteCandidates(supabase, enrollmentId),
     []
   )
-  return rows.map((row) => ({
-    stationId: row.stationId,
-    partnerId: row.partnerId,
-    stationName: row.stationName,
-    score: row.score,
-    matchedZCodeCount: row.matchedZCodeCount,
-    needUnitsMatched: row.needUnitsMatched,
-    partnerBurdenTotal: row.partnerBurdenTotal,
-    matchedZCodes: row.matchedZCodes,
-    matchedParentSummaries: row.matchedParentSummaries
-  }))
+    .then((rows) => {
+      const mapped = rows.map((row) => ({
+        stationId: row.stationId,
+        partnerId: row.partnerId,
+        stationName: row.stationName,
+        score: row.score,
+        matchedZCodeCount: row.matchedZCodeCount,
+        needUnitsMatched: row.needUnitsMatched,
+        partnerBurdenTotal: row.partnerBurdenTotal,
+        matchedZCodes: row.matchedZCodes,
+        matchedParentSummaries: row.matchedParentSummaries
+      }))
+      routeCandidatesCache.set(enrollmentId, mapped)
+      return mapped
+    })
+    .finally(() => {
+      routeCandidatesInFlight.delete(enrollmentId)
+    })
+
+  routeCandidatesInFlight.set(enrollmentId, request)
+  return request
+}
+
+export async function prefetchRouteCandidatesForEnrollments(enrollmentIds: string[]) {
+  // Warm route-candidate cache for likely-next enrollee selections so route planning
+  // opens instantly instead of waiting on a fresh query after menu navigation.
+  const uniqueEnrollmentIds = Array.from(new Set(enrollmentIds.map((value) => value.trim()).filter(Boolean)))
+  await Promise.all(uniqueEnrollmentIds.map((enrollmentId) => loadRouteCandidates(enrollmentId).catch(() => [])))
 }
 
 export async function loadCountyHeatmap(): Promise<CountyHeatPoint[]> {
@@ -443,25 +480,53 @@ export async function loadAdminDataQuality(): Promise<AdminDataQualityMetric[]> 
 
 export async function loadJourneyStationMarkers(enrollmentId?: string, enrolleeId?: string): Promise<JourneyStationMarker[]> {
   if (!enrollmentId) return []
+  const cached = journeyStationMarkersCache.get(enrollmentId)
+  if (cached) return cached
+  const existingRequest = journeyStationMarkersInFlight.get(enrollmentId)
+  if (existingRequest) return existingRequest
+
   // Marker history only includes completed route stops; active assignments are shown
   // from in-memory route planning state and should not appear as timeline history yet.
-  const historyMarkers = hasSupabaseConfig && supabase
-    ? (await withOptionalSupabaseFallback(
+  const request = (hasSupabaseConfig && supabase
+    ? withOptionalSupabaseFallback(
         `singlepane.stationMarkers:${enrollmentId}`,
         () => fetchEnrollmentStationMarkers(supabase, enrollmentId),
         []
-      ))
-        .filter((marker) => marker.status === 'completed')
-        .map((marker) => ({
-        id: marker.routePlanStopId,
-        stationName: marker.stationName,
-        assignedAtIso: marker.assignedAt,
-        phase: 'renewal',
-        iconSlug: marker.iconSlug || undefined,
-        markerType: 'history' as const
-      }))
-    : []
-  return historyMarkers
+      ).then((rows) =>
+        rows
+          .filter((marker) => marker.status === 'completed')
+          .map((marker) => ({
+            id: marker.routePlanStopId,
+            stationName: marker.stationName,
+            assignedAtIso: marker.assignedAt,
+            phase: 'renewal',
+            iconSlug: marker.iconSlug || undefined,
+            markerType: 'history' as const
+          }))
+      )
+    : Promise.resolve([]))
+    .then((markers) => {
+      journeyStationMarkersCache.set(enrollmentId, markers)
+      return markers
+    })
+    .finally(() => {
+      journeyStationMarkersInFlight.delete(enrollmentId)
+    })
+
+  journeyStationMarkersInFlight.set(enrollmentId, request)
+  return request
+}
+
+export async function prefetchJourneyStationMarkersForEnrollments(
+  enrollments: Array<{ enrollmentId?: string; enrolleeId?: string }>
+) {
+  // Timeline history for non-active enrollees is prefetched in the background so
+  // switching enrollees keeps the strip map populated without a visible delay.
+  await Promise.all(
+    enrollments.map((entry) =>
+      loadJourneyStationMarkers(entry.enrollmentId, entry.enrolleeId).catch(() => [])
+    )
+  )
 }
 
 function sanitizeFilename(value: string) {

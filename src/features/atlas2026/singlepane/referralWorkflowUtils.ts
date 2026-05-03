@@ -18,7 +18,7 @@ export interface PartnerInquirySubmissionInput {
   organizationName: string
   contactEmail: string
   contactPhone: string
-  inquiryMessage: string
+  backgroundNotes: string
 }
 
 function createPickupCaseId() {
@@ -49,9 +49,11 @@ export function buildReferralQueueUpdate(
         .filter(Boolean)
         .join(' · ')
     : ''
+  const backgroundNotes = input.backgroundNotes.trim()
   const referralMessage = [
     context.actorRoleLabel ? `submitted by ${context.actorRoleLabel}` : '',
     input.referralReason.trim(),
+    backgroundNotes ? `background notes: ${backgroundNotes}` : '',
     !input.existingPartner && partnerContactSummary ? `new partner contact: ${partnerContactSummary}` : '',
     context.sourceLabel || ''
   ]
@@ -71,6 +73,7 @@ export function buildReferralQueueUpdate(
     referredAtIso: submittedAtIso,
     referrerName,
     referrerOrganization: partnerOrganizationName,
+    backgroundNotes,
     referrerMessage: referralMessage || 'Referral submitted through partner referral workflow.',
     zCodeTags: [],
     status: 'available',
@@ -101,6 +104,7 @@ export function buildPartnerInquiryQueueUpdate(
   const organizationName =
     input.organizationName.trim() || context.partnerStationOrganizationName?.trim() || context.accountOrganization.trim() || 'community partner'
   const contactLines = [input.contactEmail.trim(), input.contactPhone.trim()].filter(Boolean).join(' · ')
+  const backgroundNotes = input.backgroundNotes.trim()
   const nextRecord: UnassignedEnrolleePickupRecord = {
     id: `pickup-inquiry-${Date.now().toString(36)}`,
     fullName: contactName,
@@ -112,7 +116,8 @@ export function buildPartnerInquiryQueueUpdate(
     referredAtIso: submittedAtIso,
     referrerName: contactName,
     referrerOrganization: organizationName,
-    referrerMessage: [context.actorRoleLabel ? `submitted by ${context.actorRoleLabel}` : '', input.inquiryMessage.trim(), contactLines, context.sourceLabel || 'public partner inquiry']
+    backgroundNotes,
+    referrerMessage: [context.actorRoleLabel ? `submitted by ${context.actorRoleLabel}` : '', backgroundNotes ? `background notes: ${backgroundNotes}` : '', contactLines, context.sourceLabel || 'public partner inquiry']
       .filter(Boolean)
       .join(' | '),
     zCodeTags: [],

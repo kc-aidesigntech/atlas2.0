@@ -50,6 +50,8 @@ import {
   loadAdminDataQuality,
   loadCountyHeatmap,
   loadEnrollmentRequests,
+  prefetchJourneyStationMarkersForEnrollments,
+  prefetchRouteCandidatesForEnrollments,
   loadPartnerServiceCapacitySurveyHistory,
   loadPartnerStationProfile,
   loadNavigatorProgramState,
@@ -119,6 +121,61 @@ const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'set policy threshold': ['legal'],
   'approve route template': ['education'],
   'audit event logs': ['legal', 'social']
+}
+
+const SESSION_ROLE_KEY = 'atlas2026.singlepane.session.role'
+const SESSION_ACTIVE_MENU_KEY = 'atlas2026.singlepane.session.active-menu'
+const SESSION_SELECTED_ENROLLEE_KEY = 'atlas2026.singlepane.session.selected-enrollee'
+const SESSION_REMOTE_SESSION_KEY = 'atlas2026.singlepane.session.remote-session'
+
+function readSessionStorageValue(key: string) {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') return null
+  try {
+    return window.sessionStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeSessionStorageValue(key: string, value: string | null) {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') return
+  try {
+    if (!value) {
+      window.sessionStorage.removeItem(key)
+      return
+    }
+    window.sessionStorage.setItem(key, value)
+  } catch {
+    // Session restore is a progressive enhancement; storage failures stay non-fatal.
+  }
+}
+
+function readSessionRole(initialRole: AtlasRole) {
+  const stored = readSessionStorageValue(SESSION_ROLE_KEY)
+  return stored === 'administrator' || stored === 'supervisor' || stored === 'partner' || stored === 'navigator'
+    ? stored
+    : initialRole
+}
+
+function readSessionRemoteSession(): TroubleshootingSessionState | null {
+  const raw = readSessionStorageValue(SESSION_REMOTE_SESSION_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<TroubleshootingSessionState>
+    if (!parsed || !parsed.isActive || !parsed.targetPersonId || !parsed.targetRole) return null
+    return {
+      isActive: true,
+      targetPersonId: String(parsed.targetPersonId),
+      targetRole: parsed.targetRole,
+      targetDisplayName: String(parsed.targetDisplayName || ''),
+      targetEmail: String(parsed.targetEmail || ''),
+      targetOrganizationName: parsed.targetOrganizationName ? String(parsed.targetOrganizationName) : null,
+      startedAtIso: String(parsed.startedAtIso || new Date().toISOString()),
+      partnerGrant: parsed.partnerGrant || null
+    }
+  } catch {
+    return null
+  }
 }
 
 function nextPhase(current?: StabilizationPhase): StabilizationPhase {
@@ -218,6 +275,9 @@ function buildSeedPickupQueue(enrollmentRequests: EnrollmentRequestRecord[]): Un
     referredAtIso: request.submittedAt,
     referrerName: 'atlas referral intake',
     referrerOrganization: 'community referral network',
+    backgroundNotes: request.status === 'assigned'
+      ? 'Referral already assigned and awaiting navigator follow-through.'
+      : 'Referral captured through Atlas intake; additional background details pending.',
     referrerMessage: 'Initial enrollee interest captured in referral intake. Review and claim if appropriate.',
     zCodeTags: [],
     status: request.status === 'assigned' ? 'claimed' : 'available',
@@ -471,14 +531,14 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
    * - repository calls persist into local storage and/or Supabase depending on availability.
    * - hook-level helpers keep those two surfaces eventually consistent.
    */
-  const [role, setRole] = useState<AtlasRole>(initialRole)
-  const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
-  const [activeMenu, setActiveMenu] = useState<string>('')
+  const [role, setRole] = useState<AtlasRole>(() => readSessionRole(initialRole))
+  const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>(() => readSessionStorageValue(SESSION_SELECTED_ENROLLEE_KEY) || '')
+  const [activeMenu, setActiveMenu] = useState<string>(() => readSessionStorageValue(SESSION_ACTIVE_MENU_KEY) || '')
   const [adminPortalRegistry, setAdminPortalRegistry] = useState<AdminPortalRegistry | null>(null)
   const [accessMatrixDataset, setAccessMatrixDataset] = useState<AccessMatrixDataset | null>(null)
   const [navigatorProgramState, setNavigatorProgramState] = useState<NavigatorProgramState>(createNavigatorProgramState())
   const [partnerTroubleshootingGrants, setPartnerTroubleshootingGrants] = useState<Record<string, PartnerTroubleshootingGrant>>({})
-  const [remoteSession, setRemoteSession] = useState<TroubleshootingSessionState | null>(null)
+  const [remoteSession, setRemoteSession] = useState<TroubleshootingSessionState | null>(() => readSessionRemoteSession())
   const [remotePartnerStationProfile, setRemotePartnerStationProfile] = useState<Awaited<ReturnType<typeof loadPartnerStationProfile>> | null>(null)
   const [isSavingAdminPortalRegistry, setIsSavingAdminPortalRegistry] = useState(false)
   const [isSavingAccessMatrix, setIsSavingAccessMatrix] = useState(false)
@@ -682,6 +742,22 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }, [scopedEnrollees, selectedEnrolleeId])
 
+  useEffect(() => {
+    writeSessionStorageValue(SESSION_ROLE_KEY, role)
+  }, [role])
+
+  useEffect(() => {
+    writeSessionStorageValue(SESSION_ACTIVE_MENU_KEY, activeMenu || null)
+  }, [activeMenu])
+
+  useEffect(() => {
+    writeSessionStorageValue(SESSION_SELECTED_ENROLLEE_KEY, selectedEnrolleeId || null)
+  }, [selectedEnrolleeId])
+
+  useEffect(() => {
+    writeSessionStorageValue(SESSION_REMOTE_SESSION_KEY, remoteSession?.isActive ? JSON.stringify(remoteSession) : null)
+  }, [remoteSession])
+
   const selectedLogs = useMemo(
     () =>
       logs
@@ -787,6 +863,36 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setPartnerServiceCapacitySurveyError
   } = usePartnerServiceCapacityHistory(viewerRole, effectivePartnerOrganizationName)
 
+  const backgroundPrefetchEnrollments = useMemo(
+    () =>
+      scopedEnrollees
+        .slice(0, 6)
+        .map((enrollee) => ({
+          enrollmentId: enrollee.enrollmentId,
+          enrolleeId: enrollee.id
+        }))
+        .filter((entry) => Boolean(entry.enrollmentId)),
+    [scopedEnrollees]
+  )
+
+  useEffect(() => {
+    if (!backgroundPrefetchEnrollments.length) return
+    if (typeof window === 'undefined') return
+    // Defer prefetch slightly so visible screen work commits first, then warm route
+    // and timeline caches for likely-next enrollees in the same navigator session.
+    const timeoutId = window.setTimeout(() => {
+      void prefetchRouteCandidatesForEnrollments(
+        backgroundPrefetchEnrollments
+          .map((entry) => entry.enrollmentId || '')
+          .filter(Boolean)
+      )
+      void prefetchJourneyStationMarkersForEnrollments(backgroundPrefetchEnrollments)
+    }, 180)
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [backgroundPrefetchEnrollments])
+
   useEffect(() => {
     if (!hasSupabaseConfig || !supabase) {
       setSessionEmail('')
@@ -843,6 +949,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [])
 
   useEffect(() => {
+    if (viewerRole !== 'administrator') {
+      // Access-matrix tables are admin-scoped. Clear stale values when role
+      // changes away from admin to avoid permission-noise and stale UI state.
+      setAccessMatrixDataset(null)
+      setAccessMatrixError(null)
+      return
+    }
     let isMounted = true
     loadAccessMatrixDataset()
       .then((dataset) => {
@@ -857,7 +970,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [viewerRole])
 
   useEffect(() => {
     let isMounted = true

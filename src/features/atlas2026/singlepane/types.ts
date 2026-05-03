@@ -396,6 +396,7 @@ export interface UnassignedEnrolleePickupRecord {
   referredAtIso: string
   referrerName: string
   referrerOrganization: string
+  backgroundNotes: string
   referrerMessage: string
   zCodeTags: string[]
   status: NavigatorPickupQueueStatus
@@ -408,6 +409,7 @@ export interface PartnerReferralSubmissionInput {
   participantEmail: string
   participantPhone: string
   referralReason: string
+  backgroundNotes: string
   selfReferring: boolean
   referrerName: string
   existingPartner: boolean

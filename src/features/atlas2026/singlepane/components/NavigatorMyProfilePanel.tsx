@@ -217,7 +217,13 @@ export default function NavigatorMyProfilePanel({
                         </div>
                       </div>
                       <div className="mt-3 rounded-[16px] border px-3 py-3 text-[13px] leading-[1.45]" style={{ borderColor: '#ffffff18' }}>
-                        {record.referrerMessage}
+                        <small className="mb-1 block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+                          background notes
+                        </small>
+                        <div className="text-white">{record.backgroundNotes || record.referrerMessage}</div>
+                        {record.referrerMessage && record.backgroundNotes && record.referrerMessage !== record.backgroundNotes ? (
+                          <div className="mt-2 text-[12px] text-[var(--foreground-secondary)]">{record.referrerMessage}</div>
+                        ) : null}
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {record.zCodeTags.length ? (

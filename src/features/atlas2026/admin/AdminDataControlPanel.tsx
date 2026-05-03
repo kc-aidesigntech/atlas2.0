@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Building2, GitBranch, ShieldCheck, Users } from 'lucide-react'
+import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import {
   AtlasInsetCard,
   AtlasMetricPill,
@@ -7,6 +8,7 @@ import {
   AtlasStatusPill,
   AtlasTextButton
 } from '@/features/atlas2026/components/AtlasPrimitives'
+import { DEFAULT_SERVICE_CAPACITY_SECTIONS } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type {
   AdminPortalCustomEnrolleeRecord,
@@ -22,7 +24,8 @@ import type {
   IntervalAssessmentDueItem,
   IntervalAssessmentRule,
   NavigatorProgramState,
-  SupervisorNavigatorCompetencySummary
+  SupervisorNavigatorCompetencySummary,
+  ZCodeSurveyPrompt
 } from '@/features/atlas2026/singlepane/types'
 
 // Admin control panel composes multiple registry contracts (people, organizations,
@@ -61,6 +64,60 @@ const ADMIN_SECTIONS: Array<{ id: AdminPortalSection; label: string; description
 
 const ROLE_OPTIONS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
 const ORG_TYPE_OPTIONS: AdminPortalOrganizationType[] = ['partner', 'internal', 'public_agency', 'community']
+const ADMIN_ACTIVE_SECTION_KEY = 'atlas2026.admin.session.active-section'
+const ADMIN_SELECTED_ENROLLEE_KEY = 'atlas2026.admin.session.selected-enrollee'
+const ADMIN_SELECTED_PERSON_KEY = 'atlas2026.admin.session.selected-person'
+const ADMIN_SELECTED_ORGANIZATION_KEY = 'atlas2026.admin.session.selected-organization'
+
+const ADMIN_Z_CODE_OPTIONS = Array.from(
+  DEFAULT_SERVICE_CAPACITY_SECTIONS.flatMap((section) => section.prompts).reduce(
+    (map, prompt) => {
+      const normalizedCode = prompt.normalizedZCode.trim().toUpperCase()
+      const existing = map.get(normalizedCode)
+      if (!existing) {
+        map.set(normalizedCode, {
+          ...prompt,
+          normalizedZCode: normalizedCode,
+          zCode: prompt.zCode.trim().toUpperCase(),
+          title: prompt.title.trim().toUpperCase(),
+          description: prompt.description.trim()
+        })
+        return map
+      }
+      const mergedDescription = Array.from(new Set([existing.description, prompt.description].map((value) => value.trim()).filter(Boolean))).join(' | ')
+      map.set(normalizedCode, {
+        ...existing,
+        description: mergedDescription
+      })
+      return map
+    },
+    new Map<string, ZCodeSurveyPrompt>()
+  ).values()
+).sort((left, right) => left.normalizedZCode.localeCompare(right.normalizedZCode, undefined, { numeric: true }))
+
+const ADMIN_Z_CODE_PARENT_CODES = DEFAULT_SERVICE_CAPACITY_SECTIONS.map((section) => section.parentCode.trim().toUpperCase())
+
+function readAdminSessionValue(key: string) {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') return null
+  try {
+    return window.sessionStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeAdminSessionValue(key: string, value: string | null) {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') return
+  try {
+    if (!value) {
+      window.sessionStorage.removeItem(key)
+      return
+    }
+    window.sessionStorage.setItem(key, value)
+  } catch {
+    // Session restore is best-effort only.
+  }
+}
 
 function slugify(value: string) {
   return value
@@ -235,16 +292,26 @@ export default function AdminDataControlPanel({
   // The UI can render before registry hydration completes; use an empty shape so
   // all mutation helpers stay null-safe and write against one consistent structure.
   const effectiveRegistry = registry || getEmptyRegistry()
-  const [activeSection, setActiveSection] = useState<AdminPortalSection>('overview')
-  const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string | null>(selectedEnrollee?.id || null)
-  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(null)
+  const [activeSection, setActiveSection] = useState<AdminPortalSection>(() => {
+    const stored = readAdminSessionValue(ADMIN_ACTIVE_SECTION_KEY)
+    return stored === 'overview' || stored === 'enrollees' || stored === 'directory' || stored === 'organizations' || stored === 'relationships' || stored === 'assessments'
+      ? stored
+      : 'overview'
+  })
+  const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string | null>(() => readAdminSessionValue(ADMIN_SELECTED_ENROLLEE_KEY) || selectedEnrollee?.id || null)
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(() => readAdminSessionValue(ADMIN_SELECTED_PERSON_KEY))
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(() => readAdminSessionValue(ADMIN_SELECTED_ORGANIZATION_KEY))
   const [enrolleeDraft, setEnrolleeDraft] = useState<CombinedEnrolleeRow | null>(null)
   const [personDraft, setPersonDraft] = useState<AdminPortalPersonRecord | null>(null)
   const [organizationDraft, setOrganizationDraft] = useState<AdminPortalOrganizationRecord | null>(null)
   const [intervalRuleDraft, setIntervalRuleDraft] = useState<IntervalAssessmentRule | null>(null)
   const [portalMessage, setPortalMessage] = useState<string | null>(null)
   const [isSubmittingEnrollee, setIsSubmittingEnrollee] = useState(false)
+  const [isZCodePickerOpen, setIsZCodePickerOpen] = useState(false)
+  const [activeZCodeParentFilters, setActiveZCodeParentFilters] = useState<string[]>([])
+  const zCodeOverlayPanelRef = useRef<HTMLDivElement | null>(null)
+  const zCodeOverlayListRef = useRef<HTMLDivElement | null>(null)
+  const previousZCodeOverlayHeightRef = useRef<number | null>(null)
 
   const seedOrganizations = useMemo<AdminPortalOrganizationRecord[]>(() => {
     if (!accountSettings.organization.trim()) return []
@@ -342,26 +409,71 @@ export default function AdminDataControlPanel({
 
   useEffect(() => {
     // Keep first-row selection sticky for UX continuity when data loads/reset occurs.
-    if (!selectedEnrolleeId && visibleEnrollees[0]?.id) {
+    if ((!selectedEnrolleeId || !visibleEnrollees.some((row) => row.id === selectedEnrolleeId)) && visibleEnrollees[0]?.id) {
       setSelectedEnrolleeId(visibleEnrollees[0].id)
     }
   }, [selectedEnrolleeId, visibleEnrollees])
 
   useEffect(() => {
-    if (!selectedPersonId && combinedPeople[0]?.id) {
+    if ((!selectedPersonId || !combinedPeople.some((person) => person.id === selectedPersonId)) && combinedPeople[0]?.id) {
       setSelectedPersonId(combinedPeople[0].id)
     }
   }, [combinedPeople, selectedPersonId])
 
   useEffect(() => {
-    if (!selectedOrganizationId && combinedOrganizations[0]?.id) {
+    if ((!selectedOrganizationId || !combinedOrganizations.some((organization) => organization.id === selectedOrganizationId)) && combinedOrganizations[0]?.id) {
       setSelectedOrganizationId(combinedOrganizations[0].id)
     }
   }, [combinedOrganizations, selectedOrganizationId])
 
+  useEffect(() => {
+    writeAdminSessionValue(ADMIN_ACTIVE_SECTION_KEY, activeSection)
+  }, [activeSection])
+
+  useEffect(() => {
+    writeAdminSessionValue(ADMIN_SELECTED_ENROLLEE_KEY, selectedEnrolleeId)
+  }, [selectedEnrolleeId])
+
+  useEffect(() => {
+    writeAdminSessionValue(ADMIN_SELECTED_PERSON_KEY, selectedPersonId)
+  }, [selectedPersonId])
+
+  useEffect(() => {
+    writeAdminSessionValue(ADMIN_SELECTED_ORGANIZATION_KEY, selectedOrganizationId)
+  }, [selectedOrganizationId])
+
   const selectedEnrolleeRow = useMemo(
     () => visibleEnrollees.find((row) => row.id === selectedEnrolleeId) || null,
     [selectedEnrolleeId, visibleEnrollees]
+  )
+  const selectedDraftZCodes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (enrolleeDraft ? (enrolleeDraft.kind === 'existing' ? enrolleeDraft.intake.zCodeTags : enrolleeDraft.record.zCodeTags) : [])
+            .map((value) => value.trim().toUpperCase())
+            .filter(Boolean)
+        )
+      ),
+    [enrolleeDraft]
+  )
+  const selectedDraftParentCodes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedDraftZCodes
+            .map((code) => code.split('.')[0]?.trim().toUpperCase() || '')
+            .filter(Boolean)
+        )
+      ),
+    [selectedDraftZCodes]
+  )
+  const visibleZCodeOptions = useMemo(
+    () =>
+      ADMIN_Z_CODE_OPTIONS.filter((option) =>
+        !activeZCodeParentFilters.length || activeZCodeParentFilters.includes(option.parentCode.trim().toUpperCase())
+      ),
+    [activeZCodeParentFilters]
   )
   const selectedPerson = useMemo(
     () => combinedPeople.find((person) => person.id === selectedPersonId) || null,
@@ -377,6 +489,42 @@ export default function AdminDataControlPanel({
       setEnrolleeDraft(selectedEnrolleeRow)
     }
   }, [enrolleeDraft, selectedEnrolleeRow])
+
+  useEffect(() => {
+    setIsZCodePickerOpen(false)
+    setActiveZCodeParentFilters([])
+  }, [selectedEnrolleeId])
+
+  useLayoutEffect(() => {
+    if (!isZCodePickerOpen || !zCodeOverlayPanelRef.current) return
+    const panel = zCodeOverlayPanelRef.current
+    const nextHeight = panel.getBoundingClientRect().height
+    const previousHeight = previousZCodeOverlayHeightRef.current
+    previousZCodeOverlayHeightRef.current = nextHeight
+    if (!previousHeight || Math.abs(previousHeight - nextHeight) < 2) return
+
+    const offsetY = (previousHeight - nextHeight) / 2
+    panel.animate(
+      [
+        { transform: `translateY(${offsetY}px) scale(0.992)`, opacity: 0.92 },
+        { transform: 'translateY(0px) scale(1)', opacity: 1 }
+      ],
+      {
+        duration: 240,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
+      }
+    )
+    zCodeOverlayListRef.current?.animate(
+      [
+        { transform: 'translateY(8px)', opacity: 0.72 },
+        { transform: 'translateY(0px)', opacity: 1 }
+      ],
+      {
+        duration: 220,
+        easing: 'cubic-bezier(0.22, 1, 0.36, 1)'
+      }
+    )
+  }, [activeZCodeParentFilters, isZCodePickerOpen, visibleZCodeOptions.length])
 
   useEffect(() => {
     if (!personDraft && selectedPerson) {
@@ -411,6 +559,39 @@ export default function AdminDataControlPanel({
     const nextOrganizations = effectiveRegistry.organizations.filter((entry) => entry.id !== organization.id)
     nextOrganizations.push(organization)
     return { ...effectiveRegistry, organizations: nextOrganizations }
+  }
+
+  function updateEnrolleeDraftZCodes(nextTags: string[]) {
+    const normalizedTags = Array.from(new Set(nextTags.map((value) => value.trim().toUpperCase()).filter(Boolean)))
+    setEnrolleeDraft((current) => {
+      if (!current) return current
+      if (current.kind === 'existing') return { ...current, intake: { ...current.intake, zCodeTags: normalizedTags } }
+      return { ...current, record: { ...current.record, zCodeTags: normalizedTags } }
+    })
+  }
+
+  function toggleEnrolleeDraftZCode(code: string) {
+    const normalizedCode = code.trim().toUpperCase()
+    if (!normalizedCode) return
+    const nextTags = selectedDraftZCodes.includes(normalizedCode)
+      ? selectedDraftZCodes.filter((tag) => tag !== normalizedCode)
+      : [...selectedDraftZCodes, normalizedCode]
+    updateEnrolleeDraftZCodes(nextTags)
+  }
+
+  function openZCodePicker() {
+    setActiveZCodeParentFilters(selectedDraftParentCodes.length ? selectedDraftParentCodes : ADMIN_Z_CODE_PARENT_CODES.slice(0, 1))
+    previousZCodeOverlayHeightRef.current = null
+    setIsZCodePickerOpen(true)
+  }
+
+  function toggleZCodeParentFilter(parentCode: string) {
+    const normalizedParentCode = parentCode.trim().toUpperCase()
+    setActiveZCodeParentFilters((current) =>
+      current.includes(normalizedParentCode)
+        ? current.filter((value) => value !== normalizedParentCode)
+        : [...current, normalizedParentCode]
+    )
   }
 
   async function handleSaveEnrolleeDraft() {
@@ -907,18 +1088,41 @@ export default function AdminDataControlPanel({
                       />
                     </Field>
                     <Field label="z-codes">
-                      <input
-                        value={(enrolleeDraft.kind === 'existing' ? enrolleeDraft.intake.zCodeTags : enrolleeDraft.record.zCodeTags).join(', ')}
-                        onChange={(event) =>
-                          setEnrolleeDraft((current) => {
-                            if (!current) return current
-                            const nextTags = event.target.value.split(',').map((item) => item.trim()).filter(Boolean)
-                            if (current.kind === 'existing') return { ...current, intake: { ...current.intake, zCodeTags: nextTags } }
-                            return { ...current, record: { ...current.record, zCodeTags: nextTags } }
-                          })
-                        }
-                        className="atlas-admin-input"
-                      />
+                      <div className="space-y-3">
+                        <div className="rounded-[18px] border border-white/10 bg-[#111111] px-3 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {selectedDraftParentCodes.length ? (
+                                selectedDraftParentCodes.map((code) => (
+                                  <button
+                                    key={code}
+                                    type="button"
+                                    onClick={openZCodePicker}
+                                    className="rounded-full"
+                                  >
+                                    <ZCodeParentFilterCircle parentCode={code} selected />
+                                  </button>
+                                ))
+                              ) : (
+                                <button type="button" onClick={openZCodePicker} className="text-[13px] text-[var(--foreground-secondary)]">
+                                  click to choose z-codes
+                                </button>
+                              )}
+                            </div>
+                            <AtlasTextButton
+                              type="button"
+                              onClick={openZCodePicker}
+                              className="px-3 py-1.5 text-[12px]"
+                              style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                            >
+                              edit z-codes
+                            </AtlasTextButton>
+                          </div>
+                          <div className="mt-3 text-[12px] text-[var(--foreground-secondary)]">
+                            {selectedDraftZCodes.length ? selectedDraftZCodes.join(', ') : 'no z-codes selected'}
+                          </div>
+                        </div>
+                      </div>
                     </Field>
                     {enrolleeDraft.kind === 'custom' ? (
                       <Field label="notes">
@@ -1609,8 +1813,164 @@ export default function AdminDataControlPanel({
             </div>
           ) : null}
         </div>
+        {isZCodePickerOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-5 py-6 backdrop-blur-[2px]">
+            <div
+              ref={zCodeOverlayPanelRef}
+              className="max-h-[85vh] w-full max-w-[980px] overflow-hidden rounded-[28px] border border-white/15 bg-[#080808] px-5 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">z-code selector</small>
+                  <div className="mt-1 text-[24px] font-medium text-white">Select active z-codes</div>
+                  <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                    Parent filters default to the currently selected families. Click the circles to add or remove parent groups.
+                  </small>
+                </div>
+                <AtlasTextButton
+                  type="button"
+                  onClick={() => setIsZCodePickerOpen(false)}
+                  className="px-4 py-2 text-[12px]"
+                  style={{ ['--button-border-color' as const]: '#ffffff30', color: '#f1f1f1' } as React.CSSProperties}
+                >
+                  close
+                </AtlasTextButton>
+              </div>
+              <div className="mt-5 flex flex-wrap items-center gap-3">
+                {ADMIN_Z_CODE_PARENT_CODES.map((parentCode) => (
+                  <button
+                    key={parentCode}
+                    type="button"
+                    onClick={() => toggleZCodeParentFilter(parentCode)}
+                    className="rounded-full"
+                  >
+                    <ZCodeParentFilterCircle
+                      parentCode={parentCode}
+                      selected={activeZCodeParentFilters.includes(parentCode)}
+                    />
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[var(--foreground-secondary)]">
+                <span>{selectedDraftZCodes.length} z-code{selectedDraftZCodes.length === 1 ? '' : 's'} selected</span>
+                <span>
+                  {activeZCodeParentFilters.length
+                    ? `showing ${activeZCodeParentFilters.join(', ')}`
+                    : 'no parent filters active'}
+                </span>
+              </div>
+              <div ref={zCodeOverlayListRef} className="mt-5 max-h-[56vh] overflow-y-auto">
+                {activeZCodeParentFilters.length ? (
+                  <div className="grid gap-2">
+                    {visibleZCodeOptions.map((option) => (
+                      <ZCodeOptionCard
+                        key={option.id}
+                        option={option}
+                        selected={selectedDraftZCodes.includes(option.normalizedZCode)}
+                        onToggle={() => toggleEnrolleeDraftZCode(option.normalizedZCode)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-[18px] border border-white/10 px-4 py-4 text-[13px] text-[var(--foreground-secondary)]">
+                    Turn on at least one parent circle to show its child z-codes.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </AtlasPanel>
+  )
+}
+
+function ZCodeParentFilterCircle({
+  parentCode,
+  selected
+}: {
+  parentCode: string
+  selected: boolean
+}) {
+  const normalized = parentCode.trim().toUpperCase()
+  const fill = getZCodeParentColor(normalized) || SP_COLORS.white
+  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
+  return (
+    <span
+      className="relative inline-flex h-12 w-12 items-center justify-center rounded-full border text-[22px] font-bold transition-all duration-200 ease-out"
+      style={{
+        backgroundColor: fill,
+        borderColor: selected ? SP_COLORS.white : fill,
+        color: textColor,
+        boxShadow: selected ? `0 0 0 2px ${SP_COLORS.yellow}` : 'none'
+      }}
+    >
+      {selected ? (
+        <span
+          className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold"
+          style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
+        >
+          ✓
+        </span>
+      ) : null}
+      {normalized.replace(/^Z/i, '')}
+    </span>
+  )
+}
+
+function ZCodeCircleChip({ code }: { code: string }) {
+  const normalized = code.trim().toUpperCase()
+  const parentCode = normalized.split('.')[0] || normalized
+  const fill = getZCodeParentColor(parentCode) || SP_COLORS.white
+  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
+  return (
+    <span
+      className="inline-flex h-11 min-w-[4.25rem] items-center justify-center rounded-full border px-3 text-[11px] font-semibold tracking-[0.04em] transition-all duration-200 ease-out"
+      style={{ backgroundColor: fill, borderColor: fill, color: textColor }}
+      title={normalized}
+    >
+      {normalized}
+    </span>
+  )
+}
+
+function ZCodeOptionCard({
+  option,
+  selected,
+  onToggle
+}: {
+  option: ZCodeSurveyPrompt
+  selected: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex items-start gap-3 rounded-[16px] border px-3 py-3 text-left transition-all duration-200 ease-out"
+      style={{
+        borderColor: selected ? SP_COLORS.yellow : '#ffffff18',
+        backgroundColor: selected ? '#1a1606' : '#101010'
+      }}
+    >
+      <ZCodeCircleChip code={option.normalizedZCode} />
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-medium text-white">{option.title}</span>
+        <span className="mt-1 block text-[12px] text-[var(--foreground-secondary)]">{option.description}</span>
+        <span className="mt-1 block text-[10px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+          {option.parentTheme}
+        </span>
+      </span>
+      <span
+        className="mt-0.5 inline-flex min-w-[64px] justify-center rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"
+        style={{
+          borderColor: selected ? SP_COLORS.yellow : '#ffffff20',
+          color: selected ? SP_COLORS.yellow : '#d8d8d8'
+        }}
+      >
+        {selected ? 'selected' : 'select'}
+      </span>
+    </button>
   )
 }
 
