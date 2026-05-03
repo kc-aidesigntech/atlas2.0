@@ -12,14 +12,26 @@ interface RadialLoadChartProps {
   onClick?: () => void
 }
 
+interface ChartAxisPoint {
+  axis: string
+  value: number
+  showLabel: boolean
+}
+
 function wrapAxisLabel(label: string) {
   if (!label.includes(' ')) return [label]
   return label.split(/\s+/).filter(Boolean)
 }
 
-function AxisTick(props: { x?: number; y?: number; cx?: number; cy?: number; payload?: { value?: string } }) {
+function AxisTick(props: {
+  x?: number
+  y?: number
+  cx?: number
+  cy?: number
+  payload?: { value?: string; payload?: ChartAxisPoint }
+}) {
   const label = props.payload?.value || ''
-  if (!label || label.includes('-')) return null
+  if (!label || !props.payload?.payload?.showLabel) return null
 
   const x = props.x ?? 0
   const y = props.y ?? 0
@@ -53,18 +65,28 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
   const habitat = load?.habitat || 0
   const work = load?.work || 0
   const social = load?.socialNetworks || 0
-  const habitatSocialBlend = (habitat + social) / 2
-  const socialWorkBlend = (social + work) / 2
+  const habitatWorkBlend = (habitat + work) / 2
+  const workSocialBlend = (work + social) / 2
+  const socialHabitatBlend = (social + habitat) / 2
   const chartWidth = 340
   const chartHeight = 220
-  const maxDomainValue = Math.max(habitat, habitatSocialBlend, social, socialWorkBlend, work, 1)
+  const maxDomainValue = Math.max(
+    habitat,
+    habitatWorkBlend,
+    work,
+    workSocialBlend,
+    social,
+    socialHabitatBlend,
+    1
+  )
 
-  const data = [
-    { axis: 'habitat', value: habitat },
-    { axis: 'habitat-social', value: habitatSocialBlend },
-    { axis: 'social networks', value: social },
-    { axis: 'social-work', value: socialWorkBlend },
-    { axis: 'work', value: work }
+  const data: ChartAxisPoint[] = [
+    { axis: 'habitat', value: habitat, showLabel: true },
+    { axis: '', value: habitatWorkBlend, showLabel: false },
+    { axis: 'work', value: work, showLabel: true },
+    { axis: '', value: workSocialBlend, showLabel: false },
+    { axis: 'social networks', value: social, showLabel: true },
+    { axis: '', value: socialHabitatBlend, showLabel: false }
   ]
   const tickCount = Math.min(Math.max(Math.ceil(maxDomainValue), 3), 6)
   const Wrapper = onClick ? 'button' : 'div'
@@ -88,7 +110,7 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
           data={data}
           startAngle={90}
           endAngle={-270}
-          margin={{ top: 12, right: 48, bottom: 18, left: 28 }}
+          margin={{ top: 10, right: 48, bottom: 18, left: 28 }}
         >
           <PolarGrid
             gridType="polygon"

@@ -122,6 +122,15 @@ export default function PublicAtlasLandingPage() {
             <AtlasTextButton
               className="px-3 py-1.5 text-[12px]"
               onClick={() => {
+                window.location.assign('/demo')
+              }}
+              style={{ ['--button-border-color' as const]: '#ffffff45', color: '#ffffffd0' } as React.CSSProperties}
+            >
+              demo
+            </AtlasTextButton>
+            <AtlasTextButton
+              className="px-3 py-1.5 text-[12px]"
+              onClick={() => {
                 window.location.assign('/app')
               }}
               style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}

@@ -189,8 +189,25 @@ async function resolveCurrentPersonId() {
   const metadataPersonId =
     String((appMetadata as Record<string, unknown>).person_id || (appMetadata as Record<string, unknown>).atlas_person_id || '').trim()
   if (metadataPersonId) return metadataPersonId
-  // Do not query atlas.people directly here because non-admin roles can hit
-  // policy-denied (403) paths during bootstrap. Metadata linkage is the safe path.
+  // Metadata can be missing/stale for some sessions even when assignment RPCs succeed.
+  // Fall back to the authorization helper function so navigator scoping still resolves.
+  const { data: helperData, error: helperError } = await (supabase as any).rpc('fn_current_person_id')
+  if (helperError) {
+    const helperCode = (helperError as { code?: string } | null)?.code
+    // Older environments may not have this helper yet; preserve safe null fallback.
+    if (helperCode === 'PGRST202') return null
+    throw helperError
+  }
+  if (typeof helperData === 'string' && helperData.trim()) return helperData
+  if (Array.isArray(helperData) && helperData.length) {
+    const firstRow = helperData[0] as Record<string, unknown>
+    const keyedValue = String(firstRow.fn_current_person_id || firstRow.id || '').trim()
+    if (keyedValue) return keyedValue
+  }
+  if (helperData && typeof helperData === 'object') {
+    const keyedValue = String((helperData as Record<string, unknown>).fn_current_person_id || '').trim()
+    if (keyedValue) return keyedValue
+  }
   return null
 }
 

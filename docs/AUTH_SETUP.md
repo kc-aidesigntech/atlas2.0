@@ -39,16 +39,18 @@ For identities that **do not** share an email, use **manual linking** (`linkIden
 
 ## Database: `auth.users` → `atlas.people` bridge
 
-Migration file: `supabase/migrations/20260421_auth_provision_atlas_people.sql`
+Canonical migration file: `supabase/migrations/20260504010000_launch_identity_bridge_baseline.sql`
 
 It creates triggers on `auth.users` so new (and updated) auth users get a matching `atlas.people` row (`id` = `auth.users.id`, `external_ref` = `auth.uid()::text`) and a default **navigator** role assignment when that role exists—matching `atlas.fn_current_person_id()` used by Row-Level Security (RLS) helpers.
 
-### Applied to remote (2026-04-21)
+### Applied to remote (2026-04-21, historical)
 
-The migration Structured Query Language (SQL) was executed against the **linked** Supabase project using the latest Command-Line Interface (CLI) (Management Application Programming Interface (API) / login role), from the directory that holds the CLI link:
+Historically, the same bridge logic was executed against the **linked** Supabase project by running a local-only migration filename that is now archived. The active migration chain now uses `20260504010000_launch_identity_bridge_baseline.sql` so new environments do not depend on archived files.
+
+The historical Structured Query Language (SQL) command was:
 
 ```bash
-cd /Users/kc_ai-designtech && npx supabase@latest db query --linked --yes -f atlas/supabase/migrations/20260421_auth_provision_atlas_people.sql
+cd /Users/kc_ai-designtech && npx supabase@latest db query --linked --yes -f atlas/supabase/migrations_archive/local_only_pre_remote_alignment/20260421_auth_provision_atlas_people.sql
 ```
 
 Prerequisites: `supabase login`, and `supabase link --project-ref qjsaedamqaqxobslboni` (or equivalent link for your machine).

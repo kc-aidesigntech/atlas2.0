@@ -6,6 +6,7 @@ import React from 'react'
 import AtlasAuthScreen from '@/auth/AtlasAuthScreen'
 import { SupabaseAuthProvider, useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
 import PublicAtlasLandingPage from '@/features/atlas2026/public/PublicAtlasLandingPage'
+import PublicAtlasDemoPage from '@/features/atlas2026/public/PublicAtlasDemoPage'
 import SinglePaneApp from '@/features/atlas2026/singlepane/SinglePaneApp'
 import StandaloneServiceCapacitySurveyPage from '@/features/atlas2026/singlepane/StandaloneServiceCapacitySurveyPage'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
@@ -32,6 +33,11 @@ function isWorkspacePath(pathname) {
   return normalizedPath === '/app' || normalizedPath.startsWith('/app/')
 }
 
+function isDemoPath(pathname) {
+  const normalizedPath = normalizePathname(pathname)
+  return normalizedPath === '/demo' || normalizedPath.startsWith('/demo/')
+}
+
 function RootAppInner() {
   const { session, isLoading } = useSupabaseAuth()
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
@@ -47,6 +53,10 @@ function RootAppInner() {
   // completions remain accessible even when the main app requires auth.
   if (typeof window !== 'undefined' && isStandaloneServiceCapacityPath(pathname)) {
     return <StandaloneServiceCapacitySurveyPage />
+  }
+
+  if (typeof window !== 'undefined' && isDemoPath(pathname)) {
+    return <PublicAtlasDemoPage />
   }
 
   if (!isWorkspaceRoute) {
