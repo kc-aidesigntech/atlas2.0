@@ -18,6 +18,7 @@ import type {
   IntervalAssessmentRule,
   JourneyStationMarker,
   NavigatorProgramState,
+  NavigatorEnrollmentAssignmentRecord,
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
   PartnerTroubleshootingGrant,
@@ -55,6 +56,7 @@ import {
   loadPartnerServiceCapacitySurveyHistory,
   loadPartnerStationProfile,
   loadNavigatorProgramState,
+  loadNavigatorEnrollmentAssignments,
   loadPartnerTroubleshootingGrants,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
@@ -74,6 +76,7 @@ import {
   saveTimelineConfig as persistTimelineConfig,
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake,
+  assignNavigatorEnrollmentToSelf as persistAssignNavigatorEnrollmentToSelf,
   loadAccessMatrixDataset
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/useJourneyStationMarkers'
@@ -490,12 +493,11 @@ function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
     },
     { habitat: 0, work: 0, socialNetworks: 0 }
   )
-  const maxTotal = Math.max(totals.habitat, totals.work, totals.socialNetworks, 1)
   return {
     enrolleeId: 'navigator-aggregate',
-    habitat: Math.round((totals.habitat / maxTotal) * 100),
-    work: Math.round((totals.work / maxTotal) * 100),
-    socialNetworks: Math.round((totals.socialNetworks / maxTotal) * 100)
+    habitat: totals.habitat,
+    work: totals.work,
+    socialNetworks: totals.socialNetworks
   }
 }
 
@@ -561,6 +563,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [regulationTestHistory, setRegulationTestHistory] = useState<RegulationTestSubmissionRecord[]>([])
   const [isSavingRegulationTest, setIsSavingRegulationTest] = useState(false)
   const [regulationTestError, setRegulationTestError] = useState<string | null>(null)
+  const [navigatorEnrollmentAssignments, setNavigatorEnrollmentAssignments] = useState<NavigatorEnrollmentAssignmentRecord[]>([])
+  const [navigatorEnrollmentAssignmentsError, setNavigatorEnrollmentAssignmentsError] = useState<string | null>(null)
+  const [isLoadingNavigatorEnrollmentAssignments, setIsLoadingNavigatorEnrollmentAssignments] = useState(false)
+  const [assigningNavigatorEnrollmentId, setAssigningNavigatorEnrollmentId] = useState<string | null>(null)
   const publicQueueRecords = useMemo(() => loadPublicReferralQueueRecords(), [])
   const {
     state: {
@@ -583,7 +589,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       routeAssignmentsByEnrolleeId,
       navigatorCompetencyAssessments
     },
-    setState: setBootstrapState
+    setState: setBootstrapState,
+    reload: reloadBootstrapState
   } = useSinglePaneBootstrapState(role)
 
   const viewerRole = remoteSession?.targetRole || role
@@ -1121,6 +1128,35 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       isMounted = false
     }
   }, [role, setBootstrapState, viewerRole])
+
+  useEffect(() => {
+    if (viewerRole !== 'navigator') {
+      setNavigatorEnrollmentAssignments([])
+      setNavigatorEnrollmentAssignmentsError(null)
+      setIsLoadingNavigatorEnrollmentAssignments(false)
+      return
+    }
+    let isMounted = true
+    setIsLoadingNavigatorEnrollmentAssignments(true)
+    loadNavigatorEnrollmentAssignments()
+      .then((rows) => {
+        if (!isMounted) return
+        setNavigatorEnrollmentAssignments(rows)
+        setNavigatorEnrollmentAssignmentsError(null)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setNavigatorEnrollmentAssignmentsError(
+          error instanceof Error ? error.message : 'Unable to load navigator assignment board.'
+        )
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingNavigatorEnrollmentAssignments(false)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [viewerRole])
 
   const completedRegulationTests = useMemo(
     () =>
@@ -1719,6 +1755,31 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     await saveAccessMatrixSupervisorAssignments(navigatorPersonId, nextSupervisorIds)
   }
 
+  async function assignNavigatorEnrollmentToSelf(enrollmentId: string) {
+    setAssigningNavigatorEnrollmentId(enrollmentId)
+    setNavigatorEnrollmentAssignmentsError(null)
+    try {
+      await persistAssignNavigatorEnrollmentToSelf(enrollmentId)
+      await Promise.all([
+        loadNavigatorEnrollmentAssignments().then((rows) => setNavigatorEnrollmentAssignments(rows)),
+        reloadBootstrapState()
+      ])
+    } catch (error) {
+      const databaseErrorCode = (error as { code?: string } | null)?.code
+      if (databaseErrorCode === 'PGRST202') {
+        setNavigatorEnrollmentAssignmentsError(
+          'Navigator self-assignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
+        )
+        return
+      }
+      setNavigatorEnrollmentAssignmentsError(
+        error instanceof Error ? error.message : 'Unable to assign enrollee to navigator.'
+      )
+    } finally {
+      setAssigningNavigatorEnrollmentId(null)
+    }
+  }
+
   async function saveAccessMatrixPartnerPrimaryContacts(partnerId: string, primaryContactPersonIds: string[]) {
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
@@ -1918,6 +1979,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     pickupQueue,
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
+    navigatorEnrollmentAssignments,
+    navigatorEnrollmentAssignmentsError,
+    isLoadingNavigatorEnrollmentAssignments,
+    assigningNavigatorEnrollmentId,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,
@@ -1949,6 +2014,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     saveAccessMatrixEnrollmentNavigators,
     saveAccessMatrixSupervisorAssignments,
     toggleSupervisorManagedNavigator,
+    assignNavigatorEnrollmentToSelf,
     saveAccessMatrixPartnerPrimaryContacts,
     startTroubleshootingSession,
     stopTroubleshootingSession,

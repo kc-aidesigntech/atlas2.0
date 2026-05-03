@@ -7,6 +7,7 @@ import type {
   EnrolleeZCodeResolutionInput,
   EnrollmentRequestRecord,
   JourneyStationMarker,
+  NavigatorEnrollmentAssignmentRecord,
   PartnerStationProfile,
   RouteCandidateRecord
 } from '@/features/atlas2026/singlepane/types'
@@ -176,44 +177,13 @@ async function resolveCurrentPersonId() {
   if (!supabase) return null
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
   if (sessionError) throw sessionError
-  const authUserId = sessionData.session?.user?.id || ''
-  const authEmail = sessionData.session?.user?.email?.trim() || ''
   const appMetadata = sessionData.session?.user?.app_metadata || {}
   const metadataPersonId =
     String((appMetadata as Record<string, unknown>).person_id || (appMetadata as Record<string, unknown>).atlas_person_id || '').trim()
   if (metadataPersonId) return metadataPersonId
-  if (!authUserId && !authEmail) return null
-
-  // Prefer auth user id linkage (`external_ref`) so role-based scoping remains stable
-  // even if account profile email text changes in local settings payloads.
-  if (authUserId) {
-    const { data: personByExternalRef, error: personByExternalRefError } = await (supabase as any)
-      .schema('atlas')
-      .from('people')
-      .select('id')
-      .eq('external_ref', authUserId)
-      .limit(1)
-      .maybeSingle()
-    if (personByExternalRefError) {
-      if (isOptionalSupabaseDataError(personByExternalRefError)) return null
-      throw personByExternalRefError
-    }
-    if (personByExternalRef?.id) return String(personByExternalRef.id)
-  }
-
-  if (!authEmail) return null
-  const { data: personByEmail, error: personByEmailError } = await (supabase as any)
-    .schema('atlas')
-    .from('people')
-    .select('id')
-    .ilike('email', authEmail)
-    .limit(1)
-    .maybeSingle()
-  if (personByEmailError) {
-    if (isOptionalSupabaseDataError(personByEmailError)) return null
-    throw personByEmailError
-  }
-  return personByEmail?.id ? String(personByEmail.id) : null
+  // Do not query atlas.people directly here because non-admin roles can hit
+  // policy-denied (403) paths during bootstrap. Metadata linkage is the safe path.
+  return null
 }
 
 export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePaneBootstrapData> {
@@ -261,7 +231,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     role === 'navigator'
       ? new Set(
           navigatorAssignedEnrollees
-            .filter((record) => navigatorPersonId && record.navigatorPersonId === navigatorPersonId)
+            .filter((record) => (navigatorPersonId ? record.navigatorPersonId === navigatorPersonId : true))
             .map((record) => record.enrollmentId)
         )
       : null
@@ -311,13 +281,6 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
       : item
   )
 
-  const loads = visibleLoadRows.map((row) => ({
-    enrolleeId: uniqueVisibleProfiles.find((profile) => profile.enrollmentId === row.enrollmentId)?.enrolleeId || row.enrollmentId,
-    habitat: row.habitat,
-    work: row.work,
-    socialNetworks: row.socialNetworks
-  }))
-
   const loadBreakdownsByEnrolleeId = Object.fromEntries(
     uniqueVisibleProfiles.map((profile) => {
       const rows = visibleBreakdownRows
@@ -350,6 +313,16 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
       ]
     })
   )
+  const loads = uniqueVisibleProfiles.map((profile) => {
+    const breakdown = loadBreakdownsByEnrolleeId[profile.enrolleeId]
+    const fallbackRow = visibleLoadRows.find((row) => row.enrollmentId === profile.enrollmentId)
+    return {
+      enrolleeId: profile.enrolleeId,
+      habitat: breakdown?.habitatTotal ?? fallbackRow?.habitat ?? 0,
+      work: breakdown?.workTotal ?? fallbackRow?.work ?? 0,
+      socialNetworks: breakdown?.socialNetworksTotal ?? fallbackRow?.socialNetworks ?? 0
+    }
+  })
 
   const baseTimelineConfig = {
     planStartIso: new Date().toISOString(),
@@ -418,6 +391,40 @@ export async function loadEnrollmentRequests(role: AtlasRole): Promise<Enrollmen
     prospectiveEnrollee: row.prospectiveEnrollee,
     email: row.email || undefined
   }))
+}
+
+export async function loadNavigatorEnrollmentAssignments(): Promise<NavigatorEnrollmentAssignmentRecord[]> {
+  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
+  const [profiles, navigatorAssignments, navigatorPersonId] = await Promise.all([
+    withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
+    withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), []),
+    withOptionalSupabaseFallback('singlepane.navigatorPerson', () => resolveCurrentPersonId(), null)
+  ])
+
+  const viewerEnrollmentIds = new Set(
+    navigatorAssignments
+      .filter((assignment) => navigatorPersonId && assignment.navigatorPersonId === navigatorPersonId)
+      .map((assignment) => assignment.enrollmentId)
+  )
+
+  return profiles
+    .map((profile) => ({
+      enrollmentId: profile.enrollmentId,
+      enrolleeId: profile.enrolleeId,
+      enrolleeName: profile.fullName,
+      caseId: profile.caseId,
+      assignedNavigatorLabel: profile.assignedNavigator?.trim() || 'unassigned',
+      isAssignedToViewer: viewerEnrollmentIds.has(profile.enrollmentId)
+    }))
+    .sort((left, right) => left.enrolleeName.localeCompare(right.enrolleeName))
+}
+
+export async function assignNavigatorEnrollmentToSelf(enrollmentId: string) {
+  if (!enrollmentId || !hasSupabaseConfig || !supabase) return
+  const { error } = await (supabase as any).rpc('fn_navigator_assign_enrollment_to_self', {
+    target_enrollment_id: enrollmentId
+  })
+  if (error) throw error
 }
 
 export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteCandidateRecord[]> {

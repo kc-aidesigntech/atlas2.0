@@ -55,19 +55,14 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
   const social = load?.socialNetworks || 0
   const chartWidth = 340
   const chartHeight = 220
+  const maxDomainValue = Math.max(habitat, work, social, 1)
 
-  // Six-point polygon mixes anchor domains with adjacency averages so chart
-  // area communicates both direct burden and cross-domain interaction.
   const data = [
     { axis: 'habitat', value: habitat },
-    { axis: 'habitat-social', value: Math.round((habitat + social) / 2) },
     { axis: 'social networks', value: social },
-    { axis: 'social-work', value: Math.round((social + work) / 2) },
-    { axis: 'work', value: work },
-    { axis: 'work-habitat', value: Math.round((work + habitat) / 2) }
+    { axis: 'work', value: work }
   ]
-  const polarRadius = [12, 24, 36, 48, 60, 72]
-  const polarAngles = [90, 30, -30, -90, -150, -210]
+  const tickCount = Math.min(Math.max(maxDomainValue + 1, 3), 6)
   const Wrapper = onClick ? 'button' : 'div'
 
   return (
@@ -94,15 +89,13 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
           <PolarGrid
             gridType="polygon"
             radialLines
-            polarRadius={polarRadius}
-            polarAngles={polarAngles}
             stroke={SP_COLORS.text}
             strokeOpacity={0.5}
             strokeWidth={0.4}
           />
           <PolarRadiusAxis
-            domain={[0, 100]}
-            tickCount={6}
+            domain={[0, maxDomainValue]}
+            tickCount={tickCount}
             tick={{ fill: 'transparent', fontSize: 1 }}
             axisLine={false}
             tickLine={false}
@@ -113,7 +106,15 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
             axisLine={false}
             tickLine={false}
           />
-          <Radar dataKey="value" stroke={SP_COLORS.text} fill={SP_COLORS.blue} fillOpacity={0.28} strokeOpacity={1} strokeWidth={1.8} isAnimationActive={false} />
+          <Radar
+            dataKey="value"
+            stroke={SP_COLORS.blue}
+            fill={SP_COLORS.blue}
+            fillOpacity={0.34}
+            strokeOpacity={1}
+            strokeWidth={2}
+            isAnimationActive={false}
+          />
         </RadarChart>
       </div>
       <div className="mt-[2px] flex w-[92%] items-center justify-between">

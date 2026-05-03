@@ -145,6 +145,7 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
 }
 
 export function useSinglePaneBootstrapState(role: AtlasRole) {
+  const [reloadNonce, setReloadNonce] = useState(0)
   const [state, setState] = useState<SinglePaneBootstrapState>({
     isLoading: true,
     enrollees: [],
@@ -234,10 +235,11 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
         window.clearTimeout(rolePrefetchTimeout)
       }
     }
-  }, [role])
+  }, [role, reloadNonce])
 
   return {
     state,
-    setState
+    setState,
+    reload: () => setReloadNonce((current) => current + 1)
   }
 }

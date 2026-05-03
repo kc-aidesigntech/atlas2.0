@@ -114,9 +114,9 @@ function SummaryChip({
     <div className="rounded-[22px] border px-4 py-3" style={{ borderColor: '#ffffff20', backgroundColor: '#050505' }}>
       <small className="block text-[11px] uppercase tracking-[0.08em] text-[#9f9f9f]">{label}</small>
       <div className="mt-1 text-[22px] font-medium" style={{ color }}>
-        {chartValue}%
+        {chartValue}
       </div>
-      <small className="text-[12px] text-[#bdbdbd]">raw total {rawTotal}</small>
+      <small className="text-[12px] text-[#bdbdbd]">domain count {rawTotal}</small>
     </div>
   )
 }

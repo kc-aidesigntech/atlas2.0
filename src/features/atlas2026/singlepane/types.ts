@@ -138,6 +138,15 @@ export interface EnrollmentRequestRecord {
   email?: string
 }
 
+export interface NavigatorEnrollmentAssignmentRecord {
+  enrollmentId: string
+  enrolleeId: string
+  enrolleeName: string
+  caseId: string
+  assignedNavigatorLabel: string
+  isAssignedToViewer: boolean
+}
+
 export interface RouteCandidateRecord {
   stationId: string
   partnerId: string

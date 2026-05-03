@@ -12,6 +12,7 @@ import ContextPanels from './components/ContextPanels'
 import LiveAccessMatrixPanel from './components/LiveAccessMatrixPanel'
 import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
+import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
 import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
 import ProfilePanel from './components/ProfilePanel'
 import RadialLoadChart from './components/RadialLoadChart'
@@ -74,6 +75,10 @@ export default function SinglePaneApp() {
     currentNavigatorName,
     navigatorAggregateLoad,
     navigatorAggregateLoadBreakdown,
+    navigatorEnrollmentAssignments,
+    navigatorEnrollmentAssignmentsError,
+    isLoadingNavigatorEnrollmentAssignments,
+    assigningNavigatorEnrollmentId,
     pickupQueue,
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
@@ -116,6 +121,7 @@ export default function SinglePaneApp() {
     saveAccessMatrixSupervisorAssignments,
     saveAccessMatrixPartnerPrimaryContacts,
     toggleSupervisorManagedNavigator,
+    assignNavigatorEnrollmentToSelf,
     startTroubleshootingSession,
     stopTroubleshootingSession,
     savePartnerTroubleshootingGrant,
@@ -144,6 +150,7 @@ export default function SinglePaneApp() {
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
+  const [navigatorEnrolleeView, setNavigatorEnrolleeView] = React.useState<'my' | 'add'>('my')
   const [lastContentMenu, setLastContentMenu] = React.useState('enrollees')
   const [contentOpacity, setContentOpacity] = React.useState(1)
   const transitionCycleRef = React.useRef(0)
@@ -266,6 +273,12 @@ export default function SinglePaneApp() {
   }, [activeMenu, remoteSession?.isActive, standaloneSurveyUrl, uiRole])
 
   React.useEffect(() => {
+    if (activeMenu !== 'enrollees' || uiRole !== 'navigator') {
+      setNavigatorEnrolleeView('my')
+    }
+  }, [activeMenu, uiRole])
+
+  React.useEffect(() => {
     if (!isRoutePlanningOpen) {
       setSelectedRouteCandidateId(selectedRouteAssignment?.stationId || null)
       return
@@ -296,7 +309,10 @@ export default function SinglePaneApp() {
   const isReferralPortalMenu = activeMenu === 'referral portal' || activeMenu === 'refer'
   const canUseReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
   const isNavigatorMyProfile = uiRole === 'navigator' && activeMenu === 'my profile'
-  const isReady = isPartnerRole ? true : isNavigatorMyProfile ? true : Boolean(selectedEnrollee && timelineConfig)
+  const isNavigatorEnrolleeMenu = uiRole === 'navigator' && activeMenu === 'enrollees'
+  const isSupervisorNavigatorManagementView =
+    uiRole === 'supervisor' && (activeMenu === 'assigned navigators' || activeMenu === 'navigator assessments')
+  const isReady = isPartnerRole ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu ? true : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const visibleLogs = React.useMemo(
     () => (uiRole === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
@@ -662,6 +678,52 @@ export default function SinglePaneApp() {
                     onSaveSelfAssessment={saveNavigatorSelfAssessment}
                     onSaveSupervisionSession={saveSupervisionSession}
                   />
+                ) : isSupervisorNavigatorManagementView ? (
+                  <div
+                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+                    style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+                  >
+                    <div className="w-full">
+                      <ContextPanels
+                        role={uiRole}
+                        activeMenu={activeMenu}
+                        enrollmentRequests={enrollmentRequests}
+                        countyHeatmap={countyHeatmap}
+                        supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                        supervisorNavigatorDirectory={supervisorNavigatorDirectory}
+                        onToggleSupervisorManagedNavigator={toggleSupervisorManagedNavigator}
+                        isSavingAccessMatrix={isSavingAccessMatrix}
+                      />
+                    </div>
+                  </div>
+                ) : isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add' ? (
+                  <div
+                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+                    style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+                  >
+                    <div className="w-full">
+                      <NavigatorEnrollmentAssignmentsPanel
+                        rows={navigatorEnrollmentAssignments}
+                        isLoading={isLoadingNavigatorEnrollmentAssignments}
+                        error={navigatorEnrollmentAssignmentsError}
+                        assigningEnrollmentId={assigningNavigatorEnrollmentId}
+                        onAssignToSelf={assignNavigatorEnrollmentToSelf}
+                      />
+                    </div>
+                  </div>
+                ) : isNavigatorEnrolleeMenu && !selectedEnrollee ? (
+                  <div
+                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+                    style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+                  >
+                    <div className="w-full rounded-[24px] border px-5 py-5 text-white" style={{ borderColor: '#ffffff30' }}>
+                      <small className="block text-[12px] uppercase tracking-[0.14em] text-[#bcbcbc]">my enrollees</small>
+                      <div className="mt-2 text-[18px] font-medium">No enrollees are currently assigned to you.</div>
+                      <small className="mt-2 block text-[12px] text-[#bcbcbc]">
+                        Switch to "add enrollees" and use "assign to me" to claim one.
+                      </small>
+                    </div>
+                  </div>
                 ) : (
                   <div
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
@@ -686,6 +748,21 @@ export default function SinglePaneApp() {
                 {uiRole !== 'navigator' && !showRoutePlanningQuickAction && actionMenus.length > 0 ? (
                   <div className="flex items-center justify-center py-1">
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
+                  </div>
+                ) : null}
+                {isNavigatorEnrolleeMenu ? (
+                  <div className="flex items-center justify-center py-1">
+                    <label className="flex items-center gap-2 text-[12px] text-[#d6d6d6]">
+                      <span>enrollee view</span>
+                      <select
+                        value={navigatorEnrolleeView}
+                        onChange={(event) => setNavigatorEnrolleeView(event.target.value as 'my' | 'add')}
+                        className="atlas-admin-input min-w-[180px]"
+                      >
+                        <option value="my">my enrollees</option>
+                        <option value="add">add enrollees</option>
+                      </select>
+                    </label>
                   </div>
                 ) : null}
 
@@ -758,7 +835,15 @@ export default function SinglePaneApp() {
                       </small>
                     </div>
                   ) : null
-                ) : isNavigatorMyProfile ? null : isPartnerRole ? (
+                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView ? null : isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add' ? (
+                  <NavigatorEnrollmentAssignmentsPanel
+                    rows={navigatorEnrollmentAssignments}
+                    isLoading={isLoadingNavigatorEnrollmentAssignments}
+                    error={navigatorEnrollmentAssignmentsError}
+                    assigningEnrollmentId={assigningNavigatorEnrollmentId}
+                    onAssignToSelf={assignNavigatorEnrollmentToSelf}
+                  />
+                ) : isPartnerRole ? (
                   <>
                     {timelineConfig ? (
                       <>
