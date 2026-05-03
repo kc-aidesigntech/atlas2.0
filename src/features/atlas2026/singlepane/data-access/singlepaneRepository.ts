@@ -13,6 +13,7 @@ import type {
 } from '@/features/atlas2026/singlepane/types'
 import {
   fetchAppRoleNavigation,
+  fetchEnrollmentAssignmentBoard,
   fetchNavigatorAssignedEnrollees,
   fetchPartnerLoadBreakdown,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
@@ -402,26 +403,18 @@ export async function loadEnrollmentRequests(role: AtlasRole): Promise<Enrollmen
 
 export async function loadNavigatorEnrollmentAssignments(): Promise<NavigatorEnrollmentAssignmentRecord[]> {
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
-  const [profiles, navigatorAssignments, navigatorPersonId] = await Promise.all([
-    withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
-    withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), []),
+  const [boardRows, navigatorPersonId] = await Promise.all([
+    withOptionalSupabaseFallback('singlepane.enrollmentAssignmentBoard', () => fetchEnrollmentAssignmentBoard(supabase), []),
     withOptionalSupabaseFallback('singlepane.navigatorPerson', () => resolveCurrentPersonId(), null)
   ])
-
-  const viewerEnrollmentIds = new Set(
-    navigatorAssignments
-      .filter((assignment) => navigatorPersonId && assignment.navigatorPersonId === navigatorPersonId)
-      .map((assignment) => assignment.enrollmentId)
-  )
-
-  return profiles
-    .map((profile) => ({
-      enrollmentId: profile.enrollmentId,
-      enrolleeId: profile.enrolleeId,
-      enrolleeName: profile.fullName,
-      caseId: profile.caseId,
-      assignedNavigatorLabel: profile.assignedNavigator?.trim() || 'unassigned',
-      isAssignedToViewer: viewerEnrollmentIds.has(profile.enrollmentId)
+  return boardRows
+    .map((row) => ({
+      enrollmentId: row.enrollmentId,
+      enrolleeId: row.enrolleeId,
+      enrolleeName: row.enrolleeName,
+      caseId: row.caseId || '',
+      assignedNavigatorLabel: row.assignedNavigatorLabel?.trim() || 'unassigned',
+      isAssignedToViewer: Boolean(navigatorPersonId && row.navigatorPersonIds.includes(navigatorPersonId))
     }))
     .sort((left, right) => left.enrolleeName.localeCompare(right.enrolleeName))
 }

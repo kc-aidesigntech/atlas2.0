@@ -603,6 +603,72 @@ export interface AtlasDatabase {
       };
     };
     Views: {
+      v_active_navigator_assignment_edges: {
+        Row: {
+          enrollment_id: string;
+          enrollee_id: string;
+          enrollee_name: string;
+          case_id: string | null;
+          current_phase: "regulation" | "readiness" | "renewal";
+          avatar_url: string | null;
+          navigator_person_id: string;
+          navigator_name: string | null;
+          station_id: string | null;
+          station_name: string | null;
+          partner_id: string | null;
+          partner_name: string | null;
+          county_id: string | null;
+          county_name: string | null;
+          starts_on: string;
+        };
+      };
+      v_active_supervisor_assignment_edges: {
+        Row: {
+          navigator_person_id: string;
+          navigator_name: string | null;
+          supervisor_person_id: string;
+          supervisor_name: string | null;
+          starts_on: string;
+        };
+      };
+      v_active_enrollment_roster: {
+        Row: {
+          enrollment_id: string;
+          enrollment_status: "active" | "paused" | "completed" | "cancelled";
+          start_date: string;
+          target_duration_months: number;
+          enrollee_id: string;
+          enrollee_person_id: string;
+          enrollee_name: string;
+          dob: string;
+          enrollee_email: string;
+          avatar_url: string | null;
+          case_id: string | null;
+          current_phase: "regulation" | "readiness" | "renewal";
+          county_id: string | null;
+          county_name: string | null;
+          navigator_person_ids: string[];
+          navigator_names: string[];
+          assigned_navigator: string;
+          z_code_tags: string[];
+          active_z_code_details: unknown;
+          completed_parent_codes: string[];
+        };
+      };
+      v_enrollment_assignment_board: {
+        Row: {
+          enrollment_id: string;
+          enrollee_id: string;
+          enrollee_name: string;
+          case_id: string | null;
+          current_phase: "regulation" | "readiness" | "renewal";
+          county_id: string | null;
+          county_name: string | null;
+          navigator_person_ids: string[];
+          navigator_names: string[];
+          assigned_navigator_label: string;
+        };
+      };
       v_navigator_assigned_enrollees: {
         Row: {
           navigator_person_id: string;

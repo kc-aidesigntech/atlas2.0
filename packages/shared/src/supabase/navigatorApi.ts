@@ -21,8 +21,10 @@ export interface EnrollmentStationMarker {
   iconSlug: string | null;
 }
 
-type NavigatorAssignedEnrolleeRow =
-  AtlasDatabase["atlas"]["Views"]["v_navigator_assigned_enrollees"]["Row"];
+type NavigatorAssignedEnrolleeRow = Pick<
+  AtlasDatabase["atlas"]["Views"]["v_active_navigator_assignment_edges"]["Row"],
+  "navigator_person_id" | "enrollment_id" | "enrollee_id" | "enrollee_name" | "case_id" | "current_phase" | "avatar_url"
+>;
 type EnrollmentStationMarkerRow =
   AtlasDatabase["atlas"]["Views"]["v_enrollment_station_markers"]["Row"];
 
@@ -59,7 +61,7 @@ export async function fetchNavigatorAssignedEnrollees(
 ): Promise<NavigatorAssignedEnrollee[]> {
   const { data, error } = await client
     .schema("atlas")
-    .from("v_navigator_assigned_enrollees")
+    .from("v_active_navigator_assignment_edges")
     .select(
       "navigator_person_id,enrollment_id,enrollee_id,enrollee_name,case_id,current_phase,avatar_url",
     )
