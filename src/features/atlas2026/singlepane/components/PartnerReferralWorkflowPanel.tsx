@@ -5,8 +5,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { DEFAULT_SERVICE_CAPACITY_SECTIONS } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import type { PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import atlasLogoSrc from '../../../../../assets/ATLAS_LOGO_simple_lucidGreenBlue4.png'
 
 interface PartnerReferralWorkflowPanelProps {
   defaultReferrerName: string
@@ -15,7 +17,22 @@ interface PartnerReferralWorkflowPanelProps {
   onSubmit: (input: PartnerReferralSubmissionInput) => Promise<unknown> | unknown
 }
 
+interface ReferralSourceOption {
+  id: string
+  label: string
+  partnerOrganizationName: string
+  partnerContactName: string
+  partnerContactEmail: string
+  partnerContactPhone: string
+  existingPartner: boolean
+}
+
 const MAX_RECENT_ROWS = 5
+const OTHER_SITUATION_CATEGORY = 'Other'
+const SITUATION_CATEGORY_OPTIONS = [
+  ...DEFAULT_SERVICE_CAPACITY_SECTIONS.map((section) => section.theme.trim()),
+  OTHER_SITUATION_CATEGORY
+]
 
 /**
  * Start every submission from caller-provided defaults so downstream consumers
@@ -26,7 +43,7 @@ function buildInitialDraft(defaultReferrerName: string, defaultPartnerOrganizati
     referredParticipantName: '',
     participantEmail: '',
     participantPhone: '',
-    referralReason: '',
+    situationCategories: [],
     backgroundNotes: '',
     selfReferring: false,
     referrerName: defaultReferrerName,
@@ -50,7 +67,17 @@ export default function PartnerReferralWorkflowPanel({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [referralImageSrc, setReferralImageSrc] = useState(() => createReferralPlaceholderImage())
+  const [isSituationDropdownOpen, setIsSituationDropdownOpen] = useState(false)
+  const [isReferralSourceDropdownOpen, setIsReferralSourceDropdownOpen] = useState(false)
+  const [isAddReferralSourceOverlayOpen, setIsAddReferralSourceOverlayOpen] = useState(false)
+  const [customReferralSources, setCustomReferralSources] = useState<ReferralSourceOption[]>([])
+  const [newReferralSourceDraft, setNewReferralSourceDraft] = useState({
+    partnerOrganizationName: '',
+    partnerContactName: '',
+    partnerContactEmail: '',
+    partnerContactPhone: ''
+  })
+  const [referralImageSrc, setReferralImageSrc] = useState(atlasLogoSrc)
   const imageObjectUrlRef = useRef<string | null>(null)
 
   // Recent list intentionally excludes archived rows and caps to a small slice
@@ -64,6 +91,39 @@ export default function PartnerReferralWorkflowPanel({
         .slice(0, MAX_RECENT_ROWS),
     [recentReferrals]
   )
+  const referralSourceOptions = useMemo<ReferralSourceOption[]>(() => {
+    const seen = new Set<string>()
+    const historical = recentReferrals
+      .map((item, index) => {
+        const organizationName = item.referrerOrganization.trim()
+        const contactName = item.referrerName.trim()
+        const dedupeKey = `${organizationName.toLowerCase()}::${contactName.toLowerCase()}`
+        if (!organizationName && !contactName) return null
+        if (seen.has(dedupeKey)) return null
+        seen.add(dedupeKey)
+        return {
+          id: `history-${index}`,
+          label: organizationName || contactName || 'previous referral source',
+          partnerOrganizationName: organizationName,
+          partnerContactName: contactName,
+          partnerContactEmail: '',
+          partnerContactPhone: '',
+          existingPartner: true
+        } satisfies ReferralSourceOption
+      })
+      .filter((value): value is ReferralSourceOption => Boolean(value))
+    return [...historical, ...customReferralSources]
+  }, [customReferralSources, recentReferrals])
+  const selectedReferralSourceLabel = useMemo(() => {
+    const match = referralSourceOptions.find(
+      (option) =>
+        option.partnerOrganizationName === draft.partnerOrganizationName &&
+        option.partnerContactName === draft.partnerContactName &&
+        option.partnerContactEmail === draft.partnerContactEmail &&
+        option.partnerContactPhone === draft.partnerContactPhone
+    )
+    return match?.label || draft.partnerOrganizationName || draft.partnerContactName || ''
+  }, [draft.partnerContactEmail, draft.partnerContactName, draft.partnerContactPhone, draft.partnerOrganizationName, referralSourceOptions])
 
   useEffect(() => {
     return () => {
@@ -80,7 +140,7 @@ export default function PartnerReferralWorkflowPanel({
     setFeedback(null)
     setError(null)
     const normalizedName = draft.referredParticipantName.trim()
-    const normalizedReason = draft.referralReason.trim()
+    const normalizedSituationCategories = Array.from(new Set(draft.situationCategories.map((value) => value.trim()).filter(Boolean)))
     const normalizedBackgroundNotes = draft.backgroundNotes.trim()
     const normalizedEmail = draft.participantEmail.trim()
     const normalizedPhone = draft.participantPhone.trim()
@@ -96,8 +156,12 @@ export default function PartnerReferralWorkflowPanel({
       setError("add the participant's name.")
       return
     }
-    if (!normalizedReason) {
+    if (!normalizedSituationCategories.length) {
       setError("add this person's situation.")
+      return
+    }
+    if (!normalizedBackgroundNotes) {
+      setError("explain this person's situation as well as possible.")
       return
     }
     if (!normalizedReferrer) {
@@ -108,11 +172,11 @@ export default function PartnerReferralWorkflowPanel({
       setError('add at least one way to contact the participant.')
       return
     }
-    if (!normalizedPartnerOrg) {
+    if (draft.selfReferring && !normalizedPartnerOrg) {
       setError('add the partner organization name.')
       return
     }
-    if (!draft.existingPartner && !normalizedPartnerContact && !normalizedPartnerContactEmail && !normalizedPartnerContactPhone) {
+    if (draft.selfReferring && !draft.existingPartner && !normalizedPartnerContact && !normalizedPartnerContactEmail && !normalizedPartnerContactPhone) {
       setError('for new partners, include at least one contact detail.')
       return
     }
@@ -125,7 +189,7 @@ export default function PartnerReferralWorkflowPanel({
         onSubmit({
           ...draft,
           referredParticipantName: normalizedName,
-          referralReason: normalizedReason,
+          situationCategories: normalizedSituationCategories,
           backgroundNotes: normalizedBackgroundNotes,
           participantEmail: normalizedEmail,
           participantPhone: normalizedPhone,
@@ -137,6 +201,8 @@ export default function PartnerReferralWorkflowPanel({
         })
       )
       setFeedback('referral submitted to navigator queue.')
+      setIsSituationDropdownOpen(false)
+      setIsReferralSourceDropdownOpen(false)
       // Preserve the resolved partner org on reset to support rapid repeat
       // referrals for the same organization without retyping.
       setDraft(buildInitialDraft(defaultReferrerName, normalizedPartnerOrg || defaultPartnerOrganizationName))
@@ -152,12 +218,12 @@ export default function PartnerReferralWorkflowPanel({
       <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
         <AtlasImageUploadTile
           imageSrc={referralImageSrc}
-          alt="referral placeholder"
+          alt="atlas logo"
           onSelectFile={(file) => {
             // Referral image stays local-only for now. This preserves
             // a consistent User Experience (UX) with profile upload while we define storage.
             if (!file.type.startsWith('image/')) {
-              setError('choose an image file for the referral placeholder.')
+              setError('choose an image file for the logo.')
               return
             }
             setError(null)
@@ -169,7 +235,7 @@ export default function PartnerReferralWorkflowPanel({
             setReferralImageSrc(objectUrl)
           }}
           buttonTitle="replace referral image"
-          idleStatusText="referral image placeholder"
+          idleStatusText="add your logo here"
         />
         <div className="min-w-[220px] flex-1 space-y-1 pt-[2px] text-white">
           <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
@@ -229,6 +295,78 @@ export default function PartnerReferralWorkflowPanel({
           </AtlasTextButton>
         </div>
 
+        {!draft.selfReferring ? (
+          <Field label="referral source">
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsReferralSourceDropdownOpen((current) => !current)}
+                  className="atlas-admin-input flex min-h-[44px] flex-1 items-center justify-between text-left"
+                >
+                  <span className={selectedReferralSourceLabel ? 'text-white' : 'text-[var(--foreground-secondary)]'}>
+                    {selectedReferralSourceLabel || 'choose a prior referral source or add a new partner'}
+                  </span>
+                  <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+                    {isReferralSourceDropdownOpen ? 'close' : 'choose'}
+                  </span>
+                </button>
+                <AtlasTextButton
+                  type="button"
+                  onClick={() => setIsAddReferralSourceOverlayOpen(true)}
+                  className="px-3 py-2 text-[16px] font-medium"
+                  style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                >
+                  +
+                </AtlasTextButton>
+              </div>
+              {isReferralSourceDropdownOpen ? (
+                <div className="rounded-[18px] border border-white/10 bg-[#0b0b0b] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+                  <div className="grid gap-1.5">
+                    {referralSourceOptions.length ? (
+                      referralSourceOptions.map((option) => {
+                        const selected = selectedReferralSourceLabel === option.label
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              setDraft((current) => ({
+                                ...current,
+                                partnerOrganizationName: option.partnerOrganizationName,
+                                partnerContactName: option.partnerContactName,
+                                partnerContactEmail: option.partnerContactEmail,
+                                partnerContactPhone: option.partnerContactPhone,
+                                existingPartner: option.existingPartner
+                              }))
+                              setIsReferralSourceDropdownOpen(false)
+                            }}
+                            className="flex items-center justify-between rounded-[14px] border px-3 py-2 text-left text-[13px] transition-colors"
+                            style={{
+                              borderColor: selected ? SP_COLORS.yellow : '#ffffff18',
+                              backgroundColor: selected ? '#1a1606' : '#101010',
+                              color: selected ? SP_COLORS.yellow : '#f5f5f5'
+                            }}
+                          >
+                            <span>{option.label}</span>
+                            <span className="text-[11px] uppercase tracking-[0.12em]">
+                              {selected ? 'selected' : 'select'}
+                            </span>
+                          </button>
+                        )
+                      })
+                    ) : (
+                      <div className="rounded-[14px] border border-white/10 px-3 py-3 text-[12px] text-[var(--foreground-secondary)]">
+                        No previous referral sources yet. Use `+` to add one.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </Field>
+        ) : null}
+
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Participant&apos;s Name*">
             <input
@@ -239,20 +377,62 @@ export default function PartnerReferralWorkflowPanel({
             />
           </Field>
           <Field label="Share this person&apos;s situation">
-            <input
-              value={draft.referralReason}
-              onChange={(event) => setDraft((current) => ({ ...current, referralReason: event.target.value }))}
-              className="atlas-admin-input"
-              placeholder="brief situation details"
-            />
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsSituationDropdownOpen((current) => !current)}
+                className="atlas-admin-input flex min-h-[44px] w-full items-center justify-between text-left"
+              >
+                <span className={draft.situationCategories.length ? 'text-white' : 'text-[var(--foreground-secondary)]'}>
+                  {draft.situationCategories.length ? draft.situationCategories.join(', ') : 'select one or more categories'}
+                </span>
+                <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+                  {isSituationDropdownOpen ? 'close' : 'choose'}
+                </span>
+              </button>
+              {isSituationDropdownOpen ? (
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-[260px] overflow-y-auto rounded-[18px] border border-white/10 bg-[#0b0b0b] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
+                  <div className="grid gap-1.5">
+                    {SITUATION_CATEGORY_OPTIONS.map((option) => {
+                      const selected = draft.situationCategories.includes(option)
+                      return (
+                        <button
+                          key={option}
+                          type="button"
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              situationCategories: selected
+                                ? current.situationCategories.filter((value) => value !== option)
+                                : [...current.situationCategories, option]
+                            }))
+                          }
+                          className="flex items-center justify-between rounded-[14px] border px-3 py-2 text-left text-[13px] transition-colors"
+                          style={{
+                            borderColor: selected ? SP_COLORS.yellow : '#ffffff18',
+                            backgroundColor: selected ? '#1a1606' : '#101010',
+                            color: selected ? SP_COLORS.yellow : '#f5f5f5'
+                          }}
+                        >
+                          <span>{option}</span>
+                          <span className="text-[11px] uppercase tracking-[0.12em]">
+                            {selected ? 'selected' : 'select'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </Field>
           <div className="md:col-span-2">
-            <Field label="additional context (optional)">
+            <Field label="explain this person&apos;s situation as well as possible*">
               <textarea
                 value={draft.backgroundNotes}
                 onChange={(event) => setDraft((current) => ({ ...current, backgroundNotes: event.target.value }))}
                 className="atlas-admin-input min-h-[140px] py-2"
-                placeholder="Add any additional context, risks, history, needs, or related details."
+                placeholder="Describe this person's situation, risks, history, needs, and any other context that would help someone understand what is going on."
               />
             </Field>
           </div>
@@ -274,7 +454,8 @@ export default function PartnerReferralWorkflowPanel({
           </Field>
         </div>
 
-        <div className="rounded-[16px] border border-white/10 bg-white/5 p-4">
+        {draft.selfReferring ? (
+          <div className="rounded-[16px] border border-white/10 bg-white/5 p-4">
           <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">partner details</small>
           <div className="mt-2 flex flex-wrap gap-2">
             <AtlasTextButton
@@ -344,7 +525,8 @@ export default function PartnerReferralWorkflowPanel({
               </Field>
             ) : null}
           </div>
-        </div>
+          </div>
+        ) : null}
 
         {error ? <small className="block text-[13px]" style={{ color: SP_COLORS.red }}>{error}</small> : null}
         {feedback ? <small className="block text-[13px]" style={{ color: SP_COLORS.deepGreen }}>{feedback}</small> : null}
@@ -363,6 +545,108 @@ export default function PartnerReferralWorkflowPanel({
           If you need assistance with this form, call (360) 539-8899
         </div>
       </form>
+
+      {isAddReferralSourceOverlayOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-5 py-6 backdrop-blur-[2px]">
+          <div className="w-full max-w-[560px] rounded-[24px] border border-white/15 bg-[#080808] px-5 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">new referral source</small>
+                <div className="mt-1 text-[22px] font-medium text-white">Add referral source</div>
+                <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                  None of these fields are required. Saving will add the partner to the selectable source list and auto-select it.
+                </small>
+              </div>
+              <AtlasTextButton
+                type="button"
+                onClick={() => setIsAddReferralSourceOverlayOpen(false)}
+                className="px-4 py-2 text-[12px]"
+                style={{ ['--button-border-color' as const]: '#ffffff30', color: '#f1f1f1' } as React.CSSProperties}
+              >
+                close
+              </AtlasTextButton>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Field label="company name">
+                <input
+                  value={newReferralSourceDraft.partnerOrganizationName}
+                  onChange={(event) => setNewReferralSourceDraft((current) => ({ ...current, partnerOrganizationName: event.target.value }))}
+                  className="atlas-admin-input"
+                />
+              </Field>
+              <Field label="point of contact">
+                <input
+                  value={newReferralSourceDraft.partnerContactName}
+                  onChange={(event) => setNewReferralSourceDraft((current) => ({ ...current, partnerContactName: event.target.value }))}
+                  className="atlas-admin-input"
+                />
+              </Field>
+              <Field label="phone">
+                <input
+                  value={newReferralSourceDraft.partnerContactPhone}
+                  onChange={(event) => setNewReferralSourceDraft((current) => ({ ...current, partnerContactPhone: event.target.value }))}
+                  className="atlas-admin-input"
+                />
+              </Field>
+              <Field label="email">
+                <input
+                  value={newReferralSourceDraft.partnerContactEmail}
+                  onChange={(event) => setNewReferralSourceDraft((current) => ({ ...current, partnerContactEmail: event.target.value }))}
+                  className="atlas-admin-input"
+                />
+              </Field>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <AtlasTextButton
+                type="button"
+                onClick={() => setIsAddReferralSourceOverlayOpen(false)}
+                className="px-4 py-2 text-[12px]"
+                style={{ ['--button-border-color' as const]: '#ffffff30', color: '#f1f1f1' } as React.CSSProperties}
+              >
+                cancel
+              </AtlasTextButton>
+              <AtlasTextButton
+                type="button"
+                onClick={() => {
+                  const nextOption: ReferralSourceOption = {
+                    id: `custom-${Date.now().toString(36)}`,
+                    label:
+                      newReferralSourceDraft.partnerOrganizationName.trim() ||
+                      newReferralSourceDraft.partnerContactName.trim() ||
+                      'new partner',
+                    partnerOrganizationName: newReferralSourceDraft.partnerOrganizationName.trim(),
+                    partnerContactName: newReferralSourceDraft.partnerContactName.trim(),
+                    partnerContactEmail: newReferralSourceDraft.partnerContactEmail.trim(),
+                    partnerContactPhone: newReferralSourceDraft.partnerContactPhone.trim(),
+                    existingPartner: false
+                  }
+                  setCustomReferralSources((current) => [...current, nextOption])
+                  setDraft((current) => ({
+                    ...current,
+                    partnerOrganizationName: nextOption.partnerOrganizationName,
+                    partnerContactName: nextOption.partnerContactName,
+                    partnerContactEmail: nextOption.partnerContactEmail,
+                    partnerContactPhone: nextOption.partnerContactPhone,
+                    existingPartner: false
+                  }))
+                  setNewReferralSourceDraft({
+                    partnerOrganizationName: '',
+                    partnerContactName: '',
+                    partnerContactEmail: '',
+                    partnerContactPhone: ''
+                  })
+                  setIsAddReferralSourceOverlayOpen(false)
+                  setIsReferralSourceDropdownOpen(false)
+                }}
+                className="px-4 py-2 text-[12px]"
+                style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+              >
+                add referral source
+              </AtlasTextButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-3">
         <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">recent referrals</small>
@@ -385,19 +669,6 @@ export default function PartnerReferralWorkflowPanel({
       </div>
     </AtlasInsetCard>
   )
-}
-
-function createReferralPlaceholderImage() {
-  // Data-URI placeholder keeps this panel self-contained until referral images
-  // are persisted server-side.
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
-      <rect width="300" height="300" rx="56" fill="#111111" />
-      <circle cx="150" cy="150" r="114" fill="#1d1d1d" stroke="#ffffff" stroke-width="6" />
-      <text x="150" y="170" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="82" font-weight="700" fill="#ffffff">R</text>
-    </svg>
-  `.trim()
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

@@ -408,7 +408,7 @@ export interface PartnerReferralSubmissionInput {
   referredParticipantName: string
   participantEmail: string
   participantPhone: string
-  referralReason: string
+  situationCategories: string[]
   backgroundNotes: string
   selfReferring: boolean
   referrerName: string

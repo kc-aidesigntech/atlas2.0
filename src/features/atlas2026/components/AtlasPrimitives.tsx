@@ -9,6 +9,98 @@ function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
 
+type ButtonStyle = React.CSSProperties & Record<string, string | number | undefined>
+
+function readStyleValue(style: React.CSSProperties | undefined, key: string) {
+  const value = (style as ButtonStyle | undefined)?.[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function stripAlphaChannel(color: string) {
+  const normalized = color.trim()
+  if (/^#[\da-fA-F]{8}$/.test(normalized)) return normalized.slice(0, 7)
+  if (/^#[\da-fA-F]{4}$/.test(normalized)) return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`
+
+  const rgbaMatch = normalized.match(/^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*[\d.]+\s*\)$/i)
+  if (rgbaMatch) return `rgb(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]})`
+
+  return normalized
+}
+
+function readAlphaChannel(color: string) {
+  const normalized = color.trim()
+  const hexMatch = normalized.match(/^#([\da-fA-F]{8})$/)
+  if (hexMatch) return Number.parseInt(hexMatch[1].slice(6, 8), 16) / 255
+
+  const shortHexMatch = normalized.match(/^#([\da-fA-F]{4})$/)
+  if (shortHexMatch) return Number.parseInt(`${shortHexMatch[1][3]}${shortHexMatch[1][3]}`, 16) / 255
+
+  const rgbaMatch = normalized.match(/^rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)$/i)
+  if (rgbaMatch) return Number.parseFloat(rgbaMatch[1])
+
+  return 1
+}
+
+function parseRgbChannels(color: string) {
+  const normalized = stripAlphaChannel(color)
+  const hexMatch = normalized.match(/^#([\da-fA-F]{6})$/)
+  if (hexMatch) {
+    const hex = hexMatch[1]
+    return {
+      r: Number.parseInt(hex.slice(0, 2), 16),
+      g: Number.parseInt(hex.slice(2, 4), 16),
+      b: Number.parseInt(hex.slice(4, 6), 16)
+    }
+  }
+
+  const rgbMatch = normalized.match(/^rgb\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/i)
+  if (rgbMatch) {
+    return {
+      r: Number.parseFloat(rgbMatch[1]),
+      g: Number.parseFloat(rgbMatch[2]),
+      b: Number.parseFloat(rgbMatch[3])
+    }
+  }
+
+  return null
+}
+
+function isWhiteLikeColor(color: string) {
+  if (/white/i.test(color)) return true
+  const channels = parseRgbChannels(color)
+  if (!channels) return false
+  return channels.r > 228 && channels.g > 228 && channels.b > 228
+}
+
+function getContrastTextColor(fillColor: string) {
+  if (/yellow/i.test(fillColor)) return '#111111'
+  const channels = parseRgbChannels(fillColor)
+  if (!channels) return '#ffffff'
+  const luminance = (0.2126 * channels.r + 0.7152 * channels.g + 0.0722 * channels.b) / 255
+  return luminance > 0.64 ? '#111111' : '#ffffff'
+}
+
+function resolveSolidButtonStyle(style: React.CSSProperties | undefined) {
+  const nextStyle: ButtonStyle = { ...(style as ButtonStyle | undefined) }
+  const accent = readStyleValue(style, '--button-border-color') ?? readStyleValue(style, 'borderColor') ?? '#ffffff'
+  const explicitFill = readStyleValue(style, '--button-fill-color') ?? readStyleValue(style, 'backgroundColor')
+  const solidAccent = stripAlphaChannel(accent)
+  const accentAlpha = readAlphaChannel(accent)
+  const isNeutralUnselected = isWhiteLikeColor(solidAccent) && accentAlpha < 0.55
+  const fill = explicitFill ? stripAlphaChannel(explicitFill) : isNeutralUnselected ? '#181b20' : isWhiteLikeColor(solidAccent) ? '#ffffff' : solidAccent
+  const explicitTextColor = readStyleValue(style, 'color')
+  const legacyOutlineColor = explicitTextColor && stripAlphaChannel(explicitTextColor) === solidAccent
+  const foreground = readStyleValue(style, '--button-foreground-color') ?? (!explicitTextColor || legacyOutlineColor ? getContrastTextColor(fill) : explicitTextColor)
+
+  nextStyle['--button-border-color'] = accent
+  nextStyle['--button-fill-color'] = fill
+  nextStyle['--button-line-color'] = readStyleValue(style, '--button-line-color') ?? foreground
+  nextStyle['--button-line-opacity'] = readStyleValue(style, '--button-line-opacity') ?? (isNeutralUnselected ? '0.18' : '0.28')
+  nextStyle.color = foreground
+  nextStyle.backgroundColor = fill
+  return nextStyle
+}
+
 interface AtlasPanelProps {
   kicker?: string
   title?: string
@@ -167,7 +259,7 @@ export function AtlasCloseButton({
 }
 
 export const AtlasTextButton = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(function AtlasTextButton(
-  { className, children, type = 'button', ...props },
+  { className, children, type = 'button', style, ...props },
   ref
 ) {
   return (
@@ -175,6 +267,7 @@ export const AtlasTextButton = React.forwardRef<HTMLButtonElement, React.ButtonH
       ref={ref}
       type={type}
       {...props}
+      style={resolveSolidButtonStyle(style)}
       className={cn(
         'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
         className
@@ -186,7 +279,7 @@ export const AtlasTextButton = React.forwardRef<HTMLButtonElement, React.ButtonH
 })
 
 export const AtlasIconButton = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>(function AtlasIconButton(
-  { className, children, type = 'button', ...props },
+  { className, children, type = 'button', style, ...props },
   ref
 ) {
   return (
@@ -194,6 +287,7 @@ export const AtlasIconButton = React.forwardRef<HTMLButtonElement, React.ButtonH
       ref={ref}
       type={type}
       {...props}
+      style={resolveSolidButtonStyle(style)}
       className={cn(
         'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-8 w-8 items-center justify-center rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
         className
@@ -205,13 +299,14 @@ export const AtlasIconButton = React.forwardRef<HTMLButtonElement, React.ButtonH
 })
 
 export const AtlasTextLink = React.forwardRef<HTMLAnchorElement, React.AnchorHTMLAttributes<HTMLAnchorElement>>(function AtlasTextLink(
-  { className, children, ...props },
+  { className, children, style, ...props },
   ref
 ) {
   return (
     <a
       ref={ref}
       {...props}
+      style={resolveSolidButtonStyle(style)}
       className={cn(
         'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)]',
         className

@@ -60,11 +60,11 @@ export function BurdenCard({
   const shouldRefocusInputRef = useRef(false)
   const [isPulsing, setIsPulsing] = useState(false)
   const hasAnsweredScore = typeof score === 'number' && score >= 1 && score <= 9
-  /** Range inputs require a numeric value; keep internal default off the visible thumb until the respondent picks a score. */
+  /** Range inputs require a numeric value, so unanswered prompts rest on a visible midpoint cue until the respondent chooses a score. */
   const rangeInputValue = hasAnsweredScore ? score : 5
   const scaleState = hasAnsweredScore ? getScaleOption(scale, score) : null
-  const thumbPercent = hasAnsweredScore ? ((score - 1) / 8) * 100 : 0
-  const showScoreThumb = hasAnsweredScore && !notEncountered
+  const thumbPercent = hasAnsweredScore ? ((score - 1) / 8) * 100 : 50
+  const showScoreThumb = !notEncountered
   const badgeTextColor =
     accentColor === SP_COLORS.yellow || accentColor === SP_COLORS.green ? SP_COLORS.bg : SP_COLORS.white
   const sliderScaleColors = useMemo(() => scale.map((option) => {

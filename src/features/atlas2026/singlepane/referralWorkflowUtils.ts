@@ -50,9 +50,10 @@ export function buildReferralQueueUpdate(
         .join(' · ')
     : ''
   const backgroundNotes = input.backgroundNotes.trim()
+  const situationSummary = input.situationCategories.map((value) => value.trim()).filter(Boolean).join(', ')
   const referralMessage = [
     context.actorRoleLabel ? `submitted by ${context.actorRoleLabel}` : '',
-    input.referralReason.trim(),
+    situationSummary ? `situation categories: ${situationSummary}` : '',
     backgroundNotes ? `background notes: ${backgroundNotes}` : '',
     !input.existingPartner && partnerContactSummary ? `new partner contact: ${partnerContactSummary}` : '',
     context.sourceLabel || ''
