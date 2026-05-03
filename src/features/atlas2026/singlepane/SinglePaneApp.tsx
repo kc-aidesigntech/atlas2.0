@@ -535,7 +535,7 @@ export default function SinglePaneApp() {
                       <small className="mt-1 block text-[14px] text-white">
                         E: {partnerStationProfile?.primaryContactEmail || accountSettings.email || 'not configured'}
                       </small>
-                      <div className="mt-3">
+                      <div className="mt-4 flex justify-center">
                         <AtlasTextButton
                           onClick={() => setActiveMenu('referral portal')}
                           className="px-4 py-1 text-[13px] text-white"

@@ -117,14 +117,33 @@ export default function PartnerReferralWorkflowPanel({
 
   return (
     <AtlasInsetCard className="space-y-4 rounded-[24px] border-white/20 bg-[#0c0c0c] px-5 py-5">
-      <div className="space-y-1">
-        <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
-          referral portal
-        </small>
-        <div className="text-[24px] font-medium text-white">submit referral</div>
-        <small className="block text-[13px] text-[var(--foreground-secondary)]">
-          capture who is being referred, why support is needed, and contact information in one pass.
-        </small>
+      <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
+        <div className="mx-auto flex w-[150px] shrink-0 flex-col items-start sm:mx-0">
+          <div
+            className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-white"
+            style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
+          >
+            <img
+              src={createReferralPlaceholderImage()}
+              alt="referral placeholder"
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <small className="mt-2 block text-[11px]" style={{ color: SP_COLORS.muted }}>
+            referral image placeholder
+          </small>
+        </div>
+        <div className="min-w-[220px] flex-1 space-y-1 pt-[2px] text-white">
+          <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+            referral portal
+          </small>
+          <div className="text-[24px] font-medium text-white">submit referral</div>
+          <small className="block text-[13px] text-[var(--foreground-secondary)]">
+            capture who is being referred, why support is needed, and contact information in one pass.
+          </small>
+          <small className="block text-[13px] text-white">Partner org: {draft.partnerOrganizationName || 'not provided'}</small>
+          <small className="block text-[13px] text-white">Referrer: {draft.referrerName || 'self referral'}</small>
+        </div>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
@@ -289,6 +308,17 @@ export default function PartnerReferralWorkflowPanel({
       </div>
     </AtlasInsetCard>
   )
+}
+
+function createReferralPlaceholderImage() {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
+      <rect width="300" height="300" rx="56" fill="#111111" />
+      <circle cx="150" cy="150" r="114" fill="#1d1d1d" stroke="#ffffff" stroke-width="6" />
+      <text x="150" y="170" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="82" font-weight="700" fill="#ffffff">R</text>
+    </svg>
+  `.trim()
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
