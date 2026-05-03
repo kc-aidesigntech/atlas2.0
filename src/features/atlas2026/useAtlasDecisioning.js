@@ -28,11 +28,11 @@ import { buildRouteSteps, canTransitionStep, deriveRouteLifecycleFromSteps, STEP
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 /**
- * Legacy ATLAS decisioning orchestrator.
+ * Legacy Atlas (ATLAS) decisioning orchestrator.
  *
  * Purpose:
  * - hydrates legacy route/memory datasets and computes derived governance snapshots.
- * - exposes role-gated mutation actions with optimistic UI behavior.
+ * - exposes role-gated mutation actions with optimistic User Interface (UI) behavior.
  */
 
 function normalizeParticipant(docId, raw) {

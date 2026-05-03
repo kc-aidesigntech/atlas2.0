@@ -170,7 +170,7 @@ export default function AtlasShell() {
   } = useAtlasDecisioning()
 
   const screenContract = useMemo(() => {
-    // The CTA contract intentionally centralizes stage intent so top-banner guidance
+    // The Call to Action (CTA) contract intentionally centralizes stage intent so top-banner guidance
     // and action behavior stay in sync across workspace switches.
     if (surface === WORKSPACES.situationalAwareness) {
       return {

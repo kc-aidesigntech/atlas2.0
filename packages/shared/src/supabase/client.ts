@@ -7,7 +7,7 @@ export interface AtlasSupabaseConfig {
 }
 
 export function resolveSupabaseConfig(config: AtlasSupabaseConfig) {
-  // Env-based config often carries whitespace from shell exports or CI secrets;
+  // Env-based config often carries whitespace from shell exports or Continuous Integration (CI) secrets;
   // normalize once so all downstream checks share identical behavior.
   return {
     url: config.url?.trim() || "",

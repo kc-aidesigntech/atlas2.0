@@ -5,7 +5,7 @@ import type { StabilizationPhase, TimelineConfig, TimelineGate } from './types'
  *
  * Purpose:
  * - enforces valid gate/duration invariants for all timeline editors.
- * - exposes deterministic transforms used by UI + persistence layers.
+ * - exposes deterministic transforms used by User Interface (UI) + persistence layers.
  */
 
 export const DEFAULT_TIMELINE_DURATION_MONTHS = 6

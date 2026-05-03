@@ -1,6 +1,6 @@
 /**
  * Decorative left-rail SVG motif used by single-pane layouts to preserve the
- * ATLAS transit-line visual identity without introducing runtime dependencies.
+ * Atlas (ATLAS) transit-line visual identity without introducing runtime dependencies.
  */
 import React from 'react'
 

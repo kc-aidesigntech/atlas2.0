@@ -1,6 +1,6 @@
 /**
  * Partner service-capacity domain helpers for survey normalization, scoring,
- * and deterministic grouping used by API and UI layers.
+ * and deterministic grouping used by Application Programming Interface (API) and User Interface (UI) layers.
  */
 import type {
   PartnerServiceCapacitySubmissionInput,

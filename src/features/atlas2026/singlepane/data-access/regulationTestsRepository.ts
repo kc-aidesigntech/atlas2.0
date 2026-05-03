@@ -148,7 +148,7 @@ export async function saveRegulationTestSubmission(input: RegulationTestSubmissi
   const draftKey = input.draftKey?.trim() || `reg-test-${Date.now().toString(36)}`
 
   if (!hasSupabaseConfig || !supabase) {
-    // Preserve identical record shape in local mode so UI rendering and merge logic
+    // Preserve identical record shape in local mode so User Interface (UI) rendering and merge logic
     // do not branch on persistence backend.
     const now = new Date().toISOString()
     const record: RegulationTestSubmissionRecord = {

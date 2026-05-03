@@ -58,7 +58,7 @@ export interface PartnerIdentifierRecord {
 }
 
 export interface AtlasDatabase {
-  // Shared DB contract for typed Supabase calls across web/mobile packages.
+  // Shared Database (DB) contract for typed Supabase calls across web/mobile packages.
   // When schema changes, update this file first so type errors expose cross-layer drift.
   atlas: {
     Tables: {

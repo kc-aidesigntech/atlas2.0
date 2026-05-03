@@ -67,7 +67,7 @@ export default function PartnerReferralWorkflowPanel({
 
   useEffect(() => {
     return () => {
-      // Revoke blob URL created from local uploads to prevent memory leaks
+      // Revoke blob Uniform Resource Locator (URL) created from local uploads to prevent memory leaks
       // when this panel unmounts.
       if (imageObjectUrlRef.current) {
         URL.revokeObjectURL(imageObjectUrlRef.current)
@@ -155,7 +155,7 @@ export default function PartnerReferralWorkflowPanel({
           alt="referral placeholder"
           onSelectFile={(file) => {
             // Referral image stays local-only for now. This preserves
-            // a consistent UX with profile upload while we define storage.
+            // a consistent User Experience (UX) with profile upload while we define storage.
             if (!file.type.startsWith('image/')) {
               setError('choose an image file for the referral placeholder.')
               return

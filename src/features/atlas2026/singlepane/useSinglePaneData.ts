@@ -106,7 +106,7 @@ import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
  *
  * Purpose:
  * - composes bootstrap state, role workflows, and persistence writes.
- * - provides a stable API consumed by single-pane UI surfaces.
+ * - provides a stable Application Programming Interface (API) consumed by single-pane User Interface (UI) surfaces.
  */
 
 const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
@@ -1359,7 +1359,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }))
 
     try {
-      // Optimistic preview is replaced with canonical persisted URL once upload succeeds.
+      // Optimistic preview is replaced with canonical persisted Uniform Resource Locator (URL) once upload succeeds.
       const uploaded = await uploadEnrolleeProfileImage(selectedEnrollee.id, file)
       setBootstrapState((current) => ({
         ...current,
@@ -1380,7 +1380,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setProfileImageUploadError(message)
       throw error
     } finally {
-      // Blob URLs are process-local browser resources and must be revoked to avoid leaks.
+      // Blob Uniform Resource Locators (URLs) are process-local browser resources and must be revoked to avoid leaks.
       URL.revokeObjectURL(previewUrl)
       setIsUploadingProfileImage(false)
     }

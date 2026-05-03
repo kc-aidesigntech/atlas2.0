@@ -1,5 +1,5 @@
 /**
- * Supabase data-access adapter for ATLAS app surfaces. It normalizes mixed
+ * Supabase data-access adapter for Atlas (ATLAS) app surfaces. It normalizes mixed
  * table/view payloads into stable records consumed by web and mobile features.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -314,7 +314,7 @@ function asStringArray(value: unknown) {
 }
 
 function asNumber(value: unknown) {
-  // Numeric payload fields sometimes arrive as strings from JSON config documents/views.
+  // Numeric payload fields sometimes arrive as strings from JavaScript Object Notation (JSON) config documents/views.
   // Coerce aggressively and default to 0 to keep downstream math stable.
   return typeof value === "number" ? value : Number(value || 0);
 }

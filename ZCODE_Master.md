@@ -1,6 +1,6 @@
 # Z-Code Master
 
-This document is the working source of truth for the ATLAS partner service-capacity Z-code survey taxonomy.
+This document is the working source of truth for the Atlas (ATLAS) partner service-capacity Z-code survey taxonomy.
 
 ## Revision Notes
 

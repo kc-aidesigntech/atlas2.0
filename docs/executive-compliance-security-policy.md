@@ -1,16 +1,16 @@
-# Executive Compliance, HIPAA Privacy, and Data Security Policy
+# Executive Compliance, Health Insurance Portability and Accountability Act (HIPAA) Privacy, and Data Security Policy
 
 **Document owner:** Executive Leadership, Security and Compliance Office  
 **Effective date:** 2026-05-03  
 **Review cadence:** Quarterly and upon material business, regulatory, or architecture change  
-**Applies to:** All ATLAS workforce members, contractors, systems, and third-party processors handling ATLAS data
+**Applies to:** All Atlas (ATLAS) workforce members, contractors, systems, and third-party processors handling ATLAS data
 
 ## 1) Policy Purpose
 
 This policy establishes ATLAS's executive-level governance requirements for:
 
-- SOC 2 control design and operating effectiveness.
-- HIPAA-aligned protection of personally identifiable information (PII) and protected health information (PHI).
+- System and Organization Controls 2 (SOC 2) control design and operating effectiveness.
+- HIPAA-aligned protection of personally identifiable information (Personally Identifiable Information (PII)) and protected health information (Protected Health Information (PHI)).
 - Organization-wide data security planning, implementation, monitoring, and continuous improvement.
 
 This policy is mandatory and supersedes conflicting lower-level standards unless an approved exception is granted.
@@ -50,16 +50,16 @@ ATLAS commits to maintaining a SOC 2 program aligned with the Trust Services Cri
 
 ### 4.2 Logical and Administrative Access Controls
 
-- Enforce least privilege and role-based access control (RBAC).
+- Enforce least privilege and role-based access control (Role-Based Access Control (RBAC)).
 - Require unique user identities; shared accounts are prohibited except approved break-glass controls.
-- Require multi-factor authentication (MFA) for privileged and production access.
+- Require multi-factor authentication (Multi-Factor Authentication (MFA)) for privileged and production access.
 - Review user and privilege assignments at least quarterly and after role changes or termination.
 
 ### 4.3 Change Management and Secure Development
 
 - Require peer review and approval for production-impacting code and infrastructure changes.
 - Use source control with traceable commit and deployment history.
-- Perform security testing proportionate to risk (SAST/DAST/dependency checks/manual review as applicable).
+- Perform security testing proportionate to risk (Static Application Security Testing (SAST)/Dynamic Application Security Testing (DAST)/dependency checks/manual review as applicable).
 - Separate environments and restrict direct production changes outside emergency procedures.
 
 ### 4.4 Monitoring, Logging, and Incident Response
@@ -139,7 +139,7 @@ ATLAS operates a defense-in-depth security program for all regulated and sensiti
 - Use managed detection/prevention controls and vulnerability scanning.
 - Apply critical security patches within defined service-level timelines.
 
-### 6.4 Application and API Security
+### 6.4 Application and Application Programming Interface (API) Security
 
 - Follow secure coding standards and threat-aware design reviews.
 - Validate and sanitize untrusted input and enforce strong authentication/authorization paths.

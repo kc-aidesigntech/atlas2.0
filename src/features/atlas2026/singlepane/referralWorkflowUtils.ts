@@ -27,7 +27,7 @@ function createPickupCaseId() {
 
 /**
  * Pure utility for mapping partner referral form input into the navigator
- * pickup-queue record contract. Extracted to keep UI hook orchestration focused
+ * pickup-queue record contract. Extracted to keep User Interface (UI) hook orchestration focused
  * on state transitions instead of field normalization details.
  */
 export function buildReferralQueueUpdate(

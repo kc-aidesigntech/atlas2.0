@@ -11,7 +11,7 @@ import type {
  * Single-pane domain type contracts.
  *
  * Purpose:
- * - centralizes cross-feature interfaces shared by data-access, hooks, and UI.
+ * - centralizes cross-feature interfaces shared by data-access, hooks, and User Interface (UI).
  * - preserves compatibility with shared package contracts via explicit re-exports.
  */
 

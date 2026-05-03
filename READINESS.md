@@ -3,7 +3,7 @@
 ## Purpose
 Readiness executes the route-remediation loop against active enrollee Z-codes.
 
-## Primary UX Rule
+## Primary User Experience (UX) Rule
 - Once an enrollee is in readiness, the only persistent quick action is `route planning`.
 - This button stays overlaid in the timeline area so route planning is always one click away.
 

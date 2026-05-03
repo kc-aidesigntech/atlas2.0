@@ -1,5 +1,5 @@
 /**
- * Feature-local re-export layer for ATLAS data contracts. This keeps consumers
+ * Feature-local re-export layer for Atlas (ATLAS) data contracts. This keeps consumers
  * decoupled from package paths while preserving shared type identities.
  */
 // Route-builder data contracts come from @atlas/shared and are intentionally

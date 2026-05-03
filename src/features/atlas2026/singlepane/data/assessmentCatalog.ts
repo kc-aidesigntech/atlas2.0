@@ -532,8 +532,8 @@ function computeRegulationScoreSummary(definition: AssessmentDefinition, answerM
 }
 
 function computeIpfScoreSummary(definition: AssessmentDefinition, answerMap: Map<string, number | null>): AssessmentScoreSummary {
-  // Section-level detail metrics preserve official PTSD scoring constraints while
-  // also providing app-gate values used by ATLAS routing decisions.
+  // Section-level detail metrics preserve official Post-Traumatic Stress Disorder (PTSD) scoring constraints while
+  // also providing app-gate values used by Atlas (ATLAS) routing decisions.
   const detailMetrics = definition.sections.map((section) => {
     const sectionPrompts = section.prompts.filter((prompt) => prompt.kind === 'number')
     const applicabilityPrompt = section.applicabilityPromptId

@@ -1,5 +1,5 @@
 /**
- * Primary ATLAS single-pane shell orchestrating role-based navigation, overlay
+ * Primary Atlas (ATLAS) single-pane shell orchestrating role-based navigation, overlay
  * workflows, and timeline/context composition around shared data hooks.
  */
 import React from 'react'
@@ -179,7 +179,7 @@ export default function SinglePaneApp() {
   React.useEffect(() => {
     if (typeof window === 'undefined') return
     if (!selectedRoleConfig.topMenus.length) return
-    // Initial hash bootstrap prefers URL intent, then canonicalizes hash to the
+    // Initial hash bootstrap prefers Uniform Resource Locator (URL) intent, then canonicalizes hash to the
     // exact current menu key for stable deep-link sharing.
     const hashTarget = hashToMenu(window.location.hash, selectedRoleConfig.topMenus)
     const fallbackMenu = hashTarget || selectedRoleConfig.topMenus[0]

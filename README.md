@@ -1,4 +1,4 @@
-# ATLAS
+# Atlas (ATLAS)
 
 ATLAS is a role-based care coordination and navigation platform centered on the 2026 operating model (`Regulation -> Readiness -> Renewal`), with a single-pane workflow for rapid field operations.
 
@@ -74,14 +74,14 @@ flowchart TD
 
 - Primary app shell is `src/features/atlas2026/singlepane/SinglePaneApp.tsx` via `src/RootApp.jsx`
 - Standalone partner survey route is available at `/service-capacity-survey`
-- Narrow/mobile route planning now uses an MTA-inspired symbolic route board and applies the same visual system inside the readiness route-planning overlay
+- Narrow/mobile route planning now uses an Metropolitan Transportation Authority (MTA)-inspired symbolic route board and applies the same visual system inside the readiness route-planning overlay
 - Supabase/Postgres is active for survey and capacity workflows
-- Authorization foundation is now in place (roles, permissions, user exceptions, RLS toggles)
+- Authorization foundation is now in place (roles, permissions, user exceptions, Row-Level Security (RLS) toggles)
 - Legacy Firebase paths still exist in the repo for specific 2026 services and migration continuity
 
 ## Visual Direction
 
-The UI is intentionally dark and operational, not pastel/civic-light.
+The User Interface (UI) is intentionally dark and operational, not pastel/civic-light.
 
 - Base surface: black-first (`SP_COLORS.bg = #000000`)
 - Reference palette model: `references/NYC-subway-pantone-colors.jpg`
@@ -115,8 +115,8 @@ Detailed behavior spec: `MAKE_APP_ALIVE.md`
 - React 18 + Vite (web)
 - Expo + React Native (mobile)
 - Tailwind + Radix primitives
-- Supabase JS client (`@supabase/supabase-js`) for Postgres/API integration
-- Firebase SDK still present for legacy/transition services
+- Supabase JS client (`@supabase/supabase-js`) for Postgres/Application Programming Interface (API) integration
+- Firebase Software Development Kit (SDK) still present for legacy/transition services
 - Shared cross-platform TypeScript package at `packages/shared`
 
 ## Quick Start
@@ -242,5 +242,6 @@ When making changes:
 - Preserve the single-pane operational interaction model unless explicitly changing IA.
 - Keep role boundaries strict (navigator vs partner vs administrator).
 - Treat authorization and data policy changes as migration-backed, reviewed infrastructure work.
-- Update docs in the same PR when behavior or architecture changes.
+- Update docs in the same Pull Request (PR) when behavior or architecture changes.
+- Follow `docs/writing-standards.md`, including required first-use acronym expansion in every file.
 

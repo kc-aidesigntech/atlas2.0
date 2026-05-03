@@ -5,7 +5,7 @@
 -- 2. supabase/seeds/seed_z_code_taxonomy.sql
 --
 -- Optional but recommended before production hardening:
--- - add auth-linked RLS policies
+-- - add auth-linked Row-Level Security (RLS) policies
 -- - replace anon write access with authenticated or edge-function writes
 
 create or replace function atlas.fn_touch_updated_at()

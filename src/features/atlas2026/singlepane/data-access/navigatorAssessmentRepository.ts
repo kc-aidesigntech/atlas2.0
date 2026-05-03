@@ -7,7 +7,7 @@ import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/da
  *
  * Purpose:
  * - resolves person/role identities required by assessment tables.
- * - maps normalized persistence rows to UI contract records.
+ * - maps normalized persistence rows to User Interface (UI) contract records.
  */
 
 // People-role assignments are validated here to preserve the domain invariant

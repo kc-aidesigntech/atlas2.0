@@ -32,7 +32,7 @@
 
 ### What Is In Place
 
-- Many controls include accessibility labels and user interface (UI) hints, including Accessible Rich Internet Applications (ARIA) attributes such as `aria-label` and `aria-expanded`.
+- Many controls include accessibility labels and user interface (User Interface (UI)) hints, including Accessible Rich Internet Applications (ARIA) attributes such as `aria-label` and `aria-expanded`.
 - Keyboard focus behavior and focus styling are present.
 - Dark theme contrast has been reinforced in global styles (`src/index.css`).
 

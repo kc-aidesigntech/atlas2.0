@@ -1,4 +1,4 @@
-# ATLAS Branding Style Specification
+# Atlas (ATLAS) Branding Style Specification
 
 ## Document Control
 
@@ -210,4 +210,4 @@ It is the canonical style source for design, product, and engineering decisions 
 - Do prioritize readability over novelty.
 - Do not introduce random hex values for one-off components.
 - Do not rely on color alone to communicate critical state.
-- Do not ship new UI primitives without documenting token usage.
+- Do not ship new User Interface (UI) primitives without documenting token usage.

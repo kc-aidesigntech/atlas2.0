@@ -1,7 +1,7 @@
 -- Compliance hardening phase 1:
 -- - disable legacy public-write/read rollout toggles by default
 -- - remove public profile image mutation policies
--- - move admin access-matrix writes behind guarded RPC functions
+-- - move admin access-matrix writes behind guarded Remote Procedure Call (RPC) functions
 
 insert into atlas.authorization_settings (setting_key, enabled, description)
 values

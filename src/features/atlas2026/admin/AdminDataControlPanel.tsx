@@ -136,7 +136,7 @@ function createSeedOrganizationId(name: string) {
 }
 
 function createPortalId(prefix: string) {
-  // UI-created records need stable, human-inspectable ids before persistence exists.
+  // User Interface (UI)-created records need stable, human-inspectable ids before persistence exists.
   // Prefixes keep mixed record collections debuggable in admin snapshots.
   return `${prefix}:${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`
 }
@@ -379,7 +379,7 @@ export default function AdminDataControlPanel({
 
   const visibleEnrollees = useMemo<CombinedEnrolleeRow[]>(() => {
     // This panel intentionally blends immutable "live" enrollees with admin-authored drafts
-    // to support one table UX while preserving the source distinction in each row.
+    // to support one table User Experience (UX) while preserving the source distinction in each row.
     const existingRows = enrollees
       .filter((profile) => !effectiveRegistry.archivedEnrolleeIds.includes(profile.id))
       .map((profile) => ({

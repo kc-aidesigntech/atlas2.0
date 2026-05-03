@@ -1,4 +1,4 @@
-# Sample Data for ATLAS CIE Portal
+# Sample Data for Atlas (ATLAS) CIE Portal
 
 This document provides sample data structures you can add to your Firestore database for testing and development.
 
@@ -286,7 +286,7 @@ Add this to `/artifacts/{appId}/users/{userId}/profile/main`:
 1. **Set up Firebase project** and configure authentication
 2. **Create Firestore database** with the structure outlined in README.md
 3. **Add sample resources** first (they don't depend on other data)
-4. **Add sample enrollees** and note their document IDs
+4. **Add sample enrollees** and note their document Identifiers (IDs)
 5. **Update user profile** with the enrollee IDs from step 4
 6. **Add care plan entries** using the enrollee IDs
 7. **Add referrals** using both enrollee and resource IDs

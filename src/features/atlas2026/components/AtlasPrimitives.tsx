@@ -1,5 +1,5 @@
 /**
- * Shared ATLAS UI primitives used by single-pane screens to keep panel/button
+ * Shared Atlas (ATLAS) User Interface (UI) primitives used by single-pane screens to keep panel/button
  * behavior and visual semantics consistent across feature modules.
  */
 import React from 'react'

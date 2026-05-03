@@ -6,14 +6,14 @@
 --
 -- Identity linking (email/password then Google/Apple as the same Supabase user):
 -- Configure in Supabase Dashboard → Authentication:
---   - Enable "Automatic identity linking" so verified-email SSO matches the existing email user.
+--   - Enable "Automatic identity linking" so verified-email Single Sign-On (SSO) matches the existing email user.
 --   - Enable "Manual identity linking" if operators should connect additional providers while
 --     signed in (client uses auth.linkIdentity).
 --
--- HIPAA-oriented platform controls (organizational + Supabase project settings, not expressible
--- in SQL alone): execute a Business Associate Agreement with Supabase, enable MFA for staff,
--- require email confirmations, enforce strong password / leaked-password protection, shorten JWT
--- lifetime for clinical contexts, disable anonymous sign-ins, and use TLS-only clients.
+-- Health Insurance Portability and Accountability Act (HIPAA)-oriented platform controls (organizational + Supabase project settings, not expressible
+-- in Structured Query Language (SQL) alone): execute a Business Associate Agreement with Supabase, enable Multi-Factor Authentication (MFA) for staff,
+-- require email confirmations, enforce strong password / leaked-password protection, shorten JavaScript Object Notation (JSON) Web Token (JWT)
+-- lifetime for clinical contexts, disable anonymous sign-ins, and use Transport Layer Security (TLS)-only clients.
 -- Atlas stores no passwords in application tables; credentials remain in Supabase Auth.
 
 create or replace function atlas.handle_auth_user_people_sync()

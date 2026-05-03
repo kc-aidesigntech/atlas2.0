@@ -29,7 +29,7 @@ type EnrollmentStationMarkerRow =
 function mapNavigatorAssignedEnrolleeRow(
   row: NavigatorAssignedEnrolleeRow,
 ): NavigatorAssignedEnrollee {
-  // Keep the snake_case -> camelCase contract in one place so DB view changes
+  // Keep the snake_case -> camelCase contract in one place so Database (DB) view changes
   // are easy to audit without hunting through query call sites.
   return {
     navigatorPersonId: row.navigator_person_id,
@@ -84,7 +84,7 @@ export async function fetchEnrollmentStationMarkers(
     .order("assigned_at", { ascending: true });
 
   if (error) throw error;
-  // Keep empty enrollment timelines as [] so UI layers can render "no markers"
+  // Keep empty enrollment timelines as [] so User Interface (UI) layers can render "no markers"
   // without special null/undefined handling.
   return (data || []).map(mapEnrollmentStationMarkerRow);
 }

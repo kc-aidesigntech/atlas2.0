@@ -1,4 +1,4 @@
-# SQL Schema Engineering Notes
+# Structured Query Language (SQL) Schema Engineering Notes
 
 This companion document is a more implementation-oriented reference for the current `atlas` schema.
 

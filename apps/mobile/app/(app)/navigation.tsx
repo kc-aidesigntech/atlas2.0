@@ -1,5 +1,5 @@
 /**
- * Mobile navigator route shell that hydrates shared ATLAS journey data and
+ * Mobile navigator route shell that hydrates shared Atlas (ATLAS) journey data and
  * gracefully falls back when live Supabase reads are unavailable.
  */
 import {
@@ -69,7 +69,7 @@ export default function MobileNavigationScreen() {
         if (cancelled) return;
         setDataset(sharedDataset);
 
-        // These cards mirror participant records so the UI still works when navigator assignments are missing.
+        // These cards mirror participant records so the User Interface (UI) still works when navigator assignments are missing.
         const fallbackCards: MobileParticipantCard[] = sharedDataset.participants.map((participant) => ({
           id: participant.id,
           name: participant.name,

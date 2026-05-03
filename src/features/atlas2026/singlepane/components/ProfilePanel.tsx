@@ -26,8 +26,8 @@ interface ParentZCodeGroup {
 }
 
 /**
- * Parent-code normalization keeps completion tracking stable even when API and
- * UI surfaces send mixed-case values (`z12` vs `Z12`).
+ * Parent-code normalization keeps completion tracking stable even when Application Programming Interface (API) and
+ * User Interface (UI) surfaces send mixed-case values (`z12` vs `Z12`).
  */
 function normalizeParentCode(value: string) {
   const normalized = getParentZCode(value) || value.trim().toLowerCase()
@@ -108,7 +108,7 @@ export default function ProfilePanel({
           errorText={avatarUploadError}
           onImageError={(event) => {
             // This handler guarantees we always land on a resolvable source so
-            // broken avatar URLs never leave an empty image frame in the panel.
+            // broken avatar Uniform Resource Locators (URLs) never leave an empty image frame in the panel.
             if (isElenaRodriguez && event.currentTarget.src !== elenaRodriguezPortraitUrl) {
               event.currentTarget.src = elenaRodriguezPortraitUrl
               return

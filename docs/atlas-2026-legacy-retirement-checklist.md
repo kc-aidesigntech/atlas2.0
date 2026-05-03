@@ -1,4 +1,4 @@
-# ATLAS 2026 Legacy Retirement Checklist
+# Atlas (ATLAS) 2026 Legacy Retirement Checklist
 
 ## Runtime Cutover Checklist
 
@@ -13,7 +13,7 @@
 
 ## Validation Checklist
 
-- [ ] Confirm no route in UI links to legacy enrollment/resource/referral pages.
+- [ ] Confirm no route in User Interface (UI) links to legacy enrollment/resource/referral pages.
 - [ ] Verify role-scoped actions in precision navigation for each role.
 - [ ] Verify unverified memory events are visually distinct from verified events.
 - [ ] Validate route recommendation explainability payload rendering.

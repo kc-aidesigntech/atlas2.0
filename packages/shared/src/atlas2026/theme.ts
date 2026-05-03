@@ -17,7 +17,7 @@ export const ATLAS_NEUTRAL_COLORS = {
 } as const;
 
 export const ATLAS_PHASE_COLORS = {
-  // These keys mirror workflow phase enums used by API/view contracts.
+  // These keys mirror workflow phase enums used by Application Programming Interface (API)/view contracts.
   regulation: ATLAS_SIGNAL_COLORS.red,
   readiness: ATLAS_SIGNAL_COLORS.yellow,
   renewal: ATLAS_SIGNAL_COLORS.deepGreen,

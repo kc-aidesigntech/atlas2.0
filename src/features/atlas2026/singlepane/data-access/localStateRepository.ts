@@ -22,7 +22,7 @@ import {
  * Single-pane local/config repository.
  *
  * Purpose:
- * - owns normalization + persistence of UI-managed config documents.
+ * - owns normalization + persistence of User Interface (UI)-managed config documents.
  * - keeps localStorage and Supabase writes aligned under a local-first contract.
  */
 
@@ -46,7 +46,7 @@ const ALLOW_SENSITIVE_LOCAL_CACHE = import.meta.env.VITE_ALLOW_SENSITIVE_LOCAL_C
 
 /**
  * Persistence strategy:
- * - account-level preferences can use localStorage for UX continuity.
+ * - account-level preferences can use localStorage for User Experience (UX) continuity.
  * - sensitive clinical/program payloads are local-cached only when explicitly enabled.
  * - Supabase writes are attempted for all config domains when configured.
  */

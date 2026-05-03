@@ -7,7 +7,7 @@ This runbook documents the live multi-role identity rollout for `kchristianson@a
 - Multi-role support is enabled in `atlas.people_role_assignments` by removing the one-role-per-person unique index and replacing it with:
   - one active assignment per `person_id + role_id`
   - one active primary role per `person_id`
-- Auth claim `raw_app_meta_data.atlas_role` is set to `administrator` for RLS/admin pathways that read JWT metadata.
+- Auth claim `raw_app_meta_data.atlas_role` is set to `administrator` for Row-Level Security (RLS)/admin pathways that read JavaScript Object Notation (JSON) Web Token (JWT) metadata.
 - Role coverage for the target user now includes:
   - `administrator`
   - `supervisor`
@@ -28,7 +28,7 @@ This runbook documents the live multi-role identity rollout for `kchristianson@a
 - Runtime role hardening: `src/features/atlas2026/singlepane/useSinglePaneData.ts`
 - New shared types: `src/features/atlas2026/singlepane/types.ts`
 
-## Live SQL verification snapshot
+## Live Structured Query Language (SQL) verification snapshot
 
 Latest verified state after rollout:
 
@@ -46,7 +46,7 @@ Latest verified state after rollout:
    - `atlas.navigator_assignments` -> enrollee coverage
    - `atlas.supervisor_navigator_assignments` -> reporting and supervision coverage
    - `atlas.partners` primary contact fields -> partner ownership mapping
-5. Admin UI (`LiveAccessMatrixPanel`) writes through guarded Supabase RPC functions that enforce administrator claims server-side.
+5. Admin User Interface (UI) (`LiveAccessMatrixPanel`) writes through guarded Supabase Remote Procedure Call (RPC) functions that enforce administrator claims server-side.
 6. Runtime hook syncs UI-enabled roles from live identity role assignments (email match), so role switching reflects actual assigned roles.
 
 ## Troubleshooting

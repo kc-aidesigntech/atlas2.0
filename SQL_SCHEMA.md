@@ -1,4 +1,4 @@
-# SQL Schema
+# Structured Query Language (SQL) Schema
 
 This document summarizes the current `atlas` schema as it exists after the successful migrations and survey additions.
 
@@ -209,7 +209,7 @@ Stores the raw saved survey envelope:
 - organization name
 - respondent roles
 - job title
-- raw payload JSON
+- raw payload JavaScript Object Notation (JSON)
 - submission timestamps
 
 #### `partner_service_capacity_answers`

@@ -1,4 +1,4 @@
-// Role policy boundaries are a hard authorization contract shared by UI affordances
+// Role policy boundaries are a hard authorization contract shared by User Interface (UI) affordances
 // and service-side enforcement. Keep action keys stable across both layers.
 export const ATLAS_ROLES = {
   peerNavigator: 'peerNavigator',

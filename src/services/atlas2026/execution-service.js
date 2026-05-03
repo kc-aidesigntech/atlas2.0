@@ -11,7 +11,7 @@ export function buildExecutionSnapshot({
   phaseReadinessAlertThreshold = 0.45
 }) {
   // All downstream queues/timelines are participant-scoped; cross-participant bleed here would
-  // create false blockers and incorrect SLA pressure in operator workflows.
+  // create false blockers and incorrect Service Level Agreement (SLA) pressure in operator workflows.
   const scopedRoutes = routes.filter((route) => route.participantId === participantId)
   const scopedSteps = steps.filter((step) => step.participantId === participantId)
   const scopedEvents = memoryEvents.filter((event) => event.participantId === participantId)

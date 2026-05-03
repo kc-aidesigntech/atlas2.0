@@ -1,0 +1,34 @@
+---
+description: Enforce first-use acronym expansion in docs and comments
+alwaysApply: true
+---
+
+# Acronym First-Use Standard
+
+All repository writing must follow this rule:
+
+- On first use in a file, write the full term and then the acronym in parentheses.
+- After first use in that same file, the acronym may be used alone.
+
+## Applies To
+
+- Markdown documentation
+- Code comments (TypeScript, JavaScript, SQL, CSS, and related files)
+- Notes, policy documents, and checklists
+
+## Required Pattern
+
+- `Application Programming Interface (API)`
+- `Role-Based Access Control (RBAC)`
+- `Row-Level Security (RLS)`
+
+## Non-Compliant Pattern
+
+- First use of `API`, `RBAC`, or `RLS` without the full term
+
+## Additional Guidance
+
+- Treat this as a file-local requirement.
+- Keep definitions readable for executive and cross-functional audiences.
+- Prefer consistent expansion wording across the repository.
+

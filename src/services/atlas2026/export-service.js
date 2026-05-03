@@ -24,7 +24,7 @@ export function downloadCsv(rows, filename) {
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
-  // Revoke after click so object URLs do not accumulate during repeated exports.
+  // Revoke after click so object Uniform Resource Locators (URLs) do not accumulate during repeated exports.
   URL.revokeObjectURL(link.href)
 }
 

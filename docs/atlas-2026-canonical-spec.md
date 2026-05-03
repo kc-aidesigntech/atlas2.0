@@ -1,4 +1,4 @@
-# ATLAS 2026 Canonical Technical Spec
+# Atlas (ATLAS) 2026 Canonical Technical Spec
 
 This repository now treats the 2026 brief as the exclusive source of product behavior.
 

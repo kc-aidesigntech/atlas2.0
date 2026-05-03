@@ -1,4 +1,4 @@
-# ATLAS 2026 Database Model
+# Atlas (ATLAS) 2026 Database Model
 
 This document is the canonical architecture reference for the Supabase/Postgres `atlas` schema, including the authorization foundation introduced for role-based permissions and user-level exceptions.
 
@@ -75,7 +75,7 @@ This logic is encapsulated in:
 - `atlas.fn_authz_setting_enabled(setting_key, fallback)`
 - `atlas.fn_has_permission(permission_key)`
 
-## RLS Policy Pattern
+## Row-Level Security (RLS) Policy Pattern
 
 RLS is enabled and policy-managed on survey/capacity tables:
 
@@ -124,7 +124,7 @@ Computed score formula:
 
 When fewer than three assessments are present, the denominator is the sum of available weights.
 
-## Notes for API Clients
+## Notes for Application Programming Interface (API) Clients
 
 - Frontend clients use:
   - `VITE_SUPABASE_URL`

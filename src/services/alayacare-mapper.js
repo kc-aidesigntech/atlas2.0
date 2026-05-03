@@ -1,5 +1,5 @@
 /**
- * AlayaCare to ATLAS Data Mapping Utilities
+ * AlayaCare to Atlas (ATLAS) Data Mapping Utilities
  * Converts AlayaCare data structures to ATLAS format
  */
 
@@ -8,7 +8,7 @@
 // ============================================================================
 
 /**
- * Calculate ATLAS risk tier from LS/CMI total score
+ * Calculate ATLAS risk tier from Level of Service and Case Management Inventory (LS/CMI) total score
  * @param {number} lscmiTotalScore - Total LS/CMI score (0-43)
  * @returns {number} ATLAS risk tier (1-3)
  */
@@ -38,7 +38,7 @@ export function calculateWellnessScores(assessment) {
     0, 100, 0, 100
   )
   
-  // Emotional Wellness (from PHQ-9, GAD-7)
+  // Emotional Wellness (from Patient Health Questionnaire-9 (PHQ-9), Generalized Anxiety Disorder 7-item scale (GAD-7))
   const phq9 = assessment.phq9_score || 0  // 0-27 scale (higher = worse)
   const gad7 = assessment.gad7_score || 0  // 0-21 scale (higher = worse)
   scores.emotional = Math.round(100 - ((phq9 / 27 + gad7 / 21) / 2 * 100))

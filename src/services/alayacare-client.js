@@ -1,5 +1,5 @@
 /**
- * AlayaCare API Client
+ * AlayaCare Application Programming Interface (API) Client
  * Handles authentication and API requests to AlayaCare platform
  */
 
@@ -19,7 +19,7 @@ class AlayaCareClient {
 
   /**
    * Make authenticated API request
-   * @param {string} endpoint - API endpoint (relative to base URL)
+   * @param {string} endpoint - API endpoint (relative to base Uniform Resource Locator (URL))
    * @param {object} options - Fetch options
    * @returns {Promise<any>} Response data
    */
@@ -44,7 +44,7 @@ class AlayaCareClient {
 
     if (!response.ok) {
       const error = await response.text()
-      // Surface raw body text because AlayaCare returns useful diagnostics outside JSON envelopes.
+      // Surface raw body text because AlayaCare returns useful diagnostics outside JavaScript Object Notation (JSON) envelopes.
       throw new Error(`API request failed: ${response.status} ${error}`)
     }
 
@@ -68,7 +68,7 @@ class AlayaCareClient {
   }
 
   /**
-   * Get client by ID
+   * Get client by Identifier (ID)
    * @param {string} clientId - AlayaCare client ID
    * @returns {Promise<object>} Client details
    */

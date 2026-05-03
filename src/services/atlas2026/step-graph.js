@@ -9,7 +9,7 @@ export const STEP_STATUS = {
 
 export function buildRouteSteps(route) {
   const prefix = route.routeId || 'route'
-  // This three-step scaffold defines the minimum orchestration contract expected by timeline and SLA views.
+  // This three-step scaffold defines the minimum orchestration contract expected by timeline and Service Level Agreement (SLA) views.
   return [
     {
       stepId: `${prefix}-intake`,

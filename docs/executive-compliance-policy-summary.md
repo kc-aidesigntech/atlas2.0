@@ -1,8 +1,8 @@
-# Executive Compliance Policy Summary (SOC 2 + HIPAA + Data Security)
+# Executive Compliance Policy Summary (System and Organization Controls 2 (SOC 2) + Health Insurance Portability and Accountability Act (HIPAA) + Data Security)
 
 ## Purpose
 
-ATLAS maintains a single executive policy framework to govern SOC 2 readiness, HIPAA-aligned privacy/security handling of PII and PHI, and enterprise data security operations.
+Atlas (ATLAS) maintains a single executive policy framework to govern SOC 2 readiness, HIPAA-aligned privacy/security handling of Personally Identifiable Information (PII) and Protected Health Information (PHI), and enterprise data security operations.
 
 This summary provides leadership-facing direction. The authoritative policy is `docs/executive-compliance-security-policy.md`.
 
@@ -23,14 +23,14 @@ This summary provides leadership-facing direction. The authoritative policy is `
 
 - **Executive Leadership:** approves policy, funds control operation and remediation.
 - **Security and Compliance:** owns control framework, risk register, audit evidence, and reporting.
-- **Engineering:** implements secure design, secure SDLC, and production safeguards.
+- **Engineering:** implements secure design, secure Software Development Life Cycle (SDLC), and production safeguards.
 - **Operations:** owns resilience, incident response, and recovery execution.
-- **Legal and Privacy:** governs HIPAA/privacy interpretations, BAAs, and regulatory obligations.
+- **Legal and Privacy:** governs HIPAA/privacy interpretations, Business Associate Agreements (BAAs), and regulatory obligations.
 
 ## Policy Baseline (What must always be true)
 
 - Least privilege and role-based access are enforced.
-- MFA is required for privileged and production access.
+- Multi-Factor Authentication (MFA) is required for privileged and production access.
 - Material production changes are reviewed, approved, and traceable.
 - Security-relevant activity is logged, monitored, and retained as evidence.
 - Sensitive data is encrypted in transit and at rest.

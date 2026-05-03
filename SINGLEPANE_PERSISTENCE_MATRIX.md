@@ -44,7 +44,7 @@ This matrix documents every major visible control in singlepane, its write contr
 | --- | --- | --- | --- | --- | --- |
 | `record navigator assessment` | `atlas.navigator_competency_assessments` | assessment id | insert | `loadNavigatorCompetencyAssessments()` | persisted contract active |
 | Admin intake form | `atlas.app_config_documents` (`singlepane/enrollee_intake:{enrolleeId}/runtime-v1`) | enrollee id | upsert | `loadEnrolleeIntakes()` | persisted contract active |
-| Admin action labels without contracts (`set policy threshold`, `approve route template`, `audit event logs`) | blocked in UI by persisted-action filter | n/a | no write allowed | n/a | guarded (non-persistent actions removed) |
+| Admin action labels without contracts (`set policy threshold`, `approve route template`, `audit event logs`) | blocked in User Interface (UI) by persisted-action filter | n/a | no write allowed | n/a | guarded (non-persistent actions removed) |
 
 ## Global operator settings
 
@@ -68,6 +68,6 @@ This matrix documents every major visible control in singlepane, its write contr
   - Reload continuity for partner draft: after `reload + short wait`, same draft row rehydrated in record management and `resume draft` re-enabled.
   - Partner `my station` guard behavior: `refer` rendered disabled as intended for no-contract action path.
 - **Blocked**
-  - Navigator, supervisor, and admin live click-through flows were not fully automatable in MCP snapshot mode because only `Account Settings` exposed accessible interactive refs on `/`; menu/action controls are rendered without actionable accessibility refs in this session, so deterministic click automation for those screens could not be completed via MCP interaction alone.
+  - Navigator, supervisor, and admin live click-through flows were not fully automatable in Model Context Protocol (MCP) snapshot mode because only `Account Settings` exposed accessible interactive refs on `/`; menu/action controls are rendered without actionable accessibility refs in this session, so deterministic click automation for those screens could not be completed via MCP interaction alone.
 - **Notes**
   - One intermediate snapshot right after reload briefly showed no draft; data rehydrated after an additional wait interval, indicating async history hydration timing rather than data loss.

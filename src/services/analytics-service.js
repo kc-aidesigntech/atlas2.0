@@ -1,5 +1,5 @@
 /**
- * Advanced Analytics Service for ATLAS
+ * Advanced Analytics Service for Atlas (ATLAS)
  * Calculates comprehensive metrics and insights
  */
 
@@ -459,7 +459,7 @@ export function predictRiskTrend(enrollee) {
 
 function predictRecommendedTier(wellness, zCodeCount, currentTier) {
   // Simple tier recommendation logic
-  // Current tier is passed for future policy-aware tuning; keep param for API stability.
+  // Current tier is passed for future policy-aware tuning; keep param for Application Programming Interface (API) stability.
   if (wellness > 70 && zCodeCount <= 2) return 1
   if (wellness < 40 || zCodeCount >= 5) return 3
   return 2

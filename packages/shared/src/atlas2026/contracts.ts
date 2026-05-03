@@ -1,5 +1,5 @@
 /**
- * Shared ATLAS 2026 routing contracts consumed by web, mobile, and Supabase
+ * Shared Atlas (ATLAS) 2026 routing contracts consumed by web, mobile, and Supabase
  * adapters to preserve a consistent in-memory dataset shape.
  */
 export type JourneyPhase = "regulation" | "readiness" | "renewal";
@@ -58,7 +58,7 @@ export interface JourneyAssignment {
 }
 
 export interface AtlasJsonDataset {
-  // Shared route-builder contract: API adapters normalize backend rows into this in-memory
+  // Shared route-builder contract: Application Programming Interface (API) adapters normalize backend rows into this in-memory
   // shape so web/mobile clients can reuse routing helpers without backend-specific logic.
   participants: Participant[];
   instructionBoms: InstructionBomItem[];

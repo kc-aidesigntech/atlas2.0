@@ -2,7 +2,7 @@ import * as React from "react"
 import * as AvatarPrimitive from "@radix-ui/react-avatar"
 import { cn } from "@/lib/utils"
 
-// Avatar primitives are exported as a stable design-system API so callers do not
+// Avatar primitives are exported as a stable design-system Application Programming Interface (API) so callers do not
 // depend directly on Radix implementation details.
 const Avatar = React.forwardRef(({ className, ...props }, ref) => (
   <AvatarPrimitive.Root

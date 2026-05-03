@@ -1,4 +1,4 @@
-# How To Commission ATLAS
+# How To Commission Atlas (ATLAS)
 
 ## Purpose
 
@@ -42,7 +42,7 @@ This target requires the runtime cutover migration and seeded runtime data.
 
 Create or choose a Supabase project and make sure you have:
 
-- project URL
+- project Uniform Resource Locator (URL)
 - publishable key
 - service or secret key for admin-side commissioning work
 
@@ -76,9 +76,9 @@ Apply migrations in this order:
 
 You can apply them with your normal Supabase workflow:
 
-- Supabase Studio SQL editor
+- Supabase Studio Structured Query Language (SQL) editor
 - migration runner already used by your team
-- Supabase CLI, if installed in your environment
+- Supabase Command-Line Interface (CLI), if installed in your environment
 
 ## 3. Apply Seeds and Derived Data
 
@@ -124,7 +124,7 @@ These support:
 - `atlas.user_permission_exceptions`
 - `atlas.authorization_settings`
 
-It also establishes the RLS and permission model used by the survey subsystem.
+It also establishes the Row-Level Security (RLS) and permission model used by the survey subsystem.
 
 ## Supervisor layer
 

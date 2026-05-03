@@ -1,4 +1,4 @@
-// Canonical Atlas 2026 vocabulary shared by UI and decision services.
+// Canonical Atlas 2026 vocabulary shared by User Interface (UI) and decision services.
 // Treat these exports as cross-system contracts, not presentation-only constants.
 export const STABILIZATION_PHASES = ['Regulation', 'Readiness', 'Renewal']
 export const RECIPROCITY_ETHOS = 'This community takes care of me - and I take care of it.'

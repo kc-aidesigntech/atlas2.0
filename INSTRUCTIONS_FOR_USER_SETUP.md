@@ -1,4 +1,4 @@
-# ATLAS User Setup Instructions
+# Atlas (ATLAS) User Setup Instructions
 
 ## What You Are Seeing Right Now
 

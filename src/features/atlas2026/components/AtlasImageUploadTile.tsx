@@ -1,5 +1,5 @@
 /**
- * Reusable ATLAS image tile primitive that centralizes upload affordances and
+ * Reusable Atlas (ATLAS) image tile primitive that centralizes upload affordances and
  * status/error messaging for avatar-style image surfaces.
  */
 import React from 'react'

@@ -1,6 +1,6 @@
 /**
- * Export Utilities for ATLAS
- * Handles PDF and Excel export functionality
+ * Export Utilities for Atlas (ATLAS)
+ * Handles Portable Document Format (PDF) and Excel export functionality
  */
 
 import jsPDF from 'jspdf'
@@ -8,7 +8,7 @@ import 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 
 function buildDateStamp() {
-  // ISO date prefix keeps filenames lexicographically sortable across locales.
+  // International Organization for Standardization (ISO) date prefix keeps filenames lexicographically sortable across locales.
   return new Date().toISOString().split('T')[0]
 }
 
@@ -280,7 +280,7 @@ export function exportReferralsToPDF(referrals, filterType = 'All') {
     }
   })
   
-  // Lowercased filter keeps filenames stable across UI title-casing differences.
+  // Lowercased filter keeps filenames stable across User Interface (UI) title-casing differences.
   doc.save(`atlas-referrals-${filterType.toLowerCase()}-${buildDateStamp()}.pdf`)
 }
 

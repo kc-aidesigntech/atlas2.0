@@ -102,7 +102,7 @@ the schema is defined in `supabase/migrations/20260114_make_app_alive.sql`.
 
 ## automation strategy
 
-automation SQL is in `supabase/migrations/20260114_make_app_alive.sql`.
+automation Structured Query Language (SQL) is in `supabase/migrations/20260114_make_app_alive.sql`.
 
 - normalize partner organizations during ingestion.
 - auto-upsert partner z-code capabilities from survey rows.

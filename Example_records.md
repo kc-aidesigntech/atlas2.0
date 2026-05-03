@@ -1,6 +1,6 @@
 # Example Records
 
-This document explains the Supabase example dataset added for the ATLAS schema.
+This document explains the Supabase example dataset added for the Atlas (ATLAS) schema.
 
 The corresponding seed lives in `supabase/migrations/20260415_example_records_seed.sql`.
 
@@ -152,7 +152,7 @@ Three example partner survey records were added:
 
 Why:
 
-- gives the UI a concrete three-partner weighted ranking example
+- gives the User Interface (UI) a concrete three-partner weighted ranking example
 - demonstrates respondent identity propagation
 - populates partner burden and partner capability surfaces
 

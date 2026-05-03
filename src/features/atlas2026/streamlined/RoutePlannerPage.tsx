@@ -10,7 +10,7 @@ import { SUBWAY_COLORS } from '@/features/atlas2026/streamlined/theme'
  * Streamlined route-planner workspace.
  *
  * Purpose:
- * - allows BOM composition, template authoring, preview, and assignment in one panel.
+ * - allows Bill of Materials (BOM) composition, template authoring, preview, and assignment in one panel.
  * - keeps interactions form-driven with minimal transient local state.
  */
 

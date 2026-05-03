@@ -1,7 +1,7 @@
 import { ROUTE_SCORING_FACTORS, STABILIZATION_PHASES } from './canonical-spec'
 import { ROUTE_LIFECYCLE, summarizePressure } from './data-model'
 
-// Intel contract defines API-level request/response shapes and deterministic scoring
+// Intel contract defines Application Programming Interface (API)-level request/response shapes and deterministic scoring
 // behavior used by Atlas route evaluation endpoints.
 export const INTEL_API_VERSION = '2026-01'
 

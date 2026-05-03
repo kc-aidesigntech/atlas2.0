@@ -24,7 +24,7 @@ function renderKeyValueRows(data = {}) {
 }
 
 function buildWeeklyReportRows({ selectedCountyId, totals, risk, activity, sla, reciprocity, countyComparisons }) {
-  // Export rows intentionally flatten nested snapshot objects so downstream CSV consumers
+  // Export rows intentionally flatten nested snapshot objects so downstream Comma-Separated Values (CSV) consumers
   // (email, BI tools, spreadsheets) do not need Atlas-specific parsing logic.
   return [
     {

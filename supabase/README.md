@@ -30,7 +30,7 @@ Migration `migrations/20260411_authorization_foundation.sql` adds:
 - `atlas.user_permission_exceptions`
 - `atlas.authorization_settings`
 
-It also introduces helper functions for permission checks and RLS policies on partner service-capacity tables. During rollout, legacy/public access remains controlled by settings rows:
+It also introduces helper functions for permission checks and Row-Level Security (RLS) policies on partner service-capacity tables. During rollout, legacy/public access remains controlled by settings rows:
 
 - `allow_legacy_public_partner_capacity_read`
 - `allow_legacy_public_partner_capacity_write`
@@ -57,5 +57,5 @@ The rollup view computes supervisor-side navigator competency trend using weight
 
 - Supabase Storage bucket: `profile-images`
 - Metadata table: `atlas.profile_images`
-- App-facing resolved URL remains on `atlas.enrollees.avatar_url`
+- App-facing resolved Uniform Resource Locator (URL) remains on `atlas.enrollees.avatar_url`
 - The trigger in `20260401_profile_images.sql` keeps `avatar_url` synced to the current primary ready image for each enrollee.

@@ -36,7 +36,7 @@ export async function withOptionalSupabaseFallback<T>(key: string, loader: () =>
   } catch (error) {
     if (isOptionalSupabaseDataError(error)) {
       // Cache fallback by key once a dependency is known-optional so repeated
-      // UI hydration paths avoid noisy retries.
+      // User Interface (UI) hydration paths avoid noisy retries.
       if (import.meta.env.DEV) {
         const candidate = error as { message?: string; code?: string }
         console.warn(`[singlepane] optional supabase fallback for ${key}`, candidate.code || '', candidate.message || '')

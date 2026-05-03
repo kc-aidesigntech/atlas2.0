@@ -46,7 +46,7 @@ export function buildSituationalOverlay({ participants, capacityTopology, phaseR
     priority: corridor.priority,
     pressure: corridor.pressure,
     capacity: corridor.capacity,
-    // Coordinates are deterministic placeholders for UI rendering until GIS integration is live.
+    // Coordinates are deterministic placeholders for User Interface (UI) rendering until Geographic Information System (GIS) integration is live.
     lat: toRoundedNumber(34.05 + index * 0.08, 3),
     lng: toRoundedNumber(-118.25 + index * 0.06, 3)
   }))

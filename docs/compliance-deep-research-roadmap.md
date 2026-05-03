@@ -1,4 +1,4 @@
-# Compliance Deep Research Roadmap (SOC 2 + HIPAA-Aligned)
+# Compliance Deep Research Roadmap (System and Organization Controls 2 (SOC 2) + Health Insurance Portability and Accountability Act (HIPAA)-Aligned)
 
 **Date:** 2026-05-03  
 **Prepared by:** Documentation Specialist workflow with parallel deep-research analysis  
@@ -7,7 +7,7 @@
 
 ## Purpose
 
-This roadmap translates deep-research findings into a practical 30/60/90-day implementation plan to move ATLAS toward audit-ready SOC 2 operation and HIPAA-aligned privacy/security controls.
+This roadmap translates deep-research findings into a practical 30/60/90-day implementation plan to move Atlas (ATLAS) toward audit-ready SOC 2 operation and HIPAA-aligned privacy/security controls.
 
 This document is implementation guidance, not legal advice.
 
@@ -36,11 +36,11 @@ This document is implementation guidance, not legal advice.
 ## Day 0-30 (Containment and Governance Activation)
 
 - [ ] **Engineering + Security:** Move third-party token exchange and secrets to server-side execution only; rotate affected secrets.
-- [ ] **Engineering + DBA/Security:** Disable and verify all `allow_legacy_public_partner_capacity_*` toggles in production.
+- [ ] **Engineering + Database Administrator (DBA)/Security:** Disable and verify all `allow_legacy_public_partner_capacity_*` toggles in production.
 - [ ] **Security + Compliance:** Assign named control owners for each line in `docs/compliance-control-owner-checklist.md`.
-- [ ] **Engineering Leadership:** Enable mandatory PR review and merge protections for production branches.
+- [ ] **Engineering Leadership:** Enable mandatory Pull Request (PR) review and merge protections for production branches.
 - [ ] **Security + Operations:** Establish incident severity matrix, escalation contacts, and breach decision workflow.
-- [ ] **Privacy + Legal:** Start subprocessor and BAA register with critical vendors first.
+- [ ] **Privacy + Legal:** Start subprocessor and Business Associate Agreement (BAA) register with critical vendors first.
 
 **Evidence expected by Day 30**
 
@@ -54,11 +54,11 @@ This document is implementation guidance, not legal advice.
 ## Day 31-60 (Control Implementation and Automation)
 
 - [ ] **Engineering + Security:** Replace browser-direct admin matrix writes with controlled server-side mutation endpoints/functions.
-- [ ] **Engineering:** Introduce CI controls: build/typecheck, dependency scan, secret scan, and policy fail gates.
-- [ ] **Engineering + Security:** Build integration tests for authorization/RLS deny/allow behavior on critical data paths.
+- [ ] **Engineering:** Introduce Continuous Integration (CI) controls: build/typecheck, dependency scan, secret scan, and policy fail gates.
+- [ ] **Engineering + Security:** Build integration tests for authorization/Row-Level Security (RLS) deny/allow behavior on critical data paths.
 - [ ] **Security + Operations:** Centralize security-relevant logs and implement baseline alerting.
 - [ ] **Privacy + Legal + Engineering:** Publish retention schedule by data class and implement first deletion workflow.
-- [ ] **Operations:** Define RTO/RPO and complete initial backup restore test.
+- [ ] **Operations:** Define Recovery Time Objective (RTO)/Recovery Point Objective (RPO) and complete initial backup restore test.
 
 **Evidence expected by Day 60**
 
@@ -95,7 +95,7 @@ This document is implementation guidance, not legal advice.
 7. Operationalize incident response and breach communications.
 8. Complete vendor/BAA governance process.
 9. Implement retention/deletion with legal hold workflow.
-10. Establish BC/DR testing and recurring reporting.
+10. Establish Business Continuity and Disaster Recovery (BC/DR) testing and recurring reporting.
 
 ## Governance Cadence After Day 90
 

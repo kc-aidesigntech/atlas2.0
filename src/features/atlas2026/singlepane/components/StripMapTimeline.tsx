@@ -1,5 +1,5 @@
 /**
- * Interactive strip-map timeline for ATLAS journey execution, including phase
+ * Interactive strip-map timeline for Atlas (ATLAS) journey execution, including phase
  * gates, draggable events, and resolution/station marker overlays.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'

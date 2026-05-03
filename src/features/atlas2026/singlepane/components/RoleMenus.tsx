@@ -10,7 +10,7 @@ interface RoleMenusProps {
 }
 
 export default function RoleMenus({ labels, label, activeLabel, onAction }: RoleMenusProps) {
-  // Preserve backwards compatibility with legacy single-label callers while supporting the newer array API.
+  // Preserve backwards compatibility with legacy single-label callers while supporting the newer array Application Programming Interface (API).
   const safeLabels = labels?.length ? labels : label ? [label] : []
   const currentActiveLabel = activeLabel || safeLabels[0] || ''
 

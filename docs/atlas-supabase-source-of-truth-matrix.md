@@ -1,7 +1,7 @@
-# ATLAS Supabase Source Of Truth Matrix
+# Atlas (ATLAS) Supabase Source Of Truth Matrix
 
 ## Scope
-This matrix inventories the remaining manual, demo, JSON, CSV, Firebase, and `localStorage` driven data planes across the repo and assigns each one to a Supabase-backed destination.
+This matrix inventories the remaining manual, demo, JavaScript Object Notation (JSON), Comma-Separated Values (CSV), Firebase, and `localStorage` driven data planes across the repo and assigns each one to a Supabase-backed destination.
 
 ## Classification
 - `existing view/table`: can move onto an already-present `atlas` schema object.
@@ -13,9 +13,9 @@ This matrix inventories the remaining manual, demo, JSON, CSV, Firebase, and `lo
 | --- | --- | --- | --- | --- |
 | Assigned enrollee list | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | existing view/table | `atlas.v_singlepane_enrollee_profiles` | Replaces CSV bootstrap rows with active enrollment projection. |
 | Enrollee domain loads | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | new table/view | `atlas.v_singlepane_enrollee_domain_loads` | Derived from active enrollee Z-codes and category mapping. |
-| Enrollee load breakdown rows | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | new table/view | `atlas.v_singlepane_enrollee_domain_load_breakdown` | Preserves current per-group breakdown UI. |
+| Enrollee load breakdown rows | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | new table/view | `atlas.v_singlepane_enrollee_domain_load_breakdown` | Preserves current per-group breakdown User Interface (UI). |
 | Role menus and action menus | `src/features/atlas2026/singlepane/data-access/localCsvData.ts`, `src/features/atlas2026/data/roles.json` | new table/view | `atlas.app_role_navigation` | Canonical workflow navigation config for `singlepane` and other surfaces. |
-| Timeline gates and default duration | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | new table/view | `atlas.app_config_documents(surface='singlepane', config_key='timeline_defaults')` | Workflow-driving timeline config becomes DB-owned JSON. |
+| Timeline gates and default duration | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | new table/view | `atlas.app_config_documents(surface='singlepane', config_key='timeline_defaults')` | Workflow-driving timeline config becomes Database (DB)-owned JSON. |
 | Enrollment requests | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | existing view/table | `atlas.v_navigator_enrollment_requests` | Already modeled in the base schema. |
 | County heatmap | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | existing view/table | `atlas.v_county_z_code_heatmap` | Already modeled in the base schema. |
 | Admin quality metrics | `src/features/atlas2026/singlepane/data-access/localCsvData.ts` | existing view/table | `atlas.v_admin_data_quality` | Already modeled in the base schema. |

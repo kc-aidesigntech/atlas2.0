@@ -18,13 +18,13 @@ This checklist operationalizes `docs/executive-compliance-security-policy.md` in
 
 ## 2) Access Control and Identity Management
 
-- [ ] **Engineering + IT/Security** - Enforce RBAC and least privilege for all systems.
-- [ ] **Engineering + IT/Security** - Require MFA for privileged/production access.
+- [ ] **Engineering + IT/Security** - Enforce Role-Based Access Control (RBAC) and least privilege for all systems.
+- [ ] **Engineering + IT/Security** - Require Multi-Factor Authentication (MFA) for privileged/production access.
 - [ ] **IT/Security** - Complete joiner/mover/leaver workflows with auditable records.
 - [ ] **Security and Compliance** - Run quarterly access reviews, including privileged accounts.
 - [ ] **Engineering** - Eliminate shared accounts except approved break-glass workflows.
 
-## 3) Change Management and Secure SDLC
+## 3) Change Management and Secure Software Development Life Cycle (SDLC)
 
 - [ ] **Engineering Leadership** - Require peer review and approval for production-impacting changes.
 - [ ] **Engineering** - Maintain traceability from requirement to code change to deployment.
@@ -39,11 +39,11 @@ This checklist operationalizes `docs/executive-compliance-security-policy.md` in
 - [ ] **Legal + Privacy + Security** - Define breach/notification decision tree and escalation contacts.
 - [ ] **Security + Operations** - Run incident tabletop exercises and capture corrective actions.
 
-## 5) HIPAA-Aligned Privacy and PHI Controls
+## 5) Health Insurance Portability and Accountability Act (HIPAA)-Aligned Privacy and Protected Health Information (PHI) Controls
 
-- [ ] **Privacy + Security** - Classify PII/PHI handling pathways and required safeguards.
+- [ ] **Privacy + Security** - Classify Personally Identifiable Information (PII)/PHI handling pathways and required safeguards.
 - [ ] **Engineering + Security** - Enforce minimum necessary data access patterns in applications and support tooling.
-- [ ] **Legal + Privacy** - Verify BAAs are executed before PHI exchange where required.
+- [ ] **Legal + Privacy** - Verify Business Associate Agreements (BAAs) are executed before PHI exchange where required.
 - [ ] **Privacy Operations** - Implement intake and fulfillment workflow for privacy rights requests.
 - [ ] **HR + Compliance** - Deliver annual HIPAA/privacy training and sanctions acknowledgment.
 
@@ -53,7 +53,7 @@ This checklist operationalizes `docs/executive-compliance-security-policy.md` in
 - [ ] **Security + Engineering** - Implement secret management and key rotation practices.
 - [ ] **Operations + Security** - Maintain patching SLAs and vulnerability remediation workflow.
 - [ ] **Security + Engineering** - Apply network segmentation and hardened baseline configurations.
-- [ ] **Engineering** - Validate API protections (authz, rate limits, abuse detection, logging).
+- [ ] **Engineering** - Validate Application Programming Interface (API) protections (authz, rate limits, abuse detection, logging).
 
 ## 7) Data Lifecycle, Retention, and Disposal
 
@@ -64,9 +64,9 @@ This checklist operationalizes `docs/executive-compliance-security-policy.md` in
 
 ## 8) Resilience and Recovery
 
-- [ ] **Operations + Engineering** - Define and document RTO/RPO for critical services.
+- [ ] **Operations + Engineering** - Define and document Recovery Time Objective (RTO)/Recovery Point Objective (RPO) for critical services.
 - [ ] **Operations** - Execute backup coverage and restoration test plans.
-- [ ] **Operations + Security** - Run annual BC/DR exercises and track remediation actions.
+- [ ] **Operations + Security** - Run annual Business Continuity and Disaster Recovery (BC/DR) exercises and track remediation actions.
 
 ## 9) Vendor and Third-Party Risk
 

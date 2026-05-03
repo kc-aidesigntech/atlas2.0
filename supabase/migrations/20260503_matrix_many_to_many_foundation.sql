@@ -1,7 +1,7 @@
 -- Matrix many-to-many foundation:
--- - preserve existing one-to-one UX options in the app while enabling many-to-many
+-- - preserve existing one-to-one User Experience (UX) options in the app while enabling many-to-many
 --   assignment storage in the database
--- - keep legacy RPC signatures callable via wrappers to avoid breaking older clients
+-- - keep legacy Remote Procedure Call (RPC) signatures callable via wrappers to avoid breaking older clients
 -- - introduce assessment participant/reviewer join tables so future workflows can
 --   model multi-subject and multi-reviewer sessions without schema rewrites
 

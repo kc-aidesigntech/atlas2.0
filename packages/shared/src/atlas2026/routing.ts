@@ -14,7 +14,7 @@ export function getSelectedParticipant(
   dataset: AtlasJsonDataset,
   participantId: string,
 ): Participant | null {
-  // Consumer layers (web/mobile) pass IDs from route params; return null instead of
+  // Consumer layers (web/mobile) pass Identifiers (IDs) from route params; return null instead of
   // throwing so callers can treat "not found" as an empty selection state.
   return findByIdOrNull(dataset.participants, participantId);
 }

@@ -1,6 +1,6 @@
 /**
- * Shared avatar fallback generator for ATLAS profile surfaces.
- * Produces deterministic initials-based SVG data URLs so any screen can render
+ * Shared avatar fallback generator for Atlas (ATLAS) profile surfaces.
+ * Produces deterministic initials-based SVG data Uniform Resource Locators (URLs) so any screen can render
  * a stable avatar without requiring persisted image storage.
  */
 export function getAvatarInitials(fullName: string) {

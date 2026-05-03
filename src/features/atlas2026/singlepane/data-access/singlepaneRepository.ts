@@ -77,7 +77,7 @@ import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/tim
  *
  * Purpose:
  * - composes per-feature repositories into a single orchestration boundary.
- * - returns UI-shaped records while insulating callers from backend topology.
+ * - returns User Interface (UI)-shaped records while insulating callers from backend topology.
  */
 
 export interface SinglePaneBootstrapData {
