@@ -35,6 +35,7 @@
     --line-height-base: 1.65;
 
     --atlas-signal-yellow: #fcc01a;
+    --atlas-signal-lucid-green: rgb(129 188 54);
     --atlas-signal-orange: #ff6319;
     --atlas-signal-red: #ee352e;
     --atlas-signal-deep-green: #00933c;
@@ -69,8 +70,8 @@
     --border-strong: rgba(255, 255, 255, 0.22);
     --input-border: rgba(148, 163, 184, 0.2);
 
-    --accent-color: var(--atlas-signal-yellow);
-    --accent-muted: color-mix(in srgb, var(--atlas-signal-yellow) 28%, transparent);
+    --accent-color: var(--atlas-signal-lucid-green);
+    --accent-muted: color-mix(in srgb, var(--atlas-signal-lucid-green) 28%, transparent);
     --atlas-shell-edge-buffer: clamp(0.25in, 5vw, 0.75in);
   }
 

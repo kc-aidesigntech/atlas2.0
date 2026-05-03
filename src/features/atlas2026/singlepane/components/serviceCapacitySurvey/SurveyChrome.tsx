@@ -343,7 +343,7 @@ export function BurdenCard({
               } as React.CSSProperties}
             >
               <span>next</span>
-              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] rotate-180 opacity-90" />
+              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] rotate-90 opacity-90 brightness-0" />
             </AtlasTextButton>
           </div>
         ) : (

@@ -171,7 +171,7 @@ export default function RoutePlannerPage({
         </div>
         <Button
           onClick={submitTemplate}
-          className="mt-3 rounded-xl border border-[color:var(--atlas-signal-yellow)] bg-[var(--atlas-signal-yellow)] px-4 py-2 text-xs font-black text-black hover:bg-[var(--atlas-signal-yellow)]/90"
+          className="mt-3 rounded-xl border border-[color:var(--atlas-signal-lucid-green)] bg-[var(--atlas-signal-lucid-green)] px-4 py-2 text-xs font-black text-black hover:bg-[color:color-mix(in_srgb,var(--atlas-signal-lucid-green)_90%,black)]"
         >
           save route template from selection
         </Button>

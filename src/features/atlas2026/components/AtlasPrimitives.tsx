@@ -5,6 +5,8 @@
 import React from 'react'
 import { X } from 'lucide-react'
 
+const ATLAS_LUCID_GREEN = '#81bc36'
+
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
 }
@@ -72,7 +74,14 @@ function isWhiteLikeColor(color: string) {
   return channels.r > 228 && channels.g > 228 && channels.b > 228
 }
 
+function isLucidGreenColor(color: string) {
+  const normalized = color.trim().toLowerCase()
+  if (normalized.includes('atlas-signal-lucid-green')) return true
+  return stripAlphaChannel(color).toLowerCase() === ATLAS_LUCID_GREEN
+}
+
 function getContrastTextColor(fillColor: string) {
+  if (isLucidGreenColor(fillColor)) return '#111111'
   if (/yellow/i.test(fillColor)) return '#111111'
   const channels = parseRgbChannels(fillColor)
   if (!channels) return '#ffffff'
@@ -82,19 +91,23 @@ function getContrastTextColor(fillColor: string) {
 
 function resolveSolidButtonStyle(style: React.CSSProperties | undefined) {
   const nextStyle: ButtonStyle = { ...(style as ButtonStyle | undefined) }
-  const accent = readStyleValue(style, '--button-border-color') ?? readStyleValue(style, 'borderColor') ?? '#ffffff'
+  const accent = readStyleValue(style, '--button-border-color') ?? readStyleValue(style, 'borderColor') ?? ATLAS_LUCID_GREEN
   const explicitFill = readStyleValue(style, '--button-fill-color') ?? readStyleValue(style, 'backgroundColor')
   const solidAccent = stripAlphaChannel(accent)
   const accentAlpha = readAlphaChannel(accent)
   const isNeutralUnselected = isWhiteLikeColor(solidAccent) && accentAlpha < 0.55
   const fill = explicitFill ? stripAlphaChannel(explicitFill) : isNeutralUnselected ? '#181b20' : isWhiteLikeColor(solidAccent) ? '#ffffff' : solidAccent
   const explicitTextColor = readStyleValue(style, 'color')
+  const explicitLineColor = readStyleValue(style, '--button-line-color')
   const legacyOutlineColor = explicitTextColor && stripAlphaChannel(explicitTextColor) === solidAccent
-  const foreground = readStyleValue(style, '--button-foreground-color') ?? (!explicitTextColor || legacyOutlineColor ? getContrastTextColor(fill) : explicitTextColor)
+  const lineMatchesFill = explicitLineColor && stripAlphaChannel(explicitLineColor) === stripAlphaChannel(fill)
+  const foreground =
+    readStyleValue(style, '--button-foreground-color') ??
+    (!explicitTextColor || legacyOutlineColor ? getContrastTextColor(fill) : explicitTextColor)
 
   nextStyle['--button-border-color'] = accent
   nextStyle['--button-fill-color'] = fill
-  nextStyle['--button-line-color'] = readStyleValue(style, '--button-line-color') ?? foreground
+  nextStyle['--button-line-color'] = !explicitLineColor || lineMatchesFill ? foreground : explicitLineColor
   nextStyle['--button-line-opacity'] = readStyleValue(style, '--button-line-opacity') ?? (isNeutralUnselected ? '0.18' : '0.28')
   nextStyle.color = foreground
   nextStyle.backgroundColor = fill
@@ -227,7 +240,7 @@ export function AtlasPlusButton({
       aria-label={label}
       title={title ?? label}
       className={cn('h-10 w-10 text-[24px] font-light', className)}
-      style={{ ['--button-border-color' as const]: 'var(--atlas-signal-yellow)', color: 'var(--atlas-signal-yellow)' } as React.CSSProperties}
+      style={{ ['--button-border-color' as const]: ATLAS_LUCID_GREEN, color: ATLAS_LUCID_GREEN } as React.CSSProperties}
     >
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.9" strokeLinecap="round">
         <path d="M12 5v14" />
