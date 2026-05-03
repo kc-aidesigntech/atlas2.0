@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { AtlasInsetCard } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { EnrolleeIntakeRecord } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
+// Admin intake form is a thin editor over the EnrolleeIntakeRecord contract.
+// It intentionally buffers edits locally and emits one normalized save payload.
 interface AdminIntakeFormProps {
   intake: EnrolleeIntakeRecord | null
   onSave: (intake: EnrolleeIntakeRecord) => void
@@ -11,18 +15,21 @@ export default function AdminIntakeForm({ intake, onSave }: AdminIntakeFormProps
   const [draft, setDraft] = useState<EnrolleeIntakeRecord | null>(intake)
 
   useEffect(() => {
+    // Replace the entire draft when selection changes so edits never bleed between enrollees.
     setDraft(intake)
   }, [intake])
 
   if (!draft) {
     return (
-      <section className="rounded-xl border p-3" style={{ borderColor: '#ffffff3a' }}>
+      <AtlasInsetCard>
         <small className="text-[12px] text-[#d4d4d4]">Select an enrollee to open the intake form.</small>
-      </section>
+      </AtlasInsetCard>
     )
   }
 
   function handleSave() {
+    // Normalize tags at save time so free-form input stays forgiving while persistence
+    // receives case-stable values for downstream matching/filtering.
     onSave({
       ...draft,
       zCodeTags: draft.zCodeTags.map((tag) => tag.toLowerCase()).filter(Boolean)
@@ -30,7 +37,7 @@ export default function AdminIntakeForm({ intake, onSave }: AdminIntakeFormProps
   }
 
   return (
-    <section className="rounded-xl border p-3" style={{ borderColor: '#ffffff3a' }}>
+    <AtlasInsetCard>
       <div className="mb-3">
         <small className="block text-[12px] font-semibold text-white">onboarding intake</small>
         <small className="text-[12px] text-[#bbbbbb]">
@@ -40,49 +47,44 @@ export default function AdminIntakeForm({ intake, onSave }: AdminIntakeFormProps
 
       <div className="grid gap-3 md:grid-cols-2">
         <Field label="full name">
-          <input
+          <Input
             value={draft.fullName}
             onChange={(event) => setDraft((current) => (current ? { ...current, fullName: event.target.value } : current))}
-            className="mt-1.5 w-full rounded-xl border bg-black px-3 py-2 text-[13px] text-white"
-            style={{ borderColor: '#ffffff30' }}
+            className="mt-1.5 text-[13px]"
           />
         </Field>
         <Field label="date of birth">
-          <input
+          <Input
             value={draft.dob}
             onChange={(event) => setDraft((current) => (current ? { ...current, dob: event.target.value } : current))}
-            className="mt-1.5 w-full rounded-xl border bg-black px-3 py-2 text-[13px] text-white"
-            style={{ borderColor: '#ffffff30' }}
+            className="mt-1.5 text-[13px]"
           />
         </Field>
         <Field label="case id">
-          <input
+          <Input
             value={draft.caseId}
             onChange={(event) => setDraft((current) => (current ? { ...current, caseId: event.target.value } : current))}
-            className="mt-1.5 w-full rounded-xl border bg-black px-3 py-2 text-[13px] text-white"
-            style={{ borderColor: '#ffffff30' }}
+            className="mt-1.5 text-[13px]"
           />
         </Field>
         <Field label="email">
-          <input
+          <Input
             value={draft.email}
             onChange={(event) => setDraft((current) => (current ? { ...current, email: event.target.value } : current))}
-            className="mt-1.5 w-full rounded-xl border bg-black px-3 py-2 text-[13px] text-white"
-            style={{ borderColor: '#ffffff30' }}
+            className="mt-1.5 text-[13px]"
           />
         </Field>
         <Field label="assigned navigator">
-          <input
+          <Input
             value={draft.assignedNavigator}
             onChange={(event) =>
               setDraft((current) => (current ? { ...current, assignedNavigator: event.target.value } : current))
             }
-            className="mt-1.5 w-full rounded-xl border bg-black px-3 py-2 text-[13px] text-white"
-            style={{ borderColor: '#ffffff30' }}
+            className="mt-1.5 text-[13px]"
           />
         </Field>
         <Field label="enrollment start">
-          <input
+          <Input
             type="date"
             value={draft.enrollmentStartIso.slice(0, 10)}
             onChange={(event) =>
@@ -95,14 +97,13 @@ export default function AdminIntakeForm({ intake, onSave }: AdminIntakeFormProps
                   : current
               )
             }
-            className="mt-1.5 w-full rounded-xl border bg-black px-3 py-2 text-[13px] text-white"
-            style={{ borderColor: '#ffffff30' }}
+            className="mt-1.5 text-[13px]"
           />
         </Field>
       </div>
 
       <Field label="z-codes" className="mt-3">
-        <input
+        <Input
           value={draft.zCodeTags.join(', ')}
           onChange={(event) =>
             setDraft((current) =>
@@ -117,22 +118,20 @@ export default function AdminIntakeForm({ intake, onSave }: AdminIntakeFormProps
                 : current
             )
           }
-          className="mt-1.5 w-full rounded-xl border bg-black px-3 py-2 text-[13px] text-white"
-          style={{ borderColor: '#ffffff30' }}
+          className="mt-1.5 text-[13px]"
         />
       </Field>
 
       <div className="mt-4 flex justify-end">
-        <button
+        <Button
           type="button"
           onClick={handleSave}
-          className="rounded-full border px-4 py-2 text-[12px] font-medium text-white"
-          style={{ borderColor: SP_COLORS.white }}
+          className="border-white/30 bg-transparent px-4 py-2 text-[12px] font-medium text-white hover:bg-white/5"
         >
           save intake
-        </button>
+        </Button>
       </div>
-    </section>
+    </AtlasInsetCard>
   )
 }
 

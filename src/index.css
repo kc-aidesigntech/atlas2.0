@@ -1,3 +1,24 @@
+.atlas-admin-input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.atlas-admin-input:focus {
+  border-color: rgb(58 104 130 / 0.78);
+  box-shadow: 0 0 0 1px rgb(58 104 130 / 0.42), 0 0 0 6px rgb(58 104 130 / 0.14);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.atlas-admin-input option {
+  color: #111111;
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,10 +34,27 @@
     --text-base: 17px;
     --line-height-base: 1.65;
 
+    --atlas-signal-yellow: #fcc01a;
+    --atlas-signal-lucid-green: rgb(129 188 54);
+    --atlas-signal-lucid-teal: rgb(58 104 130);
+    --atlas-signal-orange: #ff6319;
+    --atlas-signal-red: #ee352e;
+    --atlas-signal-deep-green: #00933c;
+    --atlas-signal-green: #6cbe45;
+    --atlas-signal-blue: #0039a6;
+    --atlas-signal-purple: #b933ad;
+    --atlas-signal-brown: #996633;
+    --atlas-signal-steel: #808183;
+    --atlas-signal-white: #ffffff;
+
     --surface-base: #000000;
     --surface-ink: #05060a;
     --surface-muted: #090d13;
-    --surface-panel: #0f1319;
+    --surface-panel: #000000;
+    --surface-panel-soft: #111111;
+    --surface-panel-raised: #080808;
+    --surface-button: #000000;
+    --surface-button-strong: #000000;
     --surface-accent: rgba(255, 255, 255, 0.04);
     --surface-overlay: rgba(12, 18, 26, 0.9);
 
@@ -33,8 +71,9 @@
     --border-strong: rgba(255, 255, 255, 0.22);
     --input-border: rgba(148, 163, 184, 0.2);
 
-    --accent-color: #ffd700;
-    --accent-muted: rgba(255, 214, 0, 0.28);
+    --accent-color: var(--atlas-signal-lucid-green);
+    --accent-muted: color-mix(in srgb, var(--atlas-signal-lucid-green) 28%, transparent);
+    --atlas-shell-edge-buffer: clamp(0.25in, 5vw, 0.75in);
   }
 
   .dark {
@@ -74,6 +113,7 @@
 
   body,
   body * {
+    /* Brand voice standardizes lowercase copy globally; component text must opt out explicitly if needed. */
     text-transform: lowercase !important;
   }
 
@@ -139,6 +179,11 @@
 }
 
 @layer utilities {
+  .atlas-shell-edge-buffer {
+    padding-left: var(--atlas-shell-edge-buffer);
+    padding-right: var(--atlas-shell-edge-buffer);
+  }
+
   @keyframes atlasTickerMarquee {
     0% {
       transform: translateX(0);
@@ -153,6 +198,7 @@
   }
 
   .text-slate-900 {
+    /* Overrides legacy Tailwind slate palette to preserve contrast on dark atlas surfaces. */
     color: rgba(248, 250, 252, 0.98) !important;
   }
   .text-slate-800 {
@@ -213,6 +259,95 @@
   }
   .border-slate-300 {
     border-color: rgba(148, 163, 184, 0.38) !important;
+  }
+
+  .service-capacity-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    height: 24px;
+    cursor: pointer;
+  }
+
+  .service-capacity-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  .service-capacity-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    background: #f3f4f6;
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+    margin-top: -9px;
+  }
+
+  .service-capacity-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  .service-capacity-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    background: #f3f4f6;
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+  }
+
+  .atlas-sign-button {
+    position: relative;
+    overflow: hidden;
+    padding-top: calc(var(--button-radius, 10px) + 3px);
+    padding-bottom: calc(var(--button-radius, 10px) * 0.5);
+    border-color: var(--button-border-color, currentColor);
+    background-color: var(--button-fill-color, var(--surface-button));
+    transition:
+      border-color 150ms ease-out,
+      color 150ms ease-out,
+      background-color 150ms ease-out,
+      box-shadow 150ms ease-out,
+      filter 150ms ease-out;
+  }
+
+  .atlas-sign-button::before {
+    content: "";
+    position: absolute;
+    left: var(--button-line-inset, 8px);
+    right: var(--button-line-inset, 8px);
+    top: var(--button-line-top, calc(var(--button-radius, 10px) - 2px));
+    height: var(--button-line-thickness, 1.5px);
+    background: var(--button-line-color, var(--button-border-color, currentColor));
+    opacity: var(--button-line-opacity, 1);
+    pointer-events: none;
+  }
+
+  .atlas-sign-button-icon {
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1;
+  }
+
+  .atlas-sign-button-icon::before {
+    content: none;
+  }
+
+  .atlas-sign-button-icon > svg,
+  .atlas-sign-button-icon > img {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .atlas-sign-button:not(:disabled):hover,
+  .atlas-sign-button:not(:disabled):active {
+    filter: brightness(var(--button-interaction-brightness, 1.18));
   }
 }
 

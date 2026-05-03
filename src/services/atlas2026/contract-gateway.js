@@ -1,68 +1,45 @@
-import { addDoc, collection, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+import {
+  createLegacyMemoryEvent,
+  createLegacyOntologyAuditRecord,
+  createLegacyRouteRecord,
+  createLegacyRouteStepRecord,
+  saveLegacyOntologyWeights,
+  saveLegacyRenewalRoleRecord,
+  updateLegacyRouteRecord,
+  updateLegacyRouteStepRecord
+} from '@atlas/shared'
 
+// Gateway intentionally preserves legacy persistence contracts while the atlas2026 layer evolves.
+// Do not reshape payloads here unless shared contract adapters are updated in lockstep.
 export async function createRouteRecord({ db, appId, payload }) {
-  return addDoc(collection(db, `artifacts/${appId}/atlas2026/routes`), {
-    ...payload,
-    createdAt: serverTimestamp()
-  })
+  return createLegacyRouteRecord(db, payload)
 }
 
 export async function updateRouteRecord({ db, appId, routeDocId, payload }) {
-  return updateDoc(doc(db, `artifacts/${appId}/atlas2026/routes/${routeDocId}`), {
-    ...payload,
-    updatedAt: serverTimestamp()
-  })
+  return updateLegacyRouteRecord(db, routeDocId, payload)
 }
 
 export async function createMemoryEvent({ db, appId, payload }) {
-  return addDoc(collection(db, `artifacts/${appId}/atlas2026/memoryEvents`), {
-    ...payload,
-    createdAt: serverTimestamp()
-  })
+  return createLegacyMemoryEvent(db, payload)
 }
 
 export async function createRouteStepRecord({ db, appId, payload }) {
-  return addDoc(collection(db, `artifacts/${appId}/atlas2026/routeSteps`), {
-    ...payload,
-    createdAt: serverTimestamp()
-  })
+  return createLegacyRouteStepRecord(db, payload)
 }
 
 export async function updateRouteStepRecord({ db, appId, stepDocId, payload }) {
-  return updateDoc(doc(db, `artifacts/${appId}/atlas2026/routeSteps/${stepDocId}`), {
-    ...payload,
-    updatedAt: serverTimestamp()
-  })
+  return updateLegacyRouteStepRecord(db, stepDocId, payload)
 }
 
 export async function saveOntologyWeightsRecord({ db, appId, payload }) {
-  return setDoc(
-    doc(db, `artifacts/${appId}/atlas2026/ontology/weights`),
-    {
-      ...payload,
-      kind: 'weights',
-      updatedAt: serverTimestamp()
-    },
-    { merge: true }
-  )
+  return saveLegacyOntologyWeights(db, payload)
 }
 
 export async function createOntologyAuditRecord({ db, appId, payload }) {
-  return addDoc(collection(db, `artifacts/${appId}/atlas2026/ontologyAudit`), {
-    ...payload,
-    updatedAt: serverTimestamp()
-  })
+  return createLegacyOntologyAuditRecord(db, payload)
 }
 
 export async function saveRenewalRoleRecord({ db, appId, participantId, payload }) {
-  return setDoc(
-    doc(db, `artifacts/${appId}/atlas2026/renewalRoles/${participantId}`),
-    {
-      participantId,
-      ...payload,
-      updatedAt: serverTimestamp()
-    },
-    { merge: true }
-  )
+  return saveLegacyRenewalRoleRecord(db, participantId, payload)
 }
 

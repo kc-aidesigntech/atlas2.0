@@ -1,6 +1,8 @@
 import React from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
+// Situational awareness is intentionally read-mostly: it surfaces pressure/capacity
+// context before any route activation side effects occur in later workspaces.
 export default function SituationalAwarenessPage({ selectedParticipant, decisionPacket, situationalOverlay, civicBioSnapshot }) {
   const topCorridor = situationalOverlay.corridorPriorities?.[0] || null
   const primaryReadinessAlert = situationalOverlay.phaseReadinessAlerts?.[0] || null

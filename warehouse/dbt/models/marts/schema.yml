@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: dim_county
+    columns:
+      - name: county_id
+        tests: [not_null, unique]
+      - name: county_name
+        tests: [not_null]
+
+  - name: dim_partner_station
+    columns:
+      - name: station_id
+        tests: [not_null, unique]
+      - name: partner_id
+        tests: [not_null]
+
+  - name: dim_person_role_active
+    columns:
+      - name: person_id
+        tests: [not_null]
+      - name: role_key
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
+
+  - name: fact_enrollment_snapshot_daily
+    columns:
+      - name: snapshot_date
+        tests: [not_null]
+      - name: enrollment_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('fact_assignment_edges_daily')
+              field: enrollment_id
+
+  - name: fact_assignment_edges_daily
+    columns:
+      - name: snapshot_date
+        tests: [not_null]
+      - name: enrollment_id
+        tests: [not_null]
+      - name: navigator_person_id
+        tests: [not_null]
+
+  - name: fact_assessment_submissions
+    columns:
+      - name: assessment_submission_id
+        tests: [not_null, unique]
+      - name: assessment_type
+        tests:
+          - accepted_values:
+              values: ['partner_service_capacity', 'enrollee_burden', 'navigator_regulation_test', 'navigator_competency']
+
+  - name: fact_assessment_answers
+    columns:
+      - name: assessment_answer_id
+        tests: [not_null, unique]
+      - name: assessment_submission_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('fact_assessment_submissions')
+              field: assessment_submission_id

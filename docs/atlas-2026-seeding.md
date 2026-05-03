@@ -1,4 +1,4 @@
-# ATLAS 2026 Seeding Guide
+# Atlas (ATLAS) 2026 Seeding Guide
 
 Use this script to populate the canonical `atlas2026` collections used by the command center.
 
@@ -30,6 +30,6 @@ The script loads `.env.local` first, then `.env`.
 
 ## Notes
 
-- This script uses client SDK auth with anonymous sign-in.
+- This script uses client Software Development Kit (SDK) auth with anonymous sign-in.
 - It is safe for iterative development; most writes are `setDoc(..., { merge: true })`.
 

@@ -1,6 +1,10 @@
+// Canonical Atlas 2026 vocabulary shared by User Interface (UI) and decision services.
+// Treat these exports as cross-system contracts, not presentation-only constants.
 export const STABILIZATION_PHASES = ['Regulation', 'Readiness', 'Renewal']
 export const RECIPROCITY_ETHOS = 'This community takes care of me - and I take care of it.'
 
+// Canonical spec values are shared by routing, operations snapshots, and UI labels.
+// Changing keys/ordering here is a cross-system contract migration, not a local refactor.
 export const ATLAS_2026_PRINCIPLES = [
   'Navigation under pressure over exploratory analytics.',
   'System pressure modeling without person-level scoring.',
@@ -58,6 +62,19 @@ export const ROUTE_SCORING_FACTORS = {
   reversibilityWeight: 0.15,
   transferCostPenalty: 0.1,
   interferencePenalty: 0.05
+}
+
+// Keep ontology defaults in the canonical spec so decisioning hooks, seed data,
+// and governance controls share one source of truth for baseline thresholds.
+export const DEFAULT_ONTOLOGY_WEIGHTS = {
+  ...ROUTE_SCORING_FACTORS,
+  civicDiplomacyBoost: 0.08,
+  slaThresholdHours: 48,
+  interferenceMediumThreshold: 0.35,
+  interferenceHighThreshold: 0.6,
+  phaseReadinessAlertThreshold: 0.45,
+  pcfRefinementWeight: 0.6,
+  reciprocityActivationThreshold: 0.6
 }
 
 export const MEMORY_EVIDENCE_RULES = [

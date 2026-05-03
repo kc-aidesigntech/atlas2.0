@@ -1,7 +1,27 @@
 /**
- * Advanced Analytics Service for ATLAS
+ * Advanced Analytics Service for Atlas (ATLAS)
  * Calculates comprehensive metrics and insights
  */
+
+// These dimensions are treated as the canonical wellness vector across dashboards,
+// exports, and cohort/prediction calculations. Keep this list in sync everywhere
+// that averages or per-dimension views are computed.
+const WELLNESS_DIMENSIONS = [
+  'physical',
+  'emotional',
+  'social',
+  'intellectual',
+  'occupational',
+  'environmental',
+  'financial',
+  'spiritual'
+]
+
+// Percent helper centralizes "empty dataset => 0" behavior so each metric
+// cannot accidentally diverge on divide-by-zero handling.
+function safePercent(part, total) {
+  return total > 0 ? Math.round((part / total) * 100) : 0
+}
 
 // ============================================================================
 // CORE ANALYTICS CALCULATIONS
@@ -59,14 +79,12 @@ export function calculateDashboardAnalytics(enrollees, referrals) {
 function calculateAverageWellness(enrollees) {
   if (enrollees.length === 0) return 0
   
-  const dimensions = ['physical', 'emotional', 'social', 'intellectual', 'occupational', 'environmental', 'financial', 'spiritual']
-  
   let totalScore = 0
   let scoreCount = 0
   
   enrollees.forEach(enrollee => {
     if (enrollee.riskProfile?.wellnessScores) {
-      dimensions.forEach(dim => {
+      WELLNESS_DIMENSIONS.forEach(dim => {
         const score = enrollee.riskProfile.wellnessScores[dim]
         if (typeof score === 'number') {
           totalScore += score
@@ -85,10 +103,9 @@ function calculateAverageWellness(enrollees) {
  * @returns {object} Dimension averages
  */
 function calculateWellnessDimensions(enrollees) {
-  const dimensions = ['physical', 'emotional', 'social', 'intellectual', 'occupational', 'environmental', 'financial', 'spiritual']
   const averages = {}
   
-  dimensions.forEach(dim => {
+  WELLNESS_DIMENSIONS.forEach(dim => {
     const scores = enrollees
       .map(e => e.riskProfile?.wellnessScores?.[dim])
       .filter(score => typeof score === 'number')
@@ -118,9 +135,9 @@ function calculateRiskDistribution(enrollees) {
     tier1,
     tier2,
     tier3,
-    tier1Percent: Math.round((tier1 / total) * 100),
-    tier2Percent: Math.round((tier2 / total) * 100),
-    tier3Percent: Math.round((tier3 / total) * 100)
+    tier1Percent: safePercent(tier1, total),
+    tier2Percent: safePercent(tier2, total),
+    tier3Percent: safePercent(tier3, total)
   }
 }
 
@@ -232,9 +249,9 @@ function analyzeReferrals(referrals) {
  * @returns {object} Trend analysis
  */
 function calculateTrends(enrollees) {
-  // Calculate improvement/decline trends
-  // This would ideally look at historical data
-  // For now, we'll calculate current vs average
+  // This trend is deliberately cohort-relative (current score vs cohort mean)
+  // and not a longitudinal progression model. Keep these semantics stable so
+  // downstream interpretations do not assume a time-series forecast.
   
   const avgWellness = calculateAverageWellness(enrollees)
   
@@ -257,9 +274,9 @@ function calculateTrends(enrollees) {
     improving,
     stable,
     declining,
-    improvingPercent: enrollees.length > 0 ? Math.round((improving / enrollees.length) * 100) : 0,
-    stablePercent: enrollees.length > 0 ? Math.round((stable / enrollees.length) * 100) : 0,
-    decliningPercent: enrollees.length > 0 ? Math.round((declining / enrollees.length) * 100) : 0
+    improvingPercent: safePercent(improving, enrollees.length),
+    stablePercent: safePercent(stable, enrollees.length),
+    decliningPercent: safePercent(declining, enrollees.length)
   }
 }
 
@@ -320,6 +337,7 @@ export function analyzeByCohort(enrollees, cohortType) {
     case 'zcode':
       return analyzeByZCode(enrollees)
     default:
+      // Unknown cohort keys resolve to an empty shape to keep chart callers fail-soft.
       return {}
   }
 }
@@ -441,6 +459,7 @@ export function predictRiskTrend(enrollee) {
 
 function predictRecommendedTier(wellness, zCodeCount, currentTier) {
   // Simple tier recommendation logic
+  // Current tier is passed for future policy-aware tuning; keep param for Application Programming Interface (API) stability.
   if (wellness > 70 && zCodeCount <= 2) return 1
   if (wellness < 40 || zCodeCount >= 5) return 3
   return 2
@@ -454,8 +473,7 @@ function calculateEnrolleeWellness(enrollee) {
   const scores = enrollee.riskProfile?.wellnessScores
   if (!scores) return 0
   
-  const dimensions = ['physical', 'emotional', 'social', 'intellectual', 'occupational', 'environmental', 'financial', 'spiritual']
-  const values = dimensions.map(dim => scores[dim]).filter(v => typeof v === 'number')
+  const values = WELLNESS_DIMENSIONS.map(dim => scores[dim]).filter(v => typeof v === 'number')
   
   return values.length > 0
     ? values.reduce((sum, score) => sum + score, 0) / values.length

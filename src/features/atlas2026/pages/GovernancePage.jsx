@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { canRolePerform } from '@/core/atlas2026/policy'
 
+// Governance settings are global scoring controls; edits here affect all subsequent
+// route recommendations and readiness alerts in Atlas decisioning.
 const WEIGHT_FIELDS = [
   'coverageWeight',
   'phaseAlignmentWeight',
@@ -48,6 +50,8 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
   }, [ontologyWeights])
 
   const onFieldChange = (field, value) => {
+    // Numeric coercion keeps persisted ontology weights consistent with downstream
+    // scoring math that assumes numbers rather than string form inputs.
     setLocalWeights((current) => ({
       ...current,
       [field]: Number(value)
@@ -170,6 +174,8 @@ export default function GovernancePage({ selectedRole, ontologyWeights, ontology
                   ...localWeights,
                   slaThresholdHours,
                   interferenceMediumThreshold,
+                  // High threshold cannot be lower than medium threshold, otherwise
+                  // "high risk" detections would become unreachable or contradictory.
                   interferenceHighThreshold: Math.max(interferenceHighThreshold, interferenceMediumThreshold),
                   phaseReadinessAlertThreshold,
                   pcfRefinementWeight,

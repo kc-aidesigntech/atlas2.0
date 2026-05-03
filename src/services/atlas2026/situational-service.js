@@ -1,11 +1,8 @@
 import { PRESSURE_DOMAINS } from '@/core/atlas2026/canonical-spec'
-
-function average(values) {
-  if (!values.length) return 0
-  return values.reduce((acc, value) => acc + value, 0) / values.length
-}
+import { average, toPhaseReadinessAlert, toRoundedNumber } from '@/services/atlas2026/snapshot-helpers'
 
 export function buildSituationalOverlay({ participants, capacityTopology, phaseReadinessAlertThreshold = 0.45 }) {
+  // Domain pressure and capacity use the same ontology keys so corridor gaps remain comparable.
   const domainPressure = PRESSURE_DOMAINS.map((domain) => {
     const all = participants
       .map((participant) => participant.pressureVectors?.find((vector) => vector.domain === domain.id)?.severity ?? 0)
@@ -13,7 +10,7 @@ export function buildSituationalOverlay({ participants, capacityTopology, phaseR
     return {
       domain: domain.id,
       label: domain.label,
-      pressure: Number(average(all).toFixed(3))
+      pressure: toRoundedNumber(average(all), 3)
     }
   })
 
@@ -25,13 +22,13 @@ export function buildSituationalOverlay({ participants, capacityTopology, phaseR
         Array.isArray(node.domainCoverage) && node.domainCoverage.includes(domain.id)
     )
     const capacity = average(matching.map((node) => node.coverageScore ?? 0.5))
-    return { domain: domain.id, capacity: Number(capacity.toFixed(3)) }
+    return { domain: domain.id, capacity: toRoundedNumber(capacity, 3) }
   })
 
   const corridorPriorities = domainPressure
     .map((entry) => {
       const capacity = capacityByDomain.find((node) => node.domain === entry.domain)?.capacity ?? 0.5
-      const gap = Number((entry.pressure - capacity).toFixed(3))
+      const gap = toRoundedNumber(entry.pressure - capacity, 3)
       return {
         domain: entry.domain,
         label: entry.label,
@@ -49,20 +46,17 @@ export function buildSituationalOverlay({ participants, capacityTopology, phaseR
     priority: corridor.priority,
     pressure: corridor.pressure,
     capacity: corridor.capacity,
-    lat: Number((34.05 + index * 0.08).toFixed(3)),
-    lng: Number((-118.25 + index * 0.06).toFixed(3))
+    // Coordinates are deterministic placeholders for User Interface (UI) rendering until Geographic Information System (GIS) integration is live.
+    lat: toRoundedNumber(34.05 + index * 0.08, 3),
+    lng: toRoundedNumber(-118.25 + index * 0.06, 3)
   }))
 
   const phaseReadinessAlerts = participants
     .filter((participant) => (participant.phaseReadiness ?? 1) < phaseReadinessAlertThreshold)
     .sort((a, b) => (a.phaseReadiness ?? 1) - (b.phaseReadiness ?? 1))
     .slice(0, 8)
-    .map((participant) => ({
-      participantId: participant.participantId,
-      countyId: participant.countyId || 'unknown',
-      currentPhase: participant.currentPhase,
-      phaseReadiness: Number((participant.phaseReadiness ?? 0).toFixed(3))
-    }))
+    // Shared alert shaper keeps operations and situational overlays contract-identical.
+    .map(toPhaseReadinessAlert)
 
   return {
     domainPressure,

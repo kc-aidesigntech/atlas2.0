@@ -1,6 +1,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
+// Card defaults encode atlas dark-surface semantics; sections below compose that base without restyling callers.
 const Card = React.forwardRef(({ className, ...props }, ref) => (
   <div
     ref={ref}

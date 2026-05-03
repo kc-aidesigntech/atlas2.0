@@ -1,6 +1,12 @@
+/**
+ * Decorative left-rail SVG motif used by single-pane layouts to preserve the
+ * Atlas (ATLAS) transit-line visual identity without introducing runtime dependencies.
+ */
 import React from 'react'
 
 export default function LeftRailLane() {
+  // Pure presentational geometry: no props/state so downstream screens can
+  // embed this lane as a stable background element.
   return (
     <div className="absolute -left-[8px] bottom-0 top-[-20px] w-[92px]">
       <svg className="h-full w-full" viewBox="100 0 140 1080" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" aria-hidden>

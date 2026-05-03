@@ -1,0 +1,28 @@
+---
+description: Require maintainability-focused code comments
+alwaysApply: true
+---
+
+# Commenting And Maintainability Standard
+
+All production code changes must include maintainability-oriented comments.
+
+- Document intent and reasoning, not obvious syntax.
+- Add comments for:
+  - Non-trivial business rules, data transforms, and fallback logic
+  - Async flows, side effects, cleanup, and state transitions
+  - Cross-system mappings (UI <-> API <-> persistence contracts)
+  - Temporary constraints and known follow-up work
+- Keep comments close to the code they explain.
+- Update comments whenever behavior changes.
+- Do not leave undocumented complex logic.
+
+## Examples
+
+```ts
+// Normalize partner identity with safe fallbacks so referrals remain actionable.
+const partnerName = input.partnerName.trim() || account.organization || 'community partner'
+
+// Revoke object URLs on unmount to avoid leaking browser memory.
+return () => URL.revokeObjectURL(previewUrl)
+```

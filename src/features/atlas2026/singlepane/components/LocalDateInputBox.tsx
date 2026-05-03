@@ -1,4 +1,5 @@
 import React from 'react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '../theme'
 
 interface LocalDateInputBoxProps {
@@ -8,6 +9,8 @@ interface LocalDateInputBoxProps {
   onChange: (nextValue: string) => void
   onSave: () => void
   onCancel: () => void
+  onDelete?: (() => void) | null
+  deleteLabel?: string
 }
 
 export default function LocalDateInputBox({
@@ -16,7 +19,9 @@ export default function LocalDateInputBox({
   error = null,
   onChange,
   onSave,
-  onCancel
+  onCancel,
+  onDelete = null,
+  deleteLabel = 'delete'
 }: LocalDateInputBoxProps) {
   return (
     <div
@@ -29,6 +34,7 @@ export default function LocalDateInputBox({
       <input
         type="date"
         value={value}
+        // Keep the control fully controlled so parent editors can validate before committing side effects.
         onChange={(event) => onChange(event.target.value)}
         className="mt-2 w-full rounded-[12px] border px-3 py-2 text-[13px] text-white"
         style={{ borderColor: '#ffffff35', backgroundColor: '#000000' }}
@@ -39,22 +45,29 @@ export default function LocalDateInputBox({
         </small>
       ) : null}
       <div className="mt-3 flex items-center justify-end gap-2">
-        <button
-          type="button"
+        {onDelete ? (
+          <AtlasTextButton
+            onClick={onDelete}
+            className="px-3 py-1 text-[11px]"
+            style={{ ['--button-border-color' as const]: `${SP_COLORS.red}90`, color: SP_COLORS.red } as React.CSSProperties}
+          >
+            {deleteLabel}
+          </AtlasTextButton>
+        ) : null}
+        <AtlasTextButton
           onClick={onCancel}
-          className="rounded-full border px-3 py-1 text-[11px] text-white"
-          style={{ borderColor: '#ffffff30' }}
+          className="px-3 py-1 text-[11px] text-white"
+          style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
         >
           cancel
-        </button>
-        <button
-          type="button"
+        </AtlasTextButton>
+        <AtlasTextButton
           onClick={onSave}
-          className="rounded-full border px-3 py-1 text-[11px]"
-          style={{ borderColor: `${SP_COLORS.yellow}90`, color: SP_COLORS.yellow }}
+          className="px-3 py-1 text-[11px]"
+          style={{ ['--button-border-color' as const]: `${SP_COLORS.yellow}90`, color: SP_COLORS.yellow } as React.CSSProperties}
         >
           save
-        </button>
+        </AtlasTextButton>
       </div>
     </div>
   )

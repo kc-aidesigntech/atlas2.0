@@ -1,86 +1,157 @@
+/**
+ * Enrollee profile header panel with avatar handling and parent Z-code badges
+ * that drive drill-in selection for resolution workflows.
+ */
 import React from 'react'
+import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
+import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
+import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import type { EnrolleeProfile } from '../types'
 import { SP_COLORS } from '../theme'
 
+const elenaRodriguezPortraitUrl = new URL('../../../../../assets/portraits/elena-rodriguez.jpeg', import.meta.url).href
+
 interface ProfilePanelProps {
   enrollee: EnrolleeProfile
-  onSelectZCode?: (zCode: string) => void
+  isUploadingAvatar?: boolean
+  avatarUploadError?: string | null
+  onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
+  onSelectZCode?: (selection: { parentCode: string; childCodes: string[] }) => void
   enrollmentStartLabel?: string
+  onOpenBurdenSurvey?: () => void
+  burdenSurveyLabel?: string
 }
 
-const TAG_COLORS_BY_GROUP: Record<string, string> = {
-  '55': SP_COLORS.yellow,
-  '56': SP_COLORS.orange,
-  '57': SP_COLORS.red,
-  '59': SP_COLORS.deepGreen,
-  '60': SP_COLORS.blue,
-  '62': SP_COLORS.purple,
-  '63': SP_COLORS.brown,
-  '64': SP_COLORS.green,
-  '65': SP_COLORS.steel,
-  '75': SP_COLORS.white
+interface ParentZCodeGroup {
+  parentCode: string
+  childCodes: string[]
 }
 
-function getInitials(fullName: string) {
-  const parts = fullName
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-  if (!parts.length) return 'A'
-  return parts.map((part) => part[0]?.toUpperCase() || '').join('') || 'A'
+/**
+ * Parent-code normalization keeps completion tracking stable even when Application Programming Interface (API) and
+ * User Interface (UI) surfaces send mixed-case values (`z12` vs `Z12`).
+ */
+function normalizeParentCode(value: string) {
+  const normalized = getParentZCode(value) || value.trim().toLowerCase()
+  return normalized.replace(/^z/i, 'Z')
 }
 
-function createFallbackAvatar(fullName: string) {
-  const initials = getInitials(fullName)
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
-      <rect width="300" height="300" rx="56" fill="#111111" />
-      <circle cx="150" cy="150" r="114" fill="#1d1d1d" stroke="#ffffff" stroke-width="6" />
-      <text x="150" y="170" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="96" font-weight="700" fill="#ffffff">${initials}</text>
-    </svg>
-  `.trim()
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+function normalizeZCode(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.toLowerCase().startsWith('z') ? trimmed.toLowerCase() : `z${trimmed.toLowerCase()}`
 }
 
-export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartLabel }: ProfilePanelProps) {
-  const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatar(enrollee.fullName), [enrollee.fullName])
-  const avatarSrc = enrollee.avatarUrl || fallbackAvatarSrc
+function getParentZCode(value: string) {
+  const normalized = normalizeZCode(value)
+  if (!normalized) return null
+  const group = normalized.match(/^z(\d{2})/)
+  if (!group) return null
+  return `z${group[1]}`
+}
+
+/**
+ * The profile header shows one badge per parent Z-code while preserving all
+ * concrete child codes for drill-in callbacks.
+ */
+function buildParentZCodeGroups(tags: string[]): ParentZCodeGroup[] {
+  const grouped = new Map<string, string[]>()
+  for (const tag of tags) {
+    const normalized = normalizeZCode(tag)
+    const parentCode = getParentZCode(tag)
+    if (!normalized || !parentCode) continue
+    if (!grouped.has(parentCode)) {
+      grouped.set(parentCode, [normalized])
+      continue
+    }
+    const existing = grouped.get(parentCode)!
+    if (!existing.includes(normalized)) {
+      existing.push(normalized)
+    }
+  }
+  return Array.from(grouped.entries()).map(([parentCode, childCodes]) => ({ parentCode, childCodes }))
+}
+
+export default function ProfilePanel({
+  enrollee,
+  isUploadingAvatar = false,
+  avatarUploadError = null,
+  onReplaceAvatar,
+  onSelectZCode,
+  enrollmentStartLabel,
+  onOpenBurdenSurvey,
+  burdenSurveyLabel = 'open burden survey'
+}: ProfilePanelProps) {
+  const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(enrollee.fullName), [enrollee.fullName])
+  // Preserve legacy demo portrait behavior while still supporting
+  // the standard uploader + fallback path for all other enrollees.
+  const isElenaRodriguez = enrollee.fullName.trim().toLowerCase() === 'elena rodriguez'
+  const avatarSrc = enrollee.avatarUrl || (isElenaRodriguez ? elenaRodriguezPortraitUrl : fallbackAvatarSrc)
+  // Prefer structured active details when present; fallback tags keep older
+  // profile payloads usable without changing rendering behavior.
+  const activeZCodeTags = React.useMemo(
+    () => (enrollee.activeZCodeDetails.length ? enrollee.activeZCodeDetails.map((detail) => detail.zCode) : enrollee.zCodeTags),
+    [enrollee.activeZCodeDetails, enrollee.zCodeTags]
+  )
+  const parentGroups = React.useMemo(() => buildParentZCodeGroups(activeZCodeTags), [activeZCodeTags])
+  const completedParentCodes = React.useMemo(
+    () => new Set(enrollee.completedParentCodes.map((code) => normalizeParentCode(code))),
+    [enrollee.completedParentCodes]
+  )
 
   return (
     <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
-      <div className="mx-auto flex w-[150px] shrink-0 flex-col items-start sm:mx-0">
-        <div
-          className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-white"
-          style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
-        >
-          <img
-            src={avatarSrc}
-            alt={`${enrollee.fullName} profile`}
-            className="h-full w-full object-cover"
-            onError={(event) => {
-              if (event.currentTarget.src !== fallbackAvatarSrc) {
-                event.currentTarget.src = fallbackAvatarSrc
-              }
-            }}
-          />
-        </div>
+      <div>
+        <AtlasImageUploadTile
+          imageSrc={avatarSrc}
+          alt={`${enrollee.fullName} profile`}
+          onSelectFile={onReplaceAvatar}
+          disabled={!onReplaceAvatar}
+          buttonTitle={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
+          statusText={isUploadingAvatar ? 'uploading image...' : null}
+          errorText={avatarUploadError}
+          onImageError={(event) => {
+            // This handler guarantees we always land on a resolvable source so
+            // broken avatar Uniform Resource Locators (URLs) never leave an empty image frame in the panel.
+            if (isElenaRodriguez && event.currentTarget.src !== elenaRodriguezPortraitUrl) {
+              event.currentTarget.src = elenaRodriguezPortraitUrl
+              return
+            }
+            if (event.currentTarget.src !== fallbackAvatarSrc) {
+              event.currentTarget.src = fallbackAvatarSrc
+            }
+          }}
+        />
         <div className="mt-4 flex flex-wrap items-center gap-[10px]">
-          {enrollee.zCodeTags.map((tag, index) => {
-            const group = tag.replace(/^z/i, '').slice(0, 2)
-            const bgColor = TAG_COLORS_BY_GROUP[group] || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]
-            const useLightText = [SP_COLORS.blue, SP_COLORS.purple, SP_COLORS.deepGreen, SP_COLORS.red].includes(bgColor)
+          {parentGroups.map((group, index) => {
+            const bgColor = getZCodeParentColor(group.parentCode) || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]
+            const useLightText = usesLightTextOnZCodeColor(bgColor)
+            const isCompleted = completedParentCodes.has(normalizeParentCode(group.parentCode))
             return (
-              <span
-                key={tag}
-                className={`inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[30px] font-bold ${
+              <button
+                key={group.parentCode}
+                type="button"
+                className={`relative inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[30px] font-bold ${
                   useLightText ? 'text-white' : 'text-black'
                 }`}
                 style={{ backgroundColor: bgColor }}
-                onClick={() => onSelectZCode?.(tag)}
+                onClick={() =>
+                  onSelectZCode?.({
+                    parentCode: group.parentCode,
+                    childCodes: group.childCodes
+                  })
+                }
               >
-                {tag.replace(/^z/i, '')}
-              </span>
+                {isCompleted ? (
+                  <span
+                    className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold"
+                    style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
+                  >
+                    ✓
+                  </span>
+                ) : null}
+                {group.parentCode.replace(/^z/i, '')}
+              </button>
             )
           })}
         </div>
@@ -98,6 +169,16 @@ export default function ProfilePanel({ enrollee, onSelectZCode, enrollmentStartL
           N: {enrollee.assignedNavigator || 'unassigned'}
         </small>
         <small className="block text-[13px] text-white">Enrollment start: {enrollmentStartLabel || 'not recorded'}</small>
+        {onOpenBurdenSurvey ? (
+          <button
+            type="button"
+            onClick={onOpenBurdenSurvey}
+            className="mt-3 inline-flex items-center rounded-full border px-4 py-2 text-[12px] font-medium"
+            style={{ borderColor: 'var(--atlas-signal-lucid-green)', backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg }}
+          >
+            {burdenSurveyLabel}
+          </button>
+        ) : null}
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ function scoreRoute(route, participantPhaseIndex, civicDiplomacyBoost = 0.08) {
   const reversibility = route.reversibilitySupport ?? 0.6
   const transferCost = route.transferCost ?? 0.25
   const interference = route.interferenceRisk ?? 0.2
+  // Civic diplomacy is a strategic tie-breaker, not a replacement for safety constraints.
   const diplomacyBonus = route.routeClass === 'civicDiplomacy' ? civicDiplomacyBoost : 0
 
   const composite =
@@ -98,6 +99,7 @@ export function generateRoutePlan({
     const interference = diagnoseInterference(route, activeRoutes, interferenceThresholds)
     const { score, phaseAlignment } = scoreRoute(route, participantPhaseIndex, civicDiplomacyBoost)
 
+    // A route is blocked when any hard gate fails; scoring still runs so analysts can inspect near-misses.
     const blocked = !phaseGate.pass || !dependencyGate.pass || interference.risk === 'high'
 
     return {

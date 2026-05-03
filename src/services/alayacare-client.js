@@ -1,97 +1,50 @@
 /**
- * AlayaCare API Client
+ * AlayaCare Application Programming Interface (API) Client
  * Handles authentication and API requests to AlayaCare platform
  */
 
 class AlayaCareClient {
   constructor() {
-    this.clientId = import.meta.env.VITE_ALAYACARE_CLIENT_ID
-    this.clientSecret = import.meta.env.VITE_ALAYACARE_CLIENT_SECRET
-    this.apiBase = import.meta.env.VITE_ALAYACARE_API_BASE || 'https://api.alayacare.com/v1'
+    this.brokerBaseUrl = (import.meta.env.VITE_ALAYACARE_BROKER_URL || '').replace(/\/+$/, '')
     this.tenantId = import.meta.env.VITE_ALAYACARE_TENANT_ID
-    this.enabled = import.meta.env.VITE_ALAYACARE_ENABLED === 'true'
-    
-    this.accessToken = null
-    this.tokenExpiry = null
+    this.enabled = import.meta.env.VITE_ALAYACARE_ENABLED === 'true' && Boolean(this.brokerBaseUrl)
   }
 
   /**
    * Check if AlayaCare integration is enabled
    */
   isEnabled() {
-    return this.enabled && this.clientId && this.clientSecret
-  }
-
-  /**
-   * Authenticate with AlayaCare OAuth 2.0
-   * @returns {Promise<string>} Access token
-   */
-  async authenticate() {
-    if (!this.isEnabled()) {
-      throw new Error('AlayaCare integration is not enabled or configured')
-    }
-
-    // Check if we have a valid token
-    if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
-      return this.accessToken
-    }
-
-    console.log('🔐 Authenticating with AlayaCare...')
-
-    try {
-      const response = await fetch(`${this.apiBase}/oauth/token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          grant_type: 'client_credentials',
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-          scope: 'clients.read assessments.read care_plans.read clinical.read'
-        })
-      })
-
-      if (!response.ok) {
-        const error = await response.text()
-        throw new Error(`Authentication failed: ${response.status} ${error}`)
-      }
-
-      const data = await response.json()
-      this.accessToken = data.access_token
-      // Set expiry to 5 minutes before actual expiry for safety
-      this.tokenExpiry = Date.now() + (data.expires_in - 300) * 1000
-
-      console.log('✅ Authenticated with AlayaCare')
-      return this.accessToken
-
-    } catch (error) {
-      console.error('❌ AlayaCare authentication error:', error)
-      throw error
-    }
+    return this.enabled
   }
 
   /**
    * Make authenticated API request
-   * @param {string} endpoint - API endpoint (relative to base URL)
+   * @param {string} endpoint - API endpoint (relative to base Uniform Resource Locator (URL))
    * @param {object} options - Fetch options
    * @returns {Promise<any>} Response data
    */
   async request(endpoint, options = {}) {
-    const token = await this.authenticate()
+    if (!this.isEnabled()) {
+      throw new Error('AlayaCare integration is not enabled or broker URL is missing')
+    }
 
-    const response = await fetch(`${this.apiBase}${endpoint}`, {
+    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers
+    }
+    if (this.tenantId) {
+      headers['X-Tenant-ID'] = this.tenantId
+    }
+
+    const response = await fetch(`${this.brokerBaseUrl}${normalizedEndpoint}`, {
       ...options,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': this.tenantId,
-        ...options.headers
-      }
+      headers
     })
 
     if (!response.ok) {
       const error = await response.text()
+      // Surface raw body text because AlayaCare returns useful diagnostics outside JavaScript Object Notation (JSON) envelopes.
       throw new Error(`API request failed: ${response.status} ${error}`)
     }
 
@@ -115,7 +68,7 @@ class AlayaCareClient {
   }
 
   /**
-   * Get client by ID
+   * Get client by Identifier (ID)
    * @param {string} clientId - AlayaCare client ID
    * @returns {Promise<object>} Client details
    */
@@ -151,6 +104,7 @@ class AlayaCareClient {
     const queryString = params.toString()
     const endpoint = `/clients/${clientId}/assessments${queryString ? `?${queryString}` : ''}`
     
+    // Always return arrays to keep caller rendering logic null-safe.
     const data = await this.request(endpoint)
     return data.assessments || []
   }

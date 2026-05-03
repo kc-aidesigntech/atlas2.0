@@ -4,7 +4,7 @@ This is the implementation map used for the clean-break transition.
 
 ## Decomposition Performed
 
-1. Retired monolithic UI entrypoint in `src/App.jsx` and replaced with `src/features/atlas2026/AtlasShell.jsx`.
+1. Retired monolithic User Interface (UI) entrypoint in `src/App.jsx` and replaced with `src/features/atlas2026/AtlasShell.jsx`.
 2. Established decision-core modules under `src/core/atlas2026/`:
    - `canonical-spec.js`
    - `data-model.js`

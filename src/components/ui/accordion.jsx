@@ -3,6 +3,8 @@ import * as AccordionPrimitive from "@radix-ui/react-accordion"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+// Thin wrapper around Radix primitives so accordion behavior stays accessible
+// while project-specific styling remains centralized.
 const Accordion = AccordionPrimitive.Root
 
 const AccordionItem = React.forwardRef(({ className, ...props }, ref) => (

@@ -1,17 +1,30 @@
 {
-  "name": "atlas-cie-portal",
+  "name": "atlas-monorepo",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite",
+    "dev:web": "vite",
+    "dev:mobile": "npm run start --workspace @atlas/mobile",
     "build": "vite build",
+    "build:web": "vite build",
     "preview": "vite preview",
+    "mobile:start": "npm run start --workspace @atlas/mobile",
+    "mobile:android": "npm run android --workspace @atlas/mobile",
+    "mobile:ios": "npm run ios --workspace @atlas/mobile",
+    "mobile:web": "npm run web --workspace @atlas/mobile",
     "start": "serve -s dist -l $PORT",
     "heroku-postbuild": "npm run build",
     "data:partner-capabilities": "node scripts/build-partner-capabilities.js",
     "test:route-ranking": "node scripts/test-route-ranking.js"
   },
   "dependencies": {
+    "@atlas/shared": "*",
     "@radix-ui/react-accordion": "^1.1.2",
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-avatar": "^1.0.4",
@@ -21,7 +34,7 @@
     "@radix-ui/react-select": "^2.0.0",
     "@radix-ui/react-tabs": "^1.0.4",
     "@react-google-maps/api": "^2.20.7",
-    "@supabase/supabase-js": "^2.101.1",
+    "@supabase/supabase-js": "^2.104.0",
     "@visx/group": "^3.12.0",
     "@visx/shape": "^3.12.0",
     "class-variance-authority": "^0.7.0",

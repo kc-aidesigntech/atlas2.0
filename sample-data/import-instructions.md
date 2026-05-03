@@ -6,11 +6,11 @@
 
 1. Go to Firebase Console → Firestore Database
 2. Click **"Start collection"**
-3. Collection ID: `artifacts/atlas-demo/public/data/resources`
+3. Collection Identifier (ID): `artifacts/atlas-demo/public/data/resources`
 4. Click **"Next"**
 5. For each resource in `resources.json`, click **"Add document"**:
    - Auto-generate Document ID
-   - Copy/paste the fields from the JSON
+   - Copy/paste the fields from the JavaScript Object Notation (JSON)
 
 **OR** Click on the collection and use **"Add document"** for each resource.
 
@@ -18,7 +18,7 @@
 
 1. Create collection: `artifacts/atlas-demo/public/data/enrollees`
 2. Add 3 documents from `enrollees.json`
-3. **IMPORTANT:** Note the auto-generated document IDs
+3. **IMPORTANT:** Note the auto-generated document Identifiers (IDs)
 
 ### Step 3: Update Your User Profile
 
@@ -34,7 +34,7 @@
 
 ---
 
-## Option 2: Firebase CLI (Faster - If You Want to Script It)
+## Option 2: Firebase Command-Line Interface (CLI) (Faster - If You Want to Script It)
 
 ```bash
 cd /Users/kc_ai-designtech/atlas

@@ -1,10 +1,5 @@
 import { STEP_STATUS } from '@/services/atlas2026/step-graph'
-
-function toMillis(timestamp) {
-  if (!timestamp) return 0
-  if (typeof timestamp.toMillis === 'function') return timestamp.toMillis()
-  return (timestamp.seconds || 0) * 1000
-}
+import { toMillis } from '@/services/atlas2026/snapshot-helpers'
 
 export function buildExecutionSnapshot({
   routes,
@@ -15,6 +10,8 @@ export function buildExecutionSnapshot({
   selectedParticipant,
   phaseReadinessAlertThreshold = 0.45
 }) {
+  // All downstream queues/timelines are participant-scoped; cross-participant bleed here would
+  // create false blockers and incorrect Service Level Agreement (SLA) pressure in operator workflows.
   const scopedRoutes = routes.filter((route) => route.participantId === participantId)
   const scopedSteps = steps.filter((step) => step.participantId === participantId)
   const scopedEvents = memoryEvents.filter((event) => event.participantId === participantId)

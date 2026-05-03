@@ -1,5 +1,5 @@
 /**
- * AlayaCare to ATLAS Data Mapping Utilities
+ * AlayaCare to Atlas (ATLAS) Data Mapping Utilities
  * Converts AlayaCare data structures to ATLAS format
  */
 
@@ -8,11 +8,13 @@
 // ============================================================================
 
 /**
- * Calculate ATLAS risk tier from LS/CMI total score
+ * Calculate ATLAS risk tier from Level of Service and Case Management Inventory (LS/CMI) total score
  * @param {number} lscmiTotalScore - Total LS/CMI score (0-43)
  * @returns {number} ATLAS risk tier (1-3)
  */
 export function calculateRiskTier(lscmiTotalScore) {
+  // Tier 2 intentionally covers two adjacent LS/CMI bands (12-31). Downstream
+  // workflows treat both as the same service-intensity bucket.
   if (lscmiTotalScore <= 11) return 1  // Low Risk
   if (lscmiTotalScore <= 20) return 2  // Moderate Risk
   if (lscmiTotalScore <= 31) return 2  // Moderate-High Risk (still Tier 2)
@@ -36,7 +38,7 @@ export function calculateWellnessScores(assessment) {
     0, 100, 0, 100
   )
   
-  // Emotional Wellness (from PHQ-9, GAD-7)
+  // Emotional Wellness (from Patient Health Questionnaire-9 (PHQ-9), Generalized Anxiety Disorder 7-item scale (GAD-7))
   const phq9 = assessment.phq9_score || 0  // 0-27 scale (higher = worse)
   const gad7 = assessment.gad7_score || 0  // 0-21 scale (higher = worse)
   scores.emotional = Math.round(100 - ((phq9 / 27 + gad7 / 21) / 2 * 100))
@@ -73,6 +75,7 @@ export function calculateWellnessScores(assessment) {
 
 // Helper mapping functions
 function mapScoreToPercentile(value, minIn, maxIn, minOut, maxOut) {
+  // Linear scaling keeps source form migrations predictable as long as min/max ranges remain stable.
   return Math.round(((value - minIn) / (maxIn - minIn)) * (maxOut - minOut) + minOut)
 }
 
@@ -195,6 +198,7 @@ export function mapClientToEnrollee(alayaCareClient) {
       firstName: alayaCareClient.firstName || alayaCareClient.first_name,
       lastName: alayaCareClient.lastName || alayaCareClient.last_name,
       dob: alayaCareClient.dateOfBirth || alayaCareClient.date_of_birth,
+      // Placeholder image ensures roster cards render even when upstream profile photos are missing.
       photoUrl: alayaCareClient.photoUrl || generatePlaceholderPhoto(
         alayaCareClient.firstName, 
         alayaCareClient.lastName
@@ -320,6 +324,7 @@ export function formatAssessmentForTimeline(assessment) {
 export function createAssessmentTimeline(assessments) {
   return assessments
     .map(formatAssessmentForTimeline)
+    // Oldest-first ordering preserves chart continuity for trend lines.
     .sort((a, b) => new Date(a.date) - new Date(b.date))
 }
 

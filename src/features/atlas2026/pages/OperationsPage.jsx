@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { downloadCsv } from '@/services/atlas2026/export-service'
 
+// Operations page summarizes county-level pressure signals into one operator-facing
+// decision contract: triage now, then export evidence for leadership review.
 function StatBlock({ label, value, hint }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950 p-3">
@@ -21,11 +23,10 @@ function renderKeyValueRows(data = {}) {
   ))
 }
 
-export default function OperationsPage({ operationsSnapshot, countyComparisons, selectedCountyId }) {
-  const { totals, participantByPhase, routesByStatus, stepsByStatus, risk, activity, sla, blockerQueue, readinessAlerts } =
-    operationsSnapshot
-  const reciprocity = operationsSnapshot.reciprocity
-  const buildWeeklyReportRows = () => [
+function buildWeeklyReportRows({ selectedCountyId, totals, risk, activity, sla, reciprocity, countyComparisons }) {
+  // Export rows intentionally flatten nested snapshot objects so downstream Comma-Separated Values (CSV) consumers
+  // (email, BI tools, spreadsheets) do not need Atlas-specific parsing logic.
+  return [
     {
       rowType: 'summary',
       scope: selectedCountyId,
@@ -62,6 +63,12 @@ export default function OperationsPage({ operationsSnapshot, countyComparisons, 
       slaThresholdHours: sla.thresholdHours
     }))
   ]
+}
+
+export default function OperationsPage({ operationsSnapshot, countyComparisons, selectedCountyId }) {
+  const { totals, participantByPhase, routesByStatus, stepsByStatus, risk, activity, sla, blockerQueue, readinessAlerts } =
+    operationsSnapshot
+  const reciprocity = operationsSnapshot.reciprocity
 
   return (
     <div className="space-y-4">
@@ -147,7 +154,23 @@ export default function OperationsPage({ operationsSnapshot, countyComparisons, 
             <Button variant="outline" onClick={() => downloadCsv(countyComparisons, 'atlas-county-comparisons.csv')}>
               Export County Comparisons CSV
             </Button>
-            <Button variant="outline" onClick={() => downloadCsv(buildWeeklyReportRows(), 'atlas-weekly-ops-report.csv')}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadCsv(
+                  buildWeeklyReportRows({
+                    selectedCountyId,
+                    totals,
+                    risk,
+                    activity,
+                    sla,
+                    reciprocity,
+                    countyComparisons
+                  }),
+                  'atlas-weekly-ops-report.csv'
+                )
+              }
+            >
               Export Weekly Ops Report
             </Button>
           </div>

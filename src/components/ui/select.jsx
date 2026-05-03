@@ -3,6 +3,7 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { Check, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+// Select wrappers preserve Radix keyboard behavior while unifying atlas menu styling and spacing.
 const Select = SelectPrimitive.Root
 const SelectGroup = SelectPrimitive.Group
 const SelectValue = SelectPrimitive.Value
@@ -11,7 +12,7 @@ const SelectTrigger = React.forwardRef(({ className, children, ...props }, ref) 
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-10 w-full items-center justify-between rounded-xl border border-white/15 bg-brand-slate px-3 py-2 text-sm text-foreground ring-offset-brand-midnight placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "flex h-10 w-full items-center justify-between rounded-xl border border-white/15 bg-brand-slate px-3 py-2 text-sm text-foreground ring-offset-brand-midnight placeholder:text-slate-400 focus:border-[color:var(--atlas-signal-lucid-teal)] focus:outline-none focus:ring-2 focus:ring-[color:var(--atlas-signal-lucid-teal)] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       className
     )}
     {...props}

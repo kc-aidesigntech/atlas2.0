@@ -1,6 +1,18 @@
 import React, { useMemo, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { AtlasInsetCard, AtlasPanel } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { InstructionBomItem, JourneyPhase, Participant, RouteTemplate, RoutingStep } from '@/features/atlas2026/data/contracts'
 import { SUBWAY_COLORS } from '@/features/atlas2026/streamlined/theme'
+
+/**
+ * Streamlined route-planner workspace.
+ *
+ * Purpose:
+ * - allows Bill of Materials (BOM) composition, template authoring, preview, and assignment in one panel.
+ * - keeps interactions form-driven with minimal transient local state.
+ */
 
 interface RoutePlannerPageProps {
   participants: Participant[]
@@ -11,9 +23,9 @@ interface RoutePlannerPageProps {
   selectedTemplateId: string
   onSelectTemplate: (templateId: string) => void
   previewStepsForBomIds: (bomItemIds: string[]) => RoutingStep[]
-  addBomItem: (payload: Omit<InstructionBomItem, 'id'>) => void
-  buildTemplateFromBom: (input: { name: string; description: string; targetPhase: JourneyPhase; bomItemIds: string[] }) => void
-  assignTemplate: (participantId: string, templateId: string) => void
+  addBomItem: (payload: Omit<InstructionBomItem, 'id'>) => void | Promise<void>
+  buildTemplateFromBom: (input: { name: string; description: string; targetPhase: JourneyPhase; bomItemIds: string[] }) => void | Promise<void>
+  assignTemplate: (participantId: string, templateId: string) => void | Promise<void>
 }
 
 export default function RoutePlannerPage({
@@ -39,9 +51,17 @@ export default function RoutePlannerPage({
   const [notice, setNotice] = useState('')
 
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) || null
+  // Preview is derived-only state: recompute from selected BOM ids so the strip always
+  // reflects the latest repository mapping logic.
   const previewSteps = useMemo(() => previewStepsForBomIds(selectedBomIds), [previewStepsForBomIds, selectedBomIds])
+  // Shared select styling keeps planner controls visually aligned as the panel grows.
+  const plannerSelectClassName = 'rounded-xl border bg-black px-3 py-2 text-sm text-white'
+  const plannerSelectStyle: React.CSSProperties = { borderColor: SUBWAY_COLORS.border }
 
+  // Action handlers intentionally keep validation lightweight and synchronous so
+  // parent repositories can own persistence-side constraints.
   function toggleBom(bomId: string) {
+    // Treat BOM selection as a set to keep checkbox toggles idempotent.
     setSelectedBomIds((previous) => (previous.includes(bomId) ? previous.filter((id) => id !== bomId) : [...previous, bomId]))
   }
 
@@ -60,6 +80,8 @@ export default function RoutePlannerPage({
   }
 
   function submitTemplate() {
+    // Template creation is intentionally blocked on at least one BOM activity so generated
+    // templates always produce a non-empty journey.
     if (!templateName.trim() || selectedBomIds.length === 0) {
       setNotice('select at least one bom activity and provide a template name.')
       return
@@ -85,96 +107,83 @@ export default function RoutePlannerPage({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border bg-[#0d0d0d] p-6" style={{ borderColor: SUBWAY_COLORS.border }}>
-        <small className="block text-xs font-black tracking-[0.12em] text-[#a7a9ac]">instruction builder (pseudo bom)</small>
+      <AtlasPanel kicker="instruction builder (pseudo bom)">
         <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <input
+          <Input
             value={newBomTitle}
             onChange={(event) => setNewBomTitle(event.target.value)}
             placeholder="activity title"
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
           />
-          <input
+          <Input
             value={newBomDomain}
             onChange={(event) => setNewBomDomain(event.target.value)}
             placeholder="domain"
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
           />
-          <button
+          <Button
             onClick={submitBom}
-            className="rounded-xl border bg-black px-3 py-2 text-xs font-black text-white"
-            style={{ borderColor: SUBWAY_COLORS.orange, backgroundColor: SUBWAY_COLORS.orange }}
+            className="rounded-xl border border-[color:var(--atlas-signal-orange)] bg-[var(--atlas-signal-orange)] px-3 py-2 text-xs font-black text-black hover:bg-[var(--atlas-signal-orange)]/90"
           >
             add bom activity
-          </button>
+          </Button>
         </div>
-        <textarea
+        <Textarea
           value={newBomDescription}
           onChange={(event) => setNewBomDescription(event.target.value)}
           placeholder="activity description"
-          className="mt-3 min-h-20 w-full rounded-xl border bg-black px-3 py-2 text-sm text-white"
-          style={{ borderColor: SUBWAY_COLORS.border }}
+          className="mt-3 min-h-20"
         />
-      </section>
+      </AtlasPanel>
 
-      <section className="rounded-2xl border bg-[#0d0d0d] p-6" style={{ borderColor: SUBWAY_COLORS.border }}>
-        <small className="block text-xs font-black tracking-[0.12em] text-[#a7a9ac]">template construction</small>
+      <AtlasPanel kicker="template construction">
         <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <input
+          <Input
             value={templateName}
             onChange={(event) => setTemplateName(event.target.value)}
             placeholder="template name"
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
           />
           <select
             value={targetPhase}
             onChange={(event) => setTargetPhase(event.target.value as JourneyPhase)}
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
+            className={plannerSelectClassName}
+            style={plannerSelectStyle}
           >
             <option value="regulation">regulation</option>
             <option value="readiness">readiness</option>
             <option value="renewal">renewal</option>
           </select>
         </div>
-        <textarea
+        <Textarea
           value={templateDescription}
           onChange={(event) => setTemplateDescription(event.target.value)}
           placeholder="template description"
-          className="mt-3 min-h-20 w-full rounded-xl border bg-black px-3 py-2 text-sm text-white"
-          style={{ borderColor: SUBWAY_COLORS.border }}
+          className="mt-3 min-h-20"
         />
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           {boms.map((bom) => (
-            <label key={bom.id} className="flex items-start gap-2 rounded-xl border bg-black p-3" style={{ borderColor: SUBWAY_COLORS.border }}>
+            <AtlasInsetCard key={bom.id} className="flex items-start gap-2">
               <input type="checkbox" checked={selectedBomIds.includes(bom.id)} onChange={() => toggleBom(bom.id)} className="mt-1" />
               <div>
                 <small className="block text-white">{bom.title}</small>
                 <small className="block text-[#a7a9ac]">{bom.description}</small>
               </div>
-            </label>
+            </AtlasInsetCard>
           ))}
         </div>
-        <button
+        <Button
           onClick={submitTemplate}
-          className="mt-3 rounded-xl border px-4 py-2 text-xs font-black text-black"
-          style={{ borderColor: SUBWAY_COLORS.yellow, backgroundColor: SUBWAY_COLORS.yellow }}
+          className="mt-3 rounded-xl border border-[color:var(--atlas-signal-lucid-green)] bg-[var(--atlas-signal-lucid-green)] px-4 py-2 text-xs font-black text-black hover:bg-[color:color-mix(in_srgb,var(--atlas-signal-lucid-green)_90%,black)]"
         >
           save route template from selection
-        </button>
-      </section>
+        </Button>
+      </AtlasPanel>
 
-      <section className="rounded-2xl border bg-[#0d0d0d] p-6" style={{ borderColor: SUBWAY_COLORS.border }}>
-        <small className="block text-xs font-black tracking-[0.12em] text-[#a7a9ac]">route step preview</small>
+      <AtlasPanel kicker="route step preview">
         <div className="mt-3 space-y-2">
           {previewSteps.length === 0 ? (
             <small className="text-[#808183]">select bom activities to preview routing steps.</small>
           ) : (
             previewSteps.map((step, index) => (
-              <div key={step.id} className="rounded-xl border bg-black p-3" style={{ borderColor: SUBWAY_COLORS.border }}>
+              <AtlasInsetCard key={step.id}>
                 <small className="block text-white">
                   {index + 1}. {step.label}
                 </small>
@@ -182,20 +191,19 @@ export default function RoutePlannerPage({
                   phase: {step.phase} | owner: {step.ownerRole}
                 </small>
                 <small className="block text-[#808183]">{step.exitCriteria}</small>
-              </div>
+              </AtlasInsetCard>
             ))
           )}
         </div>
-      </section>
+      </AtlasPanel>
 
-      <section className="rounded-2xl border bg-[#0d0d0d] p-6" style={{ borderColor: SUBWAY_COLORS.border }}>
-        <small className="block text-xs font-black tracking-[0.12em] text-[#a7a9ac]">assign template to journey</small>
+      <AtlasPanel kicker="assign template to journey">
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           <select
             value={selectedParticipantId}
             onChange={(event) => onSelectParticipant(event.target.value)}
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
+            className={plannerSelectClassName}
+            style={plannerSelectStyle}
           >
             {participants.map((participant) => (
               <option key={participant.id} value={participant.id}>
@@ -206,8 +214,8 @@ export default function RoutePlannerPage({
           <select
             value={selectedTemplateId}
             onChange={(event) => onSelectTemplate(event.target.value)}
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
+            className={plannerSelectClassName}
+            style={plannerSelectStyle}
           >
             {templates.map((template) => (
               <option key={template.id} value={template.id}>
@@ -215,13 +223,12 @@ export default function RoutePlannerPage({
               </option>
             ))}
           </select>
-          <button
+          <Button
             onClick={submitAssignment}
-            className="rounded-xl border px-3 py-2 text-xs font-black text-white"
-            style={{ borderColor: SUBWAY_COLORS.deepGreen, backgroundColor: SUBWAY_COLORS.deepGreen }}
+            className="rounded-xl border border-[color:var(--atlas-signal-deep-green)] bg-[var(--atlas-signal-deep-green)] px-3 py-2 text-xs font-black text-white hover:bg-[var(--atlas-signal-deep-green)]/90"
           >
             assign template
-          </button>
+          </Button>
         </div>
         {selectedTemplate && (
           <small className="mt-3 block text-[#a7a9ac]">
@@ -229,7 +236,7 @@ export default function RoutePlannerPage({
           </small>
         )}
         {notice && <small className="mt-2 block" style={{ color: SUBWAY_COLORS.orange }}>{notice}</small>}
-      </section>
+      </AtlasPanel>
     </div>
   )
 }

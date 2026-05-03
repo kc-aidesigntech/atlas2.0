@@ -1,5 +1,7 @@
 import { PRESSURE_DOMAINS, STABILIZATION_PHASES } from './canonical-spec'
 
+// Data-model helpers define lightweight runtime guards and default constructors for
+// participant, route, step, and memory records consumed across Atlas surfaces.
 export const ROUTE_LIFECYCLE = {
   pending: 'pending',
   active: 'active',
@@ -35,6 +37,7 @@ export const ENTITY_SCHEMAS = {
 }
 
 export function createParticipantState(seed = {}) {
+  // Seed defaults deliberately produce a minimally valid participant for demos/tests.
   return {
     participantId: seed.participantId ?? 'p-001',
     countyId: seed.countyId ?? 'county-commons-01',
@@ -57,6 +60,8 @@ export function isValidPhaseTransition(fromPhase, toPhase) {
   const fromIndex = STABILIZATION_PHASES.indexOf(fromPhase)
   const toIndex = STABILIZATION_PHASES.indexOf(toPhase)
   if (fromIndex < 0 || toIndex < 0) return false
+  // Transition monotonicity is a hard safety invariant (no phase regression).
+  // Forward-only transitions prevent accidental policy regressions into riskier phases.
   return toIndex >= fromIndex
 }
 

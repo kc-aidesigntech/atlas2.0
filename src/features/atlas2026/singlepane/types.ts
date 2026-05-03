@@ -1,4 +1,55 @@
-export type AtlasRole = 'navigator' | 'partner' | 'administrator'
+import type {
+  EnrolleeBurdenSurveyAnswer,
+  EnrolleeBurdenSurveyHeader,
+  EnrolleeBurdenSurveySubmissionInput,
+  EnrolleeBurdenSurveySubmissionRecord,
+  EnrolleeBurdenSurveyRespondentRole,
+  PartnerIdentifierRecord,
+  PartnerServiceCapacityAnswer,
+  PartnerServiceCapacityHeader,
+  PartnerServiceCapacitySubmissionInput,
+  PartnerServiceCapacitySubmissionRecord,
+  PartnerSurveyRespondentRole
+} from '@atlas/shared'
+
+/**
+ * Single-pane domain type contracts.
+ *
+ * Purpose:
+ * - centralizes cross-feature interfaces shared by data-access, hooks, and User Interface (UI).
+ * - preserves compatibility with shared package contracts via explicit re-exports.
+ */
+
+export type AtlasRole = 'navigator' | 'partner' | 'supervisor' | 'administrator'
+
+export interface EnrolleeActiveZCode {
+  enrolleeZCodeId: string
+  parentCode: string
+  zCode: string
+  title: string
+  description: string
+  isResolved: boolean
+  resolutionAt: string | null
+  resolutionPartnerId?: string | null
+  resolutionPartnerName?: string | null
+  resolutionNote?: string | null
+}
+
+export interface EnrolleeZCodeResolutionInput {
+  partnerId?: string | null
+  partnerName?: string | null
+  resolutionNote?: string | null
+}
+
+export interface ResolvedZCodeStripMarker {
+  id: string
+  parentCode: string
+  zCode: string
+  description: string
+  resolvedAtIso: string
+  partnerName: string | null
+  resolutionNote?: string | null
+}
 
 export interface EnrolleeProfile {
   id: string
@@ -10,6 +61,8 @@ export interface EnrolleeProfile {
   avatarUrl?: string
   assignedNavigator: string
   zCodeTags: string[]
+  activeZCodeDetails: EnrolleeActiveZCode[]
+  completedParentCodes: string[]
 }
 
 export interface DomainLoad {
@@ -20,13 +73,14 @@ export interface DomainLoad {
 }
 
 export type DomainLoadBucket = 'habitat' | 'work' | 'socialNetworks'
-export type DomainLoadSourceKind = 'partnerSurvey' | 'enrolleeRecords'
+export type DomainLoadSourceKind = 'partnerSurvey' | 'enrolleeRecords' | 'enrolleeSurvey'
 
 export interface DomainLoadBreakdownRow {
   id: string
   zCodeGroup: string
   mappedDomain: DomainLoadBucket
   rawCount: number
+  responseCount?: number
   specializeCount?: number
   interfereCount?: number
 }
@@ -61,6 +115,7 @@ export interface RouteLogEvent {
   timelinePositionRatio?: number | null
 }
 
+// Navigation config defines role-level menu entitlements consumed by shell routing.
 export interface RoleMenuConfig {
   role: AtlasRole
   topMenus: string[]
@@ -89,15 +144,80 @@ export interface EnrollmentRequestRecord {
   email?: string
 }
 
+export interface NavigatorEnrollmentAssignmentRecord {
+  enrollmentId: string
+  enrolleeId: string
+  enrolleeName: string
+  caseId: string
+  assignedNavigatorLabel: string
+  isAssignedToViewer: boolean
+}
+
 export interface RouteCandidateRecord {
   stationId: string
   partnerId: string
   stationName: string
   score: number
-  specializeHits: number
-  conflictHits: number
-  interfereHits: number
+  matchedZCodeCount: number
+  needUnitsMatched: number
+  partnerBurdenTotal: number
   matchedZCodes: string[]
+  matchedParentSummaries: RouteCandidateParentSummary[]
+}
+
+export interface RouteCandidateParentSummary {
+  parentCode: string
+  matchedChildCount: number
+  avgBurdenScore: number
+  matchedChildZCodes: string[]
+}
+
+export type {
+  EnrolleeBurdenSurveyAnswer,
+  EnrolleeBurdenSurveyHeader,
+  EnrolleeBurdenSurveySubmissionInput,
+  EnrolleeBurdenSurveySubmissionRecord,
+  EnrolleeBurdenSurveyRespondentRole,
+  PartnerIdentifierRecord,
+  PartnerServiceCapacityAnswer,
+  PartnerServiceCapacityHeader,
+  PartnerServiceCapacitySubmissionInput,
+  PartnerServiceCapacitySubmissionRecord,
+  PartnerSurveyRespondentRole
+}
+
+export interface PartnerServiceCapacityScaleOption {
+  value: number
+  label: string
+  description: string
+}
+
+export interface ZCodeSurveyPrompt {
+  id: string
+  parentCode: string
+  parentTheme: string
+  zCode: string
+  normalizedZCode: string
+  title: string
+  description: string
+}
+
+export interface ZCodeSurveySection {
+  parentCode: string
+  theme: string
+  prompts: ZCodeSurveyPrompt[]
+}
+
+export interface PartnerZCodeBurdenRecord {
+  id: string
+  partnerId: string | null
+  submissionId: string | null
+  zCode: string
+  normalizedZCode: string
+  score: number
+  derivedRelationType: 'specialize' | 'interfere' | null
+  strength: number
+  updatedAtIso: string
 }
 
 export interface CountyHeatPoint {
@@ -110,6 +230,105 @@ export interface CountyHeatPoint {
 export interface AdminDataQualityMetric {
   metric: string
   countValue: number
+}
+
+export type AdminPortalPersonRole = AtlasRole | 'enrollee'
+export type AdminPortalPersonStatus = 'active' | 'invited' | 'inactive'
+export type AdminPortalOrganizationType = 'partner' | 'internal' | 'public_agency' | 'community'
+export type AdminPortalOrganizationStatus = 'active' | 'draft' | 'inactive'
+export type AdminPortalCustomEnrolleeStatus = 'active' | 'draft' | 'archived'
+
+export interface AdminPortalPersonRecord {
+  id: string
+  fullName: string
+  email: string
+  title: string
+  roles: AdminPortalPersonRole[]
+  organizationId: string | null
+  reportsToPersonId: string | null
+  linkedEnrolleeId: string | null
+  status: AdminPortalPersonStatus
+  notes: string
+}
+
+export interface AdminPortalOrganizationRecord {
+  id: string
+  name: string
+  type: AdminPortalOrganizationType
+  countyName: string
+  primaryContactPersonId: string | null
+  status: AdminPortalOrganizationStatus
+  notes: string
+}
+
+export interface AdminPortalCustomEnrolleeRecord extends EnrolleeIntakeRecord {
+  status: AdminPortalCustomEnrolleeStatus
+  notes: string
+}
+
+export interface AdminPortalRegistry {
+  people: AdminPortalPersonRecord[]
+  organizations: AdminPortalOrganizationRecord[]
+  customEnrollees: AdminPortalCustomEnrolleeRecord[]
+  archivedPersonIds: string[]
+  archivedOrganizationIds: string[]
+  archivedEnrolleeIds: string[]
+  updatedAtIso: string
+}
+
+export interface AccessMatrixPersonRecord {
+  id: string
+  fullName: string
+  email: string
+  roleKeys: AdminPortalPersonRole[]
+}
+
+export interface AccessMatrixEnrollmentRecord {
+  enrollmentId: string
+  enrolleeId: string
+  enrolleeName: string
+  caseId: string
+  navigatorPersonIds: string[]
+}
+
+export interface AccessMatrixSupervisorRecord {
+  navigatorPersonId: string
+  supervisorPersonIds: string[]
+}
+
+export interface AccessMatrixPartnerRecord {
+  partnerId: string
+  organizationName: string
+  primaryContactPersonIds: string[]
+  primaryContactEmails: string[]
+}
+
+export interface AccessMatrixDataset {
+  people: AccessMatrixPersonRecord[]
+  roleKeys: AdminPortalPersonRole[]
+  enrollmentAssignments: AccessMatrixEnrollmentRecord[]
+  supervisorAssignments: AccessMatrixSupervisorRecord[]
+  partnerAssignments: AccessMatrixPartnerRecord[]
+  updatedAtIso: string
+}
+
+export interface PartnerTroubleshootingGrant {
+  partnerId: string
+  organizationName: string
+  allowedMenus: string[]
+  allowWrite: boolean
+  updatedAtIso: string
+}
+
+export interface TroubleshootingSessionState {
+  isActive: boolean
+  targetPersonId: string
+  targetRole: AtlasRole
+  targetDisplayName: string
+  targetEmail: string
+  targetOrganizationName: string | null
+  startedAtIso: string
+  partnerGrant: PartnerTroubleshootingGrant | null
 }
 
 export interface JourneyStationMarker {
@@ -125,7 +344,21 @@ export interface AccountSettings {
   fullName: string
   email: string
   organization: string
+  avatarUrl?: string | null
   enabledRoles: AtlasRole[]
+}
+
+export interface PartnerStationProfile {
+  partnerId: string
+  organizationName: string
+  stationId: string | null
+  stationName: string | null
+  countyName: string | null
+  primaryContactFirstName: string | null
+  primaryContactLastName: string | null
+  primaryContactEmail: string | null
+  capacityTotal: number | null
+  capacityAvailable: number | null
 }
 
 export interface EnrolleeIntakeRecord {
@@ -146,4 +379,185 @@ export interface RouteAssignmentRecord {
   assignedAtIso: string
   phase: StabilizationPhase
   matchedZCodes: string[]
+}
+
+export interface NavigatorCompetencyAssessmentAnswer {
+  parentCode: string
+  theme: string
+  score: number
+}
+
+export interface NavigatorCompetencyAssessmentRecord {
+  id: string
+  navigatorName: string
+  supervisorName: string
+  submittedAtIso: string
+  formVersion: string
+  answers: NavigatorCompetencyAssessmentAnswer[]
+}
+
+export interface SupervisorNavigatorCompetencySummary {
+  navigatorName: string
+  assessmentCount: number
+  weightedRollingAverage: number
+  lastAssessmentAtIso: string | null
+}
+
+export type NavigatorPickupQueueStatus = 'available' | 'claimed' | 'archived'
+
+export interface UnassignedEnrolleePickupRecord {
+  id: string
+  fullName: string
+  dob: string
+  caseId: string
+  email: string
+  phone: string
+  demographicsSummary: string
+  referredAtIso: string
+  referrerName: string
+  referrerOrganization: string
+  backgroundNotes: string
+  referrerMessage: string
+  zCodeTags: string[]
+  status: NavigatorPickupQueueStatus
+  claimedByNavigatorName: string | null
+  claimedAtIso: string | null
+}
+
+export interface PartnerReferralSubmissionInput {
+  referredParticipantName: string
+  participantEmail: string
+  participantPhone: string
+  situationCategories: string[]
+  backgroundNotes: string
+  selfReferring: boolean
+  referrerName: string
+  existingPartner: boolean
+  partnerOrganizationName: string
+  partnerContactName: string
+  partnerContactEmail: string
+  partnerContactPhone: string
+}
+
+export interface NavigatorSelfAssessmentRecord {
+  id: string
+  navigatorName: string
+  weekStartIso: string
+  submittedAtIso: string
+  stressLoadScore: number
+  confidenceScore: number
+  supportScore: number
+  note: string
+}
+
+export interface NavigatorSelfAssessmentSummary {
+  responseCount: number
+  averageStressLoad: number
+  averageConfidence: number
+  averageSupport: number
+  averageComposite: number
+  latestSubmittedAtIso: string | null
+}
+
+export type SupervisionSessionStatus = 'scheduled' | 'completed'
+
+export interface SupervisionSessionRecord {
+  id: string
+  navigatorName: string
+  supervisorName: string
+  sessionAtIso: string
+  status: SupervisionSessionStatus
+  supervisorNote: string
+  navigatorNote: string
+  actionItems: string
+}
+
+export type IntervalAssessmentType = 'navigator_self_assessment' | 'navigator_competency_review' | 'supervision_session'
+export type IntervalCadence = 'weekly' | 'monthly' | 'quarterly'
+
+export interface IntervalAssessmentRule {
+  id: string
+  title: string
+  assessmentType: IntervalAssessmentType
+  assigneeRole: 'navigator' | 'supervisor'
+  navigatorName: string | null
+  cadence: IntervalCadence
+  startsAtIso: string
+  weekday: number | null
+  isActive: boolean
+  instructions: string
+  lastGeneratedAtIso: string | null
+}
+
+export interface NavigatorProgramState {
+  pickupQueue: UnassignedEnrolleePickupRecord[]
+  selfAssessments: NavigatorSelfAssessmentRecord[]
+  supervisionSessions: SupervisionSessionRecord[]
+  intervalAssessmentRules: IntervalAssessmentRule[]
+  updatedAtIso: string
+}
+
+export interface IntervalAssessmentDueItem {
+  id: string
+  ruleId: string
+  title: string
+  assessmentType: IntervalAssessmentType
+  navigatorName: string | null
+  dueAtIso: string
+  cadence: IntervalCadence
+  status: 'open' | 'completed'
+}
+
+export type RegulationTestType = 'mh_sca' | 'svs' | 'ipf' | 'b_ipf'
+export type RegulationTestSubmissionStatus = 'draft' | 'completed'
+
+export interface RegulationTestPrompt {
+  id: string
+  label: string
+  description: string
+}
+
+export interface RegulationTestAnswer {
+  promptId: string
+  promptLabel: string
+  responseValue: number | null
+}
+
+export interface RegulationTestSubmissionRecord {
+  id: string
+  draftKey: string
+  enrolleeId: string
+  enrollmentId: string | null
+  testType: RegulationTestType
+  status: RegulationTestSubmissionStatus
+  submittedAtIso: string
+  updatedAtIso: string
+  enrolleeName: string
+  enrolleeCaseId: string
+  enrolleeEmail: string
+  score: number | null
+  passThreshold: number
+  passed: boolean | null
+  answers: RegulationTestAnswer[]
+}
+
+export interface RegulationTestSubmissionInput {
+  draftKey?: string
+  enrolleeId: string
+  enrollmentId?: string | null
+  testType: RegulationTestType
+  status: RegulationTestSubmissionStatus
+  enrolleeName: string
+  enrolleeCaseId: string
+  enrolleeEmail: string
+  answers: RegulationTestAnswer[]
+}
+
+export interface RegulationTestStripMarker {
+  id: string
+  label: string
+  testType: RegulationTestType
+  attemptedAtIso: string
+  passed: boolean
+  isLatestCompleted: boolean
 }

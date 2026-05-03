@@ -1,6 +1,22 @@
+/**
+ * Account settings drawer for profile basics, role toggles, and optional live
+ * auth provider linking/sign-out controls.
+ */
 import React, { useEffect, useMemo, useState } from 'react'
-import type { AccountSettings, AtlasRole } from '@/features/atlas2026/singlepane/types'
+import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import type { AccountSettings, AtlasRole, PartnerTroubleshootingGrant } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+
+export type AccountSecurityAuthProvider = 'google' | 'apple'
+
+export interface AccountSecurityPanelProps {
+  sessionEmail: string | null
+  /** When null, linked providers are still loading. */
+  linkedProviders: string[] | null
+  linkBusyProvider: AccountSecurityAuthProvider | null
+  onLinkProvider: (provider: AccountSecurityAuthProvider) => void
+  onSignOut: () => void
+}
 
 interface AccountSettingsPanelProps {
   isOpen: boolean
@@ -9,9 +25,12 @@ interface AccountSettingsPanelProps {
   onClose: () => void
   onRoleChange: (role: AtlasRole) => void
   onSave: (settings: AccountSettings) => void
+  security?: AccountSecurityPanelProps | null
+  partnerTroubleshootingGrant?: PartnerTroubleshootingGrant | null
+  onSavePartnerTroubleshootingGrant?: (grant: PartnerTroubleshootingGrant) => Promise<unknown> | unknown
 }
 
-const ROLE_OPTIONS: AtlasRole[] = ['administrator', 'partner', 'navigator']
+const ROLE_OPTIONS: AtlasRole[] = ['administrator', 'supervisor', 'partner', 'navigator']
 
 export default function AccountSettingsPanel({
   isOpen,
@@ -19,19 +38,31 @@ export default function AccountSettingsPanel({
   settings,
   onClose,
   onRoleChange,
-  onSave
+  onSave,
+  security,
+  partnerTroubleshootingGrant = null,
+  onSavePartnerTroubleshootingGrant
 }: AccountSettingsPanelProps) {
   const [draft, setDraft] = useState<AccountSettings>(settings)
+  const [grantDraft, setGrantDraft] = useState<PartnerTroubleshootingGrant | null>(partnerTroubleshootingGrant)
 
   useEffect(() => {
+    // Reset draft state whenever panel opens or upstream settings change so
+    // unsaved edits from previous sessions do not leak into new opens.
     setDraft(settings)
   }, [settings, isOpen])
+
+  useEffect(() => {
+    setGrantDraft(partnerTroubleshootingGrant)
+  }, [partnerTroubleshootingGrant, isOpen])
 
   const enabledRoleSet = useMemo(() => new Set(draft.enabledRoles), [draft.enabledRoles])
 
   if (!isOpen) return null
 
   function toggleRole(nextRole: AtlasRole) {
+    // Keep at least one enabled role so shell permissions never collapse into
+    // an unusable "no-role" state.
     const nextEnabledRoles = enabledRoleSet.has(nextRole)
       ? draft.enabledRoles.filter((item) => item !== nextRole)
       : [...draft.enabledRoles, nextRole]
@@ -50,6 +81,18 @@ export default function AccountSettingsPanel({
     onClose()
   }
 
+  function togglePartnerMenu(menu: string) {
+    if (!grantDraft) return
+    const allowedMenus = grantDraft.allowedMenus.includes(menu)
+      ? grantDraft.allowedMenus.filter((item) => item !== menu)
+      : [...grantDraft.allowedMenus, menu]
+    setGrantDraft({
+      ...grantDraft,
+      allowedMenus,
+      updatedAtIso: new Date().toISOString()
+    })
+  }
+
   return (
     <div className="absolute inset-0 z-40 flex justify-end bg-black/55 backdrop-blur-[2px]">
       <div
@@ -64,14 +107,11 @@ export default function AccountSettingsPanel({
               Switch roles, define operator basics, and keep core access controls in one place.
             </small>
           </div>
-          <button
-            type="button"
+          <AtlasCloseButton
             onClick={onClose}
-            className="rounded-full border px-3 py-1 text-[12px] text-white"
-            style={{ borderColor: SP_COLORS.white }}
-          >
-            close
-          </button>
+            className="h-9 w-9"
+            style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
+          />
         </div>
 
         <div className="space-y-4">
@@ -130,6 +170,68 @@ export default function AccountSettingsPanel({
             </div>
           </section>
 
+          {security ? (
+            <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff30' }}>
+              <small className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.12em] text-white">
+                sign-in and security
+              </small>
+              <small className="mb-3 block text-[12px] text-[#bcbcbc]">
+                Supabase Auth backs this shell. Use the same verified email across password and SSO so identities stay
+                on one user. Enable manual linking in the Supabase dashboard to attach Google or Apple while signed in
+                with email.
+              </small>
+              {security.sessionEmail ? (
+                <p className="mb-3 text-[13px] text-white">
+                  Signed in as <span className="font-medium">{security.sessionEmail}</span>
+                </p>
+              ) : null}
+              <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[#9f9f9f]">connected providers</p>
+              <ul className="mb-4 space-y-1 text-[13px] text-[#dedede]">
+                {security.linkedProviders === null ? (
+                  <li className="text-[#9f9f9f]">Loading…</li>
+                ) : security.linkedProviders.length ? (
+                  security.linkedProviders.map((p) => (
+                    <li key={p} className="capitalize">
+                      {p}
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-[#9f9f9f]">Email only — link a provider below.</li>
+                )}
+              </ul>
+              <div className="flex flex-col gap-2">
+                <AtlasTextButton
+                  type="button"
+                  disabled={Boolean(security.linkBusyProvider)}
+                  onClick={() => security.onLinkProvider('google')}
+                  className="w-full px-3 py-2 text-[12px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+                >
+                  {security.linkBusyProvider === 'google' ? 'Redirecting to Google…' : 'Link Google'}
+                </AtlasTextButton>
+                <AtlasTextButton
+                  type="button"
+                  disabled={Boolean(security.linkBusyProvider)}
+                  onClick={() => security.onLinkProvider('apple')}
+                  className="w-full px-3 py-2 text-[12px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+                >
+                  {security.linkBusyProvider === 'apple' ? 'Redirecting to Apple…' : 'Link Apple'}
+                </AtlasTextButton>
+              </div>
+              <div className="mt-4 border-t pt-4" style={{ borderColor: '#ffffff18' }}>
+                <AtlasTextButton
+                  type="button"
+                  onClick={() => void security.onSignOut()}
+                  className="w-full px-3 py-2 text-[12px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ff6b6b' } as React.CSSProperties}
+                >
+                  Sign out
+                </AtlasTextButton>
+              </div>
+            </section>
+          ) : null}
+
           <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff30' }}>
             <small className="mb-3 block text-[12px] font-semibold uppercase tracking-[0.12em] text-white">role assignments</small>
             <div className="space-y-2">
@@ -146,25 +248,70 @@ export default function AccountSettingsPanel({
               ))}
             </div>
           </section>
+
+          {role === 'partner' && grantDraft && onSavePartnerTroubleshootingGrant ? (
+            <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff30' }}>
+              <small className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.12em] text-white">
+                admin troubleshooting grant
+              </small>
+              <small className="mb-3 block text-[12px] text-[#bcbcbc]">
+                Choose what an administrator can open while troubleshooting this partner shell. Write access is off by
+                default until you explicitly enable it.
+              </small>
+              <div className="space-y-2">
+                {['referral portal', 'my station', 'service capacity', 'county commons'].map((menu) => (
+                  <label key={menu} className="flex items-center justify-between rounded-2xl border px-3 py-2" style={{ borderColor: '#ffffff20' }}>
+                    <span className="text-[13px] text-white">{menu}</span>
+                    <input
+                      type="checkbox"
+                      checked={grantDraft.allowedMenus.includes(menu)}
+                      onChange={() => togglePartnerMenu(menu)}
+                      className="h-4 w-4 accent-white"
+                    />
+                  </label>
+                ))}
+                <label className="mt-3 flex items-center justify-between rounded-2xl border px-3 py-2" style={{ borderColor: '#ffffff20' }}>
+                  <span className="text-[13px] text-white">Allow write access during troubleshooting</span>
+                  <input
+                    type="checkbox"
+                    checked={grantDraft.allowWrite}
+                    onChange={() =>
+                      setGrantDraft({
+                        ...grantDraft,
+                        allowWrite: !grantDraft.allowWrite,
+                        updatedAtIso: new Date().toISOString()
+                      })
+                    }
+                    className="h-4 w-4 accent-white"
+                  />
+                </label>
+              </div>
+              <AtlasTextButton
+                onClick={() => void onSavePartnerTroubleshootingGrant(grantDraft)}
+                className="mt-4 w-full px-4 py-2 text-[12px] font-medium text-white"
+                style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+              >
+                save admin troubleshooting grant
+              </AtlasTextButton>
+            </section>
+          ) : null}
         </div>
 
         <div className="mt-auto flex items-center justify-end gap-3 pt-5">
-          <button
-            type="button"
+          <AtlasTextButton
             onClick={onClose}
-            className="rounded-full border px-5 py-2 text-[13px] font-medium text-white"
-            style={{ borderColor: '#ffffff30' }}
+            className="px-5 py-2 text-[13px] font-medium text-white"
+            style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
           >
             cancel
-          </button>
-          <button
-            type="button"
+          </AtlasTextButton>
+          <AtlasTextButton
             onClick={handleSave}
-            className="rounded-full border px-5 py-2 text-[13px] font-medium text-white"
-            style={{ borderColor: SP_COLORS.white }}
+            className="px-5 py-2 text-[13px] font-medium text-white"
+            style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           >
             save account settings
-          </button>
+          </AtlasTextButton>
         </div>
       </div>
     </div>

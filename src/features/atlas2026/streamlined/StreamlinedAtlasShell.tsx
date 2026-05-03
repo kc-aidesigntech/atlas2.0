@@ -7,6 +7,8 @@ import RoutePlannerPage from '@/features/atlas2026/streamlined/RoutePlannerPage'
 import { SUBWAY_COLORS } from '@/features/atlas2026/streamlined/theme'
 import { useRoutingBuilderData } from '@/features/atlas2026/streamlined/useRoutingBuilderData'
 
+// Streamlined shell hosts a narrower "routing builder" workflow over the same
+// Atlas dataset contracts used by the broader multi-workspace experience.
 type StreamlinedView = 'navigation' | 'intelligence' | 'route-planner'
 
 const VIEWS: StreamlinedView[] = ['navigation', 'intelligence', 'route-planner']
@@ -29,6 +31,8 @@ export default function StreamlinedAtlasShell() {
     assignTemplate
   } = useRoutingBuilderData()
 
+  // Footer signal mirrors top-line readiness metric to keep the global "yield" indicator
+  // available regardless of which workspace view is active.
   const currentYield = useMemo(() => Math.round(metrics.averageReadiness * 100), [metrics.averageReadiness])
 
   return (
@@ -44,7 +48,9 @@ export default function StreamlinedAtlasShell() {
             </div>
             <div>
               <small className="block text-xs font-black tracking-[0.18em] text-white">atlas-intel</small>
-              <small className="block text-[11px] font-bold tracking-[0.1em] text-[#a7a9ac]">routing instruction builder</small>
+              <small className="block text-[11px] font-bold tracking-[0.1em]" style={{ color: SUBWAY_COLORS.muted }}>
+                routing instruction builder
+              </small>
             </div>
           </div>
 
@@ -53,24 +59,26 @@ export default function StreamlinedAtlasShell() {
               <button
                 key={item}
                 onClick={() => setView(item)}
-                className={`rounded border px-3 py-1.5 text-xs font-black tracking-[0.12em] ${
-                  view === item ? 'text-white' : 'text-[#808183]'
-                }`}
-                style={{ borderColor: view === item ? SUBWAY_COLORS.orange : SUBWAY_COLORS.border }}
+                className={`rounded border px-3 py-1.5 text-xs font-black tracking-[0.12em] ${view === item ? 'text-white' : ''}`}
+                style={{
+                  borderColor: view === item ? SUBWAY_COLORS.orange : SUBWAY_COLORS.border,
+                  color: view === item ? SUBWAY_COLORS.white : SUBWAY_COLORS.steel
+                }}
               >
                 {item.replace('-', ' ')}
               </button>
             ))}
           </nav>
 
-          <div className="flex items-center gap-2 text-[#808183]">
-            <small className="hidden text-xs font-bold tracking-[0.1em] lg:block text-[#808183]">node: {selectedParticipantId.slice(0, 10) || 'none'}</small>
+          <div className="flex items-center gap-2" style={{ color: SUBWAY_COLORS.steel }}>
+            <small className="hidden text-xs font-bold tracking-[0.1em] lg:block">node: {selectedParticipantId.slice(0, 10) || 'none'}</small>
             <Menu size={16} />
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 pb-24 pt-24">
+        {/* Visual scaffold that keeps the subway metaphor present across all views. */}
         <ConceptRailOverlay />
         {view === 'navigation' && (
           <NavigationPage
@@ -111,16 +119,16 @@ export default function StreamlinedAtlasShell() {
 
       <footer className="fixed bottom-0 left-0 right-0 z-40 flex h-12 items-center overflow-hidden border-t bg-black" style={{ borderColor: SUBWAY_COLORS.border }}>
         <div className="atlas-ticker flex min-w-max items-center gap-10 px-6">
-          <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em] text-[#808183]">
+          <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em]" style={{ color: SUBWAY_COLORS.steel }}>
             <Activity size={14} style={{ color: SUBWAY_COLORS.orange }} /> system load: focused
           </small>
-          <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em] text-[#808183]">
-            <Globe size={14} style={{ color: SUBWAY_COLORS.blue }} /> json contracts active
+          <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em]" style={{ color: SUBWAY_COLORS.steel }}>
+            <Globe size={14} style={{ color: SUBWAY_COLORS.blue }} /> supabase contracts active
           </small>
-          <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em] text-[#808183]">
-            <Lock size={14} style={{ color: SUBWAY_COLORS.steel }} /> firestore bridge prepared
+          <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em]" style={{ color: SUBWAY_COLORS.steel }}>
+            <Lock size={14} style={{ color: SUBWAY_COLORS.steel }} /> shared atlas schema linked
           </small>
-          <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em] text-[#808183]">
+          <small className="flex items-center gap-2 text-xs font-black tracking-[0.1em]" style={{ color: SUBWAY_COLORS.steel }}>
             <Layout size={14} style={{ color: SUBWAY_COLORS.deepGreen }} /> regional yield: {currentYield}%
           </small>
         </div>

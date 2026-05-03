@@ -1,56 +1,67 @@
 #!/usr/bin/env node
 
-function scoreStation(activeZCodes, capabilitiesByStation) {
-  const entries = Object.entries(capabilitiesByStation)
-  return entries
-    .map(([stationId, caps]) => {
-      let specializeHits = 0
-      let conflictHits = 0
-      let interfereHits = 0
-      let specializationStrength = 0
+function scoreStation(activeNeedByZCode, partnerBurdenByStation) {
+  return Object.entries(partnerBurdenByStation)
+    .map(([stationId, burdenByZCode]) => {
+      let score = 0
+      let matchedZCodeCount = 0
+      let needUnitsMatched = 0
+      let partnerBurdenTotal = 0
 
-      for (const zCode of activeZCodes) {
-        const specialize = caps.find((c) => c.zCode === zCode && c.relationType === 'specialize')
-        const interfere = caps.find((c) => c.zCode === zCode && c.relationType === 'interfere')
-
-        if (specialize && !interfere) specializeHits += 1
-        if (specialize && interfere) conflictHits += 1
-        if (!specialize && interfere) interfereHits += 1
-        if (specialize) specializationStrength += specialize.strength ?? 1
+      for (const [zCode, needCount] of Object.entries(activeNeedByZCode)) {
+        const burdenScore = burdenByZCode[zCode] ?? 0
+        if (burdenScore <= 0) continue
+        score += needCount * burdenScore
+        matchedZCodeCount += 1
+        needUnitsMatched += needCount
+        partnerBurdenTotal += burdenScore
       }
 
-      const score = specializeHits * 10 + specializationStrength * 2 - conflictHits * 6 - interfereHits * 4
-      return { stationId, score, specializeHits, conflictHits, interfereHits }
+      return { stationId, score, matchedZCodeCount, needUnitsMatched, partnerBurdenTotal }
     })
-    .sort((a, b) => b.score - a.score || b.specializeHits - a.specializeHits || a.conflictHits - b.conflictHits || a.interfereHits - b.interfereHits)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.matchedZCodeCount - a.matchedZCodeCount ||
+        b.needUnitsMatched - a.needUnitsMatched ||
+        b.partnerBurdenTotal - a.partnerBurdenTotal ||
+        a.stationId.localeCompare(b.stationId)
+    )
 }
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-const activeZCodes = ['Z59.0', 'Z56.0']
-const capabilitiesByStation = {
-  stationAlpha: [
-    { zCode: 'Z59.0', relationType: 'interfere', strength: 1 },
-    { zCode: 'Z56.0', relationType: 'specialize', strength: 1 }
-  ],
-  stationBeta: [
-    { zCode: 'Z59.0', relationType: 'specialize', strength: 1 },
-    { zCode: 'Z56.0', relationType: 'specialize', strength: 1 }
-  ],
-  stationGamma: [
-    { zCode: 'Z59.0', relationType: 'specialize', strength: 1 },
-    { zCode: 'Z59.0', relationType: 'interfere', strength: 1 },
-    { zCode: 'Z56.0', relationType: 'specialize', strength: 1 }
-  ]
+const activeNeedByZCode = {
+  'Z59.1': 1,
+  'Z56.2': 1,
+  'Z60.4': 1
 }
 
-const ranked = scoreStation(activeZCodes, capabilitiesByStation)
-assert(ranked[0].stationId === 'stationBeta', 'station with specialize and no interfere should rank first')
-const gammaRank = ranked.findIndex((item) => item.stationId === 'stationGamma')
-const betaRank = ranked.findIndex((item) => item.stationId === 'stationBeta')
-assert(gammaRank > betaRank, 'station with specialize+interfere conflict should rank below clean specialize')
-assert(ranked.every((item) => item.score === Number(item.score)), 'all scored stations should have numeric score')
+const partnerBurdenByStation = {
+  northHarborHousingHub: {
+    'Z59.1': 9,
+    'Z56.2': 4,
+    'Z60.4': 5
+  },
+  workSpringEmploymentDesk: {
+    'Z59.1': 5,
+    'Z56.2': 8,
+    'Z60.4': 4
+  },
+  bridgeLineCommunityCommons: {
+    'Z59.1': 7,
+    'Z56.2': 6,
+    'Z60.4': 9
+  }
+}
 
-process.stdout.write('route ranking rule test passed\n')
+const ranked = scoreStation(activeNeedByZCode, partnerBurdenByStation)
+assert(ranked[0].stationId === 'bridgeLineCommunityCommons', 'bridgeLine should rank first for Elena when it is strongest across all three active parent groups')
+assert(ranked[0].score === 22, 'top ranked weighted score should equal Elena route total 7 + 6 + 9')
+assert(ranked[1].stationId === 'northHarborHousingHub', 'north harbor should rank second with an 18-point three-parent total')
+assert(ranked[2].stationId === 'workSpringEmploymentDesk', 'workspring should rank third with a 17-point three-parent total')
+assert(ranked.every((item) => item.score === Number(item.score)), 'all scored stations should have numeric scores')
+
+process.stdout.write('weighted route ranking rule test passed\n')

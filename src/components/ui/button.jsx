@@ -2,6 +2,7 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const Button = React.forwardRef(({ className, variant = "default", size = "default", ...props }, ref) => {
+  // Variant and size maps are the contract surface consumed across screens; keep keys stable.
   const variants = {
     default: "border border-black/80 bg-white text-black hover:bg-white/90 hover:shadow-[0_0_25px_rgba(255,255,255,0.12)]",
     destructive: "bg-destructive text-destructive-foreground",

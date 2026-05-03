@@ -1,4 +1,4 @@
-# ATLAS 2026 Security and Governance Model
+# Atlas (ATLAS) 2026 Security and Governance Model
 
 ## Role Model
 

@@ -1,19 +1,40 @@
 import React from 'react'
 import CountyCommonsHeatmap from '@/features/atlas2026/singlepane/components/CountyCommonsHeatmap'
-import type { CountyHeatPoint, EnrollmentRequestRecord } from '@/features/atlas2026/singlepane/types'
+import SupervisorCompetencyPanel from '@/features/atlas2026/singlepane/components/SupervisorCompetencyPanel'
+import type { AtlasRole, CountyHeatPoint, EnrollmentRequestRecord, SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
 interface ContextPanelsProps {
+  role: AtlasRole
   activeMenu: string
   enrollmentRequests: EnrollmentRequestRecord[]
   countyHeatmap: CountyHeatPoint[]
+  supervisorNavigatorCompetency: SupervisorNavigatorCompetencySummary[]
+  supervisorNavigatorDirectory: Array<{
+    navigatorPersonId: string
+    navigatorName: string
+    assignedEnrolleeCount: number
+    isManagedByCurrentSupervisor: boolean
+  }>
+  onToggleSupervisorManagedNavigator?: (navigatorPersonId: string, isManaged: boolean) => Promise<void> | void
+  isSavingAccessMatrix?: boolean
 }
 
-export default function ContextPanels({ activeMenu, enrollmentRequests, countyHeatmap }: ContextPanelsProps) {
-  if (activeMenu === 'requests to enroll') {
+export default function ContextPanels({
+  role,
+  activeMenu,
+  enrollmentRequests,
+  countyHeatmap,
+  supervisorNavigatorCompetency,
+  supervisorNavigatorDirectory,
+  onToggleSupervisorManagedNavigator,
+  isSavingAccessMatrix = false
+}: ContextPanelsProps) {
+  // Non-navigator "my profile" intentionally surfaces enrollment intake requests instead of navigator-only profile data.
+  if (activeMenu === 'my profile' && role !== 'navigator') {
     return (
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
-        <small className="mb-2 block text-[13px] text-white">requests to enroll</small>
+        <small className="mb-2 block text-[13px] text-white">my profile</small>
         <div className="space-y-2">
           {enrollmentRequests.map((item) => (
             <div key={item.id} className="flex items-center justify-between rounded-md border px-2 py-1.5" style={{ borderColor: '#ffffff3a' }}>
@@ -33,17 +54,25 @@ export default function ContextPanels({ activeMenu, enrollmentRequests, countyHe
     return <CountyCommonsHeatmap points={countyHeatmap} />
   }
 
-  if (activeMenu === 'referral portal') {
+  if (role === 'supervisor' && (activeMenu === 'navigator assessments' || activeMenu === 'assigned navigators')) {
     return (
-      <a
-        href="https://apps.apple.com/us/app/atlas-information-exchange/id6746423572"
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex rounded-full border px-4 py-2 text-[13px] text-white"
-        style={{ borderColor: SP_COLORS.white }}
-      >
-        open atlas referral portal
-      </a>
+      <SupervisorCompetencyPanel
+        mode={activeMenu === 'assigned navigators' ? 'assigned-navigators' : 'navigator-assessments'}
+        navigatorDirectory={supervisorNavigatorDirectory}
+        competencyByNavigator={supervisorNavigatorCompetency}
+        onToggleManagedNavigator={onToggleSupervisorManagedNavigator}
+        isSavingAssignments={isSavingAccessMatrix}
+      />
+    )
+  }
+
+  if (activeMenu === 'refer' || activeMenu === 'referral portal') {
+    return (
+      <div className="space-y-2">
+        <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
+          referral workflow is available directly in this app.
+        </small>
+      </div>
     )
   }
 

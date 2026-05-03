@@ -9,6 +9,7 @@ export const STEP_STATUS = {
 
 export function buildRouteSteps(route) {
   const prefix = route.routeId || 'route'
+  // This three-step scaffold defines the minimum orchestration contract expected by timeline and Service Level Agreement (SLA) views.
   return [
     {
       stepId: `${prefix}-intake`,
@@ -44,6 +45,7 @@ export function canTransitionStep(step, nextStatus, steps) {
   }
 
   if (nextStatus === STEP_STATUS.inProgress || nextStatus === STEP_STATUS.completed) {
+    // Dependencies are checked by stepId so persisted documents can carry independent Firestore ids.
     const dependencySteps = steps.filter((candidate) => step.dependencies.includes(candidate.stepId))
     const hasIncompleteDependency = dependencySteps.some((candidate) => candidate.status !== STEP_STATUS.completed)
     if (hasIncompleteDependency) {

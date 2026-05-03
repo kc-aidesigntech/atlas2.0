@@ -2,11 +2,12 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const Input = React.forwardRef(({ className, type, ...props }, ref) => {
+  // Use shared focus/disabled styles so text-entry affordances are consistent across forms.
   return (
     <input
       type={type}
       className={cn(
-        "flex h-10 w-full rounded-xl border border-white/15 bg-brand-slate px-3 py-2 text-sm text-foreground ring-offset-brand-midnight placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-10 w-full rounded-xl border border-white/15 bg-brand-slate px-3 py-2 text-sm text-foreground ring-offset-brand-midnight placeholder:text-slate-400 focus-visible:border-[color:var(--atlas-signal-lucid-teal)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--atlas-signal-lucid-teal)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
         className
       )}
       ref={ref}
