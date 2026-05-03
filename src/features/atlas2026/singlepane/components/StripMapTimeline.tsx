@@ -1,3 +1,7 @@
+/**
+ * Interactive strip-map timeline for ATLAS journey execution, including phase
+ * gates, draggable events, and resolution/station marker overlays.
+ */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { Group } from '@visx/group'
@@ -158,6 +162,8 @@ function truncateLabel(label: string, visibleChars: number) {
 
 const RESOLVED_STACK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 
+// Nearby resolved markers are grouped into weekly windows so dense activity is
+// legible without overlapping stems and labels.
 function groupResolvedMarkersByWeek(markers: ResolvedZCodeStripMarker[]) {
   return markers.reduce<ResolvedZCodeStripMarker[][]>((groups, marker) => {
     const markerTime = new Date(marker.resolvedAtIso).getTime()
