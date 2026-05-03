@@ -441,9 +441,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
   const [activeMenu, setActiveMenu] = useState<string>('')
   const [adminPortalRegistry, setAdminPortalRegistry] = useState<AdminPortalRegistry | null>(null)
+  const [accessMatrixDataset, setAccessMatrixDataset] = useState<AccessMatrixDataset | null>(null)
   const [navigatorProgramState, setNavigatorProgramState] = useState<NavigatorProgramState>(createNavigatorProgramState())
   const [isSavingAdminPortalRegistry, setIsSavingAdminPortalRegistry] = useState(false)
+  const [isSavingAccessMatrix, setIsSavingAccessMatrix] = useState(false)
   const [adminPortalRegistryError, setAdminPortalRegistryError] = useState<string | null>(null)
+  const [accessMatrixError, setAccessMatrixError] = useState<string | null>(null)
   const [navigatorProgramError, setNavigatorProgramError] = useState<string | null>(null)
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
@@ -683,6 +686,23 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       .catch((error) => {
         if (!isMounted) return
         setNavigatorProgramError(error instanceof Error ? error.message : 'Unable to load navigator program state.')
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    loadAccessMatrixDataset()
+      .then((dataset) => {
+        if (!isMounted) return
+        setAccessMatrixDataset(dataset)
+        setAccessMatrixError(null)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setAccessMatrixError(error instanceof Error ? error.message : 'Unable to load access matrix dataset.')
       })
     return () => {
       isMounted = false
