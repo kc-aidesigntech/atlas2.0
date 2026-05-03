@@ -247,15 +247,14 @@ export function BurdenCard({
                   onClick={() => handleSelectScore(option.value)}
                   className={`px-0 font-semibold transition-[transform,box-shadow,border-color,background-color,color] duration-150 ease-out ${
                     compact ? 'mx-[2px] py-1.5 text-[12px] md:mx-[3px] md:py-[7px] md:text-[14px]' : 'mx-[3px] py-2 text-[13px] md:mx-[4px] md:text-[15px]'
-                  } ${
-                    isSelected && isPulsing ? 'animate-pulse' : ''
                   }`}
                   style={{
                     ['--button-border-color' as const]: isSelected ? selectedColor : '#ffffff22',
-                    backgroundColor: isSelected ? `${selectedColor}14` : 'var(--surface-button-strong)',
-                    color: isSelected ? selectedColor : SP_COLORS.white,
-                    boxShadow: isSelected ? `0 0 0 1px ${selectedColor}, 0 0 16px ${selectedColor}22` : 'none',
-                    transform: isSelected ? 'translateY(-1px)' : 'none'
+                    ['--button-line-color' as const]: isSelected ? selectedColor : '#ffffff38',
+                    backgroundColor: 'var(--surface-button-strong)',
+                    color: SP_COLORS.white,
+                    boxShadow: isSelected ? `0 0 0 1px ${selectedColor}66` : 'none',
+                    transform: 'none'
                   } as React.CSSProperties}
                 >
                   {option.value}
