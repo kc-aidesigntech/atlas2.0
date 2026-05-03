@@ -19,6 +19,19 @@ const DEFAULT_PHASE_START_OFFSETS: Record<StabilizationPhase, number> = {
   renewal: 4
 }
 
+/**
+ * Creates a canonical baseline timeline config for new or partially hydrated
+ * enrollees. Centralized here so repository and hook fallbacks stay aligned.
+ */
+export function createDefaultTimelineConfig(planStartIso = new Date().toISOString()): TimelineConfig {
+  return {
+    planStartIso,
+    durationMonths: DEFAULT_TIMELINE_DURATION_MONTHS,
+    maxDurationMonths: DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
+    gates: buildDefaultTimelineGates(DEFAULT_TIMELINE_DURATION_MONTHS)
+  }
+}
+
 export interface TimelinePhaseSegment {
   phase: StabilizationPhase
   label: string

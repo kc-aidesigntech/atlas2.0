@@ -5,6 +5,7 @@ import type { RegulationTestStripMarker, RouteCandidateRecord, TimelineConfig } 
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import MtaRouteBoard from './MtaRouteBoard'
 import StripMapControlOverlay from './StripMapControlOverlay'
+import { formatDateLabelShort } from './timelineDateUtils'
 
 const arrowIconUrl = new URL(
   '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
@@ -276,7 +277,7 @@ export default function MobileRouteBoardPanel({
               ) : null}
             </div>
             <div className="mt-3 rounded-[16px] border px-3 py-3 text-[11px]" style={{ borderColor: '#ffffff18', color: '#cfd6de', backgroundColor: 'var(--surface-panel-raised)' }}>
-              {timelineConfig.durationMonths * 30}d outlook anchored from {formatDateLabel(timelineConfig.planStartIso)}.
+              {timelineConfig.durationMonths * 30}d outlook anchored from {formatDateLabelShort(timelineConfig.planStartIso)}.
             </div>
           </section>
         </PhaseRailRow>
@@ -296,12 +297,6 @@ export default function MobileRouteBoardPanel({
       />
     </div>
   )
-}
-
-function formatDateLabel(timestampIso: string) {
-  const date = new Date(timestampIso)
-  if (!Number.isFinite(date.getTime())) return 'pending'
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
 }
 
 function PhaseRailRow({

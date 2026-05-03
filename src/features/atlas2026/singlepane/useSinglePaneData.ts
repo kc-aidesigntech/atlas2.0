@@ -68,9 +68,7 @@ import { usePartnerServiceCapacityHistory } from '@/features/atlas2026/singlepan
 import { useRouteCandidates } from '@/features/atlas2026/singlepane/hooks/useRouteCandidates'
 import { useSinglePaneBootstrapState } from '@/features/atlas2026/singlepane/hooks/useSinglePaneBootstrapState'
 import {
-  buildDefaultTimelineGates,
-  DEFAULT_TIMELINE_DURATION_MONTHS,
-  DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
+  createDefaultTimelineConfig,
   extendTimelinePhaseByMonth,
   normalizeTimelineConfig
 } from '@/features/atlas2026/singlepane/timelineConfigUtils'
@@ -120,15 +118,6 @@ function splitFullName(value: string) {
 
 function createPickupCaseId() {
   return `atlas-intake-${Date.now().toString(36)}`
-}
-
-function buildFallbackTimelineConfig(planStartIso: string): TimelineConfig {
-  return {
-    planStartIso,
-    durationMonths: DEFAULT_TIMELINE_DURATION_MONTHS,
-    maxDurationMonths: DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
-    gates: buildDefaultTimelineGates(DEFAULT_TIMELINE_DURATION_MONTHS)
-  }
 }
 
 function getRegulationTestLabel(testType: RegulationTestSubmissionRecord['testType']) {
@@ -1019,7 +1008,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           ...current.timelineConfigsByEnrolleeId,
           [saved.enrolleeId]: current.timelineConfigsByEnrolleeId[saved.enrolleeId]
             ? { ...current.timelineConfigsByEnrolleeId[saved.enrolleeId], planStartIso: saved.enrollmentStartIso }
-            : buildFallbackTimelineConfig(saved.enrollmentStartIso)
+            : createDefaultTimelineConfig(saved.enrollmentStartIso)
         }
       }))
     })

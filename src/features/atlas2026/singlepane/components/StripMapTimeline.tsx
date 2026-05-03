@@ -19,6 +19,14 @@ import type {
   TimelineConfig
 } from '../types'
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
+import {
+  addMonths,
+  formatDateInputValue,
+  formatDateLabel,
+  formatDateTimeLabel,
+  mergeDateInputWithTime
+} from './timelineDateUtils'
+import { TIMELINE_PHASE_COLORS, TIMELINE_STATUS_COLORS } from './timelineVisualConfig'
 import { SP_COLORS } from '../theme'
 import milestoneArrowIcon from '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
 
@@ -72,67 +80,10 @@ interface ResolvedTooltipState {
   pinned: boolean
 }
 
-const STATUS_COLORS = {
-  planned: SP_COLORS.steel,
-  active: SP_COLORS.orange,
-  completed: SP_COLORS.deepGreen,
-  blocked: SP_COLORS.red
-}
-
-const PHASE_COLORS: Record<StabilizationPhase, string> = {
-  regulation: SP_COLORS.red,
-  readiness: SP_COLORS.yellow,
-  renewal: SP_COLORS.deepGreen
-}
-
-function addMonths(date: Date, months: number) {
-  const clone = new Date(date)
-  clone.setMonth(clone.getMonth() + months)
-  return clone
-}
-
 function addDays(date: Date, days: number) {
   const clone = new Date(date)
   clone.setDate(clone.getDate() + days)
   return clone
-}
-
-function formatDateLabel(timestampIso: string) {
-  const date = new Date(timestampIso)
-  if (!Number.isFinite(date.getTime())) return 'date pending'
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
-}
-
-function formatDateTimeLabel(timestampIso: string) {
-  const date = new Date(timestampIso)
-  if (!Number.isFinite(date.getTime())) return 'date pending'
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(date)
-}
-
-function formatDateInputValue(timestampIso: string) {
-  const date = new Date(timestampIso)
-  if (!Number.isFinite(date.getTime())) return ''
-  const year = date.getUTCFullYear()
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getUTCDate()}`.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function mergeDateInputWithTime(dateInput: string, currentIso: string) {
-  const date = new Date(currentIso)
-  const safeHours = Number.isFinite(date.getTime()) ? date.getUTCHours() : 9
-  const safeMinutes = Number.isFinite(date.getTime()) ? date.getUTCMinutes() : 0
-  const safeSeconds = Number.isFinite(date.getTime()) ? date.getUTCSeconds() : 0
-  const safeMilliseconds = Number.isFinite(date.getTime()) ? date.getUTCMilliseconds() : 0
-  const next = new Date(`${dateInput}T00:00:00.000Z`)
-  next.setUTCHours(safeHours, safeMinutes, safeSeconds, safeMilliseconds)
-  return next.toISOString()
 }
 
 function wrapLabel(label: string, maxCharsPerLine: number) {
@@ -385,7 +336,7 @@ export default function StripMapTimeline({
             label: 'regulation',
             onClick: onRegulationTestsClick,
             centerX,
-            color: PHASE_COLORS.regulation,
+            color: TIMELINE_PHASE_COLORS.regulation,
             textColor: SP_COLORS.white
           }
         }
@@ -396,7 +347,7 @@ export default function StripMapTimeline({
             label: 'plan route',
             onClick: onRoutePlanningClick,
             centerX,
-            color: PHASE_COLORS.readiness,
+            color: TIMELINE_PHASE_COLORS.readiness,
             textColor: SP_COLORS.bg,
             iconHref: milestoneArrowIcon
           }
@@ -408,7 +359,7 @@ export default function StripMapTimeline({
             label: 'renewal',
             onClick: onRenewalTestsClick,
             centerX,
-            color: PHASE_COLORS.renewal,
+            color: TIMELINE_PHASE_COLORS.renewal,
             textColor: SP_COLORS.white
           }
         }
@@ -691,7 +642,7 @@ export default function StripMapTimeline({
                   y1={baselineY}
                   x2={xEnd}
                   y2={baselineY}
-                  stroke={PHASE_COLORS[segment.phase]}
+                  stroke={TIMELINE_PHASE_COLORS[segment.phase]}
                   strokeWidth={6}
                   strokeOpacity={isHiddenReadinessSegment ? 0.18 : 0.8}
                 />
@@ -706,7 +657,7 @@ export default function StripMapTimeline({
                     x={(xStart + xEnd) / 2}
                     y={phaseLabelY}
                     textAnchor="middle"
-                    fill={PHASE_COLORS[segment.phase]}
+                    fill={TIMELINE_PHASE_COLORS[segment.phase]}
                     fontFamily="Helvetica, Arial, sans-serif"
                     fontSize="22"
                   >
@@ -761,7 +712,7 @@ export default function StripMapTimeline({
           </g>
 
           {positionedEvents.map(({ event, index, x, lane }) => {
-            const color = STATUS_COLORS[event.status]
+            const color = TIMELINE_STATUS_COLORS[event.status]
             const y = baselineY - lane * laneStep
             const isDragging = dragState?.eventId === event.id
             const angledLabel = truncateLabel(event.label, 30)

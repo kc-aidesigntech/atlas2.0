@@ -3,6 +3,7 @@
  * queue operations, self-assessment capture, and supervision notes.
  */
 import React from 'react'
+import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
 import type {
   AccountSettings,
   DomainLoad,
@@ -35,24 +36,6 @@ interface NavigatorMyProfilePanelProps {
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
 }
 
-function getInitials(fullName: string) {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean).slice(0, 2)
-  if (!parts.length) return 'A'
-  return parts.map((part) => part[0]?.toUpperCase() || '').join('') || 'A'
-}
-
-function createFallbackAvatar(fullName: string) {
-  const initials = getInitials(fullName)
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
-      <rect width="300" height="300" rx="56" fill="#111111" />
-      <circle cx="150" cy="150" r="114" fill="#1d1d1d" stroke="#ffffff" stroke-width="6" />
-      <text x="150" y="170" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="96" font-weight="700" fill="#ffffff">${initials}</text>
-    </svg>
-  `.trim()
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-}
-
 function formatDateLabel(value: string | null | undefined) {
   if (!value) return 'not recorded'
   const parsed = new Date(value)
@@ -83,7 +66,7 @@ export default function NavigatorMyProfilePanel({
 }: NavigatorMyProfilePanelProps) {
   // Avatar rendering intentionally stays local-only for this panel; persisted
   // profile image uploads are managed in enrollee-facing profile workflows.
-  const avatarSrc = React.useMemo(() => createFallbackAvatar(currentNavigatorName), [currentNavigatorName])
+  const avatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(currentNavigatorName), [currentNavigatorName])
   const [draftAssessment, setDraftAssessment] = React.useState(() => {
     const now = new Date().toISOString()
     return {

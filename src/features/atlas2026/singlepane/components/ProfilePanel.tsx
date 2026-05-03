@@ -4,6 +4,7 @@
  */
 import React from 'react'
 import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
+import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import type { EnrolleeProfile } from '../types'
 import { SP_COLORS } from '../theme'
@@ -31,28 +32,6 @@ interface ParentZCodeGroup {
 function normalizeParentCode(value: string) {
   const normalized = getParentZCode(value) || value.trim().toLowerCase()
   return normalized.replace(/^z/i, 'Z')
-}
-
-function getInitials(fullName: string) {
-  const parts = fullName
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-  if (!parts.length) return 'A'
-  return parts.map((part) => part[0]?.toUpperCase() || '').join('') || 'A'
-}
-
-function createFallbackAvatar(fullName: string) {
-  const initials = getInitials(fullName)
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
-      <rect width="300" height="300" rx="56" fill="#111111" />
-      <circle cx="150" cy="150" r="114" fill="#1d1d1d" stroke="#ffffff" stroke-width="6" />
-      <text x="150" y="170" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="96" font-weight="700" fill="#ffffff">${initials}</text>
-    </svg>
-  `.trim()
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 function normalizeZCode(value: string) {
@@ -99,7 +78,7 @@ export default function ProfilePanel({
   onSelectZCode,
   enrollmentStartLabel
 }: ProfilePanelProps) {
-  const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatar(enrollee.fullName), [enrollee.fullName])
+  const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(enrollee.fullName), [enrollee.fullName])
   // Preserve legacy demo portrait behavior while still supporting
   // the standard uploader + fallback path for all other enrollees.
   const isElenaRodriguez = enrollee.fullName.trim().toLowerCase() === 'elena rodriguez'

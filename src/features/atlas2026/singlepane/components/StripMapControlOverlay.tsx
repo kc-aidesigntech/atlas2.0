@@ -9,18 +9,13 @@ import {
 } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
 import { formatDateInputValue } from './timelineDateUtils'
+import { TIMELINE_PHASE_COLORS } from './timelineVisualConfig'
 
 interface StripMapControlOverlayProps {
   isOpen: boolean
   timelineConfig: TimelineConfig
   onClose: () => void
   onSave: (nextConfig: TimelineConfig) => void
-}
-
-const PHASE_COLORS: Record<StabilizationPhase, string> = {
-  regulation: SP_COLORS.red,
-  readiness: SP_COLORS.yellow,
-  renewal: SP_COLORS.deepGreen
 }
 
 export default function StripMapControlOverlay({
@@ -129,7 +124,7 @@ export default function StripMapControlOverlay({
                     style={{ borderColor: '#ffffff14', backgroundColor: 'var(--surface-panel-soft)' }}
                   >
                     <div className="min-w-0">
-                      <small className="block text-[11px] uppercase tracking-[0.12em]" style={{ color: PHASE_COLORS[segment.phase] }}>
+                      <small className="block text-[11px] uppercase tracking-[0.12em]" style={{ color: TIMELINE_PHASE_COLORS[segment.phase] }}>
                         {segment.label}
                       </small>
                       <div className="mt-1 text-[16px] text-white">{phaseLengthDays} days</div>

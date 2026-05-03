@@ -14,7 +14,15 @@ import type {
 } from '../types'
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
 import { SP_COLORS } from '../theme'
-import { formatDateInputValue } from './timelineDateUtils'
+import {
+  addMonths,
+  formatDateInputValue,
+  formatDateLabel,
+  formatDateTimeLabel,
+  formatPhaseRange,
+  mergeDateInputWithTime
+} from './timelineDateUtils'
+import { TIMELINE_PHASE_COLORS, TIMELINE_STATUS_COLORS } from './timelineVisualConfig'
 
 const arrowIconUrl = new URL(
   '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
@@ -42,19 +50,6 @@ interface VerticalStripMapTimelineProps {
   onTimelineConfigChange?: (nextConfig: TimelineConfig) => void
 }
 
-const STATUS_COLORS: Record<RouteLogStatus, string> = {
-  planned: SP_COLORS.steel,
-  active: SP_COLORS.orange,
-  completed: SP_COLORS.deepGreen,
-  blocked: SP_COLORS.red
-}
-
-const PHASE_COLORS: Record<StabilizationPhase, string> = {
-  regulation: SP_COLORS.red,
-  readiness: SP_COLORS.yellow,
-  renewal: SP_COLORS.deepGreen
-}
-
 const DOMAIN_LABELS: Record<ZDomain, string> = {
   housing: 'housing',
   health: 'health',
@@ -64,49 +59,6 @@ const DOMAIN_LABELS: Record<ZDomain, string> = {
   education: 'education'
 }
 
-function addMonths(date: Date, months: number) {
-  const clone = new Date(date)
-  clone.setMonth(clone.getMonth() + months)
-  return clone
-}
-
-function formatDateLabel(timestampIso: string) {
-  const date = new Date(timestampIso)
-  if (!Number.isFinite(date.getTime())) return 'date pending'
-  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
-}
-
-function formatDateTimeLabel(timestampIso: string) {
-  const date = new Date(timestampIso)
-  if (!Number.isFinite(date.getTime())) return 'date pending'
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(date)
-}
-
-function formatPhaseRange(startIso: string, startOffset: number, endOffset: number) {
-  const start = addMonths(new Date(startIso), startOffset || 0)
-  const end = addMonths(new Date(startIso), endOffset || 0)
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) return ''
-  const formatter = new Intl.DateTimeFormat('en-US', { month: 'short' })
-  return `${formatter.format(start)}-${formatter.format(end)}`
-}
-
-function mergeDateInputWithTime(dateInput: string, currentIso: string) {
-  // Preserve the original time-of-day so date edits do not re-order same-day milestones unexpectedly.
-  const date = new Date(currentIso)
-  const safeHours = Number.isFinite(date.getTime()) ? date.getUTCHours() : 9
-  const safeMinutes = Number.isFinite(date.getTime()) ? date.getUTCMinutes() : 0
-  const safeSeconds = Number.isFinite(date.getTime()) ? date.getUTCSeconds() : 0
-  const safeMilliseconds = Number.isFinite(date.getTime()) ? date.getUTCMilliseconds() : 0
-  const next = new Date(`${dateInput}T00:00:00.000Z`)
-  next.setUTCHours(safeHours, safeMinutes, safeSeconds, safeMilliseconds)
-  return next.toISOString()
-}
 
 export default function VerticalStripMapTimeline({
   events,
@@ -251,17 +203,17 @@ export default function VerticalStripMapTimeline({
                 opacity: !showReadinessProgress && segment.phase !== 'regulation' ? 0.42 : 1
               }}
             >
-              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: PHASE_COLORS[segment.phase] }} />
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TIMELINE_PHASE_COLORS[segment.phase] }} />
               {isRegulationAction ? (
                 <>
                   <AtlasTextButton
                     onClick={onRegulationTestsClick}
                     className="px-3 py-1 text-[11px] font-medium"
                     style={{
-                      ['--button-border-color' as const]: PHASE_COLORS.regulation,
+                      ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.regulation,
                       ['--button-line-color' as const]: SP_COLORS.white,
                       color: SP_COLORS.white,
-                      backgroundColor: PHASE_COLORS.regulation
+                      backgroundColor: TIMELINE_PHASE_COLORS.regulation
                     } as React.CSSProperties}
                   >
                     regulation
@@ -277,10 +229,10 @@ export default function VerticalStripMapTimeline({
                   onClick={onRoutePlanningClick}
                   className="inline-flex items-center gap-2 px-3 py-1 text-[11px] font-medium"
                   style={{
-                    ['--button-border-color' as const]: PHASE_COLORS.readiness,
+                    ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.readiness,
                     ['--button-line-color' as const]: SP_COLORS.bg,
                     color: SP_COLORS.bg,
-                    backgroundColor: PHASE_COLORS.readiness
+                    backgroundColor: TIMELINE_PHASE_COLORS.readiness
                   } as React.CSSProperties}
                 >
                   <span>plan route</span>
@@ -297,16 +249,16 @@ export default function VerticalStripMapTimeline({
                   onClick={onRenewalTestsClick}
                   className="px-3 py-1 text-[11px] font-medium"
                   style={{
-                    ['--button-border-color' as const]: PHASE_COLORS.renewal,
+                    ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.renewal,
                     ['--button-line-color' as const]: SP_COLORS.white,
                     color: SP_COLORS.white,
-                    backgroundColor: PHASE_COLORS.renewal
+                    backgroundColor: TIMELINE_PHASE_COLORS.renewal
                   } as React.CSSProperties}
                 >
                   renewal
                 </AtlasTextButton>
               ) : (
-                <span style={{ color: PHASE_COLORS[segment.phase] }}>{segment.label}</span>
+                <span style={{ color: TIMELINE_PHASE_COLORS[segment.phase] }}>{segment.label}</span>
               )}
               <span style={{ color: SP_COLORS.muted }}>
                 {formatPhaseRange(normalizedTimelineConfig.planStartIso, segment.startOffset, segment.endOffset)}
@@ -340,8 +292,8 @@ export default function VerticalStripMapTimeline({
           </div>
         ) : null}
         {sortedEvents.map((event, index) => {
-          const statusColor = STATUS_COLORS[event.status]
-          const phaseColor = PHASE_COLORS[event.phase]
+          const statusColor = TIMELINE_STATUS_COLORS[event.status]
+          const phaseColor = TIMELINE_PHASE_COLORS[event.phase]
           return (
             <div key={event.id} className="relative pb-5 last:pb-0">
               <div className="absolute left-[-4px] top-1 flex h-8 w-8 items-center justify-center rounded-full border bg-[var(--surface-panel-raised)]" style={{ borderColor: SP_COLORS.white }}>

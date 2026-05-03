@@ -59,11 +59,7 @@ import {
   searchPartnerIdentifierRecordMatches
 } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
-import {
-  buildDefaultTimelineGates,
-  DEFAULT_TIMELINE_DURATION_MONTHS,
-  DEFAULT_TIMELINE_MAX_DURATION_MONTHS
-} from '@/features/atlas2026/singlepane/timelineConfigUtils'
+import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 
 /**
  * Single-pane data-access facade.
@@ -90,15 +86,6 @@ export interface SinglePaneBootstrapData {
  * - consolidates reads from Supabase-backed domain views plus local config overlays.
  * - exposes normalized UI-ready records so hooks/components avoid storage-specific logic.
  */
-
-function createDefaultTimelineConfig() {
-  return {
-    planStartIso: new Date().toISOString(),
-    durationMonths: DEFAULT_TIMELINE_DURATION_MONTHS,
-    maxDurationMonths: DEFAULT_TIMELINE_MAX_DURATION_MONTHS,
-    gates: buildDefaultTimelineGates(DEFAULT_TIMELINE_DURATION_MONTHS)
-  }
-}
 
 function normalizeNavigatorTopMenus(menus: string[]) {
   const normalized = menus
