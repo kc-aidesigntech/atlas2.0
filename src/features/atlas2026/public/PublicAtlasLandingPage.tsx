@@ -124,7 +124,7 @@ export default function PublicAtlasLandingPage() {
               onClick={() => {
                 window.location.assign('/app')
               }}
-              style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+              style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
             >
               {session ? 'open workspace' : 'log in'}
             </AtlasTextButton>
@@ -155,6 +155,7 @@ export default function PublicAtlasLandingPage() {
             defaultPartnerOrganizationName=""
             recentReferrals={recentPublicReferrals}
             onSubmit={submitPublicReferral}
+            accentColor="var(--atlas-signal-lucid-green)"
           />
 
           <div className="rounded-[24px] border border-white/20 bg-[#0d0d0d] px-5 py-5">
@@ -213,7 +214,7 @@ export default function PublicAtlasLandingPage() {
                   type="submit"
                   className="px-4 py-2 text-[13px]"
                   disabled={isSubmittingInquiry}
-                  style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                  style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
                 >
                   {isSubmittingInquiry ? 'submitting...' : 'submit partner inquiry'}
                 </AtlasTextButton>

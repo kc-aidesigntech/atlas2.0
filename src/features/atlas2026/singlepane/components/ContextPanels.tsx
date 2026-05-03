@@ -10,9 +10,26 @@ interface ContextPanelsProps {
   enrollmentRequests: EnrollmentRequestRecord[]
   countyHeatmap: CountyHeatPoint[]
   supervisorNavigatorCompetency: SupervisorNavigatorCompetencySummary[]
+  supervisorNavigatorDirectory: Array<{
+    navigatorPersonId: string
+    navigatorName: string
+    assignedEnrolleeCount: number
+    isManagedByCurrentSupervisor: boolean
+  }>
+  onToggleSupervisorManagedNavigator?: (navigatorPersonId: string, isManaged: boolean) => Promise<void> | void
+  isSavingAccessMatrix?: boolean
 }
 
-export default function ContextPanels({ role, activeMenu, enrollmentRequests, countyHeatmap, supervisorNavigatorCompetency }: ContextPanelsProps) {
+export default function ContextPanels({
+  role,
+  activeMenu,
+  enrollmentRequests,
+  countyHeatmap,
+  supervisorNavigatorCompetency,
+  supervisorNavigatorDirectory,
+  onToggleSupervisorManagedNavigator,
+  isSavingAccessMatrix = false
+}: ContextPanelsProps) {
   // Non-navigator "my profile" intentionally surfaces enrollment intake requests instead of navigator-only profile data.
   if (activeMenu === 'my profile' && role !== 'navigator') {
     return (
@@ -38,7 +55,15 @@ export default function ContextPanels({ role, activeMenu, enrollmentRequests, co
   }
 
   if (role === 'supervisor' && (activeMenu === 'navigator assessments' || activeMenu === 'assigned navigators')) {
-    return <SupervisorCompetencyPanel competencyByNavigator={supervisorNavigatorCompetency} />
+    return (
+      <SupervisorCompetencyPanel
+        mode={activeMenu === 'assigned navigators' ? 'assigned-navigators' : 'navigator-assessments'}
+        navigatorDirectory={supervisorNavigatorDirectory}
+        competencyByNavigator={supervisorNavigatorCompetency}
+        onToggleManagedNavigator={onToggleSupervisorManagedNavigator}
+        isSavingAssignments={isSavingAccessMatrix}
+      />
+    )
   }
 
   if (activeMenu === 'refer' || activeMenu === 'referral portal') {

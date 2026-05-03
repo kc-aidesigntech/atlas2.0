@@ -522,6 +522,13 @@ function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadB
   }
 }
 
+interface SupervisorNavigatorDirectoryEntry {
+  navigatorPersonId: string
+  navigatorName: string
+  assignedEnrolleeCount: number
+  isManagedByCurrentSupervisor: boolean
+}
+
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   /**
    * Orchestrates single-pane read/write state across UI memory and persistence adapters.
@@ -793,6 +800,38 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     () => buildSupervisorNavigatorCompetencySummaries(scopedEnrollees, navigatorCompetencyAssessments),
     [navigatorCompetencyAssessments, scopedEnrollees]
   )
+  const supervisorNavigatorDirectory = useMemo<SupervisorNavigatorDirectoryEntry[]>(() => {
+    if (!accessMatrixDataset) {
+      // Fallback path for offline/mock states: derive navigator labels from enrollee headers.
+      const entries = Array.from(new Set(scopedEnrollees.map((enrollee) => enrollee.assignedNavigator).filter(Boolean))).map((name) => ({
+        navigatorPersonId: `fallback:${name.toLowerCase()}`,
+        navigatorName: name,
+        assignedEnrolleeCount: scopedEnrollees.filter((enrollee) => enrollee.assignedNavigator === name).length,
+        isManagedByCurrentSupervisor: false
+      }))
+      return entries.sort((left, right) => left.navigatorName.localeCompare(right.navigatorName))
+    }
+    const assignmentByNavigator = new Map(
+      accessMatrixDataset.supervisorAssignments.map((assignment) => [assignment.navigatorPersonId, assignment])
+    )
+    const enrolleeCountByNavigatorId = new Map<string, number>()
+    for (const assignment of accessMatrixDataset.enrollmentAssignments) {
+      for (const navigatorPersonId of assignment.navigatorPersonIds) {
+        enrolleeCountByNavigatorId.set(navigatorPersonId, (enrolleeCountByNavigatorId.get(navigatorPersonId) || 0) + 1)
+      }
+    }
+    return accessMatrixDataset.people
+      .filter((person) => person.roleKeys.includes('navigator'))
+      .map((person) => ({
+        navigatorPersonId: person.id,
+        navigatorName: person.fullName,
+        assignedEnrolleeCount: enrolleeCountByNavigatorId.get(person.id) || 0,
+        isManagedByCurrentSupervisor: Boolean(
+          viewerPerson && assignmentByNavigator.get(person.id)?.supervisorPersonIds.includes(viewerPerson.id)
+        )
+      }))
+      .sort((left, right) => left.navigatorName.localeCompare(right.navigatorName))
+  }, [accessMatrixDataset, scopedEnrollees, viewerPerson])
   const mergedNavigatorProgramState = useMemo(
     () => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, enrollmentRequests, publicQueueRecords),
     [currentNavigatorName, enrollmentRequests, navigatorProgramState, publicQueueRecords]
@@ -1668,6 +1707,18 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function toggleSupervisorManagedNavigator(navigatorPersonId: string, isManaged: boolean) {
+    if (!viewerPerson?.id || !accessMatrixDataset) return
+    const currentAssignment = accessMatrixDataset.supervisorAssignments.find(
+      (assignment) => assignment.navigatorPersonId === navigatorPersonId
+    )
+    const currentSupervisorIds = currentAssignment?.supervisorPersonIds || []
+    const nextSupervisorIds = isManaged
+      ? Array.from(new Set([...currentSupervisorIds, viewerPerson.id]))
+      : currentSupervisorIds.filter((supervisorPersonId) => supervisorPersonId !== viewerPerson.id)
+    await saveAccessMatrixSupervisorAssignments(navigatorPersonId, nextSupervisorIds)
+  }
+
   async function saveAccessMatrixPartnerPrimaryContacts(partnerId: string, primaryContactPersonIds: string[]) {
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
@@ -1869,6 +1920,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     navigatorSelfAssessmentSummary,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
+    supervisorNavigatorDirectory,
     navigatorIntervalRules,
     navigatorIntervalDueItems,
     searchPartnerIdentifierMatches,
@@ -1896,6 +1948,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     saveAccessMatrixPersonRoles,
     saveAccessMatrixEnrollmentNavigators,
     saveAccessMatrixSupervisorAssignments,
+    toggleSupervisorManagedNavigator,
     saveAccessMatrixPartnerPrimaryContacts,
     startTroubleshootingSession,
     stopTroubleshootingSession,

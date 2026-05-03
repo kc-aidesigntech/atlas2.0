@@ -11,8 +11,8 @@
 }
 
 .atlas-admin-input:focus {
-  border-color: rgba(252, 192, 26, 0.7);
-  box-shadow: 0 0 0 1px rgba(252, 192, 26, 0.35), 0 0 0 6px rgba(252, 192, 26, 0.08);
+  border-color: rgb(58 104 130 / 0.78);
+  box-shadow: 0 0 0 1px rgb(58 104 130 / 0.42), 0 0 0 6px rgb(58 104 130 / 0.14);
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -36,6 +36,7 @@
 
     --atlas-signal-yellow: #fcc01a;
     --atlas-signal-lucid-green: rgb(129 188 54);
+    --atlas-signal-lucid-teal: rgb(58 104 130);
     --atlas-signal-orange: #ff6319;
     --atlas-signal-red: #ee352e;
     --atlas-signal-deep-green: #00933c;

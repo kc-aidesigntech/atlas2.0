@@ -15,6 +15,7 @@ interface PartnerReferralWorkflowPanelProps {
   defaultPartnerOrganizationName: string
   recentReferrals: UnassignedEnrolleePickupRecord[]
   onSubmit: (input: PartnerReferralSubmissionInput) => Promise<unknown> | unknown
+  accentColor?: string
 }
 
 interface ReferralSourceOption {
@@ -59,7 +60,8 @@ export default function PartnerReferralWorkflowPanel({
   defaultReferrerName,
   defaultPartnerOrganizationName,
   recentReferrals,
-  onSubmit
+  onSubmit,
+  accentColor = SP_COLORS.yellow
 }: PartnerReferralWorkflowPanelProps) {
   const [draft, setDraft] = useState<PartnerReferralSubmissionInput>(() =>
     buildInitialDraft(defaultReferrerName, defaultPartnerOrganizationName)
@@ -124,6 +126,10 @@ export default function PartnerReferralWorkflowPanel({
     )
     return match?.label || draft.partnerOrganizationName || draft.partnerContactName || ''
   }, [draft.partnerContactEmail, draft.partnerContactName, draft.partnerContactPhone, draft.partnerOrganizationName, referralSourceOptions])
+  const accentTextColor = isLucidGreenAccent(accentColor) ? '#111111' : accentColor
+  const accentSelectedBackground = isLucidGreenAccent(accentColor)
+    ? 'color-mix(in srgb, var(--atlas-signal-lucid-green) 24%, #101010)'
+    : 'color-mix(in srgb, currentColor 18%, #101010)'
 
   useEffect(() => {
     return () => {
@@ -273,8 +279,8 @@ export default function PartnerReferralWorkflowPanel({
             className="w-full px-3 py-2 text-[14px]"
             style={
               {
-                ['--button-border-color' as const]: draft.selfReferring ? SP_COLORS.yellow : '#ffffff40',
-                color: draft.selfReferring ? SP_COLORS.yellow : SP_COLORS.white
+                ['--button-border-color' as const]: draft.selfReferring ? accentColor : '#ffffff40',
+                color: draft.selfReferring ? accentTextColor : SP_COLORS.white
               } as React.CSSProperties
             }
           >
@@ -286,8 +292,8 @@ export default function PartnerReferralWorkflowPanel({
             className="w-full px-3 py-2 text-[14px]"
             style={
               {
-                ['--button-border-color' as const]: !draft.selfReferring ? SP_COLORS.yellow : '#ffffff40',
-                color: !draft.selfReferring ? SP_COLORS.yellow : SP_COLORS.white
+                ['--button-border-color' as const]: !draft.selfReferring ? accentColor : '#ffffff40',
+                color: !draft.selfReferring ? accentTextColor : SP_COLORS.white
               } as React.CSSProperties
             }
           >
@@ -315,7 +321,7 @@ export default function PartnerReferralWorkflowPanel({
                   type="button"
                   onClick={() => setIsAddReferralSourceOverlayOpen(true)}
                   className="px-3 py-2 text-[16px] font-medium"
-                  style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                  style={{ ['--button-border-color' as const]: accentColor, color: accentTextColor } as React.CSSProperties}
                 >
                   +
                 </AtlasTextButton>
@@ -343,9 +349,9 @@ export default function PartnerReferralWorkflowPanel({
                             }}
                             className="flex items-center justify-between rounded-[14px] border px-3 py-2 text-left text-[13px] transition-colors"
                             style={{
-                              borderColor: selected ? SP_COLORS.yellow : '#ffffff18',
-                              backgroundColor: selected ? '#1a1606' : '#101010',
-                              color: selected ? SP_COLORS.yellow : '#f5f5f5'
+                              borderColor: selected ? accentColor : '#ffffff18',
+                              backgroundColor: selected ? accentSelectedBackground : '#101010',
+                              color: selected ? accentTextColor : '#f5f5f5'
                             }}
                           >
                             <span>{option.label}</span>
@@ -409,9 +415,9 @@ export default function PartnerReferralWorkflowPanel({
                           }
                           className="flex items-center justify-between rounded-[14px] border px-3 py-2 text-left text-[13px] transition-colors"
                           style={{
-                            borderColor: selected ? SP_COLORS.yellow : '#ffffff18',
-                            backgroundColor: selected ? '#1a1606' : '#101010',
-                            color: selected ? SP_COLORS.yellow : '#f5f5f5'
+                            borderColor: selected ? accentColor : '#ffffff18',
+                            backgroundColor: selected ? accentSelectedBackground : '#101010',
+                            color: selected ? accentTextColor : '#f5f5f5'
                           }}
                         >
                           <span>{option}</span>
@@ -463,8 +469,8 @@ export default function PartnerReferralWorkflowPanel({
               className="px-3 py-1.5 text-[12px]"
               style={
                 {
-                  ['--button-border-color' as const]: draft.existingPartner ? SP_COLORS.yellow : '#ffffff40',
-                  color: draft.existingPartner ? SP_COLORS.yellow : SP_COLORS.white
+                  ['--button-border-color' as const]: draft.existingPartner ? accentColor : '#ffffff40',
+                  color: draft.existingPartner ? accentTextColor : SP_COLORS.white
                 } as React.CSSProperties
               }
             >
@@ -475,8 +481,8 @@ export default function PartnerReferralWorkflowPanel({
               className="px-3 py-1.5 text-[12px]"
               style={
                 {
-                  ['--button-border-color' as const]: !draft.existingPartner ? SP_COLORS.yellow : '#ffffff40',
-                  color: !draft.existingPartner ? SP_COLORS.yellow : SP_COLORS.white
+                  ['--button-border-color' as const]: !draft.existingPartner ? accentColor : '#ffffff40',
+                  color: !draft.existingPartner ? accentTextColor : SP_COLORS.white
                 } as React.CSSProperties
               }
             >
@@ -536,7 +542,7 @@ export default function PartnerReferralWorkflowPanel({
             type="submit"
             disabled={isSubmitting}
             className="px-4 py-2 text-[13px] font-medium"
-            style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+            style={{ ['--button-border-color' as const]: accentColor, color: accentTextColor } as React.CSSProperties}
           >
             {isSubmitting ? 'submitting...' : 'submit referral'}
           </AtlasTextButton>
@@ -639,7 +645,7 @@ export default function PartnerReferralWorkflowPanel({
                   setIsReferralSourceDropdownOpen(false)
                 }}
                 className="px-4 py-2 text-[12px]"
-                style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                style={{ ['--button-border-color' as const]: accentColor, color: accentTextColor } as React.CSSProperties}
               >
                 add referral source
               </AtlasTextButton>
@@ -678,4 +684,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   )
+}
+
+function isLucidGreenAccent(color: string) {
+  const normalized = color.trim().toLowerCase()
+  return normalized.includes('atlas-signal-lucid-green') || normalized === '#81bc36' || normalized === 'rgb(129 188 54)'
 }

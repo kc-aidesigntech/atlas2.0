@@ -79,6 +79,7 @@ export default function SinglePaneApp() {
     navigatorSelfAssessmentSummary,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
+    supervisorNavigatorDirectory,
     navigatorIntervalDueItems,
     navigatorProgramState,
     selectedRouteAssignment,
@@ -114,6 +115,7 @@ export default function SinglePaneApp() {
     saveAccessMatrixEnrollmentNavigators,
     saveAccessMatrixSupervisorAssignments,
     saveAccessMatrixPartnerPrimaryContacts,
+    toggleSupervisorManagedNavigator,
     startTroubleshootingSession,
     stopTroubleshootingSession,
     savePartnerTroubleshootingGrant,
@@ -614,7 +616,7 @@ export default function SinglePaneApp() {
                         <AtlasTextButton
                           onClick={() => setActiveMenu('referral portal')}
                           className="px-4 py-1 text-[13px] text-white"
-                          style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                          style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
                           title="Open the referral workflow."
                         >
                           refer
@@ -692,7 +694,7 @@ export default function SinglePaneApp() {
                     <AtlasTextButton
                       onClick={() => setActiveMenu('referral portal')}
                       className="px-4 py-1 text-[12px] text-white"
-                      style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                      style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
                       title="Open referral portal."
                     >
                       refer
@@ -708,6 +710,7 @@ export default function SinglePaneApp() {
                     }
                     recentReferrals={pickupQueue}
                     onSubmit={submitPartnerReferral}
+                    accentColor="var(--atlas-signal-lucid-green)"
                   />
                 ) : isAdminSection ? (
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
@@ -798,6 +801,9 @@ export default function SinglePaneApp() {
                       enrollmentRequests={enrollmentRequests}
                       countyHeatmap={countyHeatmap}
                       supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                          supervisorNavigatorDirectory={supervisorNavigatorDirectory}
+                          onToggleSupervisorManagedNavigator={toggleSupervisorManagedNavigator}
+                          isSavingAccessMatrix={isSavingAccessMatrix}
                     />
                   </>
                 ) : (
@@ -863,6 +869,9 @@ export default function SinglePaneApp() {
                       enrollmentRequests={enrollmentRequests}
                       countyHeatmap={countyHeatmap}
                       supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                      supervisorNavigatorDirectory={supervisorNavigatorDirectory}
+                      onToggleSupervisorManagedNavigator={toggleSupervisorManagedNavigator}
+                      isSavingAccessMatrix={isSavingAccessMatrix}
                     />
                   </>
                 )}
