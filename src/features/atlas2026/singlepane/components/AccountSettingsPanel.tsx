@@ -3,6 +3,17 @@ import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/componen
 import type { AccountSettings, AtlasRole } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
+export type AccountSecurityAuthProvider = 'google' | 'apple'
+
+export interface AccountSecurityPanelProps {
+  sessionEmail: string | null
+  /** When null, linked providers are still loading. */
+  linkedProviders: string[] | null
+  linkBusyProvider: AccountSecurityAuthProvider | null
+  onLinkProvider: (provider: AccountSecurityAuthProvider) => void
+  onSignOut: () => void
+}
+
 interface AccountSettingsPanelProps {
   isOpen: boolean
   role: AtlasRole
@@ -10,6 +21,7 @@ interface AccountSettingsPanelProps {
   onClose: () => void
   onRoleChange: (role: AtlasRole) => void
   onSave: (settings: AccountSettings) => void
+  security?: AccountSecurityPanelProps | null
 }
 
 const ROLE_OPTIONS: AtlasRole[] = ['administrator', 'supervisor', 'partner', 'navigator']
@@ -20,7 +32,8 @@ export default function AccountSettingsPanel({
   settings,
   onClose,
   onRoleChange,
-  onSave
+  onSave,
+  security
 }: AccountSettingsPanelProps) {
   const [draft, setDraft] = useState<AccountSettings>(settings)
 
@@ -127,6 +140,68 @@ export default function AccountSettingsPanel({
               </label>
             </div>
           </section>
+
+          {security ? (
+            <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff30' }}>
+              <small className="mb-2 block text-[12px] font-semibold uppercase tracking-[0.12em] text-white">
+                sign-in and security
+              </small>
+              <small className="mb-3 block text-[12px] text-[#bcbcbc]">
+                Supabase Auth backs this shell. Use the same verified email across password and SSO so identities stay
+                on one user. Enable manual linking in the Supabase dashboard to attach Google or Apple while signed in
+                with email.
+              </small>
+              {security.sessionEmail ? (
+                <p className="mb-3 text-[13px] text-white">
+                  Signed in as <span className="font-medium">{security.sessionEmail}</span>
+                </p>
+              ) : null}
+              <p className="mb-2 text-[11px] uppercase tracking-[0.14em] text-[#9f9f9f]">connected providers</p>
+              <ul className="mb-4 space-y-1 text-[13px] text-[#dedede]">
+                {security.linkedProviders === null ? (
+                  <li className="text-[#9f9f9f]">Loading…</li>
+                ) : security.linkedProviders.length ? (
+                  security.linkedProviders.map((p) => (
+                    <li key={p} className="capitalize">
+                      {p}
+                    </li>
+                  ))
+                ) : (
+                  <li className="text-[#9f9f9f]">Email only — link a provider below.</li>
+                )}
+              </ul>
+              <div className="flex flex-col gap-2">
+                <AtlasTextButton
+                  type="button"
+                  disabled={Boolean(security.linkBusyProvider)}
+                  onClick={() => security.onLinkProvider('google')}
+                  className="w-full px-3 py-2 text-[12px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+                >
+                  {security.linkBusyProvider === 'google' ? 'Redirecting to Google…' : 'Link Google'}
+                </AtlasTextButton>
+                <AtlasTextButton
+                  type="button"
+                  disabled={Boolean(security.linkBusyProvider)}
+                  onClick={() => security.onLinkProvider('apple')}
+                  className="w-full px-3 py-2 text-[12px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+                >
+                  {security.linkBusyProvider === 'apple' ? 'Redirecting to Apple…' : 'Link Apple'}
+                </AtlasTextButton>
+              </div>
+              <div className="mt-4 border-t pt-4" style={{ borderColor: '#ffffff18' }}>
+                <AtlasTextButton
+                  type="button"
+                  onClick={() => void security.onSignOut()}
+                  className="w-full px-3 py-2 text-[12px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ff6b6b' } as React.CSSProperties}
+                >
+                  Sign out
+                </AtlasTextButton>
+              </div>
+            </section>
+          ) : null}
 
           <section className="rounded-[24px] border p-4" style={{ borderColor: '#ffffff30' }}>
             <small className="mb-3 block text-[12px] font-semibold uppercase tracking-[0.12em] text-white">role assignments</small>

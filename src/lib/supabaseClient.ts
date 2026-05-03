@@ -16,6 +16,8 @@ export const isSinglePaneSupabaseBootstrapEnabled =
 export const supabase = createAtlasSupabaseClient(config, {
   auth: {
     persistSession: true,
-    autoRefreshToken: true
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce'
   }
 })

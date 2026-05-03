@@ -1,4 +1,6 @@
 import React from 'react'
+import { useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
+import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled } from '@/lib/supabaseClient'
 import AdminDataControlPanel from '../admin/AdminDataControlPanel'
 import { AtlasTextButton } from '../components/AtlasPrimitives'
 import AccountSettingsPanel from './components/AccountSettingsPanel'
@@ -103,6 +105,10 @@ export default function SinglePaneApp() {
     saveNavigatorRegulationTest,
     deleteNavigatorRegulationTestDraft
   } = useSinglePaneData()
+  const { session, signOut, refreshIdentities, linkOAuthProvider } = useSupabaseAuth()
+  const showLiveAuthSecurity = hasSupabaseConfig && isSinglePaneSupabaseBootstrapEnabled && Boolean(session)
+  const [linkedAuthProviders, setLinkedAuthProviders] = React.useState<string[] | null>(null)
+  const [linkBusyProvider, setLinkBusyProvider] = React.useState<'google' | 'apple' | null>(null)
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = React.useState(false)
   const [isRoutePlanningOpen, setIsRoutePlanningOpen] = React.useState(false)
   const [isRegulationTestsOpen, setIsRegulationTestsOpen] = React.useState(false)
@@ -126,6 +132,20 @@ export default function SinglePaneApp() {
       setLastContentMenu(activeMenu)
     }
   }, [activeMenu])
+
+  React.useEffect(() => {
+    if (!isAccountSettingsOpen || !showLiveAuthSecurity) return
+    let cancelled = false
+    setLinkedAuthProviders(null)
+    void refreshIdentities().then((identities) => {
+      if (!cancelled) {
+        setLinkedAuthProviders(identities.map((identity) => identity.provider))
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isAccountSettingsOpen, showLiveAuthSecurity, session?.user?.id, refreshIdentities])
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return
@@ -409,6 +429,26 @@ export default function SinglePaneApp() {
             onClose={() => setIsAccountSettingsOpen(false)}
             onRoleChange={setRole}
             onSave={saveAccountSettings}
+            security={
+              showLiveAuthSecurity
+                ? {
+                    sessionEmail: session?.user.email ?? null,
+                    linkedProviders: linkedAuthProviders,
+                    linkBusyProvider,
+                    onLinkProvider: async (provider) => {
+                      setLinkBusyProvider(provider)
+                      const { error } = await linkOAuthProvider(provider)
+                      setLinkBusyProvider(null)
+                      if (error && typeof window !== 'undefined') {
+                        window.alert(error.message)
+                      }
+                    },
+                    onSignOut: () => {
+                      void signOut()
+                    }
+                  }
+                : null
+            }
           />
           {!isPartnerRole ? (
             <RoutePlanningOverlay
