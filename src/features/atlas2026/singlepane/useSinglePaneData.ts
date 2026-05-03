@@ -9,6 +9,8 @@ import type {
   CountyHeatPoint,
   DomainLoadBreakdown,
   DomainLoad,
+  EnrolleeBurdenSurveySubmissionInput,
+  EnrolleeBurdenSurveySubmissionRecord,
   EnrolleeActiveZCode,
   EnrolleeIntakeRecord,
   EnrollmentRequestRecord,
@@ -46,10 +48,12 @@ import type {
 } from '@/features/atlas2026/singlepane/types'
 import {
   appendRouteLog as appendRouteLogRecord,
+  deleteEnrolleeBurdenSurveyDraftRecord,
   deletePartnerServiceCapacityDraftRecord,
   loadAdminPortalRegistry,
   loadAdminDataQuality,
   loadCountyHeatmap,
+  loadEnrolleeBurdenSurveyHistory,
   loadEnrollmentRequests,
   prefetchJourneyStationMarkersForEnrollments,
   prefetchRouteCandidatesForEnrollments,
@@ -67,6 +71,7 @@ import {
   saveAccessMatrixPartnerPrimaryContacts as persistAccessMatrixPartnerPrimaryContacts,
   saveAccessMatrixPersonRoles as persistAccessMatrixPersonRoles,
   saveAccessMatrixSupervisorAssignments as persistAccessMatrixSupervisorAssignments,
+  saveEnrolleeBurdenSurvey as persistEnrolleeBurdenSurvey,
   saveNavigatorProgramState as persistNavigatorProgramState,
   savePartnerTroubleshootingGrant as persistPartnerTroubleshootingGrant,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
@@ -90,6 +95,10 @@ import {
   normalizeTimelineConfig
 } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
+import {
+  buildSurveyDomainLoadBreakdown,
+  toNormalizedRadialDomainLoad
+} from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import {
   buildPartnerServiceCapacityDefaultHeader,
   buildSupervisorNavigatorCompetencySummaries,
@@ -496,33 +505,71 @@ function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
   )
   return {
     enrolleeId: 'navigator-aggregate',
-    habitat: totals.habitat,
-    work: totals.work,
-    socialNetworks: totals.socialNetworks
+    habitat: totals.habitat / loads.length,
+    work: totals.work / loads.length,
+    socialNetworks: totals.socialNetworks / loads.length
   }
 }
 
 function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadBreakdown>, navigatorName: string): DomainLoadBreakdown | null {
   const values = Object.values(loadBreakdowns)
   if (!values.length) return null
-  const rows = values.flatMap((breakdown) => breakdown.rows)
-  const totals = rows.reduce(
-    (sum, row) => {
-      if (row.mappedDomain === 'habitat') sum.habitatTotal += row.rawCount
-      if (row.mappedDomain === 'work') sum.workTotal += row.rawCount
-      if (row.mappedDomain === 'socialNetworks') sum.socialNetworksTotal += row.rawCount
-      return sum
-    },
-    { habitatTotal: 0, workTotal: 0, socialNetworksTotal: 0 }
-  )
+  const groupedRows = new Map<string, DomainLoadBreakdown['rows'][number] & { sampleCount: number }>()
+  values.flatMap((breakdown) => breakdown.rows).forEach((row) => {
+    const key = `${row.zCodeGroup}:${row.mappedDomain}`
+    const existing = groupedRows.get(key)
+    if (!existing) {
+      groupedRows.set(key, {
+        ...row,
+        sampleCount: 1,
+        specializeCount: row.specializeCount || 0,
+        interfereCount: row.interfereCount || 0
+      })
+      return
+    }
+    existing.rawCount += row.rawCount
+    existing.specializeCount = (existing.specializeCount || 0) + (row.specializeCount || 0)
+    existing.interfereCount = (existing.interfereCount || 0) + (row.interfereCount || 0)
+    existing.sampleCount += 1
+  })
+  const rows = Array.from(groupedRows.values()).map((row, index) => ({
+    ...row,
+    id: `${row.id}:${index}`,
+    rawCount: row.rawCount / row.sampleCount,
+    specializeCount: row.specializeCount ? row.specializeCount / row.sampleCount : undefined,
+    interfereCount: row.interfereCount ? row.interfereCount / row.sampleCount : undefined,
+    responseCount: row.sampleCount
+  }))
+  const habitatRows = rows.filter((row) => row.mappedDomain === 'habitat')
+  const workRows = rows.filter((row) => row.mappedDomain === 'work')
+  const socialRows = rows.filter((row) => row.mappedDomain === 'socialNetworks')
+  const totals = {
+    habitatTotal: habitatRows.length ? habitatRows.reduce((sum, row) => sum + row.rawCount, 0) / habitatRows.length : 0,
+    workTotal: workRows.length ? workRows.reduce((sum, row) => sum + row.rawCount, 0) / workRows.length : 0,
+    socialNetworksTotal: socialRows.length ? socialRows.reduce((sum, row) => sum + row.rawCount, 0) / socialRows.length : 0
+  }
   return {
     subjectId: 'navigator-aggregate',
     subjectLabel: navigatorName,
-    sourceKind: 'enrolleeRecords',
+    sourceKind: values.some((breakdown) => breakdown.sourceKind === 'enrolleeSurvey') ? 'enrolleeSurvey' : 'enrolleeRecords',
     sourceLabel: 'Assigned enrollee aggregate',
     ...totals,
-    rows: rows.map((row, index) => ({ ...row, id: `${row.id}:${index}` }))
+    rows
   }
+}
+
+function getEnrolleeSurveySortTime(record: EnrolleeBurdenSurveySubmissionRecord) {
+  return new Date(record.updatedAtIso || record.submittedAtIso).getTime()
+}
+
+function upsertEnrolleeBurdenSurveyHistory(
+  history: EnrolleeBurdenSurveySubmissionRecord[],
+  saved: EnrolleeBurdenSurveySubmissionRecord
+) {
+  return history
+    .filter((record) => record.id !== saved.id && record.draftKey !== saved.draftKey)
+    .concat(saved)
+    .sort((left, right) => getEnrolleeSurveySortTime(right) - getEnrolleeSurveySortTime(left))
 }
 
 interface SupervisorNavigatorDirectoryEntry {
@@ -556,6 +603,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [accessMatrixError, setAccessMatrixError] = useState<string | null>(null)
   const [navigatorProgramError, setNavigatorProgramError] = useState<string | null>(null)
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
+  const [isSavingEnrolleeBurdenSurvey, setIsSavingEnrolleeBurdenSurvey] = useState(false)
+  const [enrolleeBurdenSurveyError, setEnrolleeBurdenSurveyError] = useState<string | null>(null)
+  const [enrolleeBurdenSurveyHistoryByEnrollmentId, setEnrolleeBurdenSurveyHistoryByEnrollmentId] = useState<
+    Record<string, EnrolleeBurdenSurveySubmissionRecord[]>
+  >({})
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
   const [isUploadingAccountProfileImage, setIsUploadingAccountProfileImage] = useState(false)
@@ -682,7 +734,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   const selectedLoad = useMemo(
     () => {
-      if ((viewerRole === 'partner' || viewerRole === 'supervisor') && partnerLoad) return partnerLoad
+      if (viewerRole === 'partner' && partnerLoad) return partnerLoad
       return scopedLoads.find((item) => item.enrolleeId === selectedEnrollee?.id) || scopedLoads[0] || null
     },
     [partnerLoad, scopedLoads, selectedEnrollee, viewerRole]
@@ -690,7 +742,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   const selectedLoadBreakdown = useMemo(
     () => {
-      if ((viewerRole === 'partner' || viewerRole === 'supervisor') && partnerLoadBreakdown) return partnerLoadBreakdown
+      if (viewerRole === 'partner' && partnerLoadBreakdown) return partnerLoadBreakdown
       return (
         scopedLoadBreakdownsByEnrolleeId[selectedEnrollee?.id || ''] ||
         Object.values(scopedLoadBreakdownsByEnrolleeId)[0] ||
@@ -1588,6 +1640,72 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function reloadEnrolleeBurdenSurveyHistoryForEnrollment(enrollmentId: string) {
+    const trimmedEnrollmentId = enrollmentId.trim()
+    if (!trimmedEnrollmentId) return []
+    setEnrolleeBurdenSurveyError(null)
+    try {
+      const rows = await loadEnrolleeBurdenSurveyHistory(trimmedEnrollmentId)
+      setEnrolleeBurdenSurveyHistoryByEnrollmentId((current) => ({
+        ...current,
+        [trimmedEnrollmentId]: rows
+      }))
+      return rows
+    } catch (error) {
+      setEnrolleeBurdenSurveyError(
+        error instanceof Error ? error.message : 'Unable to load enrollee burden survey.'
+      )
+      throw error
+    }
+  }
+
+  async function saveEnrolleeBurdenSurvey(input: EnrolleeBurdenSurveySubmissionInput) {
+    ensureWriteAllowed()
+    setIsSavingEnrolleeBurdenSurvey(true)
+    setEnrolleeBurdenSurveyError(null)
+    try {
+      const saved = await persistEnrolleeBurdenSurvey(input)
+      setEnrolleeBurdenSurveyHistoryByEnrollmentId((current) => ({
+        ...current,
+        [input.header.enrollmentId]: upsertEnrolleeBurdenSurveyHistory(current[input.header.enrollmentId] || [], saved)
+      }))
+
+      if (saved.status === 'completed') {
+        const breakdown = buildSurveyDomainLoadBreakdown({
+          subjectId: saved.header.enrolleeId,
+          subjectLabel: saved.header.enrolleeName,
+          sourceKind: 'enrolleeSurvey',
+          sourceLabel: `${saved.header.respondentRole} burden survey`,
+          answers: saved.answers
+        })
+        const normalized = toNormalizedRadialDomainLoad(breakdown)
+        setBootstrapState((current) => {
+          const nextLoadMap = new Map(current.loads.map((load) => [load.enrolleeId, load]))
+          if (normalized) {
+            nextLoadMap.set(normalized.enrolleeId, normalized)
+          }
+          return {
+            ...current,
+            loads: Array.from(nextLoadMap.values()),
+            loadBreakdownsByEnrolleeId: {
+              ...current.loadBreakdownsByEnrolleeId,
+              [saved.header.enrolleeId]: breakdown
+            }
+          }
+        })
+      }
+
+      return saved
+    } catch (error) {
+      setEnrolleeBurdenSurveyError(
+        error instanceof Error ? error.message : 'Unable to save enrollee burden survey.'
+      )
+      throw error
+    } finally {
+      setIsSavingEnrolleeBurdenSurvey(false)
+    }
+  }
+
   async function reloadPartnerServiceCapacitySurveyHistory() {
     if (viewerRole !== 'partner') return
     const organizationName = effectivePartnerOrganizationName?.trim()
@@ -1618,6 +1736,29 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       throw error
     } finally {
       setIsSavingPartnerServiceCapacitySurvey(false)
+    }
+  }
+
+  async function deleteEnrolleeBurdenSurveyDraft(submissionId: string, enrollmentId: string) {
+    ensureWriteAllowed()
+    setIsSavingEnrolleeBurdenSurvey(true)
+    setEnrolleeBurdenSurveyError(null)
+    try {
+      const deleted = await deleteEnrolleeBurdenSurveyDraftRecord(submissionId)
+      setEnrolleeBurdenSurveyHistoryByEnrollmentId((current) => ({
+        ...current,
+        [enrollmentId]: (current[enrollmentId] || []).filter(
+          (record) => record.id !== deleted?.id && record.draftKey !== deleted?.draftKey
+        )
+      }))
+      return deleted
+    } catch (error) {
+      setEnrolleeBurdenSurveyError(
+        error instanceof Error ? error.message : 'Unable to delete enrollee burden draft.'
+      )
+      throw error
+    } finally {
+      setIsSavingEnrolleeBurdenSurvey(false)
     }
   }
 
@@ -1972,10 +2113,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     journeyStationMarkers,
     resolvedZCodeStripMarkers,
     partnerServiceCapacitySurveyHistory,
+    enrolleeBurdenSurveyHistoryByEnrollmentId,
     setPartnerServiceCapacitySurveyHistory,
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
+    isSavingEnrolleeBurdenSurvey,
+    enrolleeBurdenSurveyError,
     reloadPartnerServiceCapacitySurveyHistory,
     regulationTestHistory,
     regulationTestStripMarkers,
@@ -2047,7 +2191,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setEnrolleeZCodeResolution,
     saveRouteAssignment,
     savePartnerServiceCapacitySurvey,
+    saveEnrolleeBurdenSurvey,
     deletePartnerServiceCapacityDraft,
+    deleteEnrolleeBurdenSurveyDraft,
+    reloadEnrolleeBurdenSurveyHistoryForEnrollment,
     saveNavigatorCompetencyAssessment,
     saveNavigatorRegulationTest,
     deleteNavigatorRegulationTestDraft

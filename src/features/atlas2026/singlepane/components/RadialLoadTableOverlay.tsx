@@ -16,6 +16,7 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
   // Snapshot rows immediately so rendering remains stable even if upstream data refreshes while overlay is open.
   const rows = breakdown?.rows || []
   const isPartnerSurvey = breakdown?.sourceKind === 'partnerSurvey'
+  const isWeightedSurvey = breakdown?.sourceKind === 'partnerSurvey' || breakdown?.sourceKind === 'enrolleeSurvey'
 
   return (
     <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/65 px-5 py-6 backdrop-blur-[2px]" onClick={onClose}>
@@ -54,8 +55,10 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
               <small className="block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd]">derived source rows</small>
               <small className="text-[12px] text-[#8f8f8f]">
                 {isPartnerSurvey
-                  ? 'Partner chart values are derived from survey specialize counts mapped into habitat, work, and social domains.'
-                  : 'Enrollee chart values are derived from active Z-Code records mapped into habitat, work, and social domains.'}
+                  ? 'Partner chart values are weighted domain averages from the latest burden survey.'
+                  : isWeightedSurvey
+                    ? 'Enrollee chart values are weighted domain averages from the latest burden survey.'
+                    : 'Enrollee chart values are derived from active Z-Code records mapped into habitat, work, and social domains.'}
               </small>
             </div>
             <small className="text-[12px] text-[#9f9f9f]">{rows.length} grouped row{rows.length === 1 ? '' : 's'}</small>
@@ -78,7 +81,7 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
                       <td className="border-b border-white/5 px-3 py-3">{row.zCodeGroup.toUpperCase()}</td>
                       <td className="border-b border-white/5 px-3 py-3">{formatBucketLabel(row.mappedDomain)}</td>
                       <td className="border-b border-white/5 px-3 py-3 text-right">
-                        {isPartnerSurvey ? row.specializeCount || row.rawCount : row.rawCount}
+                        {formatMetricValue(isPartnerSurvey ? row.specializeCount || row.rawCount : row.rawCount)}
                       </td>
                       {isPartnerSurvey ? (
                         <td className="border-b border-white/5 px-3 py-3 text-right">{row.interfereCount || 0}</td>
@@ -114,9 +117,9 @@ function SummaryChip({
     <div className="rounded-[22px] border px-4 py-3" style={{ borderColor: '#ffffff20', backgroundColor: '#050505' }}>
       <small className="block text-[11px] uppercase tracking-[0.08em] text-[#9f9f9f]">{label}</small>
       <div className="mt-1 text-[22px] font-medium" style={{ color }}>
-        {chartValue}
+        {formatMetricValue(chartValue)}
       </div>
-      <small className="text-[12px] text-[#bdbdbd]">domain count {rawTotal}</small>
+      <small className="text-[12px] text-[#bdbdbd]">domain average {formatMetricValue(rawTotal)}</small>
     </div>
   )
 }
@@ -124,4 +127,8 @@ function SummaryChip({
 function formatBucketLabel(bucket: DomainLoadBreakdown['rows'][number]['mappedDomain']) {
   if (bucket === 'socialNetworks') return 'social networks'
   return bucket
+}
+
+function formatMetricValue(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }

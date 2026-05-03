@@ -11,6 +11,7 @@ import AccountSettingsPanel from './components/AccountSettingsPanel'
 import ContextPanels from './components/ContextPanels'
 import LiveAccessMatrixPanel from './components/LiveAccessMatrixPanel'
 import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
+import EnrolleeBurdenSurveyPanel from './components/EnrolleeBurdenSurveyPanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
 import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
 import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
@@ -87,6 +88,7 @@ export default function SinglePaneApp() {
     supervisorNavigatorDirectory,
     navigatorIntervalDueItems,
     navigatorProgramState,
+    enrolleeBurdenSurveyHistoryByEnrollmentId,
     selectedRouteAssignment,
     appendRouteLog,
     deleteRouteLog,
@@ -103,6 +105,7 @@ export default function SinglePaneApp() {
     isSavingAdminPortalRegistry,
     isSavingAccessMatrix,
     viewerCanWrite,
+    isSavingEnrolleeBurdenSurvey,
     supervisorNavigatorCompetency,
     regulationTestHistory,
     regulationTestStripMarkers,
@@ -114,6 +117,7 @@ export default function SinglePaneApp() {
     profileImageUploadError,
     isUploadingAccountProfileImage,
     accountProfileImageUploadError,
+    enrolleeBurdenSurveyError,
     saveAccountSettings,
     saveAdminPortalRegistry,
     saveAccessMatrixPersonRoles,
@@ -135,9 +139,12 @@ export default function SinglePaneApp() {
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
     saveRouteAssignment,
+    saveEnrolleeBurdenSurvey,
     saveNavigatorCompetencyAssessment,
     saveNavigatorRegulationTest,
-    deleteNavigatorRegulationTestDraft
+    deleteNavigatorRegulationTestDraft,
+    deleteEnrolleeBurdenSurveyDraft,
+    reloadEnrolleeBurdenSurveyHistoryForEnrollment
   } = useSinglePaneData()
   const { session, signOut, refreshIdentities, linkOAuthProvider } = useSupabaseAuth()
   const showLiveAuthSecurity = hasSupabaseConfig && isSinglePaneSupabaseBootstrapEnabled && Boolean(session)
@@ -148,6 +155,7 @@ export default function SinglePaneApp() {
   const [isRegulationTestsOpen, setIsRegulationTestsOpen] = React.useState(false)
   const [assessmentInitialTestType, setAssessmentInitialTestType] = React.useState<'mh_sca' | 'svs' | 'ipf' | 'b_ipf' | null>(null)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
+  const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
   const [navigatorEnrolleeView, setNavigatorEnrolleeView] = React.useState<'my' | 'add'>('my')
@@ -158,6 +166,17 @@ export default function SinglePaneApp() {
   const hashSyncBootstrappedRef = React.useRef(false)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const uiRole = viewerRole
+  const activeEnrolleeSurveyTarget = React.useMemo(
+    () => enrollees.find((item) => item.id === enrolleeSurveyTargetId) || null,
+    [enrollees, enrolleeSurveyTargetId]
+  )
+  const activeEnrolleeSurveyHistory = React.useMemo(
+    () =>
+      activeEnrolleeSurveyTarget?.enrollmentId
+        ? enrolleeBurdenSurveyHistoryByEnrollmentId[activeEnrolleeSurveyTarget.enrollmentId] || []
+        : [],
+    [activeEnrolleeSurveyTarget, enrolleeBurdenSurveyHistoryByEnrollmentId]
+  )
   const standaloneSurveyUrl = React.useMemo(() => {
     if (typeof window === 'undefined') return '/service-capacity-survey'
     return new URL('service-capacity-survey', window.location.href.split('#')[0]).toString()
@@ -205,6 +224,23 @@ export default function SinglePaneApp() {
     }
     hashSyncBootstrappedRef.current = true
   }, [selectedRoleConfig.topMenus, setActiveMenu])
+
+  const openEnrolleeBurdenSurvey = React.useCallback(
+    async (enrolleeId: string) => {
+      const target = enrollees.find((item) => item.id === enrolleeId) || null
+      if (!target) return
+      setSelectedEnrolleeId(enrolleeId)
+      setEnrolleeSurveyTargetId(enrolleeId)
+      if (target.enrollmentId) {
+        try {
+          await reloadEnrolleeBurdenSurveyHistoryForEnrollment(target.enrollmentId)
+        } catch {
+          // Let the panel surface the load error instead of blocking the open action.
+        }
+      }
+    },
+    [enrollees, reloadEnrolleeBurdenSurveyHistoryForEnrollment, setSelectedEnrolleeId]
+  )
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return
@@ -601,6 +637,33 @@ export default function SinglePaneApp() {
             onSave={saveNavigatorRegulationTest}
             onDeleteDraft={deleteNavigatorRegulationTestDraft}
           />
+          {activeEnrolleeSurveyTarget ? (
+            <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+              <div className="max-h-[92vh] w-full max-w-[1180px] overflow-y-auto rounded-[28px] border border-white/15 bg-[color:var(--surface-panel)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.45)] md:p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <small className="block text-[10px] uppercase tracking-[0.18em] text-[#9fb0c1]">intervallic assessments</small>
+                    <div className="mt-1 text-[24px] font-medium text-white">enrollee burden survey</div>
+                  </div>
+                  <AtlasTextButton onClick={() => setEnrolleeSurveyTargetId(null)} className="px-3 py-1.5 text-[12px]">
+                    close
+                  </AtlasTextButton>
+                </div>
+                <EnrolleeBurdenSurveyPanel
+                  enrollee={activeEnrolleeSurveyTarget}
+                  respondentName={accountSettings.fullName || currentNavigatorName}
+                  respondentRole={viewerRole === 'supervisor' ? 'supervisor' : 'navigator'}
+                  organizationName={accountSettings.organization}
+                  canEdit={viewerRole === 'navigator' && viewerCanWrite}
+                  submissionHistory={activeEnrolleeSurveyHistory}
+                  isSaving={isSavingEnrolleeBurdenSurvey}
+                  saveError={enrolleeBurdenSurveyError}
+                  onSubmit={saveEnrolleeBurdenSurvey}
+                  onDeleteDraft={deleteEnrolleeBurdenSurveyDraft}
+                />
+              </div>
+            </div>
+          ) : null}
           <div className="flex min-h-full flex-col gap-[10px] transition-opacity duration-300 ease-in-out" style={{ opacity: contentOpacity }}>
             {isLoading || !isReady ? (
               <LoadingShell />
@@ -663,6 +726,7 @@ export default function SinglePaneApp() {
                     currentNavigatorName={currentNavigatorName}
                     aggregateLoad={navigatorAggregateLoad}
                     assignedEnrolleeCount={enrollees.length}
+                    assignedEnrollees={enrollees}
                     pickupQueue={pickupQueue}
                     competencySummary={navigatorAssignedCompetencySummary}
                     selfAssessmentSummary={navigatorSelfAssessmentSummary}
@@ -674,6 +738,7 @@ export default function SinglePaneApp() {
                     isUploadingAvatar={isUploadingAccountProfileImage}
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
+                    onOpenEnrolleeSurvey={(enrolleeId) => void openEnrolleeBurdenSurvey(enrolleeId)}
                     onClaimPickupQueueRecord={claimPickupQueueRecord}
                     onSaveSelfAssessment={saveNavigatorSelfAssessment}
                     onSaveSupervisionSession={saveSupervisionSession}
@@ -707,7 +772,7 @@ export default function SinglePaneApp() {
                         isLoading={isLoadingNavigatorEnrollmentAssignments}
                         error={navigatorEnrollmentAssignmentsError}
                         assigningEnrollmentId={assigningNavigatorEnrollmentId}
-                        onAssignToSelf={assignNavigatorEnrollmentToSelf}
+                        onToggleAssignment={assignNavigatorEnrollmentToSelf}
                       />
                     </div>
                   </div>
@@ -737,6 +802,12 @@ export default function SinglePaneApp() {
                         onReplaceAvatar={replaceSelectedEnrolleeProfileImage}
                         onSelectZCode={openCanonicalZCodeOverlay}
                         enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
+                        onOpenBurdenSurvey={
+                          viewerRole === 'navigator' || viewerRole === 'supervisor'
+                            ? () => void openEnrolleeBurdenSurvey(selectedEnrollee.id)
+                            : undefined
+                        }
+                        burdenSurveyLabel={viewerRole === 'supervisor' ? 'review burden survey' : 'open burden survey'}
                       />
                     </div>
                     <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
@@ -841,7 +912,7 @@ export default function SinglePaneApp() {
                     isLoading={isLoadingNavigatorEnrollmentAssignments}
                     error={navigatorEnrollmentAssignmentsError}
                     assigningEnrollmentId={assigningNavigatorEnrollmentId}
-                    onAssignToSelf={assignNavigatorEnrollmentToSelf}
+                    onToggleAssignment={assignNavigatorEnrollmentToSelf}
                   />
                 ) : isPartnerRole ? (
                   <>

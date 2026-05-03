@@ -42,14 +42,6 @@ create table if not exists atlas.enrollee_burden_survey_answers (
 create index if not exists enrollee_burden_survey_answers_submission_idx
   on atlas.enrollee_burden_survey_answers (submission_id, normalized_z_code);
 
-drop trigger if exists set_enrollee_burden_survey_submissions_updated_at
-  on atlas.enrollee_burden_survey_submissions;
-
-create trigger set_enrollee_burden_survey_submissions_updated_at
-before update on atlas.enrollee_burden_survey_submissions
-for each row
-execute function atlas.set_updated_at();
-
 alter table atlas.enrollee_burden_survey_submissions enable row level security;
 alter table atlas.enrollee_burden_survey_answers enable row level security;
 

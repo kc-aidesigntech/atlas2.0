@@ -18,6 +18,8 @@ interface ProfilePanelProps {
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onSelectZCode?: (selection: { parentCode: string; childCodes: string[] }) => void
   enrollmentStartLabel?: string
+  onOpenBurdenSurvey?: () => void
+  burdenSurveyLabel?: string
 }
 
 interface ParentZCodeGroup {
@@ -76,7 +78,9 @@ export default function ProfilePanel({
   avatarUploadError = null,
   onReplaceAvatar,
   onSelectZCode,
-  enrollmentStartLabel
+  enrollmentStartLabel,
+  onOpenBurdenSurvey,
+  burdenSurveyLabel = 'open burden survey'
 }: ProfilePanelProps) {
   const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(enrollee.fullName), [enrollee.fullName])
   // Preserve legacy demo portrait behavior while still supporting
@@ -165,6 +169,16 @@ export default function ProfilePanel({
           N: {enrollee.assignedNavigator || 'unassigned'}
         </small>
         <small className="block text-[13px] text-white">Enrollment start: {enrollmentStartLabel || 'not recorded'}</small>
+        {onOpenBurdenSurvey ? (
+          <button
+            type="button"
+            onClick={onOpenBurdenSurvey}
+            className="mt-3 inline-flex items-center rounded-full border px-4 py-2 text-[12px] font-medium"
+            style={{ borderColor: 'var(--atlas-signal-lucid-green)', backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg }}
+          >
+            {burdenSurveyLabel}
+          </button>
+        ) : null}
       </div>
     </div>
   )

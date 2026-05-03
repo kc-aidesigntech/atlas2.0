@@ -8,6 +8,7 @@ import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
 import type {
   AccountSettings,
   DomainLoad,
+  EnrolleeProfile,
   IntervalAssessmentDueItem,
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
@@ -24,6 +25,7 @@ interface NavigatorMyProfilePanelProps {
   currentNavigatorName: string
   aggregateLoad: DomainLoad | null
   assignedEnrolleeCount: number
+  assignedEnrollees: EnrolleeProfile[]
   pickupQueue: UnassignedEnrolleePickupRecord[]
   competencySummary: SupervisorNavigatorCompetencySummary | null
   selfAssessmentSummary: NavigatorSelfAssessmentSummary
@@ -35,6 +37,7 @@ interface NavigatorMyProfilePanelProps {
   isUploadingAvatar?: boolean
   avatarUploadError?: string | null
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
+  onOpenEnrolleeSurvey?: (enrolleeId: string) => void
   onClaimPickupQueueRecord: (recordId: string) => Promise<unknown> | unknown
   onSaveSelfAssessment: (record: NavigatorSelfAssessmentRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
@@ -56,6 +59,7 @@ export default function NavigatorMyProfilePanel({
   currentNavigatorName,
   aggregateLoad,
   assignedEnrolleeCount,
+  assignedEnrollees,
   pickupQueue,
   competencySummary,
   selfAssessmentSummary,
@@ -67,6 +71,7 @@ export default function NavigatorMyProfilePanel({
   isUploadingAvatar = false,
   avatarUploadError = null,
   onReplaceAvatar,
+  onOpenEnrolleeSurvey,
   onClaimPickupQueueRecord,
   onSaveSelfAssessment,
   onSaveSupervisionSession
@@ -251,6 +256,44 @@ export default function NavigatorMyProfilePanel({
         </section>
 
         <div className="grid gap-4">
+          <section className="rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff35', backgroundColor: 'var(--surface-panel-soft)' }}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+                  enrollees
+                </small>
+                <div className="mt-1 text-[24px] font-medium text-white">enrollee burden surveys</div>
+              </div>
+              <span className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
+                {assignedEnrollees.length} assigned
+              </span>
+            </div>
+            <div className="mt-4 space-y-2">
+              {assignedEnrollees.length ? (
+                assignedEnrollees.slice(0, 6).map((enrollee) => (
+                  <div key={enrollee.id} className="flex items-center justify-between gap-3 rounded-[16px] border px-3 py-3" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
+                    <div className="min-w-0">
+                      <div className="truncate text-[14px] font-medium text-white">{enrollee.fullName}</div>
+                      <small style={{ color: '#9eacb9' }}>{enrollee.caseId || 'pending case id'}</small>
+                    </div>
+                    <AtlasTextButton
+                      onClick={() => onOpenEnrolleeSurvey?.(enrollee.id)}
+                      className="px-3 py-1.5 text-[11px] font-medium"
+                      disabled={!onOpenEnrolleeSurvey}
+                      style={{ backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg } as React.CSSProperties}
+                    >
+                      open survey
+                    </AtlasTextButton>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[16px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff18', color: '#9eacb9' }}>
+                  No assigned enrollees are available for survey capture yet.
+                </div>
+              )}
+            </div>
+          </section>
+
           <section className="rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff35', backgroundColor: 'var(--surface-panel-soft)' }}>
             <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
               competency

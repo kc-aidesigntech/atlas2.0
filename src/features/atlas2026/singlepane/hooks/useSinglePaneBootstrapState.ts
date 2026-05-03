@@ -22,13 +22,18 @@ import {
   loadCountyHeatmap,
   loadEnrolleeIntakes,
   loadEnrollmentRequests,
+  loadLatestEnrolleeBurdenSurveySubmissions,
   loadNavigatorCompetencyAssessments,
+  loadPartnerServiceCapacitySurveyHistory,
   loadPartnerRadialLoadBreakdown,
   loadPartnerStationProfile,
   loadRouteAssignments,
   loadSinglePaneBootstrap
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
-import { toNormalizedRadialDomainLoad } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
+import {
+  buildSurveyDomainLoadBreakdown,
+  toNormalizedRadialDomainLoad
+} from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 
 /**
  * Bootstraps role-scoped single-pane state.
@@ -74,6 +79,28 @@ const ROLE_PREFETCH_ORDER: AtlasRole[] = ['navigator', 'partner', 'supervisor', 
 const bootstrapPayloadCache = new Map<AtlasRole, SinglePaneBootstrapPayload>()
 const bootstrapPayloadInFlight = new Map<AtlasRole, Promise<SinglePaneBootstrapPayload>>()
 
+function mergeWeightedSurveyBreakdowns(
+  loads: DomainLoad[],
+  loadBreakdownsByEnrolleeId: Record<string, DomainLoadBreakdown>,
+  weightedBreakdowns: DomainLoadBreakdown[]
+) {
+  const nextBreakdowns = { ...loadBreakdownsByEnrolleeId }
+  const loadMap = new Map(loads.map((load) => [load.enrolleeId, load]))
+
+  weightedBreakdowns.forEach((breakdown) => {
+    nextBreakdowns[breakdown.subjectId] = breakdown
+    const normalized = toNormalizedRadialDomainLoad(breakdown)
+    if (normalized) {
+      loadMap.set(normalized.enrolleeId, normalized)
+    }
+  })
+
+  return {
+    loads: Array.from(loadMap.values()),
+    loadBreakdownsByEnrolleeId: nextBreakdowns
+  }
+}
+
 async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Promise<SinglePaneBootstrapPayload> {
   if (!forceRefresh) {
     const cached = bootstrapPayloadCache.get(role)
@@ -92,22 +119,52 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
       requests,
       heatmap,
       quality,
-      partnerViewLoadBreakdown,
       nextAccountSettings,
       savedIntakes,
       savedRouteAssignments,
-      savedNavigatorAssessments
+      savedNavigatorAssessments,
+      legacyPartnerViewLoadBreakdown,
+      latestEnrolleeSurveySubmissions
     ] = await Promise.all([
       loadEnrollmentRequests(role),
       loadCountyHeatmap(),
       loadAdminDataQuality(),
-      loadPartnerRadialLoadBreakdown(),
       loadAccountSettings(),
       loadEnrolleeIntakes(),
       loadRouteAssignments(),
-      loadNavigatorCompetencyAssessments()
+      loadNavigatorCompetencyAssessments(),
+      loadPartnerRadialLoadBreakdown(),
+      loadLatestEnrolleeBurdenSurveySubmissions()
     ])
 
+    const weightedEnrolleeBreakdowns = latestEnrolleeSurveySubmissions.map((record) =>
+      buildSurveyDomainLoadBreakdown({
+        subjectId: record.header.enrolleeId,
+        subjectLabel: record.header.enrolleeName,
+        sourceKind: 'enrolleeSurvey',
+        sourceLabel: `${record.header.respondentRole} burden survey`,
+        answers: record.answers
+      })
+    )
+    const mergedEnrolleeLoadState = mergeWeightedSurveyBreakdowns(
+      data.loads || [],
+      data.loadBreakdownsByEnrolleeId || {},
+      weightedEnrolleeBreakdowns
+    )
+
+    const partnerSurveyHistory = await loadPartnerServiceCapacitySurveyHistory(nextAccountSettings.organization)
+    const latestCompletedPartnerSurvey =
+      partnerSurveyHistory.find((record) => record.status === 'completed') || partnerSurveyHistory[0] || null
+    const partnerViewLoadBreakdown =
+      latestCompletedPartnerSurvey
+        ? buildSurveyDomainLoadBreakdown({
+            subjectId: latestCompletedPartnerSurvey.partnerId || nextAccountSettings.organization,
+            subjectLabel: latestCompletedPartnerSurvey.header.organizationName || nextAccountSettings.organization,
+            sourceKind: 'partnerSurvey',
+            sourceLabel: 'partner burden survey',
+            answers: latestCompletedPartnerSurvey.answers
+          })
+        : legacyPartnerViewLoadBreakdown
     const partnerViewLoad = toNormalizedRadialDomainLoad(partnerViewLoadBreakdown)
     const stationProfile = await loadPartnerStationProfile(nextAccountSettings.organization, {
       fullName: nextAccountSettings.fullName,
@@ -116,8 +173,8 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
 
     const payload: SinglePaneBootstrapPayload = {
       enrollees: data.enrollees || [],
-      loads: data.loads || [],
-      loadBreakdownsByEnrolleeId: data.loadBreakdownsByEnrolleeId || {},
+      loads: mergedEnrolleeLoadState.loads,
+      loadBreakdownsByEnrolleeId: mergedEnrolleeLoadState.loadBreakdownsByEnrolleeId,
       roleConfigs: data.roleConfigs || [],
       timelineConfig: data.timelineConfig,
       timelineConfigsByEnrolleeId: data.timelineConfigsByEnrolleeId || {},

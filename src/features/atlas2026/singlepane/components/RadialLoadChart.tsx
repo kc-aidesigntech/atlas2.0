@@ -53,16 +53,20 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
   const habitat = load?.habitat || 0
   const work = load?.work || 0
   const social = load?.socialNetworks || 0
+  const habitatSocialBlend = (habitat + social) / 2
+  const socialWorkBlend = (social + work) / 2
   const chartWidth = 340
   const chartHeight = 220
-  const maxDomainValue = Math.max(habitat, work, social, 1)
+  const maxDomainValue = Math.max(habitat, habitatSocialBlend, social, socialWorkBlend, work, 1)
 
   const data = [
     { axis: 'habitat', value: habitat },
+    { axis: 'habitat-social', value: habitatSocialBlend },
     { axis: 'social networks', value: social },
+    { axis: 'social-work', value: socialWorkBlend },
     { axis: 'work', value: work }
   ]
-  const tickCount = Math.min(Math.max(maxDomainValue + 1, 3), 6)
+  const tickCount = Math.min(Math.max(Math.ceil(maxDomainValue), 3), 6)
   const Wrapper = onClick ? 'button' : 'div'
 
   return (
@@ -80,11 +84,11 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
           height={chartHeight}
           cx={chartWidth * 0.47}
           cy={chartHeight * 0.53}
-          outerRadius={chartHeight * 0.34}
+          outerRadius={chartHeight * 0.39}
           data={data}
           startAngle={90}
           endAngle={-270}
-          margin={{ top: 14, right: 44, bottom: 14, left: 28 }}
+          margin={{ top: 12, right: 48, bottom: 18, left: 28 }}
         >
           <PolarGrid
             gridType="polygon"

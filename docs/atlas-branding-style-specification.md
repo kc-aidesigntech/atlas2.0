@@ -2,10 +2,11 @@
 
 ## Document Control
 
-- Version: `1.0`
+- Version: `1.1`
 - Status: `Active`
 - Applies to: `web app`, `single-pane workspace`, `public landing pages`, `admin workflows`
 - Primary implementation references: `src/index.css`, `packages/shared/src/atlas2026/theme.ts`, `packages/shared/src/atlas2026/zCodeColors.ts`
+- Last refreshed: `2026-05-03`
 
 ## Purpose
 
@@ -27,6 +28,13 @@ It is the canonical style source for design, product, and engineering decisions 
 - Avoid all-caps body copy. Reserve uppercase tracking styles for small utility labels and metadata only.
 
 ## Color System
+
+### 0) Token Layers (source-of-truth order)
+
+- **Shared canonical tokens**: `packages/shared/src/atlas2026/theme.ts` and `packages/shared/src/atlas2026/zCodeColors.ts`.
+- **Global interface tokens**: `src/index.css` custom properties (`--atlas-*`, `--surface-*`, `--foreground-*`).
+- **Component-level variables**: local CSS variables for button/input variants (for example `--button-border-color`).
+- When tokens conflict, canonical shared tokens define semantic meaning and global interface tokens define shell presentation defaults.
 
 ### 1) Core Neutrals (foundation surfaces)
 
@@ -51,16 +59,38 @@ It is the canonical style source for design, product, and engineering decisions 
 - `steel`: `#808183`
 - `white`: `#ffffff`
 
-### 3) Semantic Usage Rules
+### 3) Lucid Accent Layer (global UI accent)
 
-- `yellow` = readiness, primary accent, highlight intent.
-- `orange` = in-progress/active operational work.
+- `lucidGreen`: `rgb(129 188 54)`
+- `lucidTeal`: `rgb(58 104 130)`
+- Default shell accent token (`--accent-color`) is `lucidGreen`.
+- Selection tint and ambient accent surfaces derive from the current accent token.
+- Input focus treatment uses `lucidTeal` as the field border and focus ring signal.
+
+### 4) Semantic Usage Rules
+
+- `lucidGreen` = universal interface accent for shell emphasis and non-critical highlights.
+- `lucidTeal` = focus and interactive control affordance, especially form fields.
+- `yellow` = readiness, primary operational accent, highlight intent.
+- `orange` = in-progress or active operational work.
 - `red` = blocked, failed, or immediate risk.
-- `deepGreen` = resolved/completed/cleared states.
+- `deepGreen` = resolved, completed, or cleared states.
 - `steel` and `muted` = secondary information and non-blocking metadata.
 - Never invent one-off hex values when an existing semantic token fits.
 
-### 4) Z-Code Parent Mapping (must remain stable)
+### 5) Workflow Phase and Status Mappings
+
+- Phase colors:
+  - `regulation -> red`
+  - `readiness -> yellow`
+  - `renewal -> deepGreen`
+- Status colors:
+  - `planned -> steel`
+  - `active -> orange`
+  - `completed -> deepGreen`
+  - `blocked -> red`
+
+### 6) Z-Code Parent Mapping (must remain stable)
 
 - `Z55 -> yellow`
 - `Z56 -> orange`
@@ -93,7 +123,7 @@ It is the canonical style source for design, product, and engineering decisions 
 - `h2`: major section boundaries.
 - `h3`: panel-level headings.
 - `h4`: sub-panel labels and grouped control sections.
-- `p`: narrative/supporting context.
+- `p`: narrative and supporting context.
 - `small`: secondary metadata and helper text.
 
 ### Typography Rules
@@ -119,13 +149,14 @@ It is the canonical style source for design, product, and engineering decisions 
 ### Corner Radius Language
 
 - Inputs and controls: rounded, medium-soft corners.
+- Baseline admin/public intake field radius: `14px`.
 - Panels/cards: larger radius for containment and hierarchy.
 - Keep radius values consistent by component type; avoid arbitrary one-offs.
 
 ## Surface and Border Treatment
 
 - Primary app background is true black or near-black.
-- Raised surfaces use subtle tonal separation, not strong contrast jumps.
+- Raised surfaces use subtle tonal separation, not high-contrast jumps.
 - Border opacity should be low-to-moderate and used to separate content blocks, not decorate them.
 - Glass/translucent overlays must preserve text contrast and reduce background noise.
 
@@ -134,21 +165,28 @@ It is the canonical style source for design, product, and engineering decisions 
 ### Buttons
 
 - Use sign-line button language for primary ATLAS controls.
-- Primary action buttons should use `yellow` semantics unless a stronger status semantic is required.
-- Hover/active interactions may use brightness lift; avoid large motion shifts.
+- Primary action buttons default to `yellow` operational semantics unless a stronger status semantic is required.
+- Hover and active interactions use subtle brightness lift, not large motion shifts.
 - Disabled states must reduce contrast and remove hover affordances.
+- Keep sign-line interaction brightness conservative (`~1.18` default max lift).
 
 ### Inputs and Form Controls
 
 - Inputs are full-width within their field container.
 - Default field styling: dark surface, light text, subtle border.
-- Focus styling must be visible and accessible (accent border + soft ring).
+- Focus styling must be visible and accessible (teal-tinted border + soft ring).
 - Form labels are concise, small, and clearly associated with controls.
+
+### Sliders and Specialized Controls
+
+- Capacity sliders use a high-contrast light thumb on a subdued neutral track.
+- Track styling stays visually secondary so thumb position and value context remain primary.
+- Browser-specific implementations (`webkit` and `moz`) must remain behaviorally aligned.
 
 ### Cards and Panels
 
 - Cards must communicate hierarchy with spacing and border/surface contrast.
-- Avoid stacked heavy shadows in dark mode; prefer subtle border + tone separation.
+- Avoid stacked heavy shadows in dark mode; prefer subtle border + tonal separation.
 - Critical action panels require explicit status text in addition to color.
 
 ### Data and Status Indicators
@@ -161,7 +199,7 @@ It is the canonical style source for design, product, and engineering decisions 
 
 - Motion should support context transitions, not attract attention.
 - Default transitions are short (`~150ms`) and predictable.
-- Use linear marquee/continuous motion sparingly and only for passive telemetry regions.
+- Use linear marquee or continuous motion sparingly and only for passive telemetry regions.
 - Never introduce motion that blocks key workflows or causes visual fatigue.
 
 ## Accessibility and Contrast
@@ -193,6 +231,7 @@ It is the canonical style source for design, product, and engineering decisions 
 - If a new token is required, document its semantic purpose and approved use cases.
 - Keep global style behavior aligned with brand voice and accessibility rules.
 - Avoid inline style drift when a reusable token/class pattern exists.
+- Preserve global Tailwind compatibility overrides for slate/background utilities on dark surfaces unless an approved migration replaces them.
 
 ## Governance and Change Management
 
@@ -208,6 +247,7 @@ It is the canonical style source for design, product, and engineering decisions 
 - Do use semantic tokens and shared constants for status color.
 - Do keep surfaces dark, calm, and high-contrast for long sessions.
 - Do prioritize readability over novelty.
+- Do align focus and interaction styling with the lucid accent layer.
 - Do not introduce random hex values for one-off components.
 - Do not rely on color alone to communicate critical state.
-- Do not ship new User Interface (UI) primitives without documenting token usage.
+- Do not ship new UI primitives without documenting token usage.
