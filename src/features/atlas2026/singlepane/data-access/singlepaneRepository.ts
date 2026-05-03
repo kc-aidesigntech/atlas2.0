@@ -58,6 +58,13 @@ import {
   savePartnerServiceCapacitySurvey,
   searchPartnerIdentifierRecordMatches
 } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
+import {
+  loadAccessMatrixDataset,
+  saveAccessMatrixEnrollmentNavigator,
+  saveAccessMatrixPartnerPrimaryContact,
+  saveAccessMatrixPersonRoles,
+  saveAccessMatrixSupervisorAssignment
+} from '@/features/atlas2026/singlepane/data-access/accessMatrixRepository'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 
@@ -646,6 +653,11 @@ export {
   saveRouteAssignment,
   saveTimelineConfig,
   saveRouteLogs,
+  loadAccessMatrixDataset,
+  saveAccessMatrixPersonRoles,
+  saveAccessMatrixEnrollmentNavigator,
+  saveAccessMatrixSupervisorAssignment,
+  saveAccessMatrixPartnerPrimaryContact,
   ensurePartnerIdentifierRecordForSurvey,
   searchPartnerIdentifierRecordMatches
 }

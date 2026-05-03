@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type {
+  AccessMatrixDataset,
   AdminPortalRegistry,
+  AdminPortalPersonRole,
   AdminDataQualityMetric,
   AccountSettings,
   AtlasRole,
@@ -54,6 +56,10 @@ import {
   uploadEnrolleeProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
   saveAccountSettings as persistAccountSettings,
+  saveAccessMatrixEnrollmentNavigator as persistAccessMatrixEnrollmentNavigator,
+  saveAccessMatrixPartnerPrimaryContact as persistAccessMatrixPartnerPrimaryContact,
+  saveAccessMatrixPersonRoles as persistAccessMatrixPersonRoles,
+  saveAccessMatrixSupervisorAssignment as persistAccessMatrixSupervisorAssignment,
   saveNavigatorProgramState as persistNavigatorProgramState,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
@@ -61,7 +67,8 @@ import {
   saveRouteAssignment as persistRouteAssignment,
   saveTimelineConfig as persistTimelineConfig,
   saveRouteLogs as persistRouteLogs,
-  saveEnrolleeIntake as persistEnrolleeIntake
+  saveEnrolleeIntake as persistEnrolleeIntake,
+  loadAccessMatrixDataset
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/useJourneyStationMarkers'
 import { usePartnerServiceCapacityHistory } from '@/features/atlas2026/singlepane/hooks/usePartnerServiceCapacityHistory'
@@ -77,6 +84,7 @@ import {
   loadRegulationTestHistory,
   saveRegulationTestSubmission
 } from '@/features/atlas2026/singlepane/data-access/regulationTestsRepository'
+import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 
 /**
  * Primary single-pane orchestration hook.
@@ -114,10 +122,6 @@ function splitFullName(value: string) {
     firstName: parts.slice(0, -1).join(' '),
     lastName: parts[parts.length - 1]
   }
-}
-
-function createPickupCaseId() {
-  return `atlas-intake-${Date.now().toString(36)}`
 }
 
 function getRegulationTestLabel(testType: RegulationTestSubmissionRecord['testType']) {
@@ -164,6 +168,17 @@ function createNavigatorProgramState(): NavigatorProgramState {
     intervalAssessmentRules: [],
     updatedAtIso: new Date().toISOString()
   }
+}
+
+function normalizeAtlasRoleKeys(values: string[]): AtlasRole[] {
+  return values.filter((value): value is AtlasRole => value === 'administrator' || value === 'supervisor' || value === 'partner' || value === 'navigator')
+}
+
+function haveSameRoles(left: AtlasRole[], right: AtlasRole[]) {
+  if (left.length !== right.length) return false
+  const a = [...left].sort()
+  const b = [...right].sort()
+  return a.every((value, index) => value === b[index])
 }
 
 function toMidnightIso(date: Date) {
@@ -735,6 +750,27 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }, [role, selectedEnrollee?.id])
 
+  useEffect(() => {
+    if (!accessMatrixDataset || !accountSettings.email.trim()) return
+    const matchedPerson = accessMatrixDataset.people.find(
+      (person) => person.email.trim().toLowerCase() === accountSettings.email.trim().toLowerCase()
+    )
+    if (!matchedPerson) return
+    const derivedRoles = normalizeAtlasRoleKeys(matchedPerson.roleKeys)
+    if (!derivedRoles.length || haveSameRoles(derivedRoles, accountSettings.enabledRoles)) return
+    // Keep UI role options aligned to live role assignments for the signed-in identity.
+    setBootstrapState((current) => ({
+      ...current,
+      accountSettings: {
+        ...current.accountSettings,
+        enabledRoles: derivedRoles
+      }
+    }))
+    if (!derivedRoles.includes(role)) {
+      setRole(derivedRoles[0] || 'navigator')
+    }
+  }, [accessMatrixDataset, accountSettings.email, accountSettings.enabledRoles, role, setBootstrapState])
+
   const completedRegulationTests = useMemo(
     () =>
       regulationTestHistory
@@ -1166,6 +1202,68 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function refreshAccessMatrixDataset() {
+    const dataset = await loadAccessMatrixDataset()
+    setAccessMatrixDataset(dataset)
+    return dataset
+  }
+
+  async function saveAccessMatrixPersonRoles(personId: string, roleKeys: AdminPortalPersonRole[]) {
+    setIsSavingAccessMatrix(true)
+    setAccessMatrixError(null)
+    try {
+      await persistAccessMatrixPersonRoles(personId, roleKeys)
+      await refreshAccessMatrixDataset()
+    } catch (error) {
+      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save person role assignments.')
+      throw error
+    } finally {
+      setIsSavingAccessMatrix(false)
+    }
+  }
+
+  async function saveAccessMatrixEnrollmentNavigator(enrollmentId: string, navigatorPersonId: string | null) {
+    setIsSavingAccessMatrix(true)
+    setAccessMatrixError(null)
+    try {
+      await persistAccessMatrixEnrollmentNavigator(enrollmentId, navigatorPersonId)
+      await refreshAccessMatrixDataset()
+    } catch (error) {
+      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save navigator enrollment assignment.')
+      throw error
+    } finally {
+      setIsSavingAccessMatrix(false)
+    }
+  }
+
+  async function saveAccessMatrixSupervisorAssignment(navigatorPersonId: string, supervisorPersonId: string | null) {
+    setIsSavingAccessMatrix(true)
+    setAccessMatrixError(null)
+    try {
+      await persistAccessMatrixSupervisorAssignment(navigatorPersonId, supervisorPersonId)
+      await refreshAccessMatrixDataset()
+    } catch (error) {
+      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save supervisor assignment.')
+      throw error
+    } finally {
+      setIsSavingAccessMatrix(false)
+    }
+  }
+
+  async function saveAccessMatrixPartnerPrimaryContact(partnerId: string, primaryContactPersonId: string | null) {
+    setIsSavingAccessMatrix(true)
+    setAccessMatrixError(null)
+    try {
+      await persistAccessMatrixPartnerPrimaryContact(partnerId, primaryContactPersonId)
+      await refreshAccessMatrixDataset()
+    } catch (error) {
+      setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save partner ownership assignment.')
+      throw error
+    } finally {
+      setIsSavingAccessMatrix(false)
+    }
+  }
+
   async function saveNavigatorProgramState(state: NavigatorProgramState) {
     setNavigatorProgramError(null)
     try {
@@ -1230,55 +1328,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function submitPartnerReferral(input: PartnerReferralSubmissionInput) {
-    // Normalize key identity fields with safe fallbacks so referrals
-    // remain actionable even when partner-side metadata is incomplete.
-    const submittedAtIso = new Date().toISOString()
-    const partnerOrganizationName =
-      input.partnerOrganizationName.trim() ||
-      partnerStationProfile?.organizationName?.trim() ||
-      accountSettings.organization.trim() ||
-      'community partner'
-    const referrerName = input.selfReferring
-      ? 'self referral'
-      : input.referrerName.trim() || accountSettings.fullName.trim() || 'partner referral'
-    const partnerContactSummary = !input.existingPartner
-      ? [input.partnerContactName.trim(), input.partnerContactEmail.trim(), input.partnerContactPhone.trim()].filter(Boolean).join(' · ')
-      : ''
-    const referralMessage = [
-      input.referralReason.trim(),
-      !input.existingPartner && partnerContactSummary ? `new partner contact: ${partnerContactSummary}` : ''
-    ]
-      .filter(Boolean)
-      .join(' | ')
-
-    // Persist referrals into the shared pickup queue used by navigator
-    // workflow so partner intake and navigator claim flow stay connected.
-    const nextRecord: UnassignedEnrolleePickupRecord = {
-      id: `pickup-referral-${Date.now().toString(36)}`,
-      fullName: input.referredParticipantName.trim(),
-      dob: '',
-      caseId: createPickupCaseId(),
-      email: input.participantEmail.trim(),
-      phone: input.participantPhone.trim(),
-      demographicsSummary: input.existingPartner
-        ? 'Referred by an existing partner profile.'
-        : 'Referred by a new partner profile captured during intake.',
-      referredAtIso: submittedAtIso,
-      referrerName,
-      referrerOrganization: partnerOrganizationName,
-      referrerMessage: referralMessage || 'Referral submitted through partner referral workflow.',
-      zCodeTags: [],
-      status: 'available',
-      claimedByNavigatorName: null,
-      claimedAtIso: null
-    }
-    const nextState: NavigatorProgramState = {
-      ...mergedNavigatorProgramState,
-      pickupQueue: [
-        nextRecord,
-        ...mergedNavigatorProgramState.pickupQueue.filter((record) => record.id !== nextRecord.id)
-      ]
-    }
+    // Shared mapper keeps referral normalization logic consistent regardless of
+    // where referral submissions are initiated in the product.
+    const { nextRecord, nextState } = buildReferralQueueUpdate(input, mergedNavigatorProgramState, {
+      accountFullName: accountSettings.fullName,
+      accountOrganization: accountSettings.organization,
+      partnerStationOrganizationName: partnerStationProfile?.organizationName || null
+    })
     await saveNavigatorProgramState(nextState)
     return nextRecord
   }
@@ -1354,6 +1410,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     adminMetrics,
     adminPortalRegistry,
     adminPortalRegistryError,
+    accessMatrixDataset,
+    accessMatrixError,
     navigatorProgramState: mergedNavigatorProgramState,
     navigatorProgramError,
     journeyStationMarkers,
@@ -1402,8 +1460,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     selectedIntake,
     hasSavedIntake,
     isSavingAdminPortalRegistry,
+    isSavingAccessMatrix,
     saveAccountSettings,
     saveAdminPortalRegistry,
+    saveAccessMatrixPersonRoles,
+    saveAccessMatrixEnrollmentNavigator,
+    saveAccessMatrixSupervisorAssignment,
+    saveAccessMatrixPartnerPrimaryContact,
     saveNavigatorProgramState,
     claimPickupQueueRecord,
     saveNavigatorSelfAssessment,

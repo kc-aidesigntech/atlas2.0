@@ -136,7 +136,7 @@ export default function MobileRouteBoardPanel({
             style={{ ['--button-border-color' as const]: '#ffffff3d', color: SP_COLORS.white } as React.CSSProperties}
           >
             <CalendarDays size={14} strokeWidth={2} />
-            <span>start {formatDateLabel(timelineConfig.planStartIso)}</span>
+            <span>start {formatDateLabelShort(timelineConfig.planStartIso)}</span>
           </AtlasTextButton>
         ) : null}
         <div className="flex flex-wrap items-center justify-end gap-2">{phaseButtons}</div>

@@ -256,6 +256,42 @@ export interface AdminPortalRegistry {
   updatedAtIso: string
 }
 
+export interface AccessMatrixPersonRecord {
+  id: string
+  fullName: string
+  email: string
+  roleKeys: AdminPortalPersonRole[]
+}
+
+export interface AccessMatrixEnrollmentRecord {
+  enrollmentId: string
+  enrolleeId: string
+  enrolleeName: string
+  caseId: string
+  navigatorPersonId: string | null
+}
+
+export interface AccessMatrixSupervisorRecord {
+  navigatorPersonId: string
+  supervisorPersonId: string | null
+}
+
+export interface AccessMatrixPartnerRecord {
+  partnerId: string
+  organizationName: string
+  primaryContactPersonId: string | null
+  primaryContactEmail: string | null
+}
+
+export interface AccessMatrixDataset {
+  people: AccessMatrixPersonRecord[]
+  roleKeys: AdminPortalPersonRole[]
+  enrollmentAssignments: AccessMatrixEnrollmentRecord[]
+  supervisorAssignments: AccessMatrixSupervisorRecord[]
+  partnerAssignments: AccessMatrixPartnerRecord[]
+  updatedAtIso: string
+}
+
 export interface JourneyStationMarker {
   id: string
   stationName: string

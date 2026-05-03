@@ -1,0 +1,76 @@
+import type { NavigatorProgramState, PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from './types'
+
+interface ReferralContext {
+  accountFullName: string
+  accountOrganization: string
+  partnerStationOrganizationName: string | null
+}
+
+interface ReferralQueueBuildResult {
+  nextRecord: UnassignedEnrolleePickupRecord
+  nextState: NavigatorProgramState
+}
+
+function createPickupCaseId() {
+  return `atlas-intake-${Date.now().toString(36)}`
+}
+
+/**
+ * Pure utility for mapping partner referral form input into the navigator
+ * pickup-queue record contract. Extracted to keep UI hook orchestration focused
+ * on state transitions instead of field normalization details.
+ */
+export function buildReferralQueueUpdate(
+  input: PartnerReferralSubmissionInput,
+  currentState: NavigatorProgramState,
+  context: ReferralContext
+): ReferralQueueBuildResult {
+  const submittedAtIso = new Date().toISOString()
+  const partnerOrganizationName =
+    input.partnerOrganizationName.trim() ||
+    context.partnerStationOrganizationName?.trim() ||
+    context.accountOrganization.trim() ||
+    'community partner'
+  const referrerName = input.selfReferring
+    ? 'self referral'
+    : input.referrerName.trim() || context.accountFullName.trim() || 'partner referral'
+  const partnerContactSummary = !input.existingPartner
+    ? [input.partnerContactName.trim(), input.partnerContactEmail.trim(), input.partnerContactPhone.trim()]
+        .filter(Boolean)
+        .join(' · ')
+    : ''
+  const referralMessage = [
+    input.referralReason.trim(),
+    !input.existingPartner && partnerContactSummary ? `new partner contact: ${partnerContactSummary}` : ''
+  ]
+    .filter(Boolean)
+    .join(' | ')
+
+  const nextRecord: UnassignedEnrolleePickupRecord = {
+    id: `pickup-referral-${Date.now().toString(36)}`,
+    fullName: input.referredParticipantName.trim(),
+    dob: '',
+    caseId: createPickupCaseId(),
+    email: input.participantEmail.trim(),
+    phone: input.participantPhone.trim(),
+    demographicsSummary: input.existingPartner
+      ? 'Referred by an existing partner profile.'
+      : 'Referred by a new partner profile captured during intake.',
+    referredAtIso: submittedAtIso,
+    referrerName,
+    referrerOrganization: partnerOrganizationName,
+    referrerMessage: referralMessage || 'Referral submitted through partner referral workflow.',
+    zCodeTags: [],
+    status: 'available',
+    claimedByNavigatorName: null,
+    claimedAtIso: null
+  }
+
+  return {
+    nextRecord,
+    nextState: {
+      ...currentState,
+      pickupQueue: [nextRecord, ...currentState.pickupQueue.filter((record) => record.id !== nextRecord.id)]
+    }
+  }
+}

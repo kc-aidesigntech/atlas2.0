@@ -140,7 +140,7 @@ export default function StripMapControlOverlay({
                       <AtlasTextButton
                         onClick={() => setDraftConfig((current) => adjustTimelinePhaseLength(current, segment.phase, 1))}
                         className="px-3 py-1.5 text-[12px] font-medium"
-                        style={{ ['--button-border-color' as const]: PHASE_COLORS[segment.phase], color: PHASE_COLORS[segment.phase] } as React.CSSProperties}
+                        style={{ ['--button-border-color' as const]: TIMELINE_PHASE_COLORS[segment.phase], color: TIMELINE_PHASE_COLORS[segment.phase] } as React.CSSProperties}
                       >
                         +30d
                       </AtlasTextButton>

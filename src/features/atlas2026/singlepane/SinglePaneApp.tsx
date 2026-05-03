@@ -9,6 +9,7 @@ import AdminDataControlPanel from '../admin/AdminDataControlPanel'
 import { AtlasTextButton } from '../components/AtlasPrimitives'
 import AccountSettingsPanel from './components/AccountSettingsPanel'
 import ContextPanels from './components/ContextPanels'
+import LiveAccessMatrixPanel from './components/LiveAccessMatrixPanel'
 import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
 import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
@@ -62,6 +63,8 @@ export default function SinglePaneApp() {
     adminMetrics,
     adminPortalRegistry,
     adminPortalRegistryError,
+    accessMatrixDataset,
+    accessMatrixError,
     navigatorProgramError,
     journeyStationMarkers,
     resolvedZCodeStripMarkers,
@@ -89,6 +92,7 @@ export default function SinglePaneApp() {
     selectedIntake,
     hasSavedIntake,
     isSavingAdminPortalRegistry,
+    isSavingAccessMatrix,
     supervisorNavigatorCompetency,
     regulationTestHistory,
     regulationTestStripMarkers,
@@ -100,6 +104,10 @@ export default function SinglePaneApp() {
     profileImageUploadError,
     saveAccountSettings,
     saveAdminPortalRegistry,
+    saveAccessMatrixPersonRoles,
+    saveAccessMatrixEnrollmentNavigator,
+    saveAccessMatrixSupervisorAssignment,
+    saveAccessMatrixPartnerPrimaryContact,
     claimPickupQueueRecord,
     saveNavigatorSelfAssessment,
     saveSupervisionSession,
@@ -627,23 +635,34 @@ export default function SinglePaneApp() {
 
                 {isAdminSection ? (
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
-                    <AdminDataControlPanel
-                      metrics={adminMetrics}
-                      enrollees={enrollees}
-                      intakeFormsByEnrolleeId={intakeFormsByEnrolleeId}
-                      selectedEnrollee={selectedEnrollee}
-                      accountSettings={accountSettings}
-                      enrollmentRequests={enrollmentRequests}
-                      supervisorNavigatorCompetency={supervisorNavigatorCompetency}
-                      navigatorProgramState={navigatorProgramState}
-                      navigatorIntervalDueItems={navigatorIntervalDueItems}
-                      registry={adminPortalRegistry}
-                      isSavingRegistry={isSavingAdminPortalRegistry}
-                      registryError={adminPortalRegistryError}
-                      onSaveRegistry={saveAdminPortalRegistry}
-                      onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
-                      onSaveIntake={saveEnrolleeIntake}
-                    />
+                    <div className="w-full space-y-4">
+                      <LiveAccessMatrixPanel
+                        dataset={accessMatrixDataset}
+                        error={accessMatrixError}
+                        isSaving={isSavingAccessMatrix}
+                        onSavePersonRoles={saveAccessMatrixPersonRoles}
+                        onSaveEnrollmentNavigator={saveAccessMatrixEnrollmentNavigator}
+                        onSaveSupervisorAssignment={saveAccessMatrixSupervisorAssignment}
+                        onSavePartnerPrimaryContact={saveAccessMatrixPartnerPrimaryContact}
+                      />
+                      <AdminDataControlPanel
+                        metrics={adminMetrics}
+                        enrollees={enrollees}
+                        intakeFormsByEnrolleeId={intakeFormsByEnrolleeId}
+                        selectedEnrollee={selectedEnrollee}
+                        accountSettings={accountSettings}
+                        enrollmentRequests={enrollmentRequests}
+                        supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                        navigatorProgramState={navigatorProgramState}
+                        navigatorIntervalDueItems={navigatorIntervalDueItems}
+                        registry={adminPortalRegistry}
+                        isSavingRegistry={isSavingAdminPortalRegistry}
+                        registryError={adminPortalRegistryError}
+                        onSaveRegistry={saveAdminPortalRegistry}
+                        onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
+                        onSaveIntake={saveEnrolleeIntake}
+                      />
+                    </div>
                   </div>
                 ) : isServiceCapacitySection || isNavigatorMyProfile ? null : isPartnerRole ? (
                   <>
