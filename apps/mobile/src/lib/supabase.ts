@@ -13,6 +13,7 @@ export const hasMobileSupabaseConfig = hasSupabaseConfig(supabaseConfig);
 
 export const supabase = createAtlasSupabaseClient(supabaseConfig, {
   auth: {
+    // React Native has no URL callback session handoff, so auth state must persist in AsyncStorage.
     storage: AsyncStorage,
     persistSession: true,
     autoRefreshToken: true,

@@ -130,6 +130,8 @@ export default function SinglePaneApp() {
   }, [])
 
   React.useEffect(() => {
+    // Keep the last non-overlay menu so closing route planning returns users to
+    // their previous content context instead of forcing default navigation.
     if (activeMenu !== 'route planning') {
       setLastContentMenu(activeMenu)
     }
@@ -152,6 +154,8 @@ export default function SinglePaneApp() {
   React.useEffect(() => {
     if (typeof window === 'undefined') return
     if (!selectedRoleConfig.topMenus.length) return
+    // Initial hash bootstrap prefers URL intent, then canonicalizes hash to the
+    // exact current menu key for stable deep-link sharing.
     const hashTarget = hashToMenu(window.location.hash, selectedRoleConfig.topMenus)
     const fallbackMenu = hashTarget || selectedRoleConfig.topMenus[0]
     if (!fallbackMenu) return
@@ -178,6 +182,8 @@ export default function SinglePaneApp() {
     if (currentHash === nextHash) return
 
     const nextUrl = `${window.location.pathname}${window.location.search}#${nextHash}`
+    // First sync uses replaceState to avoid creating a duplicate history entry
+    // on mount; subsequent menu changes intentionally push user-visible history.
     if (!hashSyncBootstrappedRef.current) {
       window.history.replaceState(null, '', nextUrl)
       hashSyncBootstrappedRef.current = true
@@ -216,6 +222,8 @@ export default function SinglePaneApp() {
     setContentOpacity(0)
     const targetAvatarUrl = enrollees.find((enrollee) => enrollee.id === selectedEnrolleeId)?.avatarUrl || null
     void (async () => {
+      // Transition cycle token prevents stale async work from restoring opacity
+      // after a newer enrollee selection has already started rendering.
       await sleep(160)
       if (cycle !== transitionCycleRef.current) return
       await preloadImageIfNeeded(targetAvatarUrl)
@@ -349,6 +357,8 @@ export default function SinglePaneApp() {
     }
     if (role === 'supervisor' && label.trim().toLowerCase() === 'record navigator assessment') {
       if (!selectedEnrollee || !selectedLoadBreakdown) return
+      // Derive a compact score payload from current breakdown rows so supervisors
+      // can capture an assessment without leaving the workflow panel.
       const answers = selectedLoadBreakdown.rows.slice(0, 12).map((row) => ({
         parentCode: row.zCodeGroup.toUpperCase(),
         theme: row.mappedDomain,
@@ -808,6 +818,7 @@ function LoadingShell() {
 }
 
 function getNextSuggestedPhase(logs: { phase: StabilizationPhase; status: string }[], isRegulationCleared: boolean) {
+  // Invariant: never suggest readiness/renewal before regulation tests are cleared.
   const last = logs[logs.length - 1]
   if (!last) return isRegulationCleared ? 'readiness' : 'regulation'
   if (last.status !== 'active') return last.phase
@@ -836,6 +847,8 @@ function deriveEnrolleeParentCodes(
   enrollee: { activeZCodeDetails: { parentCode: string }[]; zCodeTags: string[] } | null
 ) {
   if (!enrollee) return []
+  // Prefer canonical parent codes from active details; only fall back to parsing
+  // legacy tag strings when detail records are unavailable.
   const fromDetails = enrollee.activeZCodeDetails
     .map((detail) => detail.parentCode.trim().toUpperCase())
     .filter(Boolean)

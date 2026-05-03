@@ -12,6 +12,8 @@ export function usePartnerServiceCapacityHistory(role: string, organizationName:
 
     async function hydratePartnerServiceCapacitySurvey() {
       if (role !== 'partner') {
+        // Clear partner-only records when role changes so stale survey history
+        // is never shown in supervisor/admin contexts.
         if (isMounted) {
           setPartnerServiceCapacitySurveyHistory([])
           setPartnerServiceCapacitySurveyError(null)

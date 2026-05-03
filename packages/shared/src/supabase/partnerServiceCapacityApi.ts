@@ -18,6 +18,16 @@ import type {
 let supportsDraftSubmissionSchema: boolean | null = null;
 let supportsNotEncounteredAnswerSchema: boolean | null = null;
 
+function toPostgrestErrorText(error: unknown) {
+  const message =
+    typeof error === "object" && error && "message" in error ? String((error as { message?: string }).message || "").toLowerCase() : "";
+  const details =
+    typeof error === "object" && error && "details" in error ? String((error as { details?: string }).details || "").toLowerCase() : "";
+  const hint =
+    typeof error === "object" && error && "hint" in error ? String((error as { hint?: string }).hint || "").toLowerCase() : "";
+  return { message, details, hint, combined: `${message} ${details} ${hint}` };
+}
+
 function hasLegacyRequiredHeaderFields(input: PartnerServiceCapacitySubmissionInput) {
   return Boolean(
     input.header.firstName.trim() &&
@@ -32,25 +42,14 @@ function isUuidLike(value: string) {
 }
 
 function shouldFallbackToLegacyDraftSchema(error: unknown) {
-  const message =
-    typeof error === "object" && error && "message" in error ? String((error as { message?: string }).message || "").toLowerCase() : "";
-  const details =
-    typeof error === "object" && error && "details" in error ? String((error as { details?: string }).details || "").toLowerCase() : "";
-  const hint =
-    typeof error === "object" && error && "hint" in error ? String((error as { hint?: string }).hint || "").toLowerCase() : "";
+  const { message, details, hint } = toPostgrestErrorText(error);
 
   return ["draft_key", "completed_at", "status", "on_conflict", "on conflict", "no unique", "column"]
     .some((token) => message.includes(token) || details.includes(token) || hint.includes(token));
 }
 
 function shouldFallbackToLegacyNotEncounteredAnswerSchema(error: unknown) {
-  const message =
-    typeof error === "object" && error && "message" in error ? String((error as { message?: string }).message || "").toLowerCase() : "";
-  const details =
-    typeof error === "object" && error && "details" in error ? String((error as { details?: string }).details || "").toLowerCase() : "";
-  const hint =
-    typeof error === "object" && error && "hint" in error ? String((error as { hint?: string }).hint || "").toLowerCase() : "";
-  const combined = `${message} ${details} ${hint}`;
+  const { combined } = toPostgrestErrorText(error);
 
   return [
     "not_encountered",
@@ -397,6 +396,8 @@ export async function savePartnerServiceCapacitySubmission(
   client: SupabaseClient<AtlasDatabase>,
   input: PartnerServiceCapacitySubmissionInput,
 ) {
+  // Persist and reuse a stable draft key so client-side autosave can reconnect to the same
+  // submission row even before modern draft schema support is guaranteed.
   const draftKey = input.draftKey?.trim() || createPartnerServiceCapacityDraftKey();
   const status: PartnerServiceCapacitySubmissionStatus = input.status || "draft";
   const organizationName = input.header.organizationName.trim();
@@ -435,6 +436,8 @@ export async function savePartnerServiceCapacitySubmission(
       submission = data;
     }
   } catch (error) {
+    // Probe once per runtime: when migrations are partial we downgrade to legacy writes and
+    // avoid retrying unsupported draft fields on every autosave.
     if (shouldFallbackToLegacyDraftSchema(error)) {
       supportsDraftSubmissionSchema = false;
     } else {
@@ -497,6 +500,8 @@ export async function savePartnerServiceCapacitySubmission(
 
   if (deleteAnswersError) throw deleteAnswersError;
 
+  // Answers are replaced atomically by "delete then insert" so removed prompts are not left
+  // behind when survey versions change or users clear prior responses.
   const answerRows = input.answers.map((answer) => ({
     submission_id: submission.id,
     prompt_id: answer.promptId,
@@ -539,6 +544,8 @@ export async function savePartnerServiceCapacitySubmission(
       answers = data;
     }
   } catch (error) {
+    // As above, cache schema capability after first signal and route old databases through
+    // the compatibility path without repeated failing writes.
     if (shouldFallbackToLegacyNotEncounteredAnswerSchema(error)) {
       supportsNotEncounteredAnswerSchema = false;
     } else {
@@ -581,6 +588,7 @@ export async function syncPartnerServiceCapacityDerivedTables(
   client: SupabaseClient<AtlasDatabase>,
   record: PartnerServiceCapacitySubmissionRecord,
 ) {
+  // Only finalized submissions should influence network capability signals.
   if (record.status !== "completed" || !record.partnerId) {
     return record;
   }
@@ -605,6 +613,7 @@ export async function syncPartnerServiceCapacityDerivedTables(
 
   const burdenRows: AtlasDatabase["atlas"]["Tables"]["partner_z_code_burden_scores"]["Insert"][] = normalizedAnswers
     .map((answer) => {
+      if (typeof answer.score !== "number") return null;
       const zCodeId = zCodeIdByCode.get(answer.normalizedZCode);
       if (!zCodeId) return null;
       return {
@@ -629,7 +638,10 @@ export async function syncPartnerServiceCapacityDerivedTables(
     if (burdenError) throw burdenError;
   }
 
+  // Keep both relation rows per z-code and activate one side at a time. This preserves a
+  // consistent query shape while still encoding directional capability.
   const capabilityRows: AtlasDatabase["atlas"]["Tables"]["partner_z_code_capabilities"]["Insert"][] = normalizedAnswers.flatMap((answer) => {
+    if (typeof answer.score !== "number") return [];
     const zCodeId = zCodeIdByCode.get(answer.normalizedZCode);
     if (!zCodeId) return [];
     const strength = derivePartnerCapabilityStrength(answer.score);

@@ -24,6 +24,8 @@ function authRedirectBaseUrl() {
   const base = import.meta.env.BASE_URL || '/'
   const normalized = base.endsWith('/') ? base.slice(0, -1) : base
   const path = normalized === '' ? '' : normalized
+  // OAuth/email redirects must round-trip through the deployed base path;
+  // this guards subpath deployments where origin alone is insufficient.
   return `${window.location.origin}${path}/`
 }
 
@@ -40,6 +42,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
 
     let cancelled = false
 
+    // Bootstrap from persisted browser session, then rely on live auth events.
     void supabase.auth.getSession().then(({ data }) => {
       if (cancelled) return
       setSession(data.session)
@@ -56,6 +59,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
 
     return () => {
       cancelled = true
+      // Prevent cross-render leaks from the Supabase event stream.
       subscription.unsubscribe()
     }
   }, [])
@@ -70,6 +74,8 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
     if (!supabase) return { error: new Error('Supabase is not configured') }
     const trimmed = fullName.trim()
     const parts = trimmed.split(/\s+/).filter(Boolean)
+    // Keep profile metadata non-empty for downstream displays even when the
+    // caller submits a blank or single-token full name.
     const firstName = parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || 'Atlas')
     const lastName = parts.length > 1 ? (parts[parts.length - 1] || 'User') : 'User'
     const { error } = await supabase.auth.signUp({

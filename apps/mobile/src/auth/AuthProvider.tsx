@@ -21,12 +21,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function bootstrapSession() {
       if (!supabase) {
+        // No client means auth is intentionally disabled for this build; release loading gate immediately.
         if (isMounted) setIsLoading(false);
         return;
       }
 
       const { data } = await supabase.auth.getSession();
       if (isMounted) {
+        // Initial session value is authoritative for first paint; route redirects read this before subscriptions fire.
         setSession(data.session);
         setIsLoading(false);
       }
@@ -40,6 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
+    // Keep context in sync with token refresh/sign-out events so route gates react without manual polling.
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (isMounted) {
         setSession(nextSession);

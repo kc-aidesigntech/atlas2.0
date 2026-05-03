@@ -62,6 +62,9 @@ export function usePartnerServiceCapacityDraftResolver(
     const historyBest = pickFreshestPartnerServiceCapacityRecord(historyMatches)
     const lookupOrganizationName = organizationName?.trim() || persistedDraft.header.organizationName.trim()
 
+    // Resolve order is intentional:
+    // 1) show fastest local/history candidate immediately
+    // 2) reconcile with server snapshot for canonical status and timestamps
     setState({
       persistedDraft,
       resumeDraftRecord: historyBest,
@@ -86,6 +89,7 @@ export function usePartnerServiceCapacityDraftResolver(
       })
       .catch((error) => {
         if (!isMounted) return
+        // Degrade to local/history draft so users can keep editing while backend is unavailable.
         const resumeDraftRecord =
           historyBest ?? buildLocalOnlyResumeSubmissionRecord(persistedDraft)
         setState({

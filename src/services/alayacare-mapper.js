@@ -13,6 +13,8 @@
  * @returns {number} ATLAS risk tier (1-3)
  */
 export function calculateRiskTier(lscmiTotalScore) {
+  // Tier 2 intentionally covers two adjacent LS/CMI bands (12-31). Downstream
+  // workflows treat both as the same service-intensity bucket.
   if (lscmiTotalScore <= 11) return 1  // Low Risk
   if (lscmiTotalScore <= 20) return 2  // Moderate Risk
   if (lscmiTotalScore <= 31) return 2  // Moderate-High Risk (still Tier 2)
@@ -320,6 +322,7 @@ export function formatAssessmentForTimeline(assessment) {
 export function createAssessmentTimeline(assessments) {
   return assessments
     .map(formatAssessmentForTimeline)
+    // Oldest-first ordering preserves chart continuity for trend lines.
     .sort((a, b) => new Date(a.date) - new Date(b.date))
 }
 

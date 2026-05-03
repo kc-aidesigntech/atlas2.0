@@ -7,6 +7,8 @@ import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } fro
 
 function normalizePathname(pathname) {
   if (!pathname) return '/'
+  // Treat trailing slash variants as the same logical route so auth gating
+  // cannot diverge between `/foo` and `/foo/`.
   const normalized = pathname.replace(/\/+$/, '')
   return normalized || '/'
 }
@@ -30,6 +32,8 @@ function RootAppInner() {
     isSinglePaneSupabaseBootstrapEnabled &&
     !isStandaloneServiceCapacityPath(pathname)
 
+  // Standalone survey routes intentionally bypass sign-in gating so partner
+  // completions remain accessible even when the main app requires auth.
   if (typeof window !== 'undefined' && isStandaloneServiceCapacityPath(pathname)) {
     return <StandaloneServiceCapacitySurveyPage />
   }
@@ -46,6 +50,7 @@ function RootAppInner() {
     return <AtlasAuthScreen />
   }
 
+  // At this point either auth is not required or we have a valid session.
   return <SinglePaneApp />
 }
 

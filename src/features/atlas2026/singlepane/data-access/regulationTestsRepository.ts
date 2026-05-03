@@ -90,6 +90,8 @@ export async function loadRegulationTestHistory(enrolleeId: string, testType: Re
     .order('updated_at', { ascending: false })
 
   if (error) {
+    // Renewal tests are intentionally allowed to fall back to local persistence
+    // because those schemas can lag behind in optional Supabase environments.
     if (isOptionalSupabaseDataError(error) || isRenewalAssessmentType(testType)) {
       return loadLocalState()
         .filter((record) => record.enrolleeId === enrolleeId && record.testType === testType)
@@ -136,6 +138,8 @@ export async function saveRegulationTestSubmission(input: RegulationTestSubmissi
   const draftKey = input.draftKey?.trim() || `reg-test-${Date.now().toString(36)}`
 
   if (!hasSupabaseConfig || !supabase) {
+    // Preserve identical record shape in local mode so UI rendering and merge logic
+    // do not branch on persistence backend.
     const now = new Date().toISOString()
     const record: RegulationTestSubmissionRecord = {
       id: draftKey,
@@ -185,6 +189,8 @@ export async function saveRegulationTestSubmission(input: RegulationTestSubmissi
     .single()
 
   if (error) {
+    // Non-renewal submissions should surface hard failures; renewal can continue
+    // locally to avoid blocking readiness/renewal workflow exploration.
     if (!isOptionalSupabaseDataError(error) && !isRenewalAssessmentType(input.testType)) throw error
     const fallback: RegulationTestSubmissionRecord = {
       id: draftKey,
@@ -244,6 +250,8 @@ export async function deleteRegulationTestDraft(
   const localMatch = loadLocalState().find((record) => record.id === trimmedSubmissionId)
 
   if (localMatch && isRenewalAssessmentType(localMatch.testType)) {
+    // Renewal drafts are treated as local-only artifacts and can be removed
+    // without requiring server round trips.
     if (localMatch.status !== 'draft') return null
     persistLocalState(loadLocalState().filter((record) => record.id !== trimmedSubmissionId))
     return { id: localMatch.id, draftKey: localMatch.draftKey }

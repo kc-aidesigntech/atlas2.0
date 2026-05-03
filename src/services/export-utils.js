@@ -7,6 +7,10 @@ import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 
+function buildDateStamp() {
+  return new Date().toISOString().split('T')[0]
+}
+
 // ============================================================================
 // PDF EXPORT FUNCTIONS
 // ============================================================================
@@ -59,8 +63,9 @@ export function exportEnrolleesToPDF(enrollees, title = 'ATLAS Enrollee Report')
     )
   }
   
-  // Save
-  doc.save(`atlas-enrollees-${new Date().toISOString().split('T')[0]}.pdf`)
+  // Triggering save is a side effect (download prompt); keep filename deterministic
+  // by date so repeated exports on the same day overwrite predictably if desired.
+  doc.save(`atlas-enrollees-${buildDateStamp()}.pdf`)
 }
 
 /**
@@ -141,8 +146,8 @@ export function exportDashboardAnalyticsToPDF(analytics) {
     })
   }
   
-  // Save
-  doc.save(`atlas-analytics-${new Date().toISOString().split('T')[0]}.pdf`)
+  // Save is intentionally last: all sections must be appended before I/O begins.
+  doc.save(`atlas-analytics-${buildDateStamp()}.pdf`)
 }
 
 /**
@@ -233,7 +238,8 @@ export function exportTimelineToPDF(enrollee, assessments) {
   }
   
   // Save
-  const filename = `atlas-timeline-${name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`
+  // Normalize whitespace so generated filenames remain shell-safe.
+  const filename = `atlas-timeline-${name.replace(/\s+/g, '-')}-${buildDateStamp()}.pdf`
   doc.save(filename)
 }
 
@@ -273,8 +279,8 @@ export function exportReferralsToPDF(referrals, filterType = 'All') {
     }
   })
   
-  // Save
-  doc.save(`atlas-referrals-${filterType.toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`)
+  // Lowercased filter keeps filenames stable across UI title-casing differences.
+  doc.save(`atlas-referrals-${filterType.toLowerCase()}-${buildDateStamp()}.pdf`)
 }
 
 // ============================================================================
@@ -315,7 +321,7 @@ export function exportEnrolleesToExcel(enrollees) {
     { wch: 16 }, { wch: 16 }
   ]
   
-  XLSX.writeFile(wb, `atlas-enrollees-${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.writeFile(wb, `atlas-enrollees-${buildDateStamp()}.xlsx`)
 }
 
 /**
@@ -364,7 +370,7 @@ export function exportDashboardAnalyticsToExcel(analytics) {
     XLSX.utils.book_append_sheet(wb, wsRisk, 'Risk Distribution')
   }
   
-  XLSX.writeFile(wb, `atlas-analytics-${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.writeFile(wb, `atlas-analytics-${buildDateStamp()}.xlsx`)
 }
 
 /**
@@ -397,7 +403,7 @@ export function exportTimelineToExcel(enrollee, assessments) {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Timeline')
   
-  const filename = `atlas-timeline-${name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`
+  const filename = `atlas-timeline-${name.replace(/\s+/g, '-')}-${buildDateStamp()}.xlsx`
   XLSX.writeFile(wb, filename)
 }
 
@@ -422,7 +428,7 @@ export function exportReferralsToExcel(referrals) {
     { wch: 20 }, { wch: 25 }, { wch: 12 }, { wch: 15 }, { wch: 50 }
   ]
   
-  XLSX.writeFile(wb, `atlas-referrals-${new Date().toISOString().split('T')[0]}.xlsx`)
+  XLSX.writeFile(wb, `atlas-referrals-${buildDateStamp()}.xlsx`)
 }
 
 // ============================================================================

@@ -45,6 +45,8 @@ export interface JourneyAssignment {
   id: string;
   participantId: string;
   templateId: string;
+  // Ordered step ids mirror route execution order and are consumed positionally
+  // by timeline UIs (`currentStepIndex` points into this array).
   stepIds: string[];
   status: JourneyStatus;
   currentStepIndex: number;
@@ -52,6 +54,8 @@ export interface JourneyAssignment {
 }
 
 export interface AtlasJsonDataset {
+  // Shared route-builder contract: API adapters normalize backend rows into this in-memory
+  // shape so web/mobile clients can reuse routing helpers without backend-specific logic.
   participants: Participant[];
   instructionBoms: InstructionBomItem[];
   routingSteps: RoutingStep[];

@@ -292,6 +292,8 @@ export interface LegacyAtlasRenewalRoleRecord {
 }
 
 function toTimestamp(value?: string | null): LegacyTimestamp {
+  // Legacy consumers expect a Firestore-like timestamp shape; invalid/missing input is
+  // normalized to epoch rather than throwing so snapshot reads stay resilient.
   const millis = value ? new Date(value).getTime() : 0;
   const safeMillis = Number.isFinite(millis) ? millis : 0;
   return {
@@ -306,6 +308,8 @@ function asStringArray(value: unknown) {
 }
 
 function asNumber(value: unknown) {
+  // Numeric payload fields sometimes arrive as strings from JSON config documents/views.
+  // Coerce aggressively and default to 0 to keep downstream math stable.
   return typeof value === "number" ? value : Number(value || 0);
 }
 
@@ -351,6 +355,8 @@ function asEnrolleeActiveZCodeArray(value: unknown): SinglePaneEnrolleeActiveZCo
           : typeof record.z_code === "string"
             ? record.z_code
             : "";
+      // These identifiers form the minimum contract for timeline/actions. Drop malformed
+      // rows instead of emitting partial records that can break selection state.
       if (!enrolleeZCodeId || !parentCode || !zCode) return null;
       return {
         enrolleeZCodeId,
@@ -498,6 +504,8 @@ export async function fetchSinglePaneSurveyDefinition(
           sectionHeaders.set(groupValue, description);
         });
       } else {
+        // Some environments still expose legacy key names (`z_code_key`) instead of
+        // `z_group`. Fall back so section labels remain available during migrations.
         const { data: keyedRows, error: keyedError } = await (client as SupabaseClient<any>)
           .schema("atlas")
           .from("z_code_headers")
@@ -708,6 +716,8 @@ export async function fetchPartnerLoadBreakdown(client: AnySupabaseClient) {
 
   const rows = (data || []).map((row) => {
     const categoryKey = String(row.category_key || "").trim().toLowerCase();
+    // Unknown categories default to socialNetworks to preserve historical dashboard behavior
+    // where non-work/non-habitat codes were bucketed into the social domain.
     const mappedDomain =
       categoryKey === "work"
         ? "work"

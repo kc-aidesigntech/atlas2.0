@@ -30,6 +30,8 @@ export const Z_CODE_PARENT_COLORS = {
 export type ZCodeParentColorKey = keyof typeof Z_CODE_PARENT_COLORS;
 
 export function normalizeZCodeParent(input: string) {
+  // Accept loose user/system formats ("z55", "55", "Z-55") and normalize into the
+  // canonical 3-char parent key expected by color lookups.
   const cleaned = input.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (!cleaned) return null;
   if (cleaned.startsWith("Z")) {
@@ -41,15 +43,18 @@ export function normalizeZCodeParent(input: string) {
 export function getZCodeParentColor(input: string) {
   const parent = normalizeZCodeParent(input);
   if (!parent) return null;
+  // Unknown parents should degrade gracefully instead of throwing, since color rendering
+  // is often driven by partially migrated datasets.
   return Z_CODE_PARENT_COLORS[parent] || null;
 }
 
+const LIGHT_TEXT_Z_CODE_COLORS: readonly string[] = [
+  Z_CODE_COLOR_ALIASES.blue,
+  Z_CODE_COLOR_ALIASES.purple,
+  Z_CODE_COLOR_ALIASES.deepGreen,
+  Z_CODE_COLOR_ALIASES.red,
+];
+
 export function usesLightTextOnZCodeColor(color: string) {
-  const lightTextColors: string[] = [
-    Z_CODE_COLOR_ALIASES.blue,
-    Z_CODE_COLOR_ALIASES.purple,
-    Z_CODE_COLOR_ALIASES.deepGreen,
-    Z_CODE_COLOR_ALIASES.red,
-  ];
-  return lightTextColors.includes(color.toLowerCase());
+  return LIGHT_TEXT_Z_CODE_COLORS.includes(color.toLowerCase());
 }

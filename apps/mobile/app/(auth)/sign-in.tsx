@@ -12,12 +12,14 @@ export default function SignInScreen() {
 
   async function handleSignIn() {
     if (!supabase) {
+      // Keep the failure explicit so local/dev builds without env vars do not appear to "hang" on submit.
       setError("supabase is not configured. set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY.");
       return;
     }
 
     setLoading(true);
     setError(null);
+    // Email trim mirrors web behavior and avoids auth misses caused by pasted trailing spaces.
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
@@ -29,6 +31,7 @@ export default function SignInScreen() {
       return;
     }
 
+    // Replace keeps auth flow one-way; users should not navigate "back" into stale sign-in state.
     router.replace("/(app)/navigation");
   }
 

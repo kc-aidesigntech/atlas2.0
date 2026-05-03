@@ -21,6 +21,7 @@ interface MobileParticipantCard {
 }
 
 export default function MobileNavigationScreen() {
+  // Keep a full local fallback dataset so this screen can still render in simulator sessions without live backend data.
   const [dataset, setDataset] = useState<AtlasJsonDataset>({
     participants: [],
     instructionBoms: [],
@@ -59,10 +60,12 @@ export default function MobileNavigationScreen() {
         return;
       }
       try {
+        // Load the shared route builder snapshot first; downstream selectors assume dataset shape is complete.
         const sharedDataset = await fetchRouteBuilderDataset(supabase);
         if (cancelled) return;
         setDataset(sharedDataset);
 
+        // These cards mirror participant records so the UI still works when navigator assignments are missing.
         const fallbackCards: MobileParticipantCard[] = sharedDataset.participants.map((participant) => ({
           id: participant.id,
           name: participant.name,
@@ -84,11 +87,13 @@ export default function MobileNavigationScreen() {
               }))
             : fallbackCards;
         setParticipantCards(nextCards);
+        // Selection defaults to first card; detail panes and marker fetches rely on a stable selected id.
         setSelectedParticipantId(nextCards[0]?.id || "");
         setUseLiveData(true);
         setLiveLoadError(null);
       } catch (error) {
         if (cancelled) return;
+        // Network or auth failures intentionally degrade to fallback journey data instead of blanking the page.
         setUseLiveData(false);
         setLiveLoadError(error instanceof Error ? error.message : "unable to load live data");
       }
@@ -104,6 +109,7 @@ export default function MobileNavigationScreen() {
     async function loadLiveMarkers() {
       if (!useLiveData || !supabase) return;
       if (!selectedCard?.enrollmentId) {
+        // Clear stale marker state when selection changes to a participant that has no live enrollment context.
         setLiveMarkers([]);
         return;
       }
@@ -114,6 +120,7 @@ export default function MobileNavigationScreen() {
         }
       } catch {
         if (!cancelled) {
+          // Marker failures should not block primary participant browsing, so we recover to an empty strip.
           setLiveMarkers([]);
         }
       }

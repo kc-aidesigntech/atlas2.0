@@ -46,6 +46,9 @@ export default function RoutePlannerPage({
   // Preview is derived-only state: recompute from selected BOM ids so the strip always
   // reflects the latest repository mapping logic.
   const previewSteps = useMemo(() => previewStepsForBomIds(selectedBomIds), [previewStepsForBomIds, selectedBomIds])
+  // Shared select styling keeps planner controls visually aligned as the panel grows.
+  const plannerSelectClassName = 'rounded-xl border bg-black px-3 py-2 text-sm text-white'
+  const plannerSelectStyle: React.CSSProperties = { borderColor: SUBWAY_COLORS.border }
 
   function toggleBom(bomId: string) {
     // Treat BOM selection as a set to keep checkbox toggles idempotent.
@@ -131,8 +134,8 @@ export default function RoutePlannerPage({
           <select
             value={targetPhase}
             onChange={(event) => setTargetPhase(event.target.value as JourneyPhase)}
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
+            className={plannerSelectClassName}
+            style={plannerSelectStyle}
           >
             <option value="regulation">regulation</option>
             <option value="readiness">readiness</option>
@@ -189,8 +192,8 @@ export default function RoutePlannerPage({
           <select
             value={selectedParticipantId}
             onChange={(event) => onSelectParticipant(event.target.value)}
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
+            className={plannerSelectClassName}
+            style={plannerSelectStyle}
           >
             {participants.map((participant) => (
               <option key={participant.id} value={participant.id}>
@@ -201,8 +204,8 @@ export default function RoutePlannerPage({
           <select
             value={selectedTemplateId}
             onChange={(event) => onSelectTemplate(event.target.value)}
-            className="rounded-xl border bg-black px-3 py-2 text-sm text-white"
-            style={{ borderColor: SUBWAY_COLORS.border }}
+            className={plannerSelectClassName}
+            style={plannerSelectStyle}
           >
             {templates.map((template) => (
               <option key={template.id} value={template.id}>

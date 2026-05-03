@@ -54,6 +54,8 @@ export function buildTimelinePhaseSegments(config: TimelineConfig): TimelinePhas
 }
 
 export function normalizeTimelineConfig(config: TimelineConfig): TimelineConfig {
+  // Canonicalize duration/max-duration and gate offsets so every caller downstream
+  // (strip maps, editors, persistence) can assume internally consistent timelines.
   const safeDurationMonths = getSafeTimelineDurationMonths(config)
   const safeMaxDurationMonths = Math.max(safeDurationMonths, config.maxDurationMonths || DEFAULT_TIMELINE_MAX_DURATION_MONTHS)
   const segments = buildTimelinePhaseSegments({ ...config, durationMonths: safeDurationMonths, maxDurationMonths: safeMaxDurationMonths })
@@ -105,6 +107,7 @@ export function buildTimelineConfigFromPhaseLengths(
     renewal: Math.max(1, phaseLengths.renewal)
   }
   const nextDurationMonths = safePhaseLengths.regulation + safePhaseLengths.readiness + safePhaseLengths.renewal
+  // Reject impossible edits that exceed max duration; callers keep prior config.
   if (nextDurationMonths > safeMaxDurationMonths) return normalizedConfig
 
   const segments = [

@@ -23,6 +23,8 @@ function normalizeLog(log: RouteLogEvent): RouteLogEvent {
 
 async function persistRouteLogsToSupabase(logs: RouteLogEvent[]) {
   const payload = logs.map(normalizeLog)
+  // Local persistence happens first so timeline interactions remain durable even
+  // when network writes fail or optional Supabase access is unavailable.
   persistLocalLogs(payload)
   if (!hasSupabaseConfig || !supabase) {
     return
@@ -63,6 +65,8 @@ export async function loadLocalLogs(): Promise<RouteLogEvent[]> {
   const payload = data?.[0]?.payload
   if (!Array.isArray(payload)) return []
   const normalized = payload.map((item) => normalizeLog(item as RouteLogEvent))
+  // Mirror cloud reads into local cache so subsequent offline sessions can recover
+  // the latest known timeline state.
   persistLocalLogs(normalized)
   return normalized
 }
