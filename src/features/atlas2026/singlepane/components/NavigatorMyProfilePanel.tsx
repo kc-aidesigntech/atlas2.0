@@ -1,3 +1,7 @@
+/**
+ * Navigator-facing "my profile" workspace combining load telemetry, pickup
+ * queue operations, self-assessment capture, and supervision notes.
+ */
 import React from 'react'
 import type {
   AccountSettings,
@@ -77,6 +81,8 @@ export default function NavigatorMyProfilePanel({
   onSaveSelfAssessment,
   onSaveSupervisionSession
 }: NavigatorMyProfilePanelProps) {
+  // Avatar rendering intentionally stays local-only for this panel; persisted
+  // profile image uploads are managed in enrollee-facing profile workflows.
   const avatarSrc = React.useMemo(() => createFallbackAvatar(currentNavigatorName), [currentNavigatorName])
   const [draftAssessment, setDraftAssessment] = React.useState(() => {
     const now = new Date().toISOString()

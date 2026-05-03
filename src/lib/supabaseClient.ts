@@ -1,5 +1,13 @@
 import { createAtlasSupabaseClient, hasSupabaseConfig as hasConfig } from '@atlas/shared'
 
+/**
+ * App-level Supabase client bootstrap.
+ *
+ * Purpose:
+ * - centralizes env-based configuration and feature-flagged bootstrap behavior.
+ * - exports one shared client/config contract for single-pane repositories/hooks.
+ */
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabasePublishableKey =
   // Keep backward compatibility with older env naming while preferring the

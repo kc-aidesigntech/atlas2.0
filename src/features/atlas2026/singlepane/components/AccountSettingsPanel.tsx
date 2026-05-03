@@ -1,3 +1,7 @@
+/**
+ * Account settings drawer for profile basics, role toggles, and optional live
+ * auth provider linking/sign-out controls.
+ */
 import React, { useEffect, useMemo, useState } from 'react'
 import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AccountSettings, AtlasRole } from '@/features/atlas2026/singlepane/types'
@@ -38,6 +42,8 @@ export default function AccountSettingsPanel({
   const [draft, setDraft] = useState<AccountSettings>(settings)
 
   useEffect(() => {
+    // Reset draft state whenever panel opens or upstream settings change so
+    // unsaved edits from previous sessions do not leak into new opens.
     setDraft(settings)
   }, [settings, isOpen])
 
@@ -46,6 +52,8 @@ export default function AccountSettingsPanel({
   if (!isOpen) return null
 
   function toggleRole(nextRole: AtlasRole) {
+    // Keep at least one enabled role so shell permissions never collapse into
+    // an unusable "no-role" state.
     const nextEnabledRoles = enabledRoleSet.has(nextRole)
       ? draft.enabledRoles.filter((item) => item !== nextRole)
       : [...draft.enabledRoles, nextRole]

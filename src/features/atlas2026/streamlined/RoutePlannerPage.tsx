@@ -6,6 +6,14 @@ import { AtlasInsetCard, AtlasPanel } from '@/features/atlas2026/components/Atla
 import type { InstructionBomItem, JourneyPhase, Participant, RouteTemplate, RoutingStep } from '@/features/atlas2026/data/contracts'
 import { SUBWAY_COLORS } from '@/features/atlas2026/streamlined/theme'
 
+/**
+ * Streamlined route-planner workspace.
+ *
+ * Purpose:
+ * - allows BOM composition, template authoring, preview, and assignment in one panel.
+ * - keeps interactions form-driven with minimal transient local state.
+ */
+
 interface RoutePlannerPageProps {
   participants: Participant[]
   selectedParticipantId: string
@@ -50,6 +58,8 @@ export default function RoutePlannerPage({
   const plannerSelectClassName = 'rounded-xl border bg-black px-3 py-2 text-sm text-white'
   const plannerSelectStyle: React.CSSProperties = { borderColor: SUBWAY_COLORS.border }
 
+  // Action handlers intentionally keep validation lightweight and synchronous so
+  // parent repositories can own persistence-side constraints.
   function toggleBom(bomId: string) {
     // Treat BOM selection as a set to keep checkbox toggles idempotent.
     setSelectedBomIds((previous) => (previous.includes(bomId) ? previous.filter((id) => id !== bomId) : [...previous, bomId]))

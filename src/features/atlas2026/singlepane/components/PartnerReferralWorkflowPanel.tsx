@@ -1,3 +1,7 @@
+/**
+ * Partner referral intake panel that validates submissions and forwards clean
+ * queue-ready records into navigator pickup workflows.
+ */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'

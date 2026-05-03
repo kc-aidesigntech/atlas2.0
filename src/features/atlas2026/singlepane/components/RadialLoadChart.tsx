@@ -1,3 +1,7 @@
+/**
+ * Compact radial load visualization for habitat/work/social domains used by
+ * profile and station panels, with optional click-through behavior.
+ */
 import React from 'react'
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from 'recharts'
 import type { DomainLoad } from '../types'
@@ -52,8 +56,8 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
   const chartWidth = 340
   const chartHeight = 220
 
-  // 6 points total:
-  // 3 labeled anchor domains + 3 unlabeled adjacency interaction nodes.
+  // Six-point polygon mixes anchor domains with adjacency averages so chart
+  // area communicates both direct burden and cross-domain interaction.
   const data = [
     { axis: 'habitat', value: habitat },
     { axis: 'habitat-social', value: Math.round((habitat + social) / 2) },

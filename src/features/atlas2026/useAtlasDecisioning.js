@@ -26,6 +26,14 @@ import {
 import { buildRouteSteps, canTransitionStep, deriveRouteLifecycleFromSteps, STEP_STATUS } from '@/services/atlas2026/step-graph'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
+/**
+ * Legacy ATLAS decisioning orchestrator.
+ *
+ * Purpose:
+ * - hydrates legacy route/memory datasets and computes derived governance snapshots.
+ * - exposes role-gated mutation actions with optimistic UI behavior.
+ */
+
 function normalizeParticipant(docId, raw) {
   return createParticipantState({
     ...raw,
@@ -105,6 +113,7 @@ export function useAtlasDecisioning() {
 
     let isActive = true
 
+    // Initial hydration normalizes legacy snapshot shapes into hook-local contracts.
     async function hydrateLegacyAtlas() {
       setLoadingLiveData(true)
       try {
@@ -367,6 +376,8 @@ export function useAtlasDecisioning() {
 
     try {
       setSavingRoute(true)
+      // Optimistic records are inserted first to keep operator workflows responsive;
+      // failed writes remove optimistic artifacts in the catch path.
       const optimisticRouteId = createOptimisticId('optimistic-route')
       const optimisticMemoryId = createOptimisticId('optimistic-memory')
       const optimisticRoute = {

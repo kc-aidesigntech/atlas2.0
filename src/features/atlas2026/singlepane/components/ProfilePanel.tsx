@@ -1,3 +1,7 @@
+/**
+ * Enrollee profile header panel with avatar handling and parent Z-code badges
+ * that drive drill-in selection for resolution workflows.
+ */
 import React from 'react'
 import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'

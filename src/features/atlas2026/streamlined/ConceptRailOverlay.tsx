@@ -1,5 +1,12 @@
 import React from 'react'
 
+/**
+ * Static visual rail used by streamlined overlays.
+ *
+ * Intent:
+ * - remains purely decorative and non-interactive.
+ * - keeps layering predictable relative to interactive controls.
+ */
 export default function ConceptRailOverlay() {
   return (
     // Decorative overlay only; pointer events stay disabled so it never blocks interaction

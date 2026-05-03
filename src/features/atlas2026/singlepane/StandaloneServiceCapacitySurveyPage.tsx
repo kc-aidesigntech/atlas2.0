@@ -1,3 +1,7 @@
+/**
+ * Standalone partner survey route that renders service-capacity intake outside
+ * the authenticated navigator shell.
+ */
 import React from 'react'
 import ServiceCapacitySurveyPanel from '@/features/atlas2026/singlepane/components/ServiceCapacitySurveyPanel'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
@@ -18,6 +22,8 @@ export default function StandaloneServiceCapacitySurveyPage() {
   } = useSinglePaneData('partner')
 
   React.useEffect(() => {
+    // This route hard-pins partner context so shared data hooks do not inherit
+    // stale role state from previous single-pane sessions.
     if (role !== 'partner') {
       setRole('partner')
     }

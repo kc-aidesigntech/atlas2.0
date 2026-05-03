@@ -1,3 +1,7 @@
+/**
+ * Primary ATLAS single-pane shell orchestrating role-based navigation, overlay
+ * workflows, and timeline/context composition around shared data hooks.
+ */
 import React from 'react'
 import { useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled } from '@/lib/supabaseClient'
@@ -34,6 +38,8 @@ interface ResolutionOverlayState {
   filterChildCodes?: string[]
 }
 
+// Only these labels are persisted as actionable menu intents; other role menu
+// strings remain informational and should not trigger workflow side effects.
 export default function SinglePaneApp() {
   const {
     role,

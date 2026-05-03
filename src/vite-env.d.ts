@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+// Asset module declarations ensure TypeScript understands bundler-imported static files
+// used across legacy and single-pane feature surfaces.
 declare module '*.csv?raw' {
   const content: string
   export default content
