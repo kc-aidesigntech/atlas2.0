@@ -5,13 +5,8 @@ import {
   SRIG_COORDINATION_AREAS
 } from '@/core/atlas2026/canonical-spec'
 import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
-import { isCivicContributionEvent, toMillis } from '@/services/atlas2026/snapshot-helpers'
+import { average, computeReciprocityIndex, isCivicContributionEvent, toMillis, toRoundedNumber } from '@/services/atlas2026/snapshot-helpers'
 import { STEP_STATUS } from '@/services/atlas2026/step-graph'
-
-function average(values = []) {
-  if (!values.length) return 0
-  return values.reduce((sum, value) => sum + value, 0) / values.length
-}
 
 export function buildAscentEngineSnapshot({ participant, routes = [], steps = [], pcfRefinementWeight = 0.6 }) {
   const vectors = participant?.pressureVectors || []
@@ -41,12 +36,12 @@ export function buildAscentEngineSnapshot({ participant, routes = [], steps = []
 
   const outputs = ENGINE_OF_ASCENT_OUTPUTS.map((outputId) => ({
     id: outputId,
-    score: Number((refinedEnergy * (outputMultipliers[outputId] || 0.8)).toFixed(3))
+    score: toRoundedNumber(refinedEnergy * (outputMultipliers[outputId] || 0.8), 3)
   }))
 
   return {
-    tensionLoad: Number(pressure.toFixed(3)),
-    refinedEnergy: Number(refinedEnergy.toFixed(3)),
+    tensionLoad: toRoundedNumber(pressure, 3),
+    refinedEnergy: toRoundedNumber(refinedEnergy, 3),
     outputs
   }
 }
@@ -77,7 +72,11 @@ export function buildRenewalSnapshot({
   const readiness = participant?.phaseReadiness ?? 0
   const routeCompletionRatio = routes.length ? completedRoutes / routes.length : 0
   const contributionRatio = verifiedEvents.length ? civicContributionEvents.length / verifiedEvents.length : 0
-  const reciprocityIndex = Number((readiness * 0.45 + routeCompletionRatio * 0.35 + contributionRatio * 0.2).toFixed(3))
+  const reciprocityIndex = computeReciprocityIndex({
+    readiness,
+    routeCompletionRatio,
+    contributionRatio
+  })
 
   return {
     reciprocityEthos: RECIPROCITY_ETHOS,

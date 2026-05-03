@@ -6,13 +6,17 @@ import type {
   RoutingStep,
 } from "./contracts";
 
+function findByIdOrNull<T extends { id: string }>(items: readonly T[], id: string): T | null {
+  return items.find((item) => item.id === id) || null;
+}
+
 export function getSelectedParticipant(
   dataset: AtlasJsonDataset,
   participantId: string,
 ): Participant | null {
   // Consumer layers (web/mobile) pass IDs from route params; return null instead of
   // throwing so callers can treat "not found" as an empty selection state.
-  return dataset.participants.find((participant) => participant.id === participantId) || null;
+  return findByIdOrNull(dataset.participants, participantId);
 }
 
 export function getSelectedJourney(
@@ -46,5 +50,6 @@ export function getRouteTemplate(
   dataset: AtlasJsonDataset,
   templateId: string,
 ): RouteTemplate | null {
-  return dataset.routeTemplates.find((template) => template.id === templateId) || null;
+  // Reuse shared lookup helper to keep null-on-miss behavior identical across selectors.
+  return findByIdOrNull(dataset.routeTemplates, templateId);
 }

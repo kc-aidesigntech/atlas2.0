@@ -79,6 +79,13 @@ import {
   extendTimelinePhaseByMonth,
   normalizeTimelineConfig
 } from '@/features/atlas2026/singlepane/timelineConfigUtils'
+import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
+import {
+  buildPartnerServiceCapacityDefaultHeader,
+  buildSupervisorNavigatorCompetencySummaries,
+  upsertRegulationTestHistory,
+  upsertServiceCapacitySubmissionHistory
+} from '@/features/atlas2026/singlepane/useSinglePaneDataTransforms'
 import {
   deleteRegulationTestDraft,
   loadRegulationTestHistory,
@@ -112,16 +119,6 @@ function nextPhase(current?: StabilizationPhase): StabilizationPhase {
   if (current === 'regulation') return 'readiness'
   if (current === 'readiness') return 'renewal'
   return 'renewal'
-}
-
-function splitFullName(value: string) {
-  const parts = value.trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return { firstName: '', lastName: '' }
-  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
-  return {
-    firstName: parts.slice(0, -1).join(' '),
-    lastName: parts[parts.length - 1]
-  }
 }
 
 function getRegulationTestLabel(testType: RegulationTestSubmissionRecord['testType']) {
@@ -571,48 +568,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [selectedEnrollee?.activeZCodeDetails]
   )
 
-  const partnerServiceCapacityDefaultHeader = useMemo<PartnerServiceCapacityHeader>(() => {
-    const splitName = splitFullName(accountSettings.fullName)
-    return {
-      firstName: splitName.firstName,
-      lastName: splitName.lastName,
-      email: accountSettings.email || '',
-      organizationName: accountSettings.organization || '',
-      jobTitle: '',
-      respondentRoles: role === 'administrator' ? ['administrator'] : ['direct_service_provider'],
-      otherRoleText: ''
-    }
-  }, [accountSettings.email, accountSettings.fullName, accountSettings.organization, role])
+  const partnerServiceCapacityDefaultHeader = useMemo<PartnerServiceCapacityHeader>(
+    () => buildPartnerServiceCapacityDefaultHeader(accountSettings, role),
+    [accountSettings, role]
+  )
   const currentNavigatorName = useMemo(
     () => accountSettings.fullName.trim() || selectedEnrollee?.assignedNavigator || 'atlas navigator',
     [accountSettings.fullName, selectedEnrollee?.assignedNavigator]
   )
 
-  const supervisorNavigatorCompetency = useMemo<SupervisorNavigatorCompetencySummary[]>(() => {
-    const navigatorNames = Array.from(new Set(enrollees.map((enrollee) => enrollee.assignedNavigator).filter(Boolean)))
-    const byNavigator = navigatorNames.map((navigatorName) => {
-      const records = navigatorCompetencyAssessments
-        .filter((assessment) => assessment.navigatorName === navigatorName)
-        .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime())
-      const recent = records.slice(0, 3)
-      const weightMap = [3, 2, 1]
-      const weighted = recent.map((record, index) => {
-        const avg = record.answers.length
-          ? record.answers.reduce((sum, answer) => sum + answer.score, 0) / record.answers.length
-          : 0
-        return { avg, weight: weightMap[index] || 1 }
-      })
-      const weightedScore = weighted.reduce((sum, item) => sum + item.avg * item.weight, 0)
-      const weightTotal = weighted.reduce((sum, item) => sum + item.weight, 0)
-      return {
-        navigatorName,
-        assessmentCount: records.length,
-        weightedRollingAverage: weightTotal ? Number((weightedScore / weightTotal).toFixed(2)) : 0,
-        lastAssessmentAtIso: records[0]?.submittedAtIso || null
-      } satisfies SupervisorNavigatorCompetencySummary
-    })
-    return byNavigator
-  }, [enrollees, navigatorCompetencyAssessments])
+  const supervisorNavigatorCompetency = useMemo<SupervisorNavigatorCompetencySummary[]>(
+    () => buildSupervisorNavigatorCompetencySummaries(enrollees, navigatorCompetencyAssessments),
+    [enrollees, navigatorCompetencyAssessments]
+  )
   const mergedNavigatorProgramState = useMemo(
     () => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, enrollmentRequests),
     [currentNavigatorName, enrollmentRequests, navigatorProgramState]
@@ -1111,13 +1079,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setPartnerServiceCapacitySurveyError(null)
     try {
       const saved = await persistPartnerServiceCapacitySurvey(input)
-      setPartnerServiceCapacitySurveyHistory((current) => {
-        const nextHistory = current.filter((record) => record.draftKey !== saved.draftKey && record.id !== saved.id)
-        return [saved, ...nextHistory].sort(
-          (left, right) =>
-            new Date(right.updatedAtIso || right.submittedAtIso).getTime() - new Date(left.updatedAtIso || left.submittedAtIso).getTime()
-        )
-      })
+      setPartnerServiceCapacitySurveyHistory((current) => upsertServiceCapacitySubmissionHistory(current, saved))
       const nextAccountSettings = {
         ...accountSettings,
         fullName: `${input.header.firstName} ${input.header.lastName}`.trim() || accountSettings.fullName,
@@ -1344,10 +1306,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setRegulationTestError(null)
     try {
       const saved = await saveRegulationTestSubmission(input)
-      setRegulationTestHistory((current) => {
-        const next = current.filter((record) => record.id !== saved.id && record.draftKey !== saved.draftKey)
-        return [saved, ...next].sort((left, right) => new Date(right.updatedAtIso).getTime() - new Date(left.updatedAtIso).getTime())
-      })
+      setRegulationTestHistory((current) => upsertRegulationTestHistory(current, saved))
       return saved
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save regulation test.'

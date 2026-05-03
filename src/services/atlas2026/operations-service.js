@@ -1,5 +1,12 @@
 import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
-import { isCivicContributionEvent, toMillis } from '@/services/atlas2026/snapshot-helpers'
+import {
+  computeReciprocityIndex,
+  isCivicContributionEvent,
+  isWithinRecentWindow,
+  toMillis,
+  toPhaseReadinessAlert,
+  toRoundedNumber
+} from '@/services/atlas2026/snapshot-helpers'
 import { STEP_STATUS } from '@/services/atlas2026/step-graph'
 
 function countBy(items, keySelector) {
@@ -29,11 +36,7 @@ export function buildOperationsSnapshot({
   const completedRoutes = routes.filter((route) => route.status === ROUTE_LIFECYCLE.completed).length
 
   const now = Date.now()
-  const weeklyEvents = memoryEvents.filter((event) => {
-    const seconds = event?.createdAt?.seconds
-    if (!seconds) return false
-    return now - seconds * 1000 <= 1000 * 60 * 60 * 24 * 7
-  }).length
+  const weeklyEvents = memoryEvents.filter((event) => isWithinRecentWindow(event?.createdAt, 7, now)).length
 
   const readinessAvg = participants.length
     ? participants.reduce((sum, participant) => sum + (participant.phaseReadiness || 0), 0) / participants.length
@@ -62,7 +65,7 @@ export function buildOperationsSnapshot({
       stepId: step.stepId,
       label: step.label,
       routeId: step.routeId,
-      ageHours: Number(step.ageHours.toFixed(1)),
+      ageHours: toRoundedNumber(step.ageHours, 1),
       recommendedAction:
         (step.dependencies || []).length > 0
           ? 'Resolve prerequisite steps then reset to pending.'
@@ -70,16 +73,16 @@ export function buildOperationsSnapshot({
     }))
   const readinessAlerts = participants
     .filter((participant) => (participant.phaseReadiness ?? 1) < phaseReadinessAlertThreshold)
-    .map((participant) => ({
-      participantId: participant.participantId,
-      countyId: participant.countyId || 'unknown',
-      currentPhase: participant.currentPhase,
-      phaseReadiness: Number((participant.phaseReadiness ?? 0).toFixed(3))
-    }))
+    // Shared alert shaper keeps dashboard modules aligned on participant risk payloads.
+    .map(toPhaseReadinessAlert)
   const contributionEvents = memoryEvents.filter(isCivicContributionEvent).length
   const routeCompletionRatio = routes.length ? completedRoutes / routes.length : 0
   const contributionRatio = memoryEvents.length ? contributionEvents / memoryEvents.length : 0
-  const reciprocityIndex = Number((readinessAvg * 0.45 + routeCompletionRatio * 0.35 + contributionRatio * 0.2).toFixed(3))
+  const reciprocityIndex = computeReciprocityIndex({
+    readiness: readinessAvg,
+    routeCompletionRatio,
+    contributionRatio
+  })
 
   return {
     totals: {
@@ -94,16 +97,16 @@ export function buildOperationsSnapshot({
     risk: {
       blockedRoutes,
       completedRoutes,
-      blockedRate: routes.length ? Number((blockedRoutes / routes.length).toFixed(3)) : 0
+      blockedRate: routes.length ? toRoundedNumber(blockedRoutes / routes.length, 3) : 0
     },
     activity: {
       weeklyEvents,
-      averageReadiness: Number(readinessAvg.toFixed(3))
+      averageReadiness: toRoundedNumber(readinessAvg, 3)
     },
     sla: {
       thresholdHours: slaThresholdHours,
       overdueSteps: overdueSteps.length,
-      averageStepAgeHours: Number(avgStepAgeHours.toFixed(1))
+      averageStepAgeHours: toRoundedNumber(avgStepAgeHours, 1)
     },
     reciprocity: {
       reciprocityIndex,
@@ -151,7 +154,7 @@ export function buildCountyComparisonSnapshot({ participants, routes, steps, mem
       completedRoutes,
       completedSteps,
       overdueSteps,
-      averageReadiness: Number(readinessAvg.toFixed(3))
+      averageReadiness: toRoundedNumber(readinessAvg, 3)
     }
   })
 }

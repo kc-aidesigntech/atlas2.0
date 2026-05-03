@@ -3,8 +3,8 @@
  * workflows, and timeline/context composition around shared data hooks.
  */
 import React from 'react'
-import { useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
-import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled } from '@/lib/supabaseClient'
+import { useSupabaseAuth } from '../../../auth/SupabaseAuthProvider'
+import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled } from '../../../lib/supabaseClient'
 import AdminDataControlPanel from '../admin/AdminDataControlPanel'
 import { AtlasTextButton } from '../components/AtlasPrimitives'
 import AccountSettingsPanel from './components/AccountSettingsPanel'

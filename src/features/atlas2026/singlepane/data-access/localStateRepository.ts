@@ -8,8 +8,14 @@ import type {
   RouteAssignmentRecord,
   TimelineConfig
 } from '@/features/atlas2026/singlepane/types'
-import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import {
+  loadConfigPayloadMapByPrefix,
+  loadLatestConfigPayload,
+  loadLocalStorageState,
+  persistLocalStorageState,
+  upsertConfigPayload
+} from '@/features/atlas2026/singlepane/data-access/configDocumentPersistence'
 
 /**
  * Single-pane local/config repository.
@@ -26,8 +32,6 @@ const ENROLLEE_INTAKE_CONFIG_KEY_PREFIX = 'enrollee_intake:'
 const ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX = 'route_assignment:'
 const TIMELINE_CONFIG_KEY_PREFIX = 'timeline_config:'
 const ADMIN_PORTAL_REGISTRY_CONFIG_KEY = 'admin_portal_registry'
-const CONFIG_SURFACE = 'singlepane'
-const CONFIG_VERSION = 'runtime-v1'
 const LOCAL_ACCOUNT_SETTINGS_KEY = 'atlas2026.singlepane.account-settings.v2'
 const LOCAL_ENROLLEE_INTAKES_KEY = 'atlas2026.singlepane.enrollee-intakes.v2'
 const LOCAL_ROUTE_ASSIGNMENTS_KEY = 'atlas2026.singlepane.route-assignments.v2'
@@ -65,73 +69,48 @@ function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | nul
 }
 
 function loadLocalAccountSettingsState(): AccountSettings {
-  if (typeof window === 'undefined') return getDefaultAccountSettings()
-  const raw = window.localStorage.getItem(LOCAL_ACCOUNT_SETTINGS_KEY)
-  if (!raw) return getDefaultAccountSettings()
-  try {
-    return normalizeAccountSettingsPayload(JSON.parse(raw) as Partial<AccountSettings>)
-  } catch {
-    return getDefaultAccountSettings()
-  }
+  return loadLocalStorageState(
+    LOCAL_ACCOUNT_SETTINGS_KEY,
+    getDefaultAccountSettings(),
+    (parsed) => normalizeAccountSettingsPayload(parsed as Partial<AccountSettings>)
+  )
 }
 
 function persistLocalAccountSettingsState(settings: AccountSettings) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(LOCAL_ACCOUNT_SETTINGS_KEY, JSON.stringify(settings))
+  persistLocalStorageState(LOCAL_ACCOUNT_SETTINGS_KEY, settings)
 }
 
 function loadLocalEnrolleeIntakeState(): Record<string, EnrolleeIntakeRecord> {
-  if (typeof window === 'undefined') return {}
-  const raw = window.localStorage.getItem(LOCAL_ENROLLEE_INTAKES_KEY)
-  if (!raw) return {}
-  try {
-    const parsed = JSON.parse(raw) as Record<string, EnrolleeIntakeRecord>
+  return loadLocalStorageState(LOCAL_ENROLLEE_INTAKES_KEY, {}, (parsed) => {
     if (!parsed || typeof parsed !== 'object') return {}
     return parsed
-  } catch {
-    return {}
-  }
+  })
 }
 
 function persistLocalEnrolleeIntakeState(state: Record<string, EnrolleeIntakeRecord>) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(LOCAL_ENROLLEE_INTAKES_KEY, JSON.stringify(state))
+  persistLocalStorageState(LOCAL_ENROLLEE_INTAKES_KEY, state)
 }
 
 function loadLocalRouteAssignmentState(): Record<string, RouteAssignmentRecord> {
-  if (typeof window === 'undefined') return {}
-  const raw = window.localStorage.getItem(LOCAL_ROUTE_ASSIGNMENTS_KEY)
-  if (!raw) return {}
-  try {
-    const parsed = JSON.parse(raw) as Record<string, RouteAssignmentRecord>
+  return loadLocalStorageState(LOCAL_ROUTE_ASSIGNMENTS_KEY, {}, (parsed) => {
     if (!parsed || typeof parsed !== 'object') return {}
     return parsed
-  } catch {
-    return {}
-  }
+  })
 }
 
 function persistLocalRouteAssignmentState(state: Record<string, RouteAssignmentRecord>) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(LOCAL_ROUTE_ASSIGNMENTS_KEY, JSON.stringify(state))
+  persistLocalStorageState(LOCAL_ROUTE_ASSIGNMENTS_KEY, state)
 }
 
 function loadLocalTimelineConfigState(): Record<string, TimelineConfig> {
-  if (typeof window === 'undefined') return {}
-  const raw = window.localStorage.getItem(LOCAL_TIMELINE_CONFIGS_KEY)
-  if (!raw) return {}
-  try {
-    const parsed = JSON.parse(raw) as Record<string, TimelineConfig>
+  return loadLocalStorageState(LOCAL_TIMELINE_CONFIGS_KEY, {}, (parsed) => {
     if (!parsed || typeof parsed !== 'object') return {}
     return parsed
-  } catch {
-    return {}
-  }
+  })
 }
 
 function persistLocalTimelineConfigState(state: Record<string, TimelineConfig>) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(LOCAL_TIMELINE_CONFIGS_KEY, JSON.stringify(state))
+  persistLocalStorageState(LOCAL_TIMELINE_CONFIGS_KEY, state)
 }
 
 function getDefaultAdminPortalRegistry(): AdminPortalRegistry {
@@ -165,19 +144,15 @@ function normalizeAdminPortalRegistry(payload: Partial<AdminPortalRegistry> | nu
 }
 
 function loadLocalAdminPortalRegistryState(): AdminPortalRegistry {
-  if (typeof window === 'undefined') return getDefaultAdminPortalRegistry()
-  const raw = window.localStorage.getItem(LOCAL_ADMIN_PORTAL_REGISTRY_KEY)
-  if (!raw) return getDefaultAdminPortalRegistry()
-  try {
-    return normalizeAdminPortalRegistry(JSON.parse(raw) as Partial<AdminPortalRegistry>)
-  } catch {
-    return getDefaultAdminPortalRegistry()
-  }
+  return loadLocalStorageState(
+    LOCAL_ADMIN_PORTAL_REGISTRY_KEY,
+    getDefaultAdminPortalRegistry(),
+    (parsed) => normalizeAdminPortalRegistry(parsed as Partial<AdminPortalRegistry>)
+  )
 }
 
 function persistLocalAdminPortalRegistryState(registry: AdminPortalRegistry) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(LOCAL_ADMIN_PORTAL_REGISTRY_KEY, JSON.stringify(registry))
+  persistLocalStorageState(LOCAL_ADMIN_PORTAL_REGISTRY_KEY, registry)
 }
 
 function getDefaultNavigatorProgramState(): NavigatorProgramState {
@@ -201,19 +176,15 @@ function normalizeNavigatorProgramState(payload: Partial<NavigatorProgramState> 
 }
 
 function loadLocalNavigatorProgramState(): NavigatorProgramState {
-  if (typeof window === 'undefined') return getDefaultNavigatorProgramState()
-  const raw = window.localStorage.getItem(LOCAL_NAVIGATOR_PROGRAM_STATE_KEY)
-  if (!raw) return getDefaultNavigatorProgramState()
-  try {
-    return normalizeNavigatorProgramState(JSON.parse(raw) as Partial<NavigatorProgramState>)
-  } catch {
-    return getDefaultNavigatorProgramState()
-  }
+  return loadLocalStorageState(
+    LOCAL_NAVIGATOR_PROGRAM_STATE_KEY,
+    getDefaultNavigatorProgramState(),
+    (parsed) => normalizeNavigatorProgramState(parsed as Partial<NavigatorProgramState>)
+  )
 }
 
 function persistLocalNavigatorProgramState(state: NavigatorProgramState) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(LOCAL_NAVIGATOR_PROGRAM_STATE_KEY, JSON.stringify(state))
+  persistLocalStorageState(LOCAL_NAVIGATOR_PROGRAM_STATE_KEY, state)
 }
 
 export function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrides: Record<string, EnrolleeIntakeRecord>) {
@@ -233,22 +204,11 @@ export function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrid
 }
 
 export async function loadAccountSettings(): Promise<AccountSettings> {
-  if (!hasSupabaseConfig || !supabase) return loadLocalAccountSettingsState()
-  const { data, error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .select('payload')
-    .eq('surface', CONFIG_SURFACE)
-    .eq('config_key', SETTINGS_CONFIG_KEY)
-    .eq('version', CONFIG_VERSION)
-    .order('created_at', { ascending: false })
-    .limit(1)
-
+  const { payload, error } = await loadLatestConfigPayload<Partial<AccountSettings>>(SETTINGS_CONFIG_KEY)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return loadLocalAccountSettingsState()
     throw error
   }
-  const payload = (data?.[0]?.payload || null) as Partial<AccountSettings> | null
   const normalized = normalizeAccountSettingsPayload(payload)
   persistLocalAccountSettingsState(normalized)
   return normalized
@@ -257,21 +217,7 @@ export async function loadAccountSettings(): Promise<AccountSettings> {
 export async function saveAccountSettings(settings: AccountSettings): Promise<AccountSettings> {
   const normalized = normalizeAccountSettingsPayload(settings)
   persistLocalAccountSettingsState(normalized)
-  if (!hasSupabaseConfig || !supabase) {
-    return normalized
-  }
-  const { error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .upsert(
-      {
-        surface: CONFIG_SURFACE,
-        config_key: SETTINGS_CONFIG_KEY,
-        version: CONFIG_VERSION,
-        payload: normalized
-      },
-      { onConflict: 'surface,config_key,version' }
-    )
+  const error = await upsertConfigPayload(SETTINGS_CONFIG_KEY, normalized)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return normalized
     throw error
@@ -280,15 +226,7 @@ export async function saveAccountSettings(settings: AccountSettings): Promise<Ac
 }
 
 export async function loadEnrolleeIntakes(): Promise<Record<string, EnrolleeIntakeRecord>> {
-  if (!hasSupabaseConfig || !supabase) return loadLocalEnrolleeIntakeState()
-  const { data, error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .select('config_key,payload')
-    .eq('surface', CONFIG_SURFACE)
-    .eq('version', CONFIG_VERSION)
-    .like('config_key', `${ENROLLEE_INTAKE_CONFIG_KEY_PREFIX}%`)
-
+  const { rows: data, error } = await loadConfigPayloadMapByPrefix<EnrolleeIntakeRecord>(ENROLLEE_INTAKE_CONFIG_KEY_PREFIX)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return loadLocalEnrolleeIntakeState()
     throw error
@@ -314,21 +252,7 @@ export async function saveEnrolleeIntake(intake: EnrolleeIntakeRecord): Promise<
     ...loadLocalEnrolleeIntakeState(),
     [intake.enrolleeId]: intake
   })
-  if (!hasSupabaseConfig || !supabase) {
-    return intake
-  }
-  const { error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .upsert(
-      {
-        surface: CONFIG_SURFACE,
-        config_key: `${ENROLLEE_INTAKE_CONFIG_KEY_PREFIX}${intake.enrolleeId}`,
-        version: CONFIG_VERSION,
-        payload: intake
-      },
-      { onConflict: 'surface,config_key,version' }
-    )
+  const error = await upsertConfigPayload(`${ENROLLEE_INTAKE_CONFIG_KEY_PREFIX}${intake.enrolleeId}`, intake)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return intake
     throw error
@@ -337,15 +261,7 @@ export async function saveEnrolleeIntake(intake: EnrolleeIntakeRecord): Promise<
 }
 
 export async function loadRouteAssignments(): Promise<Record<string, RouteAssignmentRecord>> {
-  if (!hasSupabaseConfig || !supabase) return loadLocalRouteAssignmentState()
-  const { data, error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .select('config_key,payload')
-    .eq('surface', CONFIG_SURFACE)
-    .eq('version', CONFIG_VERSION)
-    .like('config_key', `${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}%`)
-
+  const { rows: data, error } = await loadConfigPayloadMapByPrefix<RouteAssignmentRecord>(ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return loadLocalRouteAssignmentState()
     throw error
@@ -369,21 +285,7 @@ export async function saveRouteAssignment(assignment: RouteAssignmentRecord): Pr
     ...loadLocalRouteAssignmentState(),
     [assignment.enrolleeId]: assignment
   })
-  if (!hasSupabaseConfig || !supabase) {
-    return assignment
-  }
-  const { error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .upsert(
-      {
-        surface: CONFIG_SURFACE,
-        config_key: `${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}${assignment.enrolleeId}`,
-        version: CONFIG_VERSION,
-        payload: assignment
-      },
-      { onConflict: 'surface,config_key,version' }
-    )
+  const error = await upsertConfigPayload(`${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}${assignment.enrolleeId}`, assignment)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return assignment
     throw error
@@ -392,15 +294,7 @@ export async function saveRouteAssignment(assignment: RouteAssignmentRecord): Pr
 }
 
 export async function loadTimelineConfigs(): Promise<Record<string, TimelineConfig>> {
-  if (!hasSupabaseConfig || !supabase) return loadLocalTimelineConfigState()
-  const { data, error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .select('config_key,payload')
-    .eq('surface', CONFIG_SURFACE)
-    .eq('version', CONFIG_VERSION)
-    .like('config_key', `${TIMELINE_CONFIG_KEY_PREFIX}%`)
-
+  const { rows: data, error } = await loadConfigPayloadMapByPrefix<TimelineConfig>(TIMELINE_CONFIG_KEY_PREFIX)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return loadLocalTimelineConfigState()
     throw error
@@ -441,23 +335,11 @@ export async function saveTimelineConfig(
     nextLocalState[key] = config
   }
   persistLocalTimelineConfigState(nextLocalState)
-  if (!hasSupabaseConfig || !supabase) return config
 
   // Persist each addressable key to keep reads consistent regardless of which
   // identifier a caller currently has available.
   for (const key of keys) {
-    const { error } = await (supabase as any)
-      .schema('atlas')
-      .from('app_config_documents')
-      .upsert(
-        {
-          surface: CONFIG_SURFACE,
-          config_key: `${TIMELINE_CONFIG_KEY_PREFIX}${key}`,
-          version: CONFIG_VERSION,
-          payload: config
-        },
-        { onConflict: 'surface,config_key,version' }
-      )
+    const error = await upsertConfigPayload(`${TIMELINE_CONFIG_KEY_PREFIX}${key}`, config)
     if (error) {
       if (isOptionalSupabaseDataError(error)) return config
       throw error
@@ -467,23 +349,13 @@ export async function saveTimelineConfig(
 }
 
 export async function loadAdminPortalRegistry(): Promise<AdminPortalRegistry> {
-  if (!hasSupabaseConfig || !supabase) return loadLocalAdminPortalRegistryState()
-  const { data, error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .select('payload')
-    .eq('surface', CONFIG_SURFACE)
-    .eq('config_key', ADMIN_PORTAL_REGISTRY_CONFIG_KEY)
-    .eq('version', CONFIG_VERSION)
-    .order('created_at', { ascending: false })
-    .limit(1)
-
+  const { payload, error } = await loadLatestConfigPayload<Partial<AdminPortalRegistry>>(ADMIN_PORTAL_REGISTRY_CONFIG_KEY)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return loadLocalAdminPortalRegistryState()
     throw error
   }
 
-  const normalized = normalizeAdminPortalRegistry((data?.[0]?.payload || null) as Partial<AdminPortalRegistry> | null)
+  const normalized = normalizeAdminPortalRegistry(payload)
   persistLocalAdminPortalRegistryState(normalized)
   return normalized
 }
@@ -494,21 +366,7 @@ export async function saveAdminPortalRegistry(registry: AdminPortalRegistry): Pr
     updatedAtIso: new Date().toISOString()
   })
   persistLocalAdminPortalRegistryState(normalized)
-  if (!hasSupabaseConfig || !supabase) {
-    return normalized
-  }
-  const { error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .upsert(
-      {
-        surface: CONFIG_SURFACE,
-        config_key: ADMIN_PORTAL_REGISTRY_CONFIG_KEY,
-        version: CONFIG_VERSION,
-        payload: normalized
-      },
-      { onConflict: 'surface,config_key,version' }
-    )
+  const error = await upsertConfigPayload(ADMIN_PORTAL_REGISTRY_CONFIG_KEY, normalized)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return normalized
     throw error
@@ -517,23 +375,13 @@ export async function saveAdminPortalRegistry(registry: AdminPortalRegistry): Pr
 }
 
 export async function loadNavigatorProgramState(): Promise<NavigatorProgramState> {
-  if (!hasSupabaseConfig || !supabase) return loadLocalNavigatorProgramState()
-  const { data, error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .select('payload')
-    .eq('surface', CONFIG_SURFACE)
-    .eq('config_key', NAVIGATOR_PROGRAM_STATE_CONFIG_KEY)
-    .eq('version', CONFIG_VERSION)
-    .order('created_at', { ascending: false })
-    .limit(1)
-
+  const { payload, error } = await loadLatestConfigPayload<Partial<NavigatorProgramState>>(NAVIGATOR_PROGRAM_STATE_CONFIG_KEY)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return loadLocalNavigatorProgramState()
     throw error
   }
 
-  const normalized = normalizeNavigatorProgramState((data?.[0]?.payload || null) as Partial<NavigatorProgramState> | null)
+  const normalized = normalizeNavigatorProgramState(payload)
   persistLocalNavigatorProgramState(normalized)
   return normalized
 }
@@ -546,21 +394,7 @@ export async function saveNavigatorProgramState(state: NavigatorProgramState): P
   // Updated timestamp is owned by persistence boundary to prevent clients from
   // accidentally writing stale metadata.
   persistLocalNavigatorProgramState(normalized)
-  if (!hasSupabaseConfig || !supabase) {
-    return normalized
-  }
-  const { error } = await (supabase as any)
-    .schema('atlas')
-    .from('app_config_documents')
-    .upsert(
-      {
-        surface: CONFIG_SURFACE,
-        config_key: NAVIGATOR_PROGRAM_STATE_CONFIG_KEY,
-        version: CONFIG_VERSION,
-        payload: normalized
-      },
-      { onConflict: 'surface,config_key,version' }
-    )
+  const error = await upsertConfigPayload(NAVIGATOR_PROGRAM_STATE_CONFIG_KEY, normalized)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return normalized
     throw error

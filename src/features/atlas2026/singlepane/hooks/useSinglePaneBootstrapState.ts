@@ -28,6 +28,7 @@ import {
   loadRouteAssignments,
   loadSinglePaneBootstrap
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
+import { toNormalizedRadialDomainLoad } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 
 /**
  * Bootstraps role-scoped single-pane state.
@@ -64,19 +65,6 @@ const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   email: 'operator@atlas.local',
   organization: 'atlas operations',
   enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
-}
-
-function derivePartnerRadialLoad(breakdown: DomainLoadBreakdown | null): DomainLoad | null {
-  if (!breakdown) return null
-  // Normalize to percentages so radial chart scale remains stable even when
-  // source totals vary significantly across organizations.
-  const maxTotal = Math.max(breakdown.habitatTotal, breakdown.workTotal, breakdown.socialNetworksTotal, 1)
-  return {
-    enrolleeId: breakdown.subjectId,
-    habitat: Math.round((breakdown.habitatTotal / maxTotal) * 100),
-    work: Math.round((breakdown.workTotal / maxTotal) * 100),
-    socialNetworks: Math.round((breakdown.socialNetworksTotal / maxTotal) * 100)
-  }
 }
 
 export function useSinglePaneBootstrapState(role: AtlasRole) {
@@ -138,7 +126,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
 
         if (!isMounted) return
 
-        const partnerViewLoad = derivePartnerRadialLoad(partnerViewLoadBreakdown)
+        const partnerViewLoad = toNormalizedRadialDomainLoad(partnerViewLoadBreakdown)
         const stationProfile = await loadPartnerStationProfile(nextAccountSettings.organization, {
           fullName: nextAccountSettings.fullName,
           email: nextAccountSettings.email

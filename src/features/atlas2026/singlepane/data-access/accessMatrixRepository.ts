@@ -34,6 +34,60 @@ function normalizeRoles(values: string[]): AdminPortalPersonRole[] {
   return values.filter((value): value is AdminPortalPersonRole => KNOWN_ROLE_KEYS.includes(value as AdminPortalPersonRole))
 }
 
+function getIsoDateOnly() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+async function replaceActiveAssignmentRow(params: {
+  table: 'navigator_assignments' | 'supervisor_navigator_assignments'
+  identityColumn: 'enrollment_id' | 'navigator_person_id'
+  identityValue: string
+  assigneeColumn: 'navigator_person_id' | 'supervisor_person_id'
+  assigneeValue: string | null
+  buildInsert: () => Record<string, unknown>
+}) {
+  if (!supabase) return
+  // Both assignment tables are date-ranged histories, so "replace" means:
+  // end non-matching active rows first, then insert only when target row is absent.
+  const nowDate = getIsoDateOnly()
+  if (!params.assigneeValue) {
+    const { error } = await (supabase as any)
+      .schema('atlas')
+      .from(params.table)
+      .update({ ends_on: nowDate })
+      .eq(params.identityColumn, params.identityValue)
+      .is('ends_on', null)
+    if (error) throw error
+    return
+  }
+
+  const { error: clearError } = await (supabase as any)
+    .schema('atlas')
+    .from(params.table)
+    .update({ ends_on: nowDate })
+    .eq(params.identityColumn, params.identityValue)
+    .is('ends_on', null)
+    .neq(params.assigneeColumn, params.assigneeValue)
+  if (clearError) throw clearError
+
+  const { data: existing, error: existingError } = await (supabase as any)
+    .schema('atlas')
+    .from(params.table)
+    .select('id')
+    .eq(params.identityColumn, params.identityValue)
+    .eq(params.assigneeColumn, params.assigneeValue)
+    .is('ends_on', null)
+    .limit(1)
+  if (existingError) throw existingError
+  if (existing?.length) return
+
+  const { error: insertError } = await (supabase as any)
+    .schema('atlas')
+    .from(params.table)
+    .insert(params.buildInsert())
+  if (insertError) throw insertError
+}
+
 export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
   if (!hasSupabaseConfig || !supabase) return createEmptyDataset()
   try {
@@ -187,7 +241,7 @@ export async function saveAccessMatrixPersonRoles(personId: string, roleKeys: Ad
   if (currentError) throw currentError
 
   const current = currentRows || []
-  const nowDate = new Date().toISOString().slice(0, 10)
+  const nowDate = getIsoDateOnly()
   const toDeactivate = current.filter((row: { role_id: string }) => !nextRoleIds.has(row.role_id)).map((row: { id: string }) => row.id)
   if (toDeactivate.length) {
     const { error } = await (supabase as any)
@@ -242,97 +296,39 @@ export async function saveAccessMatrixPersonRoles(personId: string, roleKeys: Ad
 
 export async function saveAccessMatrixEnrollmentNavigator(enrollmentId: string, navigatorPersonId: string | null) {
   if (!hasSupabaseConfig || !supabase) return
-  const nowDate = new Date().toISOString().slice(0, 10)
-  if (!navigatorPersonId) {
-    const { error } = await (supabase as any)
-      .schema('atlas')
-      .from('navigator_assignments')
-      .update({ ends_on: nowDate })
-      .eq('enrollment_id', enrollmentId)
-      .is('ends_on', null)
-    if (error) throw error
-    return
-  }
-
-  const { error: clearError } = await (supabase as any)
-    .schema('atlas')
-    .from('navigator_assignments')
-    .update({ ends_on: nowDate })
-    .eq('enrollment_id', enrollmentId)
-    .is('ends_on', null)
-    .neq('navigator_person_id', navigatorPersonId)
-  if (clearError) throw clearError
-
-  const { data: existing, error: existingError } = await (supabase as any)
-    .schema('atlas')
-    .from('navigator_assignments')
-    .select('id')
-    .eq('enrollment_id', enrollmentId)
-    .eq('navigator_person_id', navigatorPersonId)
-    .is('ends_on', null)
-    .limit(1)
-  if (existingError) throw existingError
-  if (existing?.length) return
-
-  const { error: insertError } = await (supabase as any)
-    .schema('atlas')
-    .from('navigator_assignments')
-    .insert({
+  await replaceActiveAssignmentRow({
+    table: 'navigator_assignments',
+    identityColumn: 'enrollment_id',
+    identityValue: enrollmentId,
+    assigneeColumn: 'navigator_person_id',
+    assigneeValue: navigatorPersonId,
+    buildInsert: () => ({
       id: crypto.randomUUID(),
       enrollment_id: enrollmentId,
       navigator_person_id: navigatorPersonId,
-      starts_on: nowDate,
+      starts_on: getIsoDateOnly(),
       ends_on: null,
       station_id: null
     })
-  if (insertError) throw insertError
+  })
 }
 
 export async function saveAccessMatrixSupervisorAssignment(navigatorPersonId: string, supervisorPersonId: string | null) {
   if (!hasSupabaseConfig || !supabase) return
-  const nowDate = new Date().toISOString().slice(0, 10)
-  if (!supervisorPersonId) {
-    const { error } = await (supabase as any)
-      .schema('atlas')
-      .from('supervisor_navigator_assignments')
-      .update({ ends_on: nowDate })
-      .eq('navigator_person_id', navigatorPersonId)
-      .is('ends_on', null)
-    if (error) throw error
-    return
-  }
-
-  const { error: clearError } = await (supabase as any)
-    .schema('atlas')
-    .from('supervisor_navigator_assignments')
-    .update({ ends_on: nowDate })
-    .eq('navigator_person_id', navigatorPersonId)
-    .is('ends_on', null)
-    .neq('supervisor_person_id', supervisorPersonId)
-  if (clearError) throw clearError
-
-  const { data: existing, error: existingError } = await (supabase as any)
-    .schema('atlas')
-    .from('supervisor_navigator_assignments')
-    .select('id')
-    .eq('navigator_person_id', navigatorPersonId)
-    .eq('supervisor_person_id', supervisorPersonId)
-    .is('ends_on', null)
-    .limit(1)
-  if (existingError) throw existingError
-  if (existing?.length) return
-
-  const { error: insertError } = await (supabase as any)
-    .schema('atlas')
-    .from('supervisor_navigator_assignments')
-    .insert({
+  await replaceActiveAssignmentRow({
+    table: 'supervisor_navigator_assignments',
+    identityColumn: 'navigator_person_id',
+    identityValue: navigatorPersonId,
+    assigneeColumn: 'supervisor_person_id',
+    assigneeValue: supervisorPersonId,
+    buildInsert: () => ({
       id: crypto.randomUUID(),
       navigator_person_id: navigatorPersonId,
       supervisor_person_id: supervisorPersonId,
-      starts_on: nowDate,
+      starts_on: getIsoDateOnly(),
       ends_on: null
     })
-  if (insertError) throw insertError
+  })
 }
 
 export async function saveAccessMatrixPartnerPrimaryContact(partnerId: string, primaryContactPersonId: string | null) {

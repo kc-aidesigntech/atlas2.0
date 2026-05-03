@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { fetchLegacyAtlasSnapshot } from '@atlas/shared'
 import { evaluateParticipantForRoutes } from '@/core/atlas2026/intel-contract'
 import { createParticipantState, MEMORY_EVENT_TYPES, ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
+import { DEFAULT_ONTOLOGY_WEIGHTS } from '@/core/atlas2026/canonical-spec'
 import { canRolePerform } from '@/core/atlas2026/policy'
 import { generateRoutePlan } from '@/services/atlas2026/route-engine'
 import { buildMemoryView } from '@/services/atlas2026/memory-service'
@@ -70,21 +71,8 @@ export function useAtlasDecisioning() {
   const [memoryEvents, setMemoryEvents] = useState([])
   const [ontologyAudit, setOntologyAudit] = useState([])
   const [renewalRoles, setRenewalRoles] = useState([])
-  const [ontologyWeights, setOntologyWeights] = useState({
-    coverageWeight: 0.3,
-    phaseAlignmentWeight: 0.2,
-    specializationWeight: 0.2,
-    reversibilityWeight: 0.15,
-    transferCostPenalty: 0.1,
-    interferencePenalty: 0.05,
-    civicDiplomacyBoost: 0.08,
-    slaThresholdHours: 48,
-    interferenceMediumThreshold: 0.35,
-    interferenceHighThreshold: 0.6,
-    phaseReadinessAlertThreshold: 0.45,
-    pcfRefinementWeight: 0.6,
-    reciprocityActivationThreshold: 0.6
-  })
+  // Clone canonical defaults so local edits stay isolated from module-level state.
+  const [ontologyWeights, setOntologyWeights] = useState(() => ({ ...DEFAULT_ONTOLOGY_WEIGHTS }))
   const [selectedParticipantId, setSelectedParticipantId] = useState(DEMO_PARTICIPANTS[0].participantId)
   const [selectedCountyId, setSelectedCountyId] = useState('all')
   const [selectedRole, setSelectedRole] = useState('peerNavigator')

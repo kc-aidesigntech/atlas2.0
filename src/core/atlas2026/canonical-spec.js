@@ -64,6 +64,19 @@ export const ROUTE_SCORING_FACTORS = {
   interferencePenalty: 0.05
 }
 
+// Keep ontology defaults in the canonical spec so decisioning hooks, seed data,
+// and governance controls share one source of truth for baseline thresholds.
+export const DEFAULT_ONTOLOGY_WEIGHTS = {
+  ...ROUTE_SCORING_FACTORS,
+  civicDiplomacyBoost: 0.08,
+  slaThresholdHours: 48,
+  interferenceMediumThreshold: 0.35,
+  interferenceHighThreshold: 0.6,
+  phaseReadinessAlertThreshold: 0.45,
+  pcfRefinementWeight: 0.6,
+  reciprocityActivationThreshold: 0.6
+}
+
 export const MEMORY_EVIDENCE_RULES = [
   'Milestones require timestamp, actor role, and verification source.',
   'Blockers must include categorized cause and unblock proposal.',

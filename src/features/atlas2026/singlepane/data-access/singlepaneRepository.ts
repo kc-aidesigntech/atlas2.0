@@ -65,7 +65,9 @@ import {
   saveAccessMatrixPersonRoles,
   saveAccessMatrixSupervisorAssignment
 } from '@/features/atlas2026/singlepane/data-access/accessMatrixRepository'
+import { toNormalizedRadialDomainLoad } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 
 /**
@@ -482,14 +484,7 @@ export async function setEnrolleeZCodeResolution(
 
 export async function loadPartnerRadialLoad(): Promise<DomainLoad | null> {
   const breakdown = await loadPartnerRadialLoadBreakdown()
-  if (!breakdown) return null
-  const maxTotal = Math.max(breakdown.habitatTotal, breakdown.workTotal, breakdown.socialNetworksTotal, 1)
-  return {
-    enrolleeId: breakdown.subjectId,
-    habitat: Math.round((breakdown.habitatTotal / maxTotal) * 100),
-    work: Math.round((breakdown.workTotal / maxTotal) * 100),
-    socialNetworks: Math.round((breakdown.socialNetworksTotal / maxTotal) * 100)
-  }
+  return toNormalizedRadialDomainLoad(breakdown)
 }
 
 export async function loadPartnerRadialLoadBreakdown(): Promise<DomainLoadBreakdown | null> {
@@ -499,13 +494,6 @@ export async function loadPartnerRadialLoadBreakdown(): Promise<DomainLoadBreakd
 
 function normalizeOrganizationName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-}
-
-function splitFullName(value: string) {
-  const parts = value.trim().split(/\s+/).filter(Boolean)
-  if (!parts.length) return { firstName: '', lastName: '' }
-  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
-  return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] }
 }
 
 function buildFallbackPartnerStationProfile(
