@@ -26,8 +26,10 @@ export function useRoutingBuilderData() {
     async function hydrate() {
       setIsLoading(true)
       const nextDataset = await loadDataset()
+      // Ignore late async completion after unmount to prevent state writes on stale views.
       if (!isMounted) return
       setDataset(nextDataset)
+      // Preserve user-selected ids when possible; only seed defaults on first hydration.
       setSelectedParticipantId((current) => current || nextDataset.participants[0]?.id || '')
       setSelectedTemplateId((current) => current || nextDataset.routeTemplates[0]?.id || '')
       setIsLoading(false)
@@ -56,6 +58,7 @@ export function useRoutingBuilderData() {
 
   const selectedJourneySteps = useMemo(() => {
     if (!selectedJourney) return []
+    // Route templates may evolve; filter missing ids defensively so navigation still renders.
     return selectedJourney.stepIds
       .map((stepId) => dataset.routingSteps.find((step) => step.id === stepId))
       .filter((step): step is NonNullable<typeof step> => Boolean(step))
@@ -76,6 +79,7 @@ export function useRoutingBuilderData() {
   }, [dataset])
 
   function updateDataset(next: AtlasJsonDataset) {
+    // Single write helper keeps local state transitions uniform across mutation paths.
     setDataset(next)
     return next
   }
@@ -99,6 +103,8 @@ export function useRoutingBuilderData() {
   async function assignTemplate(participantId: string, templateId: string) {
     const assignment = await assignTemplateToParticipant(dataset, participantId, templateId)
     if (!assignment) return { assignment: null, dataset }
+    // Participant pointer is updated in lockstep with assignment insertion so the selected
+    // participant always resolves to the newly created active journey.
     const nextParticipants = dataset.participants.map((participant) =>
       participant.id === participantId ? { ...participant, activeJourneyId: assignment.id } : participant
     )

@@ -75,6 +75,14 @@ export interface SinglePaneBootstrapData {
   logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]
 }
 
+/**
+ * Repository facade for single-pane orchestration.
+ *
+ * Boundary contract:
+ * - consolidates reads from Supabase-backed domain views plus local config overlays.
+ * - exposes normalized UI-ready records so hooks/components avoid storage-specific logic.
+ */
+
 function createDefaultTimelineConfig() {
   return {
     planStartIso: new Date().toISOString(),
@@ -114,6 +122,8 @@ function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/type
 }
 
 export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePaneBootstrapData> {
+  // Local overrides are loaded even in cloud mode because intake/timeline edits may
+  // be made offline and must be projected over server bootstrap data.
   const logs = await loadLocalLogs()
   const intakeOverrides = await loadEnrolleeIntakes()
   const timelineOverrides = await loadTimelineConfigs()
@@ -149,6 +159,8 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
 
   const navigatorEnrollmentIds =
     role === 'navigator' ? new Set(navigatorAssignedEnrollees.map((record) => record.enrollmentId)) : null
+  // Navigator role is intentionally constrained to assigned enrollments, while other
+  // roles keep full visibility over the fetched profile set.
   const visibleProfiles =
     navigatorEnrollmentIds && navigatorEnrollmentIds.size
       ? profiles.filter((profile) => navigatorEnrollmentIds.has(profile.enrollmentId))
@@ -264,6 +276,8 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   const firstEnrolleeId = enrollees[0]?.id || ''
   const mergedTimelineConfigs = Object.fromEntries(
     enrollees.map((enrollee) => {
+      // Prefer persisted timeline override (enrollment key first) to preserve edits
+      // across bootstrap refreshes and legacy key migrations.
       const persistedTimelineConfig =
         timelineOverrides[`enrollment:${enrollee.enrollmentId}`] ||
         timelineOverrides[`enrollee:${enrollee.id}`] ||
@@ -332,6 +346,8 @@ export async function loadAdminDataQuality(): Promise<AdminDataQualityMetric[]> 
 
 export async function loadJourneyStationMarkers(enrollmentId?: string, enrolleeId?: string): Promise<JourneyStationMarker[]> {
   if (!enrollmentId) return []
+  // Marker history only includes completed route stops; active assignments are shown
+  // from in-memory route planning state and should not appear as timeline history yet.
   const historyMarkers = hasSupabaseConfig && supabase
     ? (await withOptionalSupabaseFallback(
         `singlepane.stationMarkers:${enrollmentId}`,
@@ -417,6 +433,8 @@ export async function uploadEnrolleeProfileImage(
   if (updatePrimaryError) throw updatePrimaryError
 
   if (!updatedPrimaryRows?.length) {
+    // Upsert behavior here is split on purpose: update existing primary image when present,
+    // otherwise insert a new primary row for first-time uploads.
     const { error: profileImageInsertError } = await (supabase as any)
       .schema('atlas')
       .from('profile_images')
@@ -437,6 +455,8 @@ export async function setEnrolleeZCodeResolution(
   input: EnrolleeZCodeResolutionInput = {}
 ) {
   if (!enrolleeZCodeId || !hasSupabaseConfig || !supabase) {
+    // Local fallback mirrors persisted response shape so callers can apply one
+    // merge path regardless of online/offline persistence mode.
     return {
       enrolleeZCodeId,
       isResolved,
@@ -549,6 +569,8 @@ export async function loadPartnerStationProfile(
     const splitName = splitFullName(fallback?.fullName || '')
     if (splitName.firstName && splitName.lastName) {
       try {
+        // Best-effort registration backfills partner directory records when a known
+        // contact submits from an org that has not been indexed yet.
         await ensurePartnerIdentifierRecordForSurvey({
           firstName: splitName.firstName,
           lastName: splitName.lastName,

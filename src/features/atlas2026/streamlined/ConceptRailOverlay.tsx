@@ -2,6 +2,8 @@ import React from 'react'
 
 export default function ConceptRailOverlay() {
   return (
+    // Decorative overlay only; pointer events stay disabled so it never blocks interaction
+    // with the live controls rendered beneath it.
     <div className="pointer-events-none fixed bottom-12 right-[35px] top-16 z-[45] w-[6vw] min-w-[72px] max-w-[96px] overflow-visible opacity-95">
       <svg className="h-full w-full" viewBox="108 0 132 1080" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" aria-hidden>
         <line y1="30" x2="38" transform="translate(134.5 924.5)" fill="none" stroke="#ee352e" strokeLinecap="round" strokeWidth="5" />

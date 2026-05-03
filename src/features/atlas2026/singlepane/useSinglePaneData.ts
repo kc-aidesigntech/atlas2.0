@@ -288,6 +288,8 @@ function mergeNavigatorProgramState(
   navigatorName: string,
   enrollmentRequests: EnrollmentRequestRecord[]
 ): NavigatorProgramState {
+  // Preserve previously persisted records, but seed deterministic starter data when
+  // no state exists yet so navigator dashboards always have actionable baseline rows.
   const base = rawState || createNavigatorProgramState()
   return {
     pickupQueue: base.pickupQueue.length ? base.pickupQueue : buildSeedPickupQueue(enrollmentRequests),
@@ -418,6 +420,14 @@ function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadB
 }
 
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
+  /**
+   * Orchestrates single-pane read/write state across UI memory and persistence adapters.
+   *
+   * Data-flow boundary:
+   * - `setBootstrapState` mutates immediate UI state for responsiveness.
+   * - repository calls persist into local storage and/or Supabase depending on availability.
+   * - hook-level helpers keep those two surfaces eventually consistent.
+   */
   const [role, setRole] = useState<AtlasRole>(initialRole)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>('')
   const [activeMenu, setActiveMenu] = useState<string>('')
@@ -512,6 +522,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   )
 
   useEffect(() => {
+    // Keep deep-linked menu state valid when role config changes.
+    // Invariant: `activeMenu` must always be one of the current role's top menus.
     const firstMenu = selectedRoleConfig.topMenus?.[0]
     if (!firstMenu) return
     if (!selectedRoleConfig.topMenus.includes(activeMenu)) {
@@ -520,6 +532,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [activeMenu, selectedRoleConfig])
 
   useEffect(() => {
+    // Maintain a stable selected enrollee pointer after bootstrap reloads
+    // and role changes that may swap the visible enrollee list.
     if (!enrollees[0]?.id) return
     if (!selectedEnrolleeId || !enrollees.some((enrollee) => enrollee.id === selectedEnrolleeId)) {
       setSelectedEnrolleeId(enrollees[0].id)
@@ -659,6 +673,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   useEffect(() => {
     let isMounted = true
+    // Fire-and-forget bootstrap read; guard with `isMounted` to avoid setting stale
+    // state if a role switch unmounts before the request resolves.
     loadAdminPortalRegistry()
       .then((registry) => {
         if (!isMounted) return
@@ -676,6 +692,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   useEffect(() => {
     let isMounted = true
+    // Program state has its own persistence stream because it can be mutated from
+    // multiple UI surfaces (profile panel, referral flow, admin controls).
     loadNavigatorProgramState()
       .then((state) => {
         if (!isMounted) return
@@ -692,6 +710,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [])
 
   useEffect(() => {
+    // Regulation history is navigator + enrollee scoped; clear stale records eagerly
+    // when either dimension changes to avoid rendering prior enrollee results.
     if (role !== 'navigator' || !selectedEnrollee?.id) {
       setRegulationTestHistory([])
       setRegulationTestError(null)
@@ -822,6 +842,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           : log
       )
       persistRouteLogs(nextLogs)
+        // Timeline drag should never block UI updates; failed writes stay non-fatal
+        // and are retried on future log persistence operations.
         .catch((error) => console.warn('Failed to persist route log timeline position.', error))
       return nextLogs
     })
@@ -869,6 +891,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   function updateTimelineConfig(nextConfig: TimelineConfig) {
     if (!selectedEnrollee) return
     const normalizedTimelineConfig = normalizeTimelineConfig(nextConfig)
+    // Update in-memory timeline immediately for smooth editing interactions, then
+    // persist both timeline config and intake start date so those two fields cannot drift.
     setBootstrapState((current) => ({
       ...current,
       timelineConfig: normalizedTimelineConfig,
@@ -933,6 +957,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }))
 
     try {
+      // Optimistic preview is replaced with canonical persisted URL once upload succeeds.
       const uploaded = await uploadEnrolleeProfileImage(selectedEnrollee.id, file)
       setBootstrapState((current) => ({
         ...current,
@@ -942,6 +967,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       }))
       return uploaded
     } catch (error) {
+      // Roll back to the prior avatar on failure so UI does not keep a dead blob URL.
       setBootstrapState((current) => ({
         ...current,
         enrollees: current.enrollees.map((enrollee) =>
@@ -952,12 +978,15 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setProfileImageUploadError(message)
       throw error
     } finally {
+      // Blob URLs are process-local browser resources and must be revoked to avoid leaks.
       URL.revokeObjectURL(previewUrl)
       setIsUploadingProfileImage(false)
     }
   }
 
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
+    // Intake edits are a cross-surface source of truth: they update the intake record
+    // and denormalized enrollee header fields consumed across profile and timeline views.
     persistEnrolleeIntake(nextIntake).then((saved) => {
       setBootstrapState((current) => ({
         ...current,
@@ -1015,6 +1044,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     input: EnrolleeZCodeResolutionInput = {}
   ) {
     if (!selectedEnrollee || !enrolleeZCodeId) return null
+    // Persist first, then project the response into enrollee state so completed parent
+    // code badges remain consistent with the resolved child-code set.
     const saved = await persistEnrolleeZCodeResolution(enrolleeZCodeId, isResolved, input)
     setBootstrapState((current) => ({
       ...current,
@@ -1064,6 +1095,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         ...current,
         accountSettings: nextAccountSettings
       }))
+      // Best-effort account settings sync: survey completion should succeed even if
+      // profile metadata persistence fails later.
       persistAccountSettings(nextAccountSettings)
       return saved
     } catch (error) {
@@ -1112,6 +1145,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     formVersion: string
     answers: NavigatorCompetencyAssessmentRecord['answers']
   }) {
+    // Insert newest-first to keep supervisor views sorted without recomputing entire list.
     const saved = await persistNavigatorCompetencyAssessment(input)
     setBootstrapState((current) => ({
       ...current,
@@ -1138,6 +1172,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   async function saveNavigatorProgramState(state: NavigatorProgramState) {
     setNavigatorProgramError(null)
     try {
+      // Treat repository return as canonical because persistence layer normalizes payloads.
       const saved = await persistNavigatorProgramState(state)
       setNavigatorProgramState(saved)
       return saved
@@ -1198,6 +1233,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function submitPartnerReferral(input: PartnerReferralSubmissionInput) {
+    // Normalize key identity fields with safe fallbacks so referrals
+    // remain actionable even when partner-side metadata is incomplete.
     const submittedAtIso = new Date().toISOString()
     const partnerOrganizationName =
       input.partnerOrganizationName.trim() ||
@@ -1217,6 +1254,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       .filter(Boolean)
       .join(' | ')
 
+    // Persist referrals into the shared pickup queue used by navigator
+    // workflow so partner intake and navigator claim flow stay connected.
     const nextRecord: UnassignedEnrolleePickupRecord = {
       id: `pickup-referral-${Date.now().toString(36)}`,
       fullName: input.referredParticipantName.trim(),

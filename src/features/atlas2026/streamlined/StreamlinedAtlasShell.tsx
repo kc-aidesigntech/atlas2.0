@@ -29,6 +29,8 @@ export default function StreamlinedAtlasShell() {
     assignTemplate
   } = useRoutingBuilderData()
 
+  // Footer signal mirrors top-line readiness metric to keep the global "yield" indicator
+  // available regardless of which workspace view is active.
   const currentYield = useMemo(() => Math.round(metrics.averageReadiness * 100), [metrics.averageReadiness])
 
   return (
@@ -74,6 +76,7 @@ export default function StreamlinedAtlasShell() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 pb-24 pt-24">
+        {/* Visual scaffold that keeps the subway metaphor present across all views. */}
         <ConceptRailOverlay />
         {view === 'navigation' && (
           <NavigationPage

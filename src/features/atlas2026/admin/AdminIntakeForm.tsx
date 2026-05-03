@@ -13,6 +13,7 @@ export default function AdminIntakeForm({ intake, onSave }: AdminIntakeFormProps
   const [draft, setDraft] = useState<EnrolleeIntakeRecord | null>(intake)
 
   useEffect(() => {
+    // Replace the entire draft when selection changes so edits never bleed between enrollees.
     setDraft(intake)
   }, [intake])
 
@@ -25,6 +26,8 @@ export default function AdminIntakeForm({ intake, onSave }: AdminIntakeFormProps
   }
 
   function handleSave() {
+    // Normalize tags at save time so free-form input stays forgiving while persistence
+    // receives case-stable values for downstream matching/filtering.
     onSave({
       ...draft,
       zCodeTags: draft.zCodeTags.map((tag) => tag.toLowerCase()).filter(Boolean)

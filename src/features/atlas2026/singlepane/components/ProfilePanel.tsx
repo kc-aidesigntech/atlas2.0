@@ -1,4 +1,5 @@
 import React from 'react'
+import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import type { EnrolleeProfile } from '../types'
 import { SP_COLORS } from '../theme'
@@ -19,6 +20,10 @@ interface ParentZCodeGroup {
   childCodes: string[]
 }
 
+/**
+ * Parent-code normalization keeps completion tracking stable even when API and
+ * UI surfaces send mixed-case values (`z12` vs `Z12`).
+ */
 function normalizeParentCode(value: string) {
   const normalized = getParentZCode(value) || value.trim().toLowerCase()
   return normalized.replace(/^z/i, 'Z')
@@ -60,6 +65,10 @@ function getParentZCode(value: string) {
   return `z${group[1]}`
 }
 
+/**
+ * The profile header shows one badge per parent Z-code while preserving all
+ * concrete child codes for drill-in callbacks.
+ */
 function buildParentZCodeGroups(tags: string[]): ParentZCodeGroup[] {
   const grouped = new Map<string, string[]>()
   for (const tag of tags) {
@@ -87,9 +96,12 @@ export default function ProfilePanel({
   enrollmentStartLabel
 }: ProfilePanelProps) {
   const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatar(enrollee.fullName), [enrollee.fullName])
+  // Preserve legacy demo portrait behavior while still supporting
+  // the standard uploader + fallback path for all other enrollees.
   const isElenaRodriguez = enrollee.fullName.trim().toLowerCase() === 'elena rodriguez'
   const avatarSrc = enrollee.avatarUrl || (isElenaRodriguez ? elenaRodriguezPortraitUrl : fallbackAvatarSrc)
-  const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+  // Prefer structured active details when present; fallback tags keep older
+  // profile payloads usable without changing rendering behavior.
   const activeZCodeTags = React.useMemo(
     () => (enrollee.activeZCodeDetails.length ? enrollee.activeZCodeDetails.map((detail) => detail.zCode) : enrollee.zCodeTags),
     [enrollee.activeZCodeDetails, enrollee.zCodeTags]
@@ -102,61 +114,27 @@ export default function ProfilePanel({
 
   return (
     <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
-      <div className="mx-auto flex w-[150px] shrink-0 flex-col items-start sm:mx-0">
-        <div
-          className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-white"
-          style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
-        >
-          <button
-            type="button"
-            className="relative h-full w-full cursor-pointer"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!onReplaceAvatar}
-            title={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
-          >
-            <img
-              src={avatarSrc}
-              alt={`${enrollee.fullName} profile`}
-              className="h-full w-full object-cover"
-              onError={(event) => {
-                if (isElenaRodriguez && event.currentTarget.src !== elenaRodriguezPortraitUrl) {
-                  event.currentTarget.src = elenaRodriguezPortraitUrl
-                  return
-                }
-                if (event.currentTarget.src !== fallbackAvatarSrc) {
-                  event.currentTarget.src = fallbackAvatarSrc
-                }
-              }}
-            />
-            <div className="absolute inset-0 flex items-end justify-center bg-black/0 pb-2 opacity-0 transition-opacity hover:bg-black/25 hover:opacity-100">
-              <small className="rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-white" style={{ borderColor: '#ffffff90' }}>
-                replace image
-              </small>
-            </div>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(event) => {
-              const selectedFile = event.target.files?.[0]
-              event.currentTarget.value = ''
-              if (!selectedFile || !onReplaceAvatar) return
-              void Promise.resolve(onReplaceAvatar(selectedFile))
-            }}
-          />
-        </div>
-        {isUploadingAvatar ? (
-          <small className="mt-2 block text-[11px]" style={{ color: SP_COLORS.muted }}>
-            uploading image...
-          </small>
-        ) : null}
-        {avatarUploadError ? (
-          <small className="mt-2 block text-[11px]" style={{ color: SP_COLORS.red }}>
-            {avatarUploadError}
-          </small>
-        ) : null}
+      <div>
+        <AtlasImageUploadTile
+          imageSrc={avatarSrc}
+          alt={`${enrollee.fullName} profile`}
+          onSelectFile={onReplaceAvatar}
+          disabled={!onReplaceAvatar}
+          buttonTitle={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
+          statusText={isUploadingAvatar ? 'uploading image...' : null}
+          errorText={avatarUploadError}
+          onImageError={(event) => {
+            // This handler guarantees we always land on a resolvable source so
+            // broken avatar URLs never leave an empty image frame in the panel.
+            if (isElenaRodriguez && event.currentTarget.src !== elenaRodriguezPortraitUrl) {
+              event.currentTarget.src = elenaRodriguezPortraitUrl
+              return
+            }
+            if (event.currentTarget.src !== fallbackAvatarSrc) {
+              event.currentTarget.src = fallbackAvatarSrc
+            }
+          }}
+        />
         <div className="mt-4 flex flex-wrap items-center gap-[10px]">
           {parentGroups.map((group, index) => {
             const bgColor = getZCodeParentColor(group.parentCode) || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]

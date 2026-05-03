@@ -14,6 +14,7 @@ interface NavigationPageProps {
 }
 
 function phaseTone(phase?: string) {
+  // Keep phase-to-color mapping centralized so badges and pills stay visually consistent.
   if (phase === 'renewal') return { color: SUBWAY_COLORS.deepGreen }
   if (phase === 'readiness') return { color: SUBWAY_COLORS.blue }
   return { color: SUBWAY_COLORS.yellow }
@@ -27,6 +28,8 @@ export default function NavigationPage({
   selectedJourney,
   selectedJourneySteps
 }: NavigationPageProps) {
+  // If assignment metadata drifts, fall back to first step so the panel still presents
+  // a safe "next move" instead of blanking out.
   const activeStep = selectedJourneySteps[selectedJourney?.currentStepIndex || 0] || selectedJourneySteps[0] || null
 
   return (

@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
@@ -12,6 +13,10 @@ interface PartnerReferralWorkflowPanelProps {
 
 const MAX_RECENT_ROWS = 5
 
+/**
+ * Start every submission from caller-provided defaults so downstream consumers
+ * receive the same shape whether this is first load or a post-submit reset.
+ */
 function buildInitialDraft(defaultReferrerName: string, defaultPartnerOrganizationName: string): PartnerReferralSubmissionInput {
   return {
     referredParticipantName: '',
@@ -40,7 +45,11 @@ export default function PartnerReferralWorkflowPanel({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [referralImageSrc, setReferralImageSrc] = useState(() => createReferralPlaceholderImage())
+  const imageObjectUrlRef = useRef<string | null>(null)
 
+  // Recent list intentionally excludes archived rows and caps to a small slice
+  // so this panel remains scannable in constrained single-pane layouts.
   const recentRows = useMemo(
     () =>
       recentReferrals
@@ -50,6 +59,16 @@ export default function PartnerReferralWorkflowPanel({
         .slice(0, MAX_RECENT_ROWS),
     [recentReferrals]
   )
+
+  useEffect(() => {
+    return () => {
+      // Revoke blob URL created from local uploads to prevent memory leaks
+      // when this panel unmounts.
+      if (imageObjectUrlRef.current) {
+        URL.revokeObjectURL(imageObjectUrlRef.current)
+      }
+    }
+  }, [])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -65,6 +84,8 @@ export default function PartnerReferralWorkflowPanel({
     const normalizedPartnerContactEmail = draft.partnerContactEmail.trim()
     const normalizedPartnerContactPhone = draft.partnerContactPhone.trim()
 
+    // Keep validation messages tightly aligned with form wording so
+    // partner users can resolve issues without guesswork.
     if (!normalizedName) {
       setError('add who is being referred.')
       return
@@ -92,6 +113,8 @@ export default function PartnerReferralWorkflowPanel({
 
     setIsSubmitting(true)
     try {
+      // Submit only normalized values so queue records are consistent even when
+      // form fields include leading/trailing whitespace.
       await Promise.resolve(
         onSubmit({
           ...draft,
@@ -107,6 +130,8 @@ export default function PartnerReferralWorkflowPanel({
         })
       )
       setFeedback('referral submitted to navigator queue.')
+      // Preserve the resolved partner org on reset to support rapid repeat
+      // referrals for the same organization without retyping.
       setDraft(buildInitialDraft(defaultReferrerName, normalizedPartnerOrg || defaultPartnerOrganizationName))
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'unable to submit referral right now.')
@@ -118,21 +143,27 @@ export default function PartnerReferralWorkflowPanel({
   return (
     <AtlasInsetCard className="space-y-4 rounded-[24px] border-white/20 bg-[#0c0c0c] px-5 py-5">
       <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
-        <div className="mx-auto flex w-[150px] shrink-0 flex-col items-start sm:mx-0">
-          <div
-            className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-white"
-            style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
-          >
-            <img
-              src={createReferralPlaceholderImage()}
-              alt="referral placeholder"
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <small className="mt-2 block text-[11px]" style={{ color: SP_COLORS.muted }}>
-            referral image placeholder
-          </small>
-        </div>
+        <AtlasImageUploadTile
+          imageSrc={referralImageSrc}
+          alt="referral placeholder"
+          onSelectFile={(file) => {
+            // Referral image stays local-only for now. This preserves
+            // a consistent UX with profile upload while we define storage.
+            if (!file.type.startsWith('image/')) {
+              setError('choose an image file for the referral placeholder.')
+              return
+            }
+            setError(null)
+            const objectUrl = URL.createObjectURL(file)
+            if (imageObjectUrlRef.current) {
+              URL.revokeObjectURL(imageObjectUrlRef.current)
+            }
+            imageObjectUrlRef.current = objectUrl
+            setReferralImageSrc(objectUrl)
+          }}
+          buttonTitle="replace referral image"
+          idleStatusText="referral image placeholder"
+        />
         <div className="min-w-[220px] flex-1 space-y-1 pt-[2px] text-white">
           <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
             referral portal
@@ -230,6 +261,8 @@ export default function PartnerReferralWorkflowPanel({
               new partner
             </AtlasTextButton>
           </div>
+          {/* New partners must provide a contact path; existing partners skip
+              these fields to keep the workflow short for known organizations. */}
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <Field label="partner organization">
               <input
@@ -311,6 +344,8 @@ export default function PartnerReferralWorkflowPanel({
 }
 
 function createReferralPlaceholderImage() {
+  // Data-URI placeholder keeps this panel self-contained until referral images
+  // are persisted server-side.
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
       <rect width="300" height="300" rx="56" fill="#111111" />

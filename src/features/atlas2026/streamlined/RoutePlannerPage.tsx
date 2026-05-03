@@ -43,9 +43,12 @@ export default function RoutePlannerPage({
   const [notice, setNotice] = useState('')
 
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) || null
+  // Preview is derived-only state: recompute from selected BOM ids so the strip always
+  // reflects the latest repository mapping logic.
   const previewSteps = useMemo(() => previewStepsForBomIds(selectedBomIds), [previewStepsForBomIds, selectedBomIds])
 
   function toggleBom(bomId: string) {
+    // Treat BOM selection as a set to keep checkbox toggles idempotent.
     setSelectedBomIds((previous) => (previous.includes(bomId) ? previous.filter((id) => id !== bomId) : [...previous, bomId]))
   }
 
@@ -64,6 +67,8 @@ export default function RoutePlannerPage({
   }
 
   function submitTemplate() {
+    // Template creation is intentionally blocked on at least one BOM activity so generated
+    // templates always produce a non-empty journey.
     if (!templateName.trim() || selectedBomIds.length === 0) {
       setNotice('select at least one bom activity and provide a template name.')
       return

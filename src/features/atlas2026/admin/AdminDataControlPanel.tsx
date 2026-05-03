@@ -77,6 +77,8 @@ function createSeedOrganizationId(name: string) {
 }
 
 function createPortalId(prefix: string) {
+  // UI-created records need stable, human-inspectable ids before persistence exists.
+  // Prefixes keep mixed record collections debuggable in admin snapshots.
   return `${prefix}:${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`
 }
 
@@ -93,6 +95,8 @@ function getEmptyRegistry(): AdminPortalRegistry {
 }
 
 function buildExistingEnrolleeIntake(profile: EnrolleeProfile, intake: EnrolleeIntakeRecord | undefined): EnrolleeIntakeRecord {
+  // Intake overrides are sparse. Fall back to profile fields so edits always start
+  // from a complete object and save handlers can rely on required keys.
   return (
     intake || {
       enrolleeId: profile.id,
@@ -166,6 +170,8 @@ function buildBlankIntervalAssessmentRule(): IntervalAssessmentRule {
 }
 
 function mergeById<T extends { id: string }>(seedRows: T[], persistedRows: T[], archivedIds: string[]) {
+  // Persisted rows win over seeded rows with the same id so operator edits survive
+  // each render, while archived ids remain hidden even if they are still present in seed data.
   const map = new Map(seedRows.map((row) => [row.id, row]))
   for (const row of persistedRows) {
     map.set(row.id, row)
@@ -224,6 +230,8 @@ export default function AdminDataControlPanel({
   onSaveIntervalAssessmentRule,
   onSaveIntake
 }: AdminDataControlPanelProps) {
+  // The UI can render before registry hydration completes; use an empty shape so
+  // all mutation helpers stay null-safe and write against one consistent structure.
   const effectiveRegistry = registry || getEmptyRegistry()
   const [activeSection, setActiveSection] = useState<AdminPortalSection>('overview')
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string | null>(selectedEnrollee?.id || null)
@@ -301,6 +309,8 @@ export default function AdminDataControlPanel({
   )
 
   const visibleEnrollees = useMemo<CombinedEnrolleeRow[]>(() => {
+    // This panel intentionally blends immutable "live" enrollees with admin-authored drafts
+    // to support one table UX while preserving the source distinction in each row.
     const existingRows = enrollees
       .filter((profile) => !effectiveRegistry.archivedEnrolleeIds.includes(profile.id))
       .map((profile) => ({
@@ -329,6 +339,7 @@ export default function AdminDataControlPanel({
   )
 
   useEffect(() => {
+    // Keep first-row selection sticky for UX continuity when data loads/reset occurs.
     if (!selectedEnrolleeId && visibleEnrollees[0]?.id) {
       setSelectedEnrolleeId(visibleEnrollees[0].id)
     }
@@ -378,6 +389,8 @@ export default function AdminDataControlPanel({
   }, [organizationDraft, selectedOrganization])
 
   async function commitRegistry(nextRegistry: AdminPortalRegistry, successMessage: string) {
+    // Centralize registry writes so every path updates updatedAt and portal feedback
+    // with the same semantics.
     const saved = await onSaveRegistry({
       ...nextRegistry,
       updatedAtIso: new Date().toISOString()
@@ -423,6 +436,8 @@ export default function AdminDataControlPanel({
   }
 
   async function handleArchiveEnrollee(row: CombinedEnrolleeRow) {
+    // Archiving is soft-delete: ids are tracked separately so source records can stay in
+    // historical data while disappearing from active admin workflows.
     await commitRegistry(
       {
         ...effectiveRegistry,
@@ -463,6 +478,8 @@ export default function AdminDataControlPanel({
   }
 
   async function handleDeleteOrganization(organization: AdminPortalOrganizationRecord) {
+    // Clearing organization references avoids dangling foreign keys in people records
+    // after an org is removed from the active registry.
     await commitRegistry(
       {
         ...effectiveRegistry,

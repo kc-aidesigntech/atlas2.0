@@ -60,6 +60,8 @@ const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
 
 function derivePartnerRadialLoad(breakdown: DomainLoadBreakdown | null): DomainLoad | null {
   if (!breakdown) return null
+  // Normalize to percentages so radial chart scale remains stable even when
+  // source totals vary significantly across organizations.
   const maxTotal = Math.max(breakdown.habitatTotal, breakdown.workTotal, breakdown.socialNetworksTotal, 1)
   return {
     enrolleeId: breakdown.subjectId,
@@ -101,6 +103,8 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
           setState((current) => ({ ...current, isLoading: true }))
         }
 
+        // Bootstrap aggregates role-scoped domain data, then this hook enriches it
+        // with ancillary records used by secondary panels and workflows.
         const data = await loadSinglePaneBootstrap(role)
         const [
           requests,
@@ -156,6 +160,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
       } catch (error) {
         console.warn('Failed to bootstrap single pane state.', error)
         if (!isMounted) return
+        // Preserve existing state on failure so previously hydrated data remains usable.
         setState((current) => ({
           ...current,
           isLoading: false

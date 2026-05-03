@@ -26,6 +26,13 @@ const LOCAL_ADMIN_PORTAL_REGISTRY_KEY = 'atlas2026.singlepane.admin-portal-regis
 const NAVIGATOR_PROGRAM_STATE_CONFIG_KEY = 'navigator_program_state'
 const LOCAL_NAVIGATOR_PROGRAM_STATE_KEY = 'atlas2026.singlepane.navigator-program-state.v1'
 
+/**
+ * Persistence strategy:
+ * - localStorage is always updated first for offline continuity.
+ * - Supabase writes are attempted second when configured.
+ * - optional-data failures intentionally degrade to local-only mode.
+ */
+
 function getDefaultAccountSettings(): AccountSettings {
   return {
     fullName: 'atlas operator',
@@ -401,6 +408,8 @@ export async function loadTimelineConfigs(): Promise<Record<string, TimelineConf
 }
 
 function buildTimelineConfigKeys(enrolleeId: string, enrollmentId?: string | null) {
+  // Keep both key variants in sync so migrations between enrollment-scoped and
+  // enrollee-scoped lookups can read the same timeline configuration.
   const keys = [`enrollee:${enrolleeId}`]
   if (enrollmentId?.trim()) {
     keys.unshift(`enrollment:${enrollmentId.trim()}`)
@@ -422,6 +431,8 @@ export async function saveTimelineConfig(
   persistLocalTimelineConfigState(nextLocalState)
   if (!hasSupabaseConfig || !supabase) return config
 
+  // Persist each addressable key to keep reads consistent regardless of which
+  // identifier a caller currently has available.
   for (const key of keys) {
     const { error } = await (supabase as any)
       .schema('atlas')
@@ -520,6 +531,8 @@ export async function saveNavigatorProgramState(state: NavigatorProgramState): P
     ...state,
     updatedAtIso: new Date().toISOString()
   })
+  // Updated timestamp is owned by persistence boundary to prevent clients from
+  // accidentally writing stale metadata.
   persistLocalNavigatorProgramState(normalized)
   if (!hasSupabaseConfig || !supabase) {
     return normalized

@@ -15,11 +15,13 @@ interface IntelligencePageProps {
 }
 
 export default function IntelligencePage({ participants, templates, journeys, metrics }: IntelligencePageProps) {
+  // Build a lightweight distribution map once per render for phase cards.
   const byPhase = participants.reduce<Record<string, number>>((accumulator, participant) => {
     accumulator[participant.currentPhase] = (accumulator[participant.currentPhase] || 0) + 1
     return accumulator
   }, {})
 
+  // Completion is reported as a ratio to keep the metric comparable across cohorts.
   const completionRatio = journeys.length === 0 ? 0 : journeys.filter((journey) => journey.status === 'completed').length / journeys.length
 
   return (
