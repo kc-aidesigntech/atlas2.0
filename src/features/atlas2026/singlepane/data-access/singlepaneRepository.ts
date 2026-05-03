@@ -113,6 +113,16 @@ function normalizeNavigatorTopMenus(menus: string[]) {
   return normalized
 }
 
+function dedupeProfilesByEnrollmentId<T extends { enrollmentId?: string; enrolleeId?: string }>(profiles: T[]) {
+  const seen = new Set<string>()
+  return profiles.filter((profile) => {
+    const key = profile.enrollmentId || profile.enrolleeId || ''
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]): SinglePaneBootstrapData {
   return {
     enrollees: [],
@@ -171,6 +181,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     navigatorEnrollmentIds && navigatorEnrollmentIds.size
       ? profiles.filter((profile) => navigatorEnrollmentIds.has(profile.enrollmentId))
       : profiles
+  const uniqueVisibleProfiles = dedupeProfilesByEnrollmentId(visibleProfiles)
   const visibleLoadRows =
     navigatorEnrollmentIds && navigatorEnrollmentIds.size
       ? loadRows.filter((row) => navigatorEnrollmentIds.has(row.enrollmentId))
@@ -180,7 +191,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
       ? breakdownRows.filter((row) => navigatorEnrollmentIds.has(row.enrollmentId))
       : breakdownRows
 
-  const bootstrapEnrollees = visibleProfiles.map((profile) => ({
+  const bootstrapEnrollees = uniqueVisibleProfiles.map((profile) => ({
     id: profile.enrolleeId,
     enrollmentId: profile.enrollmentId,
     fullName: profile.fullName,
@@ -206,14 +217,14 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   }))
 
   const loads = visibleLoadRows.map((row) => ({
-    enrolleeId: visibleProfiles.find((profile) => profile.enrollmentId === row.enrollmentId)?.enrolleeId || row.enrollmentId,
+    enrolleeId: uniqueVisibleProfiles.find((profile) => profile.enrollmentId === row.enrollmentId)?.enrolleeId || row.enrollmentId,
     habitat: row.habitat,
     work: row.work,
     socialNetworks: row.socialNetworks
   }))
 
   const loadBreakdownsByEnrolleeId = Object.fromEntries(
-    visibleProfiles.map((profile) => {
+    uniqueVisibleProfiles.map((profile) => {
       const rows = visibleBreakdownRows
         .filter((row) => row.enrollmentId === profile.enrollmentId)
         .map((row) => ({
@@ -259,7 +270,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     roleConfigs,
     timelineConfig: baseTimelineConfig,
     timelineConfigsByEnrolleeId: Object.fromEntries(
-      visibleProfiles.map((profile) => [
+      uniqueVisibleProfiles.map((profile) => [
         profile.enrolleeId,
         {
           ...baseTimelineConfig,
