@@ -7,6 +7,7 @@ import AccountSettingsPanel from './components/AccountSettingsPanel'
 import ContextPanels from './components/ContextPanels'
 import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
+import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
 import ProfilePanel from './components/ProfilePanel'
 import RadialLoadChart from './components/RadialLoadChart'
 import RadialLoadTableOverlay from './components/RadialLoadTableOverlay'
@@ -97,6 +98,7 @@ export default function SinglePaneApp() {
     saveNavigatorSelfAssessment,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
+    submitPartnerReferral,
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
@@ -256,6 +258,7 @@ export default function SinglePaneApp() {
   const isPartnerRole = role === 'partner'
   const isAdminSection = role === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
   const isServiceCapacitySection = role === 'partner' && activeMenu === 'service capacity'
+  const isPartnerReferralPortal = role === 'partner' && activeMenu === 'referral portal'
   const isNavigatorMyProfile = role === 'navigator' && activeMenu === 'my profile'
   const isReady = isPartnerRole ? true : isNavigatorMyProfile ? true : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
@@ -534,10 +537,10 @@ export default function SinglePaneApp() {
                       </small>
                       <div className="mt-3">
                         <AtlasTextButton
-                          disabled
+                          onClick={() => setActiveMenu('referral portal')}
                           className="px-4 py-1 text-[13px] text-white"
-                          style={{ ['--button-border-color' as const]: '#ffffff40', opacity: 0.5 } as React.CSSProperties}
-                          title="Referral action disabled until explicit persistence contract is defined."
+                          style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                          title="Open the referral workflow."
                         >
                           refer
                         </AtlasTextButton>
@@ -628,48 +631,61 @@ export default function SinglePaneApp() {
                   </div>
                 ) : isServiceCapacitySection || isNavigatorMyProfile ? null : isPartnerRole ? (
                   <>
-                    {timelineConfig ? (
-                      <>
-                        <div className="hidden min-h-[220px] flex-1 items-start md:flex">
-                          <StripMapTimeline
-                            events={historyOnlyLogs}
-                            timelineConfig={timelineConfig}
-                            completedParentCodes={completedParentCodes}
-                            resolvedZCodeMarkers={resolvedZCodeStripMarkers}
-                            stationMarkers={visibleJourneyStationMarkers}
-                            highlightedStationName={highlightedStationName}
-                            onEventDelete={deleteRouteLog}
-                            onEventPositionChange={updateRouteLogTimelinePosition}
-                            onEventDateChange={updateRouteLogDate}
-                            onStartDateChange={updateTimelineStartDate}
-                          />
-                        </div>
-                        <div className="flex min-h-[220px] flex-1 items-start md:hidden">
-                          <VerticalStripMapTimeline
-                            events={historyOnlyLogs}
-                            timelineConfig={timelineConfig}
-                            completedParentCodes={completedParentCodes}
-                            resolvedZCodeMarkers={resolvedZCodeStripMarkers}
-                            stationMarkers={visibleJourneyStationMarkers}
-                            highlightedStationName={highlightedStationName}
-                            onEventDelete={deleteRouteLog}
-                            onEventDateChange={updateRouteLogDate}
-                            onStartDateChange={updateTimelineStartDate}
-                          />
-                        </div>
-                      </>
+                    {isPartnerReferralPortal ? (
+                      <PartnerReferralWorkflowPanel
+                        defaultReferrerName={accountSettings.fullName}
+                        defaultPartnerOrganizationName={
+                          partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
+                        }
+                        recentReferrals={pickupQueue}
+                        onSubmit={submitPartnerReferral}
+                      />
                     ) : (
-                      <div className="mt-3 rounded-[18px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff28', color: SP_COLORS.muted }}>
-                        Timeline configuration is not available yet.
-                      </div>
+                      <>
+                        {timelineConfig ? (
+                          <>
+                            <div className="hidden min-h-[220px] flex-1 items-start md:flex">
+                              <StripMapTimeline
+                                events={historyOnlyLogs}
+                                timelineConfig={timelineConfig}
+                                completedParentCodes={completedParentCodes}
+                                resolvedZCodeMarkers={resolvedZCodeStripMarkers}
+                                stationMarkers={visibleJourneyStationMarkers}
+                                highlightedStationName={highlightedStationName}
+                                onEventDelete={deleteRouteLog}
+                                onEventPositionChange={updateRouteLogTimelinePosition}
+                                onEventDateChange={updateRouteLogDate}
+                                onStartDateChange={updateTimelineStartDate}
+                              />
+                            </div>
+                            <div className="flex min-h-[220px] flex-1 items-start md:hidden">
+                              <VerticalStripMapTimeline
+                                events={historyOnlyLogs}
+                                timelineConfig={timelineConfig}
+                                completedParentCodes={completedParentCodes}
+                                resolvedZCodeMarkers={resolvedZCodeStripMarkers}
+                                stationMarkers={visibleJourneyStationMarkers}
+                                highlightedStationName={highlightedStationName}
+                                onEventDelete={deleteRouteLog}
+                                onEventDateChange={updateRouteLogDate}
+                                onStartDateChange={updateTimelineStartDate}
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <div className="mt-3 rounded-[18px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff28', color: SP_COLORS.muted }}>
+                            Timeline configuration is not available yet.
+                          </div>
+                        )}
+                        <ContextPanels
+                          role={role}
+                          activeMenu={activeMenu}
+                          enrollmentRequests={enrollmentRequests}
+                          countyHeatmap={countyHeatmap}
+                          supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                        />
+                      </>
                     )}
-                    <ContextPanels
-                      role={role}
-                      activeMenu={activeMenu}
-                      enrollmentRequests={enrollmentRequests}
-                      countyHeatmap={countyHeatmap}
-                      supervisorNavigatorCompetency={supervisorNavigatorCompetency}
-                    />
                   </>
                 ) : (
                   <>

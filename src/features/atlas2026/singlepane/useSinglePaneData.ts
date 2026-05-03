@@ -19,6 +19,7 @@ import type {
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
   PartnerIdentifierRecord,
+  PartnerReferralSubmissionInput,
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
@@ -107,6 +108,10 @@ function splitFullName(value: string) {
     firstName: parts.slice(0, -1).join(' '),
     lastName: parts[parts.length - 1]
   }
+}
+
+function createPickupCaseId() {
+  return `atlas-intake-${Date.now().toString(36)}`
 }
 
 function buildFallbackTimelineConfig(planStartIso: string): TimelineConfig {
@@ -1192,6 +1197,56 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return saveNavigatorProgramState(nextState)
   }
 
+  async function submitPartnerReferral(input: PartnerReferralSubmissionInput) {
+    const submittedAtIso = new Date().toISOString()
+    const partnerOrganizationName =
+      input.partnerOrganizationName.trim() ||
+      partnerStationProfile?.organizationName?.trim() ||
+      accountSettings.organization.trim() ||
+      'community partner'
+    const referrerName = input.selfReferring
+      ? 'self referral'
+      : input.referrerName.trim() || accountSettings.fullName.trim() || 'partner referral'
+    const partnerContactSummary = !input.existingPartner
+      ? [input.partnerContactName.trim(), input.partnerContactEmail.trim(), input.partnerContactPhone.trim()].filter(Boolean).join(' · ')
+      : ''
+    const referralMessage = [
+      input.referralReason.trim(),
+      !input.existingPartner && partnerContactSummary ? `new partner contact: ${partnerContactSummary}` : ''
+    ]
+      .filter(Boolean)
+      .join(' | ')
+
+    const nextRecord: UnassignedEnrolleePickupRecord = {
+      id: `pickup-referral-${Date.now().toString(36)}`,
+      fullName: input.referredParticipantName.trim(),
+      dob: '',
+      caseId: createPickupCaseId(),
+      email: input.participantEmail.trim(),
+      phone: input.participantPhone.trim(),
+      demographicsSummary: input.existingPartner
+        ? 'Referred by an existing partner profile.'
+        : 'Referred by a new partner profile captured during intake.',
+      referredAtIso: submittedAtIso,
+      referrerName,
+      referrerOrganization: partnerOrganizationName,
+      referrerMessage: referralMessage || 'Referral submitted through partner referral workflow.',
+      zCodeTags: [],
+      status: 'available',
+      claimedByNavigatorName: null,
+      claimedAtIso: null
+    }
+    const nextState: NavigatorProgramState = {
+      ...mergedNavigatorProgramState,
+      pickupQueue: [
+        nextRecord,
+        ...mergedNavigatorProgramState.pickupQueue.filter((record) => record.id !== nextRecord.id)
+      ]
+    }
+    await saveNavigatorProgramState(nextState)
+    return nextRecord
+  }
+
   async function saveNavigatorRegulationTest(input: RegulationTestSubmissionInput) {
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
@@ -1318,6 +1373,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     saveNavigatorSelfAssessment,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
+    submitPartnerReferral,
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,

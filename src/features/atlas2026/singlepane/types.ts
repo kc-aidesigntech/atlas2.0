@@ -338,6 +338,20 @@ export interface UnassignedEnrolleePickupRecord {
   claimedAtIso: string | null
 }
 
+export interface PartnerReferralSubmissionInput {
+  referredParticipantName: string
+  participantEmail: string
+  participantPhone: string
+  referralReason: string
+  selfReferring: boolean
+  referrerName: string
+  existingPartner: boolean
+  partnerOrganizationName: string
+  partnerContactName: string
+  partnerContactEmail: string
+  partnerContactPhone: string
+}
+
 export interface NavigatorSelfAssessmentRecord {
   id: string
   navigatorName: string

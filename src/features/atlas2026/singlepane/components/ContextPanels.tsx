@@ -1,5 +1,4 @@
 import React from 'react'
-import { AtlasTextLink } from '@/features/atlas2026/components/AtlasPrimitives'
 import CountyCommonsHeatmap from '@/features/atlas2026/singlepane/components/CountyCommonsHeatmap'
 import SupervisorCompetencyPanel from '@/features/atlas2026/singlepane/components/SupervisorCompetencyPanel'
 import type { AtlasRole, CountyHeatPoint, EnrollmentRequestRecord, SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/singlepane/types'
@@ -44,17 +43,8 @@ export default function ContextPanels({ role, activeMenu, enrollmentRequests, co
   if (activeMenu === 'refer' || activeMenu === 'referral portal') {
     return (
       <div className="space-y-2">
-        <AtlasTextLink
-          href="https://apps.apple.com/us/app/atlas-information-exchange/id6746423572"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex px-4 py-2 text-[13px] text-white"
-          style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
-        >
-          open atlas referral portal
-        </AtlasTextLink>
         <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
-          refer is currently an external handoff with no in-shell write actions.
+          referral workflow is available directly in this app.
         </small>
       </div>
     )
