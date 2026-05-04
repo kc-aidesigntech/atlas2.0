@@ -30,11 +30,18 @@ export default function PublicAtlasLandingPage() {
   })
 
   React.useEffect(() => {
-    setRecentPublicReferrals(loadPublicReferralQueueRecords())
+    let isMounted = true
+    void loadPublicReferralQueueRecords().then((records) => {
+      if (!isMounted) return
+      setRecentPublicReferrals(records)
+    })
+    return () => {
+      isMounted = false
+    }
   }, [])
 
-  function enqueueRecord(record: UnassignedEnrolleePickupRecord) {
-    enqueuePublicReferralQueueRecord(record)
+  async function enqueueRecord(record: UnassignedEnrolleePickupRecord) {
+    await enqueuePublicReferralQueueRecord(record)
     setRecentPublicReferrals((current) => [record, ...current.filter((item) => item.id !== record.id)])
   }
 
@@ -46,7 +53,7 @@ export default function PublicAtlasLandingPage() {
       actorRoleLabel: session ? 'authenticated website user' : 'public website visitor',
       sourceLabel: 'public website referral form'
     })
-    enqueueRecord(nextRecord)
+    await enqueueRecord(nextRecord)
     return nextRecord
   }
 
@@ -94,7 +101,7 @@ export default function PublicAtlasLandingPage() {
           sourceLabel: 'public website partner inquiry'
         }
       )
-      enqueueRecord(nextRecord)
+      await enqueueRecord(nextRecord)
       setInquirySuccess('Partner inquiry submitted. Atlas management has been queued for follow-up.')
       setInquiryDraft({
         contactName: '',
@@ -119,6 +126,15 @@ export default function PublicAtlasLandingPage() {
             <div className="text-[20px] font-semibold">Community Navigation Platform</div>
           </div>
           <div className="flex items-center gap-2">
+            <AtlasTextButton
+              className="px-3 py-1.5 text-[12px]"
+              onClick={() => {
+                window.location.assign('/demo')
+              }}
+              style={{ ['--button-border-color' as const]: '#ffffff45', color: '#ffffffd0' } as React.CSSProperties}
+            >
+              demo
+            </AtlasTextButton>
             <AtlasTextButton
               className="px-3 py-1.5 text-[12px]"
               onClick={() => {

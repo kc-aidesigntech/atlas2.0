@@ -21,7 +21,9 @@ This runbook documents the live multi-role identity rollout for `kchristianson@a
 
 ## Source files
 
-- Migration: `supabase/migrations/20260503_multi_role_identity_assignments.sql`
+- Migrations:
+  - `supabase/migrations/20260503182646_matrix_many_to_many_foundation.sql`
+  - `supabase/migrations/20260504010000_launch_identity_bridge_baseline.sql`
 - Access matrix repo: `src/features/atlas2026/singlepane/data-access/accessMatrixRepository.ts`
 - Access matrix panel: `src/features/atlas2026/singlepane/components/LiveAccessMatrixPanel.tsx`
 - Admin integration: `src/features/atlas2026/singlepane/SinglePaneApp.tsx`
