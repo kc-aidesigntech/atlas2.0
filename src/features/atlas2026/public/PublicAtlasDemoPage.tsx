@@ -2,6 +2,7 @@ import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import { useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
+import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 const DEMO_PASSCODE_SESSION_KEY = 'atlas2026.public.demo-passcode-verified.v1'
 
@@ -23,6 +24,21 @@ function persistDemoAccessState(isUnlocked: boolean) {
   window.localStorage.removeItem(DEMO_PASSCODE_SESSION_KEY)
 }
 
+async function logDemoAccessEvent(accessMode: 'passcode' | 'administrator_bypass', email: string | null) {
+  if (!hasSupabaseConfig || !supabase) return
+  await (supabase as any)
+    .schema('atlas')
+    .from('demo_access_events')
+    .insert({
+      access_mode: accessMode,
+      session_email: email,
+      metadata: {
+        page: '/demo',
+        client_time: new Date().toISOString()
+      }
+    })
+}
+
 export default function PublicAtlasDemoPage() {
   const { session } = useSupabaseAuth()
   const [passcodeInput, setPasscodeInput] = React.useState('')
@@ -39,8 +55,9 @@ export default function PublicAtlasDemoPage() {
       // Administrators can always access demo preview without sharing passcodes.
       setIsUnlocked(true)
       persistDemoAccessState(true)
+      void logDemoAccessEvent('administrator_bypass', session?.user?.email || null)
     }
-  }, [isAdministrator, isUnlocked])
+  }, [isAdministrator, isUnlocked, session?.user?.email])
 
   function unlockDemo(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -55,6 +72,7 @@ export default function PublicAtlasDemoPage() {
     }
     setIsUnlocked(true)
     persistDemoAccessState(true)
+    void logDemoAccessEvent('passcode', session?.user?.email || null)
   }
 
   if (!isUnlocked) {

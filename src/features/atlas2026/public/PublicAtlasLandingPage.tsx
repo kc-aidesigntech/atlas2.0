@@ -30,11 +30,18 @@ export default function PublicAtlasLandingPage() {
   })
 
   React.useEffect(() => {
-    setRecentPublicReferrals(loadPublicReferralQueueRecords())
+    let isMounted = true
+    void loadPublicReferralQueueRecords().then((records) => {
+      if (!isMounted) return
+      setRecentPublicReferrals(records)
+    })
+    return () => {
+      isMounted = false
+    }
   }, [])
 
-  function enqueueRecord(record: UnassignedEnrolleePickupRecord) {
-    enqueuePublicReferralQueueRecord(record)
+  async function enqueueRecord(record: UnassignedEnrolleePickupRecord) {
+    await enqueuePublicReferralQueueRecord(record)
     setRecentPublicReferrals((current) => [record, ...current.filter((item) => item.id !== record.id)])
   }
 
@@ -46,7 +53,7 @@ export default function PublicAtlasLandingPage() {
       actorRoleLabel: session ? 'authenticated website user' : 'public website visitor',
       sourceLabel: 'public website referral form'
     })
-    enqueueRecord(nextRecord)
+    await enqueueRecord(nextRecord)
     return nextRecord
   }
 
@@ -94,7 +101,7 @@ export default function PublicAtlasLandingPage() {
           sourceLabel: 'public website partner inquiry'
         }
       )
-      enqueueRecord(nextRecord)
+      await enqueueRecord(nextRecord)
       setInquirySuccess('Partner inquiry submitted. Atlas management has been queued for follow-up.')
       setInquiryDraft({
         contactName: '',
