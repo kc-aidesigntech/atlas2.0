@@ -1,0 +1,18 @@
+---
+description: Keep infrastructure documentation synchronized with runtime changes
+alwaysApply: true
+---
+
+# Documentation Sync on Infrastructure Change
+
+When infrastructure behavior changes, documentation must be updated in the same work session.
+
+## Required updates
+
+- Update runbooks such as `Runpod_VM.md` when pod specs, image/template, ports, startup commands, or deployment wiring change.
+- Update environment variable guidance in README or runbooks when endpoint contracts change.
+- Record newly observed operational failure signatures and resolutions in troubleshooting sections.
+
+## Completion rule
+
+Do not consider infrastructure work complete until documentation reflects the latest known-good working state.

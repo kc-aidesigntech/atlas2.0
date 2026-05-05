@@ -120,7 +120,7 @@ export default function MobileRouteBoardPanel({
             ['--button-line-color' as const]: SP_COLORS.white,
             backgroundColor: SP_COLORS.deepGreen,
             color: SP_COLORS.white
-          }}
+          } as React.CSSProperties}
         >
           renewal
         </AtlasTextButton>

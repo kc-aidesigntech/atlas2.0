@@ -11,9 +11,8 @@ import type {
   RouteTemplate,
   RoutingStep,
 } from "../atlas2026/contracts";
-import type { AtlasDatabase } from "./contracts";
 
-type AnySupabaseClient = SupabaseClient<AtlasDatabase>;
+type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
 
 export interface AppRoleNavigationRecord {
   roleKey: string;

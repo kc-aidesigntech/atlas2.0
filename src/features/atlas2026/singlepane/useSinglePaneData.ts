@@ -62,6 +62,7 @@ import {
   loadNavigatorProgramState,
   loadNavigatorEnrollmentAssignments,
   loadPartnerTroubleshootingGrants,
+  loadDemoTaggedEnrollmentIds,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
   uploadEnrolleeProfileImage,
@@ -83,6 +84,8 @@ import {
   saveEnrolleeIntake as persistEnrolleeIntake,
   assignNavigatorEnrollmentToSelf as persistAssignNavigatorEnrollmentToSelf,
   unassignNavigatorEnrollmentFromSelf as persistUnassignNavigatorEnrollmentFromSelf,
+  materializeClaimedReferralIntoEnrollment,
+  upsertEnrollmentInferredZCodes,
   loadAccessMatrixDataset
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/useJourneyStationMarkers'
@@ -113,6 +116,7 @@ import {
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import { loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
+import { inferZCodesForReferral } from '@/services/atlas2026/demoInferenceService'
 
 /**
  * Primary single-pane orchestration hook.
@@ -274,6 +278,14 @@ function getWeekStartIso(dateIso: string) {
   const diff = (day + 6) % 7
   date.setUTCDate(date.getUTCDate() - diff)
   return toMidnightIso(date)
+}
+
+function normalizeOrganizationKey(value: string | null | undefined) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
 }
 
 function buildSeedPickupQueue(enrollmentRequests: EnrollmentRequestRecord[]): UnassignedEnrolleePickupRecord[] {
@@ -620,7 +632,18 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [navigatorEnrollmentAssignmentsError, setNavigatorEnrollmentAssignmentsError] = useState<string | null>(null)
   const [isLoadingNavigatorEnrollmentAssignments, setIsLoadingNavigatorEnrollmentAssignments] = useState(false)
   const [assigningNavigatorEnrollmentId, setAssigningNavigatorEnrollmentId] = useState<string | null>(null)
-  const publicQueueRecords = useMemo(() => loadPublicReferralQueueRecords(), [])
+  const [demoTaggedEnrollmentIds, setDemoTaggedEnrollmentIds] = useState<string[]>([])
+  const [publicQueueRecords, setPublicQueueRecords] = useState<UnassignedEnrolleePickupRecord[]>([])
+  useEffect(() => {
+    let isMounted = true
+    void loadPublicReferralQueueRecords().then((records) => {
+      if (!isMounted) return
+      setPublicQueueRecords(records)
+    })
+    return () => {
+      isMounted = false
+    }
+  }, [])
   const {
     state: {
       isLoading,
@@ -704,9 +727,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           .map((assignment) => assignment.enrollmentId)
       )
     }
-    if (scopedRole === 'partner') return new Set<string>()
+    if (scopedRole === 'partner') return new Set<string>(demoTaggedEnrollmentIds)
     return null
-  }, [accessMatrixDataset, remoteSession, role, viewerPerson?.id])
+  }, [accessMatrixDataset, demoTaggedEnrollmentIds, remoteSession, role, viewerPerson?.id])
   const scopedEnrollees = useMemo(
     () =>
       scopedEnrollmentIds
@@ -951,12 +974,26 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [currentNavigatorName, scopedLoadBreakdownsByEnrolleeId]
   )
   const pickupQueue = useMemo(
-    () =>
-      mergedNavigatorProgramState.pickupQueue
-        .filter((item) => item.status !== 'archived')
+    () => {
+      const visibleQueue = mergedNavigatorProgramState.pickupQueue.filter((item) => item.status !== 'archived')
+      if (viewerRole !== 'partner') {
+        return visibleQueue
+          .slice()
+          .sort((left, right) => new Date(right.referredAtIso).getTime() - new Date(left.referredAtIso).getTime())
+      }
+
+      // Partner users should only see their own station submissions in partner-facing flows.
+      const normalizedOrg = normalizeOrganizationKey(effectivePartnerOrganizationName)
+      const scopedQueue = normalizedOrg
+        ? visibleQueue.filter(
+            (item) => normalizeOrganizationKey(item.referrerOrganization) === normalizedOrg
+          )
+        : visibleQueue
+      return scopedQueue
         .slice()
-        .sort((left, right) => new Date(right.referredAtIso).getTime() - new Date(left.referredAtIso).getTime()),
-    [mergedNavigatorProgramState.pickupQueue]
+        .sort((left, right) => new Date(right.referredAtIso).getTime() - new Date(left.referredAtIso).getTime())
+    },
+    [effectivePartnerOrganizationName, mergedNavigatorProgramState.pickupQueue, viewerRole]
   )
   const routeCandidates = useRouteCandidates(selectedEnrollee)
   const { journeyStationMarkers, setJourneyStationMarkers } = useJourneyStationMarkers(selectedEnrollee, selectedLogs, routeCandidates)
@@ -1210,6 +1247,26 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       })
       .finally(() => {
         if (isMounted) setIsLoadingNavigatorEnrollmentAssignments(false)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [viewerRole])
+
+  useEffect(() => {
+    if (viewerRole !== 'partner') {
+      setDemoTaggedEnrollmentIds([])
+      return
+    }
+    let isMounted = true
+    loadDemoTaggedEnrollmentIds()
+      .then((ids) => {
+        if (!isMounted) return
+        setDemoTaggedEnrollmentIds(ids)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        console.warn('Unable to load demo-tagged enrollment ids for partner scope.', error)
       })
     return () => {
       isMounted = false
@@ -1966,6 +2023,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   async function claimPickupQueueRecord(recordId: string) {
     ensureWriteAllowed()
+    const claimedRecord = mergedNavigatorProgramState.pickupQueue.find((record) => record.id === recordId) || null
     const nextState = {
       ...mergedNavigatorProgramState,
       pickupQueue: mergedNavigatorProgramState.pickupQueue.map((record) =>
@@ -1979,7 +2037,27 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           : record
       )
     }
-    return saveNavigatorProgramState(nextState)
+    const savedState = await saveNavigatorProgramState(nextState)
+    if (claimedRecord) {
+      try {
+        // Keep claim conversion transactional with queue claim so demo flow can
+        // open immediately into a real navigator-bound enrollee.
+        const materialized = await materializeClaimedReferralIntoEnrollment(claimedRecord)
+        if (materialized?.enrollmentId) {
+          const inferred = await inferZCodesForReferral({
+            fullName: claimedRecord.fullName,
+            situationCategories: claimedRecord.zCodeTags,
+            backgroundNotes: claimedRecord.backgroundNotes,
+            referrerMessage: claimedRecord.referrerMessage
+          })
+          await upsertEnrollmentInferredZCodes(materialized.enrollmentId, inferred.zCodes)
+        }
+      } catch (error) {
+        console.warn('Unable to materialize claimed referral into enrollee enrollment.', error)
+      }
+      await reloadBootstrapState()
+    }
+    return savedState
   }
 
   async function saveNavigatorSelfAssessment(record: NavigatorSelfAssessmentRecord) {

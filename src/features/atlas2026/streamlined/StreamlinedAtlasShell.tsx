@@ -111,8 +111,12 @@ export default function StreamlinedAtlasShell() {
             onSelectTemplate={setSelectedTemplateId}
             previewStepsForBomIds={previewStepsForBomIds}
             addBomItem={addBomItem}
-            buildTemplateFromBom={buildTemplateFromBom}
-            assignTemplate={assignTemplate}
+            buildTemplateFromBom={async (input) => {
+              await buildTemplateFromBom(input)
+            }}
+            assignTemplate={async (participantId, templateId) => {
+              await assignTemplate(participantId, templateId)
+            }}
           />
         )}
       </main>

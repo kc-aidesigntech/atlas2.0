@@ -5,9 +5,9 @@ import type {
   AccessMatrixPersonRecord,
   AccessMatrixSupervisorRecord,
   AdminPortalPersonRole
-} from '@/features/atlas2026/singlepane/types'
-import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
-import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+} from '../types'
+import { hasSupabaseConfig, supabase } from '../../../../lib/supabaseClient'
+import { isOptionalSupabaseDataError } from './supabaseOptionalData'
 
 const KNOWN_ROLE_KEYS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
 

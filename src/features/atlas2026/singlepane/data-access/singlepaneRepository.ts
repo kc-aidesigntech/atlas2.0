@@ -9,7 +9,8 @@ import type {
   JourneyStationMarker,
   NavigatorEnrollmentAssignmentRecord,
   PartnerStationProfile,
-  RouteCandidateRecord
+  RouteCandidateRecord,
+  UnassignedEnrolleePickupRecord
 } from '@/features/atlas2026/singlepane/types'
 import {
   fetchAppRoleNavigation,
@@ -103,6 +104,14 @@ const routeCandidatesCache = new Map<string, RouteCandidateRecord[]>()
 const routeCandidatesInFlight = new Map<string, Promise<RouteCandidateRecord[]>>()
 const journeyStationMarkersCache = new Map<string, JourneyStationMarker[]>()
 const journeyStationMarkersInFlight = new Map<string, Promise<JourneyStationMarker[]>>()
+const DEMO_NAVIGATOR_NAME = 'atlas demo navigator'
+
+export interface ReferralClaimMaterializationResult {
+  enrollmentId: string
+  enrolleeId: string
+  enrolleeName: string
+  createdAtIso: string
+}
 
 /**
  * Repository facade for single-pane orchestration.
@@ -450,6 +459,107 @@ export async function unassignNavigatorEnrollmentFromSelf(enrollmentId: string) 
     target_enrollment_id: enrollmentId
   })
   if (error) throw error
+}
+
+export async function materializeClaimedReferralIntoEnrollment(record: UnassignedEnrolleePickupRecord) {
+  if (!record.id || !hasSupabaseConfig || !supabase) return null
+  const payload = {
+    queue_record_id: record.id,
+    full_name: record.fullName,
+    email: record.email || null,
+    phone: record.phone || null,
+    case_id: record.caseId || null,
+    referrer_name: record.referrerName || null,
+    referrer_organization: record.referrerOrganization || null,
+    background_notes: record.backgroundNotes || null,
+    metadata: {
+      demo_tag: 'atlas_demo',
+      demo_record: true,
+      demo_navigator_name: DEMO_NAVIGATOR_NAME
+    }
+  }
+  // Claim conversion runs as one database transaction via Remote Procedure Call (RPC),
+  // so person/enrollee/enrollment/navigator assignment records cannot drift.
+  const { data, error } = await (supabase as any).rpc('fn_claim_referral_queue_to_enrollment', payload)
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || typeof row !== 'object') return null
+  const typed = row as Record<string, unknown>
+  const enrollmentId = String(typed.enrollment_id || typed.enrollmentId || '').trim()
+  const enrolleeId = String(typed.enrollee_id || typed.enrolleeId || '').trim()
+  if (!enrollmentId || !enrolleeId) return null
+  return {
+    enrollmentId,
+    enrolleeId,
+    enrolleeName: String(typed.enrollee_name || typed.enrolleeName || record.fullName || ''),
+    createdAtIso: String(typed.created_at || typed.createdAt || new Date().toISOString())
+  } satisfies ReferralClaimMaterializationResult
+}
+
+export async function upsertEnrollmentInferredZCodes(
+  enrollmentId: string,
+  zCodes: string[],
+  sourceLabel = 'demo_ollama_inference'
+) {
+  if (!enrollmentId || !hasSupabaseConfig || !supabase) return []
+  const normalizedCodes = Array.from(
+    new Set(
+      zCodes
+        .map((value) => value.trim().toUpperCase())
+        .filter((value) => /^Z\d{2}(\.\d+)?$/.test(value))
+    )
+  )
+  if (!normalizedCodes.length) return []
+
+  const { data: zRows, error: zRowsError } = await (supabase as any)
+    .schema('atlas')
+    .from('z_codes')
+    .select('id,z_code')
+    .in('z_code', normalizedCodes)
+  if (zRowsError) throw zRowsError
+  const activeRows = (zRows || []) as Array<{ id: string; z_code: string }>
+  if (!activeRows.length) return []
+
+  const payload = activeRows.map((row) => ({
+    enrollment_id: enrollmentId,
+    z_code_id: row.id,
+    is_resolved: false,
+    resolution_at: null,
+    source: sourceLabel,
+    ended_at: null
+  }))
+
+  // Inference writes only add currently active needs. Duplicate active rows are prevented
+  // by checking existing unresolved entries before insert.
+  const { data: existingRows, error: existingError } = await (supabase as any)
+    .schema('atlas')
+    .from('enrollee_z_codes')
+    .select('z_code_id')
+    .eq('enrollment_id', enrollmentId)
+    .is('ended_at', null)
+  if (existingError) throw existingError
+  const existingZCodeIds = new Set((existingRows || []).map((row: { z_code_id: string }) => row.z_code_id))
+  const nextRows = payload.filter((row) => !existingZCodeIds.has(row.z_code_id))
+  if (!nextRows.length) return activeRows.map((row) => row.z_code)
+
+  const { error: insertError } = await (supabase as any)
+    .schema('atlas')
+    .from('enrollee_z_codes')
+    .insert(nextRows)
+  if (insertError) throw insertError
+  return activeRows.map((row) => row.z_code)
+}
+
+export async function loadDemoTaggedEnrollmentIds(tag = 'atlas_demo') {
+  if (!hasSupabaseConfig || !supabase) return []
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('demo_record_tags')
+    .select('record_id')
+    .eq('tag', tag)
+    .eq('record_type', 'enrollments')
+  if (error) throw error
+  return (data || []).map((row: { record_id: string }) => row.record_id).filter(Boolean)
 }
 
 export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteCandidateRecord[]> {

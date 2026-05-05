@@ -98,6 +98,12 @@ interface VisiblePromptEntry {
   prompt: ZCodeSurveyPrompt
 }
 
+function isSubmissionRecord(
+  value: PartnerServiceCapacitySubmissionRecord | void
+): value is PartnerServiceCapacitySubmissionRecord {
+  return Boolean(value && typeof value === 'object' && 'id' in value)
+}
+
 function getRespondentValidationMessage(header: PartnerServiceCapacityHeader) {
   const trimmedFirstName = header.firstName.trim()
   const trimmedLastName = header.lastName.trim()
@@ -652,7 +658,7 @@ function ServiceCapacitySurveyForm({
       setBlockingSaveError(null)
       Promise.resolve(onSubmitRef.current(payload))
         .then((savedRecord) => {
-          if (savedRecord?.id) {
+          if (isSubmissionRecord(savedRecord)) {
             setCurrentRecordId(savedRecord.id)
             if (savedRecord.draftKey) setDraftKey(savedRecord.draftKey)
           }
@@ -713,7 +719,7 @@ function ServiceCapacitySurveyForm({
       setBlockingSaveError(getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR))
       return
     }
-    if (completedRecord?.id) setCurrentRecordId(completedRecord.id)
+    if (isSubmissionRecord(completedRecord)) setCurrentRecordId(completedRecord.id)
     persistSurveyDraft(null)
     setAutosaveState('saved')
     setBlockingSaveError(null)

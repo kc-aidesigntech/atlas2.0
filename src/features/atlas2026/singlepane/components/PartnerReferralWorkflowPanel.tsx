@@ -113,7 +113,7 @@ export default function PartnerReferralWorkflowPanel({
           existingPartner: true
         } satisfies ReferralSourceOption
       })
-      .filter((value): value is ReferralSourceOption => Boolean(value))
+      .filter(Boolean) as ReferralSourceOption[]
     return [...historical, ...customReferralSources]
   }, [customReferralSources, recentReferrals])
   const selectedReferralSourceLabel = useMemo(() => {

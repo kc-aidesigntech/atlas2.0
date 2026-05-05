@@ -387,8 +387,14 @@ export default function SinglePaneApp() {
     [isRegulationCleared, selectedLogs]
   )
   const hasEnteredRenewalStage = React.useMemo(
-    () => selectedLogs.some((log) => log.phase === 'renewal') || nextSuggestedPhase === 'renewal',
-    [nextSuggestedPhase, selectedLogs]
+    () => {
+      const resolvedByZCodes = Boolean(
+        selectedEnrollee?.activeZCodeDetails.length &&
+        selectedEnrollee.activeZCodeDetails.every((detail) => detail.isResolved)
+      )
+      return selectedLogs.some((log) => log.phase === 'renewal') || nextSuggestedPhase === 'renewal' || resolvedByZCodes
+    },
+    [nextSuggestedPhase, selectedEnrollee?.activeZCodeDetails, selectedLogs]
   )
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
@@ -402,6 +408,14 @@ export default function SinglePaneApp() {
     const combined = `${firstName} ${lastName}`.trim()
     return combined || accountSettings.fullName || 'not configured'
   }, [accountSettings.fullName, partnerStationProfile?.primaryContactFirstName, partnerStationProfile?.primaryContactLastName])
+  const partnerUnresolvedCodes = React.useMemo(
+    () =>
+      (selectedEnrollee?.activeZCodeDetails || [])
+        .filter((detail) => !detail.isResolved)
+        .map((detail) => detail.zCode)
+        .slice(0, 8),
+    [selectedEnrollee?.activeZCodeDetails]
+  )
 
   function handleMenuSelect(menu: string) {
     if (!remoteSession?.isActive && uiRole === 'partner' && menu === 'service capacity') {
@@ -690,6 +704,9 @@ export default function SinglePaneApp() {
                       <small className="mt-1 block text-[14px] text-white">Contact: {partnerContactName}</small>
                       <small className="mt-1 block text-[14px] text-white">
                         E: {partnerStationProfile?.primaryContactEmail || accountSettings.email || 'not configured'}
+                      </small>
+                      <small className="mt-1 block text-[14px] text-white">
+                        unresolved categories: {partnerUnresolvedCodes.length ? partnerUnresolvedCodes.join(', ') : 'none'}
                       </small>
                       <div className="mt-4 flex justify-center">
                         <AtlasTextButton
