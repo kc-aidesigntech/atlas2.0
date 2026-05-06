@@ -4,8 +4,10 @@
  */
 import React from 'react'
 import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
+import { AtlasTextButton } from '../../components/AtlasPrimitives'
 import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
-import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
+import { getZCodeParentColor } from '@atlas/shared'
+import ZCodeBadge from '../../components/ZCodeBadge'
 import type { EnrolleeProfile } from '../types'
 import { SP_COLORS } from '../theme'
 
@@ -122,19 +124,27 @@ export default function ProfilePanel({
             }
           }}
         />
+        {onOpenBurdenSurvey ? (
+          <div className="mt-3 flex justify-center">
+            <AtlasTextButton
+              type="button"
+              onClick={onOpenBurdenSurvey}
+              className="justify-center px-[19px] py-[10px] text-[14px] font-medium"
+              style={{ borderColor: 'var(--atlas-signal-lucid-green)', backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg }}
+            >
+              {burdenSurveyLabel}
+            </AtlasTextButton>
+          </div>
+        ) : null}
         <div className="mt-4 flex flex-wrap items-center gap-[10px]">
           {parentGroups.map((group, index) => {
             const bgColor = getZCodeParentColor(group.parentCode) || [SP_COLORS.yellow, SP_COLORS.red, SP_COLORS.blue][index % 3]
-            const useLightText = usesLightTextOnZCodeColor(bgColor)
             const isCompleted = completedParentCodes.has(normalizeParentCode(group.parentCode))
             return (
               <button
                 key={group.parentCode}
                 type="button"
-                className={`relative inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[30px] font-bold ${
-                  useLightText ? 'text-white' : 'text-black'
-                }`}
-                style={{ backgroundColor: bgColor }}
+                className="cursor-pointer"
                 onClick={() =>
                   onSelectZCode?.({
                     parentCode: group.parentCode,
@@ -142,15 +152,7 @@ export default function ProfilePanel({
                   })
                 }
               >
-                {isCompleted ? (
-                  <span
-                    className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold"
-                    style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
-                  >
-                    ✓
-                  </span>
-                ) : null}
-                {group.parentCode.replace(/^z/i, '')}
+                <ZCodeBadge value={group.parentCode} fill={bgColor} size="enrollee" stripLeadingZ checked={isCompleted} />
               </button>
             )
           })}
@@ -169,16 +171,6 @@ export default function ProfilePanel({
           N: {enrollee.assignedNavigator || 'unassigned'}
         </small>
         <small className="block text-[13px] text-white">Enrollment start: {enrollmentStartLabel || 'not recorded'}</small>
-        {onOpenBurdenSurvey ? (
-          <button
-            type="button"
-            onClick={onOpenBurdenSurvey}
-            className="mt-3 inline-flex items-center rounded-full border px-4 py-2 text-[12px] font-medium"
-            style={{ borderColor: 'var(--atlas-signal-lucid-green)', backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg }}
-          >
-            {burdenSurveyLabel}
-          </button>
-        ) : null}
       </div>
     </div>
   )

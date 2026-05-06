@@ -55,7 +55,7 @@ export default function ZCodeTaskPane({ zCode, childCodes = [], onClose }: ZCode
         <small className="text-[13px] font-semibold text-white">z-code task list: {zCode.replace(/^z/i, '')}</small>
         <AtlasIconButton
           onClick={onClose}
-          className="h-7 w-7 p-1"
+          className="h-9 w-9 p-[5px]"
           style={{ ['--button-border-color' as const]: SP_COLORS.border } as React.CSSProperties}
         >
           <X size={14} color={SP_COLORS.white} />
@@ -81,7 +81,7 @@ export default function ZCodeTaskPane({ zCode, childCodes = [], onClose }: ZCode
             <div className="flex items-center gap-1">
               <AtlasIconButton
                 onClick={() => setTaskState((prev) => ({ ...prev, [row.id]: !prev[row.id] }))}
-                className="h-7 w-7 p-1"
+                className="h-9 w-9 p-[5px]"
                 style={{ ['--button-border-color' as const]: row.resolved ? SP_COLORS.deepGreen : SP_COLORS.border } as React.CSSProperties}
                 title="mark resolved"
               >
@@ -89,7 +89,7 @@ export default function ZCodeTaskPane({ zCode, childCodes = [], onClose }: ZCode
               </AtlasIconButton>
               <AtlasIconButton
                 onClick={() => setTaskState((prev) => ({ ...prev, [row.id]: false }))}
-                className="h-7 w-7 p-1"
+                className="h-9 w-9 p-[5px]"
                 style={{ ['--button-border-color' as const]: SP_COLORS.red } as React.CSSProperties}
                 title="mark not applicable"
               >

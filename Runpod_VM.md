@@ -45,6 +45,7 @@ Use the detailed infrastructure runbook in `atlas-mcp-server/Runpod_VM.md` for:
 - Ollama installation and model pull commands
 - Caddy reverse proxy setup and HyperText Transfer Protocol Secure (HTTPS) validation
 - Heroku environment variable wiring for MCP
+- Ollama GitHub `.tar.zst` fallback install path when `ollama.com` installer times out
 
 Current pricing snapshot from the active pod:
 
@@ -52,6 +53,12 @@ Current pricing snapshot from the active pod:
 - container storage `$0.003/hr` (20 GB)
 - volume storage `$0.003/hr` (20 GB)
 - total `$0.70/hr`
+
+## Current endpoint routing note
+
+- In the active template profile, port `8888` serves Jupyter interfaces.
+- Do not use the Jupyter URL as `OLLAMA_BASE_URL`.
+- Use the RunPod proxied host for exposed HTTP port `11434` once Ollama is bound and reachable.
 
 ## Required Atlas environment variables
 

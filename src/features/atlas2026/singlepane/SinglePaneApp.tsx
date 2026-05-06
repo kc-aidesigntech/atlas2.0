@@ -521,7 +521,9 @@ export default function SinglePaneApp() {
         enrollees={enrollees}
         selectedEnrolleeId={selectedEnrolleeId}
         onSelectEnrollee={setSelectedEnrolleeId}
-        onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
+        navigatorEnrolleeView={navigatorEnrolleeView}
+        onNavigatorEnrolleeViewChange={setNavigatorEnrolleeView}
+        onOpenAccountSettings={() => setIsAccountSettingsOpen((current) => !current)}
       />
 
       <main className="atlas-shell-edge-buffer relative py-[10px]">
@@ -547,7 +549,7 @@ export default function SinglePaneApp() {
               </div>
               <AtlasTextButton
                 onClick={stopTroubleshootingSession}
-                className="px-4 py-2 text-[12px] font-medium text-white"
+                className="px-[19px] py-[10px] text-[14px] font-medium text-white"
                 style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
               >
                 exit troubleshooting
@@ -590,7 +592,12 @@ export default function SinglePaneApp() {
                       }
                     },
                     onSignOut: () => {
-                      void signOut()
+                      void (async () => {
+                        await signOut()
+                        if (typeof window !== 'undefined') {
+                          window.location.assign('/')
+                        }
+                      })()
                     }
                   }
                 : null
@@ -659,7 +666,7 @@ export default function SinglePaneApp() {
                     <small className="block text-[10px] uppercase tracking-[0.18em] text-[#9fb0c1]">intervallic assessments</small>
                     <div className="mt-1 text-[24px] font-medium text-white">enrollee burden survey</div>
                   </div>
-                  <AtlasTextButton onClick={() => setEnrolleeSurveyTargetId(null)} className="px-3 py-1.5 text-[12px]">
+                  <AtlasTextButton onClick={() => setEnrolleeSurveyTargetId(null)} className="px-[14px] py-[7px] text-[14px]">
                     close
                   </AtlasTextButton>
                 </div>
@@ -802,7 +809,7 @@ export default function SinglePaneApp() {
                       <small className="block text-[12px] uppercase tracking-[0.14em] text-[#bcbcbc]">my enrollees</small>
                       <div className="mt-2 text-[18px] font-medium">No enrollees are currently assigned to you.</div>
                       <small className="mt-2 block text-[12px] text-[#bcbcbc]">
-                        Switch to "add enrollees" and use "assign to me" to claim one.
+                        Use the dropdown next to "enrollees" and switch to "add enrollees" to claim one.
                       </small>
                     </div>
                   </div>
@@ -838,27 +845,11 @@ export default function SinglePaneApp() {
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
                   </div>
                 ) : null}
-                {isNavigatorEnrolleeMenu ? (
-                  <div className="flex items-center justify-center py-1">
-                    <label className="flex items-center gap-2 text-[12px] text-[#d6d6d6]">
-                      <span>enrollee view</span>
-                      <select
-                        value={navigatorEnrolleeView}
-                        onChange={(event) => setNavigatorEnrolleeView(event.target.value as 'my' | 'add')}
-                        className="atlas-admin-input min-w-[180px]"
-                      >
-                        <option value="my">my enrollees</option>
-                        <option value="add">add enrollees</option>
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
-
                 {canUseReferralPortal && !isReferralPortalMenu ? (
                   <div className="flex items-center justify-center py-1">
                     <AtlasTextButton
                       onClick={() => setActiveMenu('referral portal')}
-                      className="px-4 py-1 text-[12px] text-white"
+                      className="px-[19px] py-[6px] text-[14px] text-white"
                       style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
                       title="Open referral portal."
                     >

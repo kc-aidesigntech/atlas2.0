@@ -127,7 +127,7 @@ export default function PublicAtlasLandingPage() {
           </div>
           <div className="flex items-center gap-2">
             <AtlasTextButton
-              className="px-3 py-1.5 text-[12px]"
+              className="px-[14px] py-[7px] text-[14px]"
               onClick={() => {
                 window.location.assign('/demo')
               }}
@@ -136,7 +136,7 @@ export default function PublicAtlasLandingPage() {
               demo
             </AtlasTextButton>
             <AtlasTextButton
-              className="px-3 py-1.5 text-[12px]"
+              className="px-[14px] py-[7px] text-[14px]"
               onClick={() => {
                 window.location.assign('/app')
               }}
@@ -146,7 +146,7 @@ export default function PublicAtlasLandingPage() {
             </AtlasTextButton>
             {session ? (
               <AtlasTextButton
-                className="px-3 py-1.5 text-[12px]"
+                className="px-[14px] py-[7px] text-[14px]"
                 onClick={() => void signOut()}
                 style={{ ['--button-border-color' as const]: '#ffffff45', color: '#ffffffd0' } as React.CSSProperties}
               >

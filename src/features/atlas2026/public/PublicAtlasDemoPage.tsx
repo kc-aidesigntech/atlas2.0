@@ -1,6 +1,7 @@
 import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import ZCodeCircle from '@/features/atlas2026/components/ZCodeCircle'
+import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import PartnerReferralWorkflowPanel from '@/features/atlas2026/singlepane/components/PartnerReferralWorkflowPanel'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
@@ -19,10 +20,6 @@ const EMPTY_PROGRAM_STATE: NavigatorProgramState = {
   intervalAssessmentRules: [],
   updatedAtIso: new Date().toISOString()
 }
-const arrowIconUrl = new URL(
-  '../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
-  import.meta.url
-).href
 type DemoWorkspace = 'referral' | 'profile' | 'station'
 
 function canUseLocalStorage() {
@@ -161,7 +158,7 @@ export default function PublicAtlasDemoPage() {
             <div className="flex justify-end gap-2">
               <AtlasTextButton
                 type="button"
-                className="px-3 py-1.5 text-[12px]"
+                className="px-[14px] py-[7px] text-[14px]"
                 onClick={() => window.location.assign('/')}
                 style={{ ['--button-border-color' as const]: '#ffffff45', color: '#ffffffd0' } as React.CSSProperties}
               >
@@ -169,7 +166,7 @@ export default function PublicAtlasDemoPage() {
               </AtlasTextButton>
               <AtlasTextButton
                 type="submit"
-                className="px-3 py-1.5 text-[12px]"
+                className="px-[14px] py-[7px] text-[14px]"
                 style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
               >
                 unlock demo
@@ -208,19 +205,18 @@ export default function PublicAtlasDemoPage() {
             <div className="mt-4 flex justify-end">
               <AtlasTextButton
                 type="button"
-                className="px-3 py-1.5 text-[11px]"
+                className="px-[14px] py-[7px] text-[13px]"
                 onClick={() => openWorkspace('referral')}
                 style={{ ['--button-border-color' as const]: DEMO_STEP_COLORS[0], color: SP_COLORS.white } as React.CSSProperties}
               >
                 see more
               </AtlasTextButton>
             </div>
-            <img
-              src={arrowIconUrl}
-              alt=""
-              aria-hidden="true"
-              className="pointer-events-none absolute -right-[2.375rem] top-1/2 hidden h-7 w-7 -translate-y-1/2 rotate-90 opacity-95 lg:block"
-              style={{ filter: 'brightness(0) saturate(100%) invert(100%)' }}
+            <AtlasArrowIcon
+              decorative
+              direction="right"
+              invert
+              className="pointer-events-none absolute -right-[2.375rem] top-1/2 hidden h-7 w-7 -translate-y-1/2 opacity-95 lg:block"
             />
           </article>
 
@@ -245,19 +241,18 @@ export default function PublicAtlasDemoPage() {
             <div className="mt-4 flex justify-end">
               <AtlasTextButton
                 type="button"
-                className="px-3 py-1.5 text-[11px]"
+                className="px-[14px] py-[7px] text-[13px]"
                 onClick={() => openWorkspace('profile')}
                 style={{ ['--button-border-color' as const]: DEMO_STEP_COLORS[1], color: SP_COLORS.bg } as React.CSSProperties}
               >
                 see more
               </AtlasTextButton>
             </div>
-            <img
-              src={arrowIconUrl}
-              alt=""
-              aria-hidden="true"
-              className="pointer-events-none absolute -right-[2.375rem] top-1/2 hidden h-7 w-7 -translate-y-1/2 rotate-90 opacity-95 lg:block"
-              style={{ filter: 'brightness(0) saturate(100%) invert(100%)' }}
+            <AtlasArrowIcon
+              decorative
+              direction="right"
+              invert
+              className="pointer-events-none absolute -right-[2.375rem] top-1/2 hidden h-7 w-7 -translate-y-1/2 opacity-95 lg:block"
             />
           </article>
 
@@ -282,7 +277,7 @@ export default function PublicAtlasDemoPage() {
             <div className="mt-4 flex justify-end">
               <AtlasTextButton
                 type="button"
-                className="px-3 py-1.5 text-[11px]"
+                className="px-[14px] py-[7px] text-[13px]"
                 onClick={() => openWorkspace('station')}
                 style={{ ['--button-border-color' as const]: DEMO_STEP_COLORS[2], color: SP_COLORS.white } as React.CSSProperties}
               >
@@ -295,7 +290,7 @@ export default function PublicAtlasDemoPage() {
         <section className="flex justify-end">
           <AtlasTextButton
             type="button"
-            className="px-3 py-1.5 text-[12px]"
+            className="px-[14px] py-[7px] text-[14px]"
             onClick={() => window.location.assign('/')}
             style={{ ['--button-border-color' as const]: '#ffffff45', color: '#ffffffd0' } as React.CSSProperties}
           >
@@ -364,7 +359,7 @@ function LiveWorkspaceModal({
           <small className="text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd]">{title}</small>
           <AtlasTextButton
             type="button"
-            className="px-3 py-1 text-[12px]"
+            className="px-[14px] py-[6px] text-[14px]"
             onClick={onClose}
             style={{ ['--button-border-color' as const]: '#ffffff45', color: '#ffffffd0' } as React.CSSProperties}
           >

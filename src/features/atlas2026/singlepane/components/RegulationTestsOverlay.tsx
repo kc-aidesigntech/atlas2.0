@@ -283,7 +283,6 @@ export default function RegulationTestsOverlay({
           </div>
           <AtlasCloseButton
             onClick={onClose}
-            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           />
         </div>
@@ -373,14 +372,14 @@ export default function RegulationTestsOverlay({
                             <>
                               <AtlasIconButton
                                 onClick={() => openDraftRecord(record)}
-                                className="h-7 w-7 text-white"
+                                className="h-9 w-9 text-white"
                                 style={{ ['--button-border-color' as const]: '#ffffff40' } as React.CSSProperties}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </AtlasIconButton>
                               <AtlasIconButton
                                 onClick={() => onDeleteDraft(record.id)}
-                                className="h-7 w-7 text-white"
+                                className="h-9 w-9 text-white"
                                 style={{ ['--button-border-color' as const]: '#ffffff40' } as React.CSSProperties}
                               >
                                 <Trash2 className="h-3.5 w-3.5" />

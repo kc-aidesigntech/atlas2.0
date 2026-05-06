@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import LocalDateInputBox from './LocalDateInputBox'
 import StripMapControlOverlay from './StripMapControlOverlay'
 import type {
@@ -23,11 +24,6 @@ import {
   mergeDateInputWithTime
 } from './timelineDateUtils'
 import { TIMELINE_PHASE_COLORS, TIMELINE_STATUS_COLORS } from './timelineVisualConfig'
-
-const arrowIconUrl = new URL(
-  '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
-  import.meta.url
-).href
 
 interface VerticalStripMapTimelineProps {
   events: RouteLogEvent[]
@@ -208,7 +204,7 @@ export default function VerticalStripMapTimeline({
                 <>
                   <AtlasTextButton
                     onClick={onRegulationTestsClick}
-                    className="px-3 py-1 text-[11px] font-medium"
+                    className="px-[14px] py-[6px] text-[13px] font-medium"
                     style={{
                       ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.regulation,
                       ['--button-line-color' as const]: SP_COLORS.white,
@@ -227,7 +223,7 @@ export default function VerticalStripMapTimeline({
               ) : isReadinessAction ? (
                 <AtlasTextButton
                   onClick={onRoutePlanningClick}
-                  className="inline-flex items-center gap-2 px-3 py-1 text-[11px] font-medium"
+                  className="inline-flex items-center gap-2 px-[14px] py-[6px] text-[13px] font-medium"
                   style={{
                     ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.readiness,
                     ['--button-line-color' as const]: SP_COLORS.bg,
@@ -236,18 +232,12 @@ export default function VerticalStripMapTimeline({
                   } as React.CSSProperties}
                 >
                   <span>plan route</span>
-                  <img
-                    src={arrowIconUrl}
-                    alt=""
-                    aria-hidden="true"
-                    className="h-[0.9rem] w-[0.9rem] rotate-90"
-                    style={{ filter: 'brightness(0) saturate(100%)' }}
-                  />
+                  <AtlasArrowIcon decorative direction="right" className="h-[0.9rem] w-[0.9rem] brightness-0" />
                 </AtlasTextButton>
               ) : isRenewalButton ? (
                 <AtlasTextButton
                   onClick={onRenewalTestsClick}
-                  className="px-3 py-1 text-[11px] font-medium"
+                  className="px-[14px] py-[6px] text-[13px] font-medium"
                   style={{
                     ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.renewal,
                     ['--button-line-color' as const]: SP_COLORS.white,

@@ -46,7 +46,7 @@ export default function NavigatorEnrollmentAssignmentsPanel({
               <AtlasTextButton
                 onClick={() => void onToggleAssignment(row.enrollmentId, row.isAssignedToViewer ? 'unassign' : 'assign')}
                 disabled={assigningEnrollmentId === row.enrollmentId}
-                className="px-3 py-1 text-[11px] font-medium text-white"
+                className="px-[14px] py-[6px] text-[13px] font-medium text-white"
                 style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
               >
                 {assigningEnrollmentId === row.enrollmentId

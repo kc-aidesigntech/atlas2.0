@@ -12,8 +12,12 @@ interface TopNavProps {
   enrollees: EnrolleeProfile[]
   selectedEnrolleeId: string
   onSelectEnrollee: (enrolleeId: string) => void
+  navigatorEnrolleeView?: 'my' | 'add'
+  onNavigatorEnrolleeViewChange?: (view: 'my' | 'add') => void
   onOpenAccountSettings: () => void
 }
+
+const ADD_ENROLLEES_OPTION_VALUE = '__atlas_add_enrollees__'
 
 export default function TopNav({
   role,
@@ -23,16 +27,22 @@ export default function TopNav({
   enrollees,
   selectedEnrolleeId,
   onSelectEnrollee,
+  navigatorEnrolleeView = 'my',
+  onNavigatorEnrolleeViewChange,
   onOpenAccountSettings
 }: TopNavProps) {
   const firstMenu = roleConfig.topMenus[0] || ''
   // Enrollee picker is intentionally scoped to the primary enrollees menu to keep top-nav interactions predictable.
-  const showEnrolleeSelector = firstMenu === 'enrollees' && enrollees.length > 0
+  const showEnrolleeSelector = firstMenu === 'enrollees' && (enrollees.length > 0 || role === 'navigator')
   const rolePillLabel = `atlas ${role}`
+  const enrolleeSelectorValue =
+    role === 'navigator' && navigatorEnrolleeView === 'add'
+      ? ADD_ENROLLEES_OPTION_VALUE
+      : selectedEnrolleeId || (role === 'navigator' ? ADD_ENROLLEES_OPTION_VALUE : '')
 
   return (
     <header className="border-b bg-black" style={{ borderColor: '#ffffff70' }}>
-      <div className="atlas-shell-edge-buffer flex h-[44px] items-center justify-between border-b" style={{ borderColor: '#ffffff45' }}>
+      <div className="atlas-shell-edge-buffer flex h-[54px] items-center justify-between border-b" style={{ borderColor: '#ffffff45' }}>
         <div className="flex items-center gap-3">
           {role === 'partner' ? (
             <div
@@ -43,8 +53,8 @@ export default function TopNav({
             </div>
           ) : (
             <>
-              <small className="text-[15px] font-medium tracking-[0.08em] text-white">ATLAS</small>
-              <small className="text-[11px] uppercase tracking-[0.16em] text-[#b9b9b9]">{role}</small>
+              <small className="text-[17px] font-medium tracking-[0.08em] text-white">ATLAS</small>
+              <small className="text-[13px] uppercase tracking-[0.16em] text-[#b9b9b9]">{role}</small>
             </>
           )}
         </div>
@@ -58,7 +68,7 @@ export default function TopNav({
         </AtlasTextButton>
       </div>
 
-      <div className="atlas-shell-edge-buffer overflow-x-auto py-2 text-white">
+      <div className="atlas-shell-edge-buffer flex h-[54px] items-center overflow-x-auto text-white">
         <div className="flex min-w-max items-center gap-6 text-white">
           <div className="flex items-center gap-2 pl-2">
             {showEnrolleeSelector ? (
@@ -72,15 +82,25 @@ export default function TopNav({
                 </button>
                 <div className="relative inline-flex items-center">
                   <select
-                    value={selectedEnrolleeId}
+                    value={enrolleeSelectorValue}
                     onChange={(event) => {
                       onMenuSelect(firstMenu)
+                      if (event.target.value === ADD_ENROLLEES_OPTION_VALUE && role === 'navigator') {
+                        onNavigatorEnrolleeViewChange?.('add')
+                        return
+                      }
+                      onNavigatorEnrolleeViewChange?.('my')
                       onSelectEnrollee(event.target.value)
                     }}
                     className="appearance-none border border-white/30 bg-black pl-3 pr-9 text-[15px] font-medium text-white"
                     style={{ textTransform: 'none', borderRadius: '999px', minHeight: '34px' }}
                     aria-label="Assigned enrollees"
                   >
+                    {role === 'navigator' ? (
+                      <option value={ADD_ENROLLEES_OPTION_VALUE} className="bg-black text-white">
+                        add enrollees
+                      </option>
+                    ) : null}
                     {enrollees.map((enrollee) => (
                       <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">
                         {enrollee.fullName}

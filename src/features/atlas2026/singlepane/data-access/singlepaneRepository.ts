@@ -14,7 +14,6 @@ import type {
 } from '@/features/atlas2026/singlepane/types'
 import {
   fetchAppRoleNavigation,
-  fetchEnrollmentAssignmentBoard,
   fetchNavigatorAssignedEnrollees,
   fetchPartnerLoadBreakdown,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
@@ -200,7 +199,9 @@ async function resolveCurrentPersonId() {
   if (metadataPersonId) return metadataPersonId
   // Metadata can be missing/stale for some sessions even when assignment RPCs succeed.
   // Fall back to the authorization helper function so navigator scoping still resolves.
-  const { data: helperData, error: helperError } = await (supabase as any).rpc('fn_current_person_id')
+  // Canonical helper lives in atlas schema; call through schema-scoped RPC so
+  // environments without a public wrapper avoid postgrest 404 lookups.
+  const { data: helperData, error: helperError } = await (supabase as any).schema('atlas').rpc('fn_current_person_id')
   if (helperError) {
     const helperCode = (helperError as { code?: string } | null)?.code
     // Older environments may not have this helper yet; preserve safe null fallback.
@@ -429,25 +430,35 @@ export async function loadEnrollmentRequests(role: AtlasRole): Promise<Enrollmen
 
 export async function loadNavigatorEnrollmentAssignments(): Promise<NavigatorEnrollmentAssignmentRecord[]> {
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
-  const [boardRows, navigatorPersonId] = await Promise.all([
-    withOptionalSupabaseFallback('singlepane.enrollmentAssignmentBoard', () => fetchEnrollmentAssignmentBoard(supabase), []),
+  // Keep assignment board resilient: if canonical board view is permission-gated,
+  // derive the same user-facing rows from profile + assignment sources.
+  const [profiles, navigatorAssignments, navigatorPersonId] = await Promise.all([
+    withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
+    withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), []),
     withOptionalSupabaseFallback('singlepane.navigatorPerson', () => resolveCurrentPersonId(), null)
   ])
-  return boardRows
-    .map((row) => ({
-      enrollmentId: row.enrollmentId,
-      enrolleeId: row.enrolleeId,
-      enrolleeName: row.enrolleeName,
-      caseId: row.caseId || '',
-      assignedNavigatorLabel: row.assignedNavigatorLabel?.trim() || 'unassigned',
-      isAssignedToViewer: Boolean(navigatorPersonId && row.navigatorPersonIds.includes(navigatorPersonId))
+
+  const viewerEnrollmentIds = new Set(
+    navigatorAssignments
+      .filter((assignment) => navigatorPersonId && assignment.navigatorPersonId === navigatorPersonId)
+      .map((assignment) => assignment.enrollmentId)
+  )
+
+  return profiles
+    .map((profile) => ({
+      enrollmentId: profile.enrollmentId,
+      enrolleeId: profile.enrolleeId,
+      enrolleeName: profile.fullName,
+      caseId: profile.caseId,
+      assignedNavigatorLabel: profile.assignedNavigator?.trim() || 'unassigned',
+      isAssignedToViewer: viewerEnrollmentIds.has(profile.enrollmentId)
     }))
     .sort((left, right) => left.enrolleeName.localeCompare(right.enrolleeName))
 }
 
 export async function assignNavigatorEnrollmentToSelf(enrollmentId: string) {
   if (!enrollmentId || !hasSupabaseConfig || !supabase) return
-  const { error } = await (supabase as any).rpc('fn_navigator_assign_enrollment_to_self', {
+  const { error } = await (supabase as any).schema('atlas').rpc('fn_navigator_assign_enrollment_to_self', {
     target_enrollment_id: enrollmentId
   })
   if (error) throw error
@@ -455,7 +466,7 @@ export async function assignNavigatorEnrollmentToSelf(enrollmentId: string) {
 
 export async function unassignNavigatorEnrollmentFromSelf(enrollmentId: string) {
   if (!enrollmentId || !hasSupabaseConfig || !supabase) return
-  const { error } = await (supabase as any).rpc('fn_navigator_unassign_enrollment_from_self', {
+  const { error } = await (supabase as any).schema('atlas').rpc('fn_navigator_unassign_enrollment_from_self', {
     target_enrollment_id: enrollmentId
   })
   if (error) throw error
@@ -480,7 +491,7 @@ export async function materializeClaimedReferralIntoEnrollment(record: Unassigne
   }
   // Claim conversion runs as one database transaction via Remote Procedure Call (RPC),
   // so person/enrollee/enrollment/navigator assignment records cannot drift.
-  const { data, error } = await (supabase as any).rpc('fn_claim_referral_queue_to_enrollment', payload)
+  const { data, error } = await (supabase as any).schema('atlas').rpc('fn_claim_referral_queue_to_enrollment', payload)
   if (error) throw error
   const row = Array.isArray(data) ? data[0] : data
   if (!row || typeof row !== 'object') return null

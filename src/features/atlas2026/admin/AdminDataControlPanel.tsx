@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Building2, GitBranch, ShieldCheck, Users } from 'lucide-react'
-import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
+import { getZCodeParentColor } from '@atlas/shared'
 import {
   AtlasInsetCard,
   AtlasMetricPill,
@@ -8,6 +8,7 @@ import {
   AtlasStatusPill,
   AtlasTextButton
 } from '@/features/atlas2026/components/AtlasPrimitives'
+import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import { DEFAULT_SERVICE_CAPACITY_SECTIONS } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type {
@@ -1112,7 +1113,7 @@ export default function AdminDataControlPanel({
                             <AtlasTextButton
                               type="button"
                               onClick={openZCodePicker}
-                              className="px-3 py-1.5 text-[12px]"
+                              className="px-[14px] py-[7px] text-[14px]"
                               style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
                             >
                               edit z-codes
@@ -1245,7 +1246,7 @@ export default function AdminDataControlPanel({
                                     : current
                                 )
                               }
-                              className="px-3 py-1.5 text-[12px] font-medium"
+                              className="px-[14px] py-[7px] text-[14px] font-medium"
                               style={
                                 {
                                   ['--button-border-color' as const]: isActive ? SP_COLORS.yellow : '#ffffff25',
@@ -1830,7 +1831,7 @@ export default function AdminDataControlPanel({
                 <AtlasTextButton
                   type="button"
                   onClick={() => setIsZCodePickerOpen(false)}
-                  className="px-4 py-2 text-[12px]"
+                  className="px-[19px] py-[10px] text-[14px]"
                   style={{ ['--button-border-color' as const]: '#ffffff30', color: '#f1f1f1' } as React.CSSProperties}
                 >
                   close
@@ -1894,26 +1895,19 @@ function ZCodeParentFilterCircle({
 }) {
   const normalized = parentCode.trim().toUpperCase()
   const fill = getZCodeParentColor(normalized) || SP_COLORS.white
-  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
   return (
     <span
-      className="relative inline-flex h-12 w-12 items-center justify-center rounded-full border text-[22px] font-bold transition-all duration-200 ease-out"
-      style={{
-        backgroundColor: fill,
-        borderColor: selected ? SP_COLORS.white : fill,
-        color: textColor,
-        boxShadow: selected ? `0 0 0 2px ${SP_COLORS.yellow}` : 'none'
-      }}
+      className="inline-flex rounded-full transition-all duration-200 ease-out"
+      style={{ boxShadow: selected ? `0 0 0 2px ${SP_COLORS.yellow}` : 'none' }}
     >
-      {selected ? (
-        <span
-          className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold"
-          style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
-        >
-          ✓
-        </span>
-      ) : null}
-      {normalized.replace(/^Z/i, '')}
+      <ZCodeBadge
+        value={normalized}
+        fill={fill}
+        size="filter"
+        stripLeadingZ
+        checked={selected}
+        borderColor={selected ? SP_COLORS.white : fill}
+      />
     </span>
   )
 }
@@ -1922,16 +1916,7 @@ function ZCodeCircleChip({ code }: { code: string }) {
   const normalized = code.trim().toUpperCase()
   const parentCode = normalized.split('.')[0] || normalized
   const fill = getZCodeParentColor(parentCode) || SP_COLORS.white
-  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
-  return (
-    <span
-      className="inline-flex h-11 min-w-[4.25rem] items-center justify-center rounded-full border px-3 text-[11px] font-semibold tracking-[0.04em] transition-all duration-200 ease-out"
-      style={{ backgroundColor: fill, borderColor: fill, color: textColor }}
-      title={normalized}
-    >
-      {normalized}
-    </span>
-  )
+  return <ZCodeBadge value={normalized} fill={fill} size="chip" className="transition-all duration-200 ease-out" />
 }
 
 function ZCodeOptionCard({

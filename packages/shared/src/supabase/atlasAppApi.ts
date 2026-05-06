@@ -13,6 +13,7 @@ import type {
 } from "../atlas2026/contracts";
 
 type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
+let canonicalEnrollmentRosterUnauthorized = false;
 
 export interface AppRoleNavigationRecord {
   roleKey: string;
@@ -585,26 +586,61 @@ export async function fetchSinglePaneSurveyDefinition(
 }
 
 export async function fetchSinglePaneEnrolleeProfiles(client: AnySupabaseClient) {
-  const { data, error } = await (client as SupabaseClient<any>)
+  if (!canonicalEnrollmentRosterUnauthorized) {
+    const canonicalResult = await (client as SupabaseClient<any>)
+      .schema("atlas")
+      .from("v_active_enrollment_roster")
+      .select("*")
+      .order("enrollee_name", { ascending: true });
+
+    if (!canonicalResult.error) {
+      return (canonicalResult.data || []).map(
+        (row): SinglePaneEnrolleeProfileRecord => ({
+          enrolleeId: row.enrollee_id,
+          enrollmentId: row.enrollment_id,
+          fullName: row.enrollee_name,
+          dob: row.dob,
+          caseId: row.case_id || "",
+          email: row.enrollee_email || "",
+          avatarUrl: row.avatar_url,
+          assignedNavigator: row.assigned_navigator,
+          zCodeTags: asStringArray(row.z_code_tags),
+          activeZCodeDetails: asEnrolleeActiveZCodeArray(row.active_z_code_details),
+          completedParentCodes: asStringArray(row.completed_parent_codes),
+          enrollmentStartIso: row.start_date,
+          targetDurationMonths: Number(row.target_duration_months || 9),
+          currentPhase: row.current_phase,
+        }),
+      );
+    }
+
+    const fallbackCode = (canonicalResult.error as { code?: string } | null)?.code;
+    // Compatibility fallback for environments where canonical views are present
+    // but underlying table grants are not yet aligned for navigator sessions.
+    if (fallbackCode !== "42501") throw canonicalResult.error;
+    canonicalEnrollmentRosterUnauthorized = true;
+  }
+
+  const { data: legacyData, error: legacyError } = await (client as SupabaseClient<any>)
     .schema("atlas")
-    .from("v_active_enrollment_roster")
+    .from("v_singlepane_enrollee_profiles")
     .select("*")
-    .order("enrollee_name", { ascending: true });
-  if (error) throw error;
-  return (data || []).map(
+    .order("full_name", { ascending: true });
+  if (legacyError) throw legacyError;
+  return (legacyData || []).map(
     (row): SinglePaneEnrolleeProfileRecord => ({
       enrolleeId: row.enrollee_id,
       enrollmentId: row.enrollment_id,
-      fullName: row.enrollee_name,
+      fullName: row.full_name,
       dob: row.dob,
-      caseId: row.case_id || "",
-      email: row.enrollee_email || "",
+      caseId: row.case_id,
+      email: row.email,
       avatarUrl: row.avatar_url,
       assignedNavigator: row.assigned_navigator,
       zCodeTags: asStringArray(row.z_code_tags),
       activeZCodeDetails: asEnrolleeActiveZCodeArray(row.active_z_code_details),
       completedParentCodes: asStringArray(row.completed_parent_codes),
-      enrollmentStartIso: row.start_date,
+      enrollmentStartIso: row.enrollment_start_iso,
       targetDurationMonths: Number(row.target_duration_months || 9),
       currentPhase: row.current_phase,
     }),

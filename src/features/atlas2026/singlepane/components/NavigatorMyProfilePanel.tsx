@@ -189,7 +189,7 @@ export default function NavigatorMyProfilePanel({
                         {record.status === 'available' ? (
                           <AtlasTextButton
                             onClick={() => void onClaimPickupQueueRecord(record.id)}
-                            className="px-3 py-1.5 text-[11px] font-medium"
+                            className="px-[14px] py-[7px] text-[13px] font-medium"
                             style={{
                               ['--button-border-color' as const]: SP_COLORS.yellow,
                               ['--button-line-color' as const]: SP_COLORS.bg,
@@ -278,7 +278,7 @@ export default function NavigatorMyProfilePanel({
                     </div>
                     <AtlasTextButton
                       onClick={() => onOpenEnrolleeSurvey?.(enrollee.id)}
-                      className="px-3 py-1.5 text-[11px] font-medium"
+                      className="px-[14px] py-[7px] text-[13px] font-medium"
                       disabled={!onOpenEnrolleeSurvey}
                       style={{ backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg } as React.CSSProperties}
                     >
@@ -398,7 +398,7 @@ export default function NavigatorMyProfilePanel({
                 }
               }}
               disabled={isSavingAssessment}
-              className="px-3 py-1.5 text-[11px] font-medium"
+              className="px-[14px] py-[7px] text-[13px] font-medium"
               style={{
                 ['--button-border-color' as const]: SP_COLORS.yellow,
                 ['--button-line-color' as const]: SP_COLORS.bg,

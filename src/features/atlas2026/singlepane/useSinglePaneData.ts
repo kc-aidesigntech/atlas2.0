@@ -2041,21 +2041,40 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     if (claimedRecord) {
       try {
         // Keep claim conversion transactional with queue claim so demo flow can
-        // open immediately into a real navigator-bound enrollee.
+        // open immediately into a real navigator-bound enrollee. We still apply
+        // an explicit self-assignment guard because some environments materialize
+        // enrollment rows without wiring navigator edges to the active operator.
         const materialized = await materializeClaimedReferralIntoEnrollment(claimedRecord)
         if (materialized?.enrollmentId) {
-          const inferred = await inferZCodesForReferral({
-            fullName: claimedRecord.fullName,
-            situationCategories: claimedRecord.zCodeTags,
-            backgroundNotes: claimedRecord.backgroundNotes,
-            referrerMessage: claimedRecord.referrerMessage
-          })
-          await upsertEnrollmentInferredZCodes(materialized.enrollmentId, inferred.zCodes)
+          await persistAssignNavigatorEnrollmentToSelf(materialized.enrollmentId)
+          try {
+            // Inference enrichment is non-blocking for claim ownership; keep claim
+            // successful even when inference service or z-code upsert is unavailable.
+            const inferred = await inferZCodesForReferral({
+              fullName: claimedRecord.fullName,
+              situationCategories: claimedRecord.zCodeTags,
+              backgroundNotes: claimedRecord.backgroundNotes,
+              referrerMessage: claimedRecord.referrerMessage
+            })
+            await upsertEnrollmentInferredZCodes(materialized.enrollmentId, inferred.zCodes)
+          } catch (inferenceError) {
+            console.warn('Unable to enrich claimed referral with inferred z-codes.', inferenceError)
+          }
         }
       } catch (error) {
+        // Surface a visible failure so the queue status does not look "claimed"
+        // while navigator assignment never appears in "my enrollees".
+        setNavigatorProgramError(
+          error instanceof Error
+            ? error.message
+            : 'Claim saved, but we could not associate this enrollee to your navigator profile.'
+        )
         console.warn('Unable to materialize claimed referral into enrollee enrollment.', error)
       }
-      await reloadBootstrapState()
+      await Promise.all([
+        loadNavigatorEnrollmentAssignments().then((rows) => setNavigatorEnrollmentAssignments(rows)),
+        reloadBootstrapState()
+      ])
     }
     return savedState
   }

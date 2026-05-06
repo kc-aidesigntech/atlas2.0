@@ -6,6 +6,7 @@ import React from 'react'
 import { X } from 'lucide-react'
 
 const ATLAS_LUCID_GREEN = '#81bc36'
+const ATLAS_DEFAULT_BUTTON_ACCENT = 'var(--atlas-signal-lucid-teal)'
 
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
@@ -91,7 +92,7 @@ function getContrastTextColor(fillColor: string) {
 
 function resolveSolidButtonStyle(style: React.CSSProperties | undefined) {
   const nextStyle: ButtonStyle = { ...(style as ButtonStyle | undefined) }
-  const accent = readStyleValue(style, '--button-border-color') ?? readStyleValue(style, 'borderColor') ?? ATLAS_LUCID_GREEN
+  const accent = readStyleValue(style, '--button-border-color') ?? readStyleValue(style, 'borderColor') ?? ATLAS_DEFAULT_BUTTON_ACCENT
   const explicitFill = readStyleValue(style, '--button-fill-color') ?? readStyleValue(style, 'backgroundColor')
   const solidAccent = stripAlphaChannel(accent)
   const accentAlpha = readAlphaChannel(accent)
@@ -239,10 +240,10 @@ export function AtlasPlusButton({
       disabled={disabled}
       aria-label={label}
       title={title ?? label}
-      className={cn('h-10 w-10 text-[24px] font-light', className)}
+      className={cn('h-12 w-12 text-[29px] font-light', className)}
       style={{ ['--button-border-color' as const]: ATLAS_LUCID_GREEN, color: ATLAS_LUCID_GREEN } as React.CSSProperties}
     >
-      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-none stroke-current" strokeWidth="1.9" strokeLinecap="round">
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 fill-none stroke-current" strokeWidth="1.9" strokeLinecap="round">
         <path d="M12 5v14" />
         <path d="M5 12h14" />
       </svg>
@@ -263,10 +264,10 @@ export function AtlasCloseButton({
       onClick={onClick}
       aria-label={title}
       title={title}
-      className={cn('h-9 w-9 text-white', className)}
+      className={cn('h-11 w-11 text-white', className)}
       {...props}
     >
-      <X className="h-4 w-4" strokeWidth={2.1} />
+      <X className="h-5 w-5" strokeWidth={2.1} />
     </AtlasIconButton>
   )
 }
@@ -282,7 +283,7 @@ export const AtlasTextButton = React.forwardRef<HTMLButtonElement, React.ButtonH
       {...props}
       style={resolveSolidButtonStyle(style)}
       className={cn(
-        'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
+        'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border px-[14px] text-[14px] font-medium transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none md:text-[17px]',
         className
       )}
     >
@@ -302,7 +303,7 @@ export const AtlasIconButton = React.forwardRef<HTMLButtonElement, React.ButtonH
       {...props}
       style={resolveSolidButtonStyle(style)}
       className={cn(
-        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-8 w-8 items-center justify-center rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
+        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
         className
       )}
     >
@@ -321,7 +322,7 @@ export const AtlasTextLink = React.forwardRef<HTMLAnchorElement, React.AnchorHTM
       {...props}
       style={resolveSolidButtonStyle(style)}
       className={cn(
-        'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)]',
+        'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border px-[14px] text-[14px] font-medium transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] md:text-[17px]',
         className
       )}
     >

@@ -3,12 +3,8 @@ import { usesLightTextOnZCodeColor } from '@atlas/shared'
 import { getScaleOption } from '../../data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '../../theme'
 import type { PartnerServiceCapacityScaleOption, ZCodeSurveyPrompt } from '../../types'
+import AtlasArrowIcon from '../../../components/AtlasArrowIcon'
 import { AtlasTextButton, AtlasTextLink } from '../../../components/AtlasPrimitives'
-
-const arrowIconUrl = new URL(
-  '../../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
-  import.meta.url
-).href
 
 export interface SurveySectionProgressItem {
   parentCode: string
@@ -203,7 +199,7 @@ export function BurdenCard({
               }
             }}
             className={`transition-[border-color,background-color,color,box-shadow] duration-150 ease-out ${
-              compact ? 'px-2.5 py-1 text-[11px] md:text-[12px]' : 'px-3 py-1.5 text-[12px] md:text-[13px]'
+              compact ? 'px-3 py-1.5 text-[13px] md:text-[14px]' : 'px-[14px] py-[7px] text-[14px] md:text-[16px]'
             }`}
             style={{
               ['--button-border-color' as const]: notEncountered ? SP_COLORS.green : '#ffffff2c',
@@ -246,7 +242,7 @@ export function BurdenCard({
                   disabled={notEncountered}
                   onClick={() => handleSelectScore(option.value)}
                   className={`px-0 font-semibold transition-[transform,box-shadow,border-color,background-color,color] duration-150 ease-out ${
-                    compact ? 'mx-[2px] py-1.5 text-[12px] md:mx-[3px] md:py-[7px] md:text-[14px]' : 'mx-[3px] py-2 text-[13px] md:mx-[4px] md:text-[15px]'
+                    compact ? 'mx-[2px] py-[7px] text-[14px] md:mx-[3px] md:py-[8px] md:text-[17px]' : 'mx-[3px] py-[10px] text-[16px] md:mx-[4px] md:text-[18px]'
                   }`}
                   style={{
                     ['--button-border-color' as const]: isSelected ? selectedColor : '#ffffff22',
@@ -301,7 +297,7 @@ export function BurdenCard({
           onClick={onPreviousNavigate}
           disabled={!hasPrevious}
           className={`inline-flex items-center gap-2 lowercase ${
-            compact ? 'px-3 py-1.5 text-[12px] md:text-[13px]' : 'px-3 py-1.5 text-[12px] md:text-[13px]'
+            compact ? 'px-[14px] py-[7px] text-[14px] md:text-[16px]' : 'px-[14px] py-[7px] text-[14px] md:text-[16px]'
           }`}
           style={{
             ['--button-border-color' as const]: '#ffffff24',
@@ -309,7 +305,7 @@ export function BurdenCard({
             opacity: hasPrevious ? 1 : 0.35
           } as React.CSSProperties}
         >
-          <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] -rotate-90 opacity-90" />
+          <AtlasArrowIcon decorative direction="left" className="h-[1.2rem] w-[1.2rem] opacity-90" />
           back
         </AtlasTextButton>
         {hasNext ? (
@@ -318,7 +314,7 @@ export function BurdenCard({
               onClick={onResumeNavigate}
               disabled={!canResume}
               className={`inline-flex items-center gap-2 font-medium ${
-                compact ? 'px-3.5 py-1.5 text-[12px] md:text-[13px]' : 'px-4 py-2 text-[13px] md:text-[14px]'
+                compact ? 'px-4 py-[7px] text-[14px] md:text-[16px]' : 'px-[19px] py-[10px] text-[16px] md:text-[17px]'
               }`}
               style={{
                 ['--button-border-color' as const]: '#ffffff24',
@@ -332,7 +328,7 @@ export function BurdenCard({
               onClick={advanceToNextPrompt}
               disabled={!canAdvance}
               className={`inline-flex items-center gap-2 font-medium ${
-                compact ? 'px-3.5 py-1.5 text-[12px] md:text-[13px]' : 'px-4 py-2 text-[13px] md:text-[14px]'
+                compact ? 'px-4 py-[7px] text-[14px] md:text-[16px]' : 'px-[19px] py-[10px] text-[16px] md:text-[17px]'
               }`}
               style={{
                 ['--button-border-color' as const]: SP_COLORS.yellow,
@@ -342,7 +338,7 @@ export function BurdenCard({
               } as React.CSSProperties}
             >
               <span>next</span>
-              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] rotate-90 opacity-90 brightness-0" />
+              <AtlasArrowIcon decorative direction="right" className="h-[1.2rem] w-[1.2rem] opacity-90 brightness-0" />
             </AtlasTextButton>
           </div>
         ) : (
@@ -563,7 +559,7 @@ export function BlockingSupportOverlay({
         <div className="mt-5 flex flex-wrap justify-center gap-3">
           <AtlasTextLink
             href={supportHref}
-            className="inline-flex items-center justify-center px-5 py-2 text-[13px] font-medium text-white md:text-[14px]"
+            className="inline-flex items-center justify-center px-6 py-[10px] text-[16px] font-medium text-white md:text-[17px]"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           >
             email {supportEmail}
@@ -571,7 +567,7 @@ export function BlockingSupportOverlay({
           {canDismiss && onDismiss ? (
             <AtlasTextButton
               onClick={onDismiss}
-              className="inline-flex items-center justify-center px-5 py-2 text-[13px] font-medium text-white md:text-[14px]"
+              className="inline-flex items-center justify-center px-6 py-[10px] text-[16px] font-medium text-white md:text-[17px]"
               style={{ ['--button-border-color' as const]: '#ffffff35' } as React.CSSProperties}
             >
               {dismissLabel}

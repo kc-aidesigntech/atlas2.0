@@ -1,16 +1,12 @@
 import React, { useMemo, useState } from 'react'
 import { CalendarDays } from 'lucide-react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import type { RegulationTestStripMarker, RouteCandidateRecord, TimelineConfig } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import MtaRouteBoard from './MtaRouteBoard'
 import StripMapControlOverlay from './StripMapControlOverlay'
 import { formatDateLabelShort } from './timelineDateUtils'
-
-const arrowIconUrl = new URL(
-  '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
-  import.meta.url
-).href
 const PHASE_RAIL_COLUMN_WIDTH_PX = 26
 const PHASE_NODE_CENTER_OFFSET_PX = 42
 
@@ -71,7 +67,7 @@ export default function MobileRouteBoardPanel({
         <AtlasTextButton
           key="regulation-tests"
           onClick={onRegulationTestsClick}
-          className="px-3 py-1.5 text-[11px] font-medium"
+          className="px-[14px] py-[7px] text-[13px] font-medium"
           style={{
             ['--button-border-color' as const]: SP_COLORS.red,
             ['--button-line-color' as const]: SP_COLORS.white,
@@ -89,7 +85,7 @@ export default function MobileRouteBoardPanel({
         <AtlasTextButton
           key="route-planning"
           onClick={onRoutePlanningClick}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-medium"
+          className="inline-flex items-center gap-2 px-[14px] py-[7px] text-[13px] font-medium"
           style={{
             ['--button-border-color' as const]: SP_COLORS.yellow,
             ['--button-line-color' as const]: SP_COLORS.bg,
@@ -98,13 +94,7 @@ export default function MobileRouteBoardPanel({
           } as React.CSSProperties}
         >
           <span>plan route</span>
-          <img
-            src={arrowIconUrl}
-            alt=""
-            aria-hidden="true"
-            className="h-[0.9rem] w-[0.9rem] rotate-90"
-            style={{ filter: 'brightness(0) saturate(100%)' }}
-          />
+          <AtlasArrowIcon decorative direction="right" className="h-[0.9rem] w-[0.9rem] brightness-0" />
         </AtlasTextButton>
       )
     }
@@ -114,7 +104,7 @@ export default function MobileRouteBoardPanel({
         <AtlasTextButton
           key="renewal-phase"
           onClick={onRenewalTestsClick}
-          className="px-3 py-1.5 text-[11px] font-medium"
+          className="px-[14px] py-[7px] text-[13px] font-medium"
           style={{
             ['--button-border-color' as const]: SP_COLORS.deepGreen,
             ['--button-line-color' as const]: SP_COLORS.white,
@@ -132,7 +122,7 @@ export default function MobileRouteBoardPanel({
         {hasTimelineControls ? (
           <AtlasTextButton
             onClick={() => setIsControlOverlayOpen(true)}
-            className="inline-flex self-start items-center gap-2 px-3 py-1.5 text-[11px] font-medium"
+            className="inline-flex self-start items-center gap-2 px-[14px] py-[7px] text-[13px] font-medium"
             style={{ ['--button-border-color' as const]: '#ffffff3d', color: SP_COLORS.white } as React.CSSProperties}
           >
             <CalendarDays size={14} strokeWidth={2} />
@@ -179,7 +169,7 @@ export default function MobileRouteBoardPanel({
               {onRegulationTestsClick ? (
                 <AtlasTextButton
                   onClick={onRegulationTestsClick}
-                  className="px-3 py-1.5 text-[11px] font-medium"
+                  className="px-[14px] py-[7px] text-[13px] font-medium"
                   style={{
                     ['--button-border-color' as const]: SP_COLORS.red,
                     ['--button-line-color' as const]: SP_COLORS.white,
@@ -264,7 +254,7 @@ export default function MobileRouteBoardPanel({
               {onRenewalTestsClick ? (
                 <AtlasTextButton
                   onClick={onRenewalTestsClick}
-                  className="px-3 py-1.5 text-[11px] font-medium"
+                  className="px-[14px] py-[7px] text-[13px] font-medium"
                   style={{
                     ['--button-border-color' as const]: SP_COLORS.deepGreen,
                     ['--button-line-color' as const]: SP_COLORS.white,

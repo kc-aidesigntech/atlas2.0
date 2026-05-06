@@ -15,7 +15,6 @@ interface RadialLoadChartProps {
 interface ChartAxisPoint {
   axis: string
   value: number
-  showLabel: boolean
 }
 
 function wrapAxisLabel(label: string) {
@@ -28,10 +27,10 @@ function AxisTick(props: {
   y?: number
   cx?: number
   cy?: number
-  payload?: { value?: string; payload?: ChartAxisPoint }
+  payload?: { value?: string }
 }) {
   const label = props.payload?.value || ''
-  if (!label || !props.payload?.payload?.showLabel) return null
+  if (!label.trim()) return null
 
   const x = props.x ?? 0
   const y = props.y ?? 0
@@ -81,12 +80,12 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
   )
 
   const data: ChartAxisPoint[] = [
-    { axis: 'habitat', value: habitat, showLabel: true },
-    { axis: '', value: habitatWorkBlend, showLabel: false },
-    { axis: 'work', value: work, showLabel: true },
-    { axis: '', value: workSocialBlend, showLabel: false },
-    { axis: 'social networks', value: social, showLabel: true },
-    { axis: '', value: socialHabitatBlend, showLabel: false }
+    { axis: 'habitat', value: habitat },
+    { axis: '', value: habitatWorkBlend },
+    { axis: 'work', value: work },
+    { axis: '', value: workSocialBlend },
+    { axis: 'social networks', value: social },
+    { axis: '', value: socialHabitatBlend }
   ]
   const tickCount = Math.min(Math.max(Math.ceil(maxDomainValue), 3), 6)
   const Wrapper = onClick ? 'button' : 'div'

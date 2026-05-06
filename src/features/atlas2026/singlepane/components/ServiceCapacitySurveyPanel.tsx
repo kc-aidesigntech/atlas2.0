@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getZCodeParentColor } from '@atlas/shared'
 import { AtlasPlusButton, AtlasTextButton } from '../../components/AtlasPrimitives'
+import AtlasArrowIcon from '../../components/AtlasArrowIcon'
 import {
   SERVICE_CAPACITY_FORM_VERSION,
   flattenSurveyPrompts
@@ -86,10 +87,6 @@ const ROLE_OPTIONS: Array<{ value: PartnerSurveyRespondentRole; label: string }>
   { value: 'other', label: 'Other' }
 ]
 type PanelView = 'history' | 'survey'
-const arrowIconUrl = new URL(
-  '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
-  import.meta.url
-).href
 const SUPPORT_EMAIL = 'support@transitionalcare.net'
 const SERVICE_CAPACITY_SAVE_ERROR = 'Unable to save service capacity survey.'
 
@@ -796,10 +793,10 @@ function ServiceCapacitySurveyForm({
           <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
             <AtlasTextButton
               onClick={onBackToRecords}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-[12px] md:text-[13px]"
+              className="inline-flex items-center gap-2 px-[14px] py-[7px] text-[14px] md:text-[16px]"
               style={{ ['--button-border-color' as const]: '#ffffff32', color: SP_COLORS.white } as React.CSSProperties}
             >
-              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] -rotate-90 opacity-90" />
+              <AtlasArrowIcon decorative direction="left" className="h-[1.2rem] w-[1.2rem] opacity-90" />
               <span>back to list</span>
             </AtlasTextButton>
             <AtlasPlusButton
@@ -926,7 +923,7 @@ function ServiceCapacitySurveyForm({
                       <AtlasTextButton
                         key={option.value}
                         onClick={() => toggleRole(option.value)}
-                        className="px-3 py-1.5 text-[12px] md:text-[13px]"
+                        className="px-[14px] py-[7px] text-[14px] md:text-[16px]"
                         style={{
                           ['--button-border-color' as const]: isSelected ? SP_COLORS.yellow : '#ffffff30',
                           color: isSelected ? SP_COLORS.yellow : SP_COLORS.white

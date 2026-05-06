@@ -4,8 +4,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
-import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { DEFAULT_SERVICE_CAPACITY_SECTIONS } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
+import { AtlasCloseButton, AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import atlasLogoSrc from '../../../../../assets/ATLAS_LOGO_simple_lucidGreenBlue4.png'
@@ -29,11 +28,6 @@ interface ReferralSourceOption {
 }
 
 const MAX_RECENT_ROWS = 5
-const OTHER_SITUATION_CATEGORY = 'Other'
-const SITUATION_CATEGORY_OPTIONS = [
-  ...DEFAULT_SERVICE_CAPACITY_SECTIONS.map((section) => section.theme.trim()),
-  OTHER_SITUATION_CATEGORY
-]
 
 /**
  * Start every submission from caller-provided defaults so downstream consumers
@@ -69,7 +63,6 @@ export default function PartnerReferralWorkflowPanel({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isSituationDropdownOpen, setIsSituationDropdownOpen] = useState(false)
   const [isReferralSourceDropdownOpen, setIsReferralSourceDropdownOpen] = useState(false)
   const [isAddReferralSourceOverlayOpen, setIsAddReferralSourceOverlayOpen] = useState(false)
   const [customReferralSources, setCustomReferralSources] = useState<ReferralSourceOption[]>([])
@@ -146,7 +139,7 @@ export default function PartnerReferralWorkflowPanel({
     setFeedback(null)
     setError(null)
     const normalizedName = draft.referredParticipantName.trim()
-    const normalizedSituationCategories = Array.from(new Set(draft.situationCategories.map((value) => value.trim()).filter(Boolean)))
+    const normalizedSituationCategories: string[] = []
     const normalizedBackgroundNotes = draft.backgroundNotes.trim()
     const normalizedEmail = draft.participantEmail.trim()
     const normalizedPhone = draft.participantPhone.trim()
@@ -162,12 +155,8 @@ export default function PartnerReferralWorkflowPanel({
       setError("add the participant's name.")
       return
     }
-    if (!normalizedSituationCategories.length) {
-      setError("add this person's situation.")
-      return
-    }
     if (!normalizedBackgroundNotes) {
-      setError("explain this person's situation as well as possible.")
+      setError("share this person's situation.")
       return
     }
     if (!normalizedReferrer) {
@@ -207,7 +196,6 @@ export default function PartnerReferralWorkflowPanel({
         })
       )
       setFeedback('referral submitted to navigator queue.')
-      setIsSituationDropdownOpen(false)
       setIsReferralSourceDropdownOpen(false)
       // Preserve the resolved partner org on reset to support rapid repeat
       // referrals for the same organization without retyping.
@@ -382,58 +370,8 @@ export default function PartnerReferralWorkflowPanel({
               placeholder="participant full name"
             />
           </Field>
-          <Field label="Share this person&apos;s situation">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsSituationDropdownOpen((current) => !current)}
-                className="atlas-admin-input flex min-h-[44px] w-full items-center justify-between text-left"
-              >
-                <span className={draft.situationCategories.length ? 'text-white' : 'text-[var(--foreground-secondary)]'}>
-                  {draft.situationCategories.length ? draft.situationCategories.join(', ') : 'select one or more categories'}
-                </span>
-                <span className="text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
-                  {isSituationDropdownOpen ? 'close' : 'choose'}
-                </span>
-              </button>
-              {isSituationDropdownOpen ? (
-                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-20 max-h-[260px] overflow-y-auto rounded-[18px] border border-white/10 bg-[#0b0b0b] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
-                  <div className="grid gap-1.5">
-                    {SITUATION_CATEGORY_OPTIONS.map((option) => {
-                      const selected = draft.situationCategories.includes(option)
-                      return (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() =>
-                            setDraft((current) => ({
-                              ...current,
-                              situationCategories: selected
-                                ? current.situationCategories.filter((value) => value !== option)
-                                : [...current.situationCategories, option]
-                            }))
-                          }
-                          className="flex items-center justify-between rounded-[14px] border px-3 py-2 text-left text-[13px] transition-colors"
-                          style={{
-                            borderColor: selected ? accentColor : '#ffffff18',
-                            backgroundColor: selected ? accentSelectedBackground : '#101010',
-                            color: selected ? accentTextColor : '#f5f5f5'
-                          }}
-                        >
-                          <span>{option}</span>
-                          <span className="text-[11px] uppercase tracking-[0.12em]">
-                            {selected ? 'selected' : 'select'}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </Field>
           <div className="md:col-span-2">
-            <Field label="explain this person&apos;s situation as well as possible*">
+            <Field label="share this person&apos;s situation*">
               <textarea
                 value={draft.backgroundNotes}
                 onChange={(event) => setDraft((current) => ({ ...current, backgroundNotes: event.target.value }))}
@@ -466,7 +404,7 @@ export default function PartnerReferralWorkflowPanel({
           <div className="mt-2 flex flex-wrap gap-2">
             <AtlasTextButton
               onClick={() => setDraft((current) => ({ ...current, existingPartner: true }))}
-              className="px-3 py-1.5 text-[12px]"
+              className="px-[14px] py-[7px] text-[14px]"
               style={
                 {
                   ['--button-border-color' as const]: draft.existingPartner ? accentColor : '#ffffff40',
@@ -478,7 +416,7 @@ export default function PartnerReferralWorkflowPanel({
             </AtlasTextButton>
             <AtlasTextButton
               onClick={() => setDraft((current) => ({ ...current, existingPartner: false }))}
-              className="px-3 py-1.5 text-[12px]"
+              className="px-[14px] py-[7px] text-[14px]"
               style={
                 {
                   ['--button-border-color' as const]: !draft.existingPartner ? accentColor : '#ffffff40',
@@ -563,14 +501,11 @@ export default function PartnerReferralWorkflowPanel({
                   None of these fields are required. Saving will add the partner to the selectable source list and auto-select it.
                 </small>
               </div>
-              <AtlasTextButton
+              <AtlasCloseButton
                 type="button"
                 onClick={() => setIsAddReferralSourceOverlayOpen(false)}
-                className="px-4 py-2 text-[12px]"
                 style={{ ['--button-border-color' as const]: '#ffffff30', color: '#f1f1f1' } as React.CSSProperties}
-              >
-                close
-              </AtlasTextButton>
+              />
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <Field label="company name">
@@ -606,7 +541,7 @@ export default function PartnerReferralWorkflowPanel({
               <AtlasTextButton
                 type="button"
                 onClick={() => setIsAddReferralSourceOverlayOpen(false)}
-                className="px-4 py-2 text-[12px]"
+                className="px-[19px] py-[10px] text-[14px]"
                 style={{ ['--button-border-color' as const]: '#ffffff30', color: '#f1f1f1' } as React.CSSProperties}
               >
                 cancel
@@ -644,7 +579,7 @@ export default function PartnerReferralWorkflowPanel({
                   setIsAddReferralSourceOverlayOpen(false)
                   setIsReferralSourceDropdownOpen(false)
                 }}
-                className="px-4 py-2 text-[12px]"
+                className="px-[19px] py-[10px] text-[14px]"
                 style={{ ['--button-border-color' as const]: accentColor, color: accentTextColor } as React.CSSProperties}
               >
                 add referral source

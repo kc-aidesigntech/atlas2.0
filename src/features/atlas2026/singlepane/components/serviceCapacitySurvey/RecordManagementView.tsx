@@ -81,7 +81,7 @@ export function RecordManagementView({
                         <>
                           <AtlasIconButton
                             onClick={() => onEditDraftRecord(record)}
-                            className="h-7 w-7"
+                            className="h-9 w-9"
                             style={{ ['--button-border-color' as const]: '#ffffff2f', color: SP_COLORS.white } as React.CSSProperties}
                             aria-label={`Edit draft record ${record.id}`}
                             title="Edit draft"
@@ -93,7 +93,7 @@ export function RecordManagementView({
                           </AtlasIconButton>
                           <AtlasIconButton
                             onClick={() => onDeleteDraftRecord(record)}
-                            className="h-7 w-7"
+                            className="h-9 w-9"
                             style={{ ['--button-border-color' as const]: '#ffffff2f', color: SP_COLORS.red } as React.CSSProperties}
                             aria-label={`Delete draft record ${record.id}`}
                             title="Delete draft"

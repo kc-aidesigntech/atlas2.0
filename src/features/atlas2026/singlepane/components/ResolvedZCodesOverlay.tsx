@@ -1,13 +1,14 @@
 import React from 'react'
 import { Check } from 'lucide-react'
 import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import type {
   EnrolleeProfile,
   EnrolleeZCodeResolutionInput,
   RouteCandidateRecord
 } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
+import { getZCodeParentColor } from '@atlas/shared'
 
 interface ResolvedZCodesOverlayProps {
   isOpen: boolean
@@ -132,7 +133,6 @@ export default function ResolvedZCodesOverlay({
           </div>
           <AtlasCloseButton
             onClick={onClose}
-            className="h-8 w-8"
             style={{ ['--button-border-color' as const]: '#ffffff45', color: SP_COLORS.white } as React.CSSProperties}
           />
         </div>
@@ -194,7 +194,6 @@ export default function ResolvedZCodesOverlay({
           {detailsToRender.length ? (
             detailsToRender.map((detail) => {
               const parentFill = getZCodeParentColor(detail.parentCode) || SP_COLORS.yellow
-              const parentTextColor = usesLightTextOnZCodeColor(parentFill) ? SP_COLORS.white : SP_COLORS.bg
               const isSaving = savingIds.includes(detail.enrolleeZCodeId)
               return (
                 <button
@@ -208,12 +207,7 @@ export default function ResolvedZCodesOverlay({
                     backgroundColor: detail.isResolved ? 'rgba(111,207,151,0.08)' : 'var(--surface-panel-raised)'
                   }}
                 >
-                  <span
-                    className="inline-flex h-12 min-w-[3rem] items-center justify-center rounded-full border px-2 text-[18px] font-semibold"
-                    style={{ backgroundColor: parentFill, borderColor: parentFill, color: parentTextColor }}
-                  >
-                    {detail.zCode.replace(/^Z/i, '')}
-                  </span>
+                  <ZCodeBadge value={detail.zCode} fill={parentFill} size="resolved" stripLeadingZ />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[18px] font-medium text-white">{detail.title || detail.zCode}</span>
