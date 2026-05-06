@@ -817,16 +817,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     },
     [remoteSession?.partnerGrant?.allowedMenus, remoteSession?.targetRole, roleConfigs, viewerRole]
   )
+  const selectedRoleTopMenus = useMemo(
+    () => selectedRoleConfig.topMenus.filter((menu) => Boolean(menu && menu.trim())),
+    [selectedRoleConfig.topMenus]
+  )
+  const selectedRoleTopMenusKey = useMemo(() => selectedRoleTopMenus.join('||'), [selectedRoleTopMenus])
 
   useEffect(() => {
     // Keep deep-linked menu state valid when role config changes.
     // Invariant: `activeMenu` must always be one of the current role's top menus.
-    const firstMenu = selectedRoleConfig.topMenus?.[0]
+    const firstMenu = selectedRoleTopMenus[0]
     if (!firstMenu) return
-    if (!selectedRoleConfig.topMenus.includes(activeMenu)) {
-      setActiveMenu(firstMenu)
-    }
-  }, [activeMenu, selectedRoleConfig])
+    setActiveMenu((current) => (selectedRoleTopMenus.includes(current) ? current : firstMenu))
+  }, [selectedRoleTopMenus, selectedRoleTopMenusKey])
 
   useEffect(() => {
     // Maintain a stable selected enrollee pointer after bootstrap reloads

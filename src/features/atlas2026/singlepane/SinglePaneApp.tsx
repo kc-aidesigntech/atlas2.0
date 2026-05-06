@@ -192,7 +192,7 @@ export default function SinglePaneApp() {
   }, [activeMenu])
 
   React.useEffect(() => {
-    const canOpenReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
+    const canOpenReferralPortal = uiRole === 'navigator' || uiRole === 'supervisor'
     const isReferralPortalSelection = activeMenu === 'referral portal' || activeMenu === 'refer'
     if (!canOpenReferralPortal || !isReferralPortalSelection) return
     setIsReferralPortalOpen(true)
@@ -440,6 +440,11 @@ export default function SinglePaneApp() {
       return
     }
     if (menu === 'referral portal' || menu === 'refer') {
+      if (uiRole === 'partner') {
+        setActiveMenu(menu)
+        setIsReferralPortalOpen(false)
+        return
+      }
       setIsReferralPortalOpen(true)
       return
     }
@@ -548,7 +553,7 @@ export default function SinglePaneApp() {
       />
 
       <main className="atlas-shell-edge-buffer relative py-[10px]">
-        {isReferralPortalOpen && canUseReferralPortal ? (
+        {isReferralPortalOpen && canUseReferralPortal && !isPartnerRole ? (
           <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-[2px]">
             <div className="relative max-h-[92vh] w-full max-w-[1040px] overflow-y-auto">
               <div className="mb-3 flex justify-end">
@@ -760,7 +765,10 @@ export default function SinglePaneApp() {
                       </small>
                       <div className="mt-4 flex justify-center">
                         <AtlasTextButton
-                          onClick={() => setIsReferralPortalOpen(true)}
+                          onClick={() => {
+                            setActiveMenu('referral portal')
+                            setIsReferralPortalOpen(false)
+                          }}
                           className="px-4 py-1 text-[13px] text-white"
                           style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
                           title="Open the referral workflow."
@@ -891,7 +899,14 @@ export default function SinglePaneApp() {
                 {canUseReferralPortal && !isReferralPortalMenu ? (
                   <div className="flex items-center justify-center py-1">
                     <AtlasTextButton
-                      onClick={() => setIsReferralPortalOpen(true)}
+                      onClick={() => {
+                        if (uiRole === 'partner') {
+                          setActiveMenu('referral portal')
+                          setIsReferralPortalOpen(false)
+                          return
+                        }
+                        setIsReferralPortalOpen(true)
+                      }}
                       className="px-[19px] py-[6px] text-[14px] text-white"
                       style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
                       title="Open referral portal."
@@ -947,15 +962,19 @@ export default function SinglePaneApp() {
                       </small>
                     </div>
                   ) : null
-                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView ? null : isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add' ? (
-                  <NavigatorEnrollmentAssignmentsPanel
-                    rows={navigatorEnrollmentAssignments}
-                    isLoading={isLoadingNavigatorEnrollmentAssignments}
-                    error={navigatorEnrollmentAssignmentsError}
-                    assigningEnrollmentId={assigningNavigatorEnrollmentId}
-                    onToggleAssignment={assignNavigatorEnrollmentToSelf}
-                  />
-                ) : isPartnerRole ? (
+                ) : isPartnerRole && isReferralPortalMenu ? (
+                  <div className="rounded-[24px] border px-4 py-4" style={{ borderColor: '#ffffff30' }}>
+                    <PartnerReferralWorkflowPanel
+                      defaultReferrerName={accountSettings.fullName}
+                      defaultPartnerOrganizationName={
+                        partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
+                      }
+                      recentReferrals={pickupQueue}
+                      onSubmit={submitPartnerReferral}
+                      accentColor="var(--atlas-signal-lucid-green)"
+                    />
+                  </div>
+                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerRole ? (
                   <>
                     {timelineConfig ? (
                       <>

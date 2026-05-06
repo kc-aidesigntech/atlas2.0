@@ -18,35 +18,34 @@ export default function NavigatorEnrollmentAssignmentsPanel({
   onToggleAssignment
 }: NavigatorEnrollmentAssignmentsPanelProps) {
   return (
-    <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
-      <small className="mb-2 block text-[13px] text-white">navigator assignment board</small>
-      <small className="mb-3 block text-[11px] text-[#cfcfcf]">
+    <div className="atlas-surface-panel w-full px-5 py-5 text-white" style={{ borderColor: '#ffffff50' }}>
+      <small className="atlas-overline mb-2 block text-[#cfcfcf]">navigator assignment board</small>
+      <small className="atlas-panel-copy mb-4 block max-w-[780px] text-[#cfcfcf]">
         Review current navigator ownership. Assign unassigned enrollees to yourself or remove your assignment as needed.
       </small>
-      {error ? <small className="mb-3 block text-[12px] text-[#ff7d7d]">{error}</small> : null}
+      {error ? <small className="atlas-caption mb-4 block text-[#ff7d7d]">{error}</small> : null}
       {isLoading ? (
-        <small className="block text-[12px] text-[#cfcfcf]">Loading navigator assignment board...</small>
+        <small className="atlas-caption block text-[#cfcfcf]">Loading navigator assignment board...</small>
       ) : rows.length ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {rows.map((row) => (
             <div
               key={row.enrollmentId}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-2 py-1.5"
-              style={{ borderColor: '#ffffff3a' }}
+              className="atlas-surface-raised flex flex-wrap items-center justify-between gap-3 px-4 py-4"
             >
-              <div>
-                <small className="block text-[12px] text-white">{row.enrolleeName}</small>
-                <small className="text-[11px] text-[#cfcfcf]">
+              <div className="min-w-0 flex-1">
+                <div className="atlas-h4 truncate text-[20px] font-medium text-white">{row.enrolleeName}</div>
+                <small className="atlas-meta-muted mt-1 block text-[#cfcfcf]">
                   {row.caseId || 'case id pending'} • navigator: {row.assignedNavigatorLabel}
                 </small>
-                <small className="mt-0.5 block text-[11px] text-[#9bd4a5]">
+                <small className="atlas-caption mt-2 block text-[#9bd4a5]">
                   {row.isAssignedToViewer ? 'assigned to you' : 'not assigned to you'}
                 </small>
               </div>
               <AtlasTextButton
                 onClick={() => void onToggleAssignment(row.enrollmentId, row.isAssignedToViewer ? 'unassign' : 'assign')}
                 disabled={assigningEnrollmentId === row.enrollmentId}
-                className="px-[14px] py-[6px] text-[13px] font-medium text-white"
+                className="px-[19px] py-[10px] text-[15px] font-medium text-white"
                 style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
               >
                 {assigningEnrollmentId === row.enrollmentId
@@ -61,7 +60,7 @@ export default function NavigatorEnrollmentAssignmentsPanel({
           ))}
         </div>
       ) : (
-        <small className="block text-[12px] text-[#cfcfcf]">No enrollment records found.</small>
+        <div className="atlas-empty-state">No enrollment records found.</div>
       )}
     </div>
   )
