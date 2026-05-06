@@ -294,7 +294,7 @@ export function AtlasCloseButton({
       onClick={onClick}
       aria-label={title}
       title={title}
-      className={cn('h-11 w-11 text-white', className)}
+      className={cn('h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 aspect-square p-0 text-white', className)}
       {...props}
     >
       <X className="h-5 w-5" strokeWidth={2.1} />
@@ -333,7 +333,7 @@ export const AtlasIconButton = React.forwardRef<HTMLButtonElement, React.ButtonH
       {...props}
       style={resolveSolidButtonStyle(style)}
       className={cn(
-        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
+        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-10 w-10 min-h-[40px] min-w-[40px] shrink-0 aspect-square items-center justify-center rounded-[10px] border p-0 leading-none transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
         className
       )}
     >
