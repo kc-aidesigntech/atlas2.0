@@ -10,15 +10,16 @@ import type {
   DomainLoad,
   EnrolleeProfile,
   IntervalAssessmentDueItem,
+  NavigatorEnrollmentAssignmentRecord,
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
   SupervisionSessionRecord,
-  SupervisorNavigatorCompetencySummary,
-  UnassignedEnrolleePickupRecord
+  SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import RadialLoadChart from './RadialLoadChart'
+import NavigatorEnrollmentAssignmentsPanel from './NavigatorEnrollmentAssignmentsPanel'
 
 interface NavigatorMyProfilePanelProps {
   accountSettings: AccountSettings
@@ -26,7 +27,10 @@ interface NavigatorMyProfilePanelProps {
   aggregateLoad: DomainLoad | null
   assignedEnrolleeCount: number
   assignedEnrollees: EnrolleeProfile[]
-  pickupQueue: UnassignedEnrolleePickupRecord[]
+  navigatorEnrollmentAssignments: NavigatorEnrollmentAssignmentRecord[]
+  navigatorEnrollmentAssignmentsError: string | null
+  isLoadingNavigatorEnrollmentAssignments: boolean
+  assigningEnrollmentId: string | null
   competencySummary: SupervisorNavigatorCompetencySummary | null
   selfAssessmentSummary: NavigatorSelfAssessmentSummary
   selfAssessments: NavigatorSelfAssessmentRecord[]
@@ -38,7 +42,7 @@ interface NavigatorMyProfilePanelProps {
   avatarUploadError?: string | null
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenEnrolleeSurvey?: (enrolleeId: string) => void
-  onClaimPickupQueueRecord: (recordId: string) => Promise<unknown> | unknown
+  onToggleEnrollmentAssignment: (enrollmentId: string, mode: 'assign' | 'unassign') => Promise<void> | void
   onSaveSelfAssessment: (record: NavigatorSelfAssessmentRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
 }
@@ -60,7 +64,10 @@ export default function NavigatorMyProfilePanel({
   aggregateLoad,
   assignedEnrolleeCount,
   assignedEnrollees,
-  pickupQueue,
+  navigatorEnrollmentAssignments,
+  navigatorEnrollmentAssignmentsError,
+  isLoadingNavigatorEnrollmentAssignments,
+  assigningEnrollmentId,
   competencySummary,
   selfAssessmentSummary,
   selfAssessments,
@@ -72,7 +79,7 @@ export default function NavigatorMyProfilePanel({
   avatarUploadError = null,
   onReplaceAvatar,
   onOpenEnrolleeSurvey,
-  onClaimPickupQueueRecord,
+  onToggleEnrollmentAssignment,
   onSaveSelfAssessment,
   onSaveSupervisionSession
 }: NavigatorMyProfilePanelProps) {
@@ -150,105 +157,13 @@ export default function NavigatorMyProfilePanel({
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="atlas-surface-panel px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-                pickup queue
-              </small>
-              <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">unassigned enrollees</div>
-            </div>
-            <span className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
-              {pickupQueue.filter((item) => item.status === 'available').length} available
-            </span>
-          </div>
-          <div className="mt-4 space-y-3">
-            {pickupQueue.length ? (
-              pickupQueue.map((record, index) => (
-                <div key={record.id} className="atlas-surface-raised px-4 py-4">
-                  <div className="flex items-start gap-3">
-                    <span
-                      className="mt-[2px] flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold"
-                      style={{ borderColor: '#ffffff2c', color: '#d8e1ea' }}
-                    >
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-[22px] font-medium leading-tight text-white">{record.fullName}</div>
-                          <div className="mt-1 flex flex-wrap gap-3 text-[12px]" style={{ color: '#aab6c3' }}>
-                            <span>DOB: {record.dob || 'pending'}</span>
-                            <span>C: {record.caseId || 'pending'}</span>
-                            <span>E: {record.email || 'pending'}</span>
-                          </div>
-                        </div>
-                        {record.status === 'available' ? (
-                          <AtlasTextButton
-                            onClick={() => void onClaimPickupQueueRecord(record.id)}
-                            className="px-[14px] py-[7px] text-[13px] font-medium"
-                            style={{
-                              ['--button-border-color' as const]: SP_COLORS.yellow,
-                              ['--button-line-color' as const]: SP_COLORS.bg,
-                              color: SP_COLORS.bg,
-                              backgroundColor: SP_COLORS.yellow
-                            } as React.CSSProperties}
-                          >
-                            pick up
-                          </AtlasTextButton>
-                        ) : (
-                          <span className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: `${SP_COLORS.deepGreen}90`, color: SP_COLORS.deepGreen }}>
-                            claimed
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-                            referred by
-                          </small>
-                          <div className="mt-1 text-[13px] text-white">
-                            {record.referrerName} · {record.referrerOrganization}
-                          </div>
-                        </div>
-                        <div>
-                          <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-                            demographics
-                          </small>
-                          <div className="mt-1 text-[13px] text-white">{record.demographicsSummary}</div>
-                        </div>
-                      </div>
-                      <div className="atlas-surface-raised mt-3 px-3 py-3 text-[13px] leading-[1.45]">
-                        <small className="atlas-overline mb-1 block" style={{ color: SP_COLORS.muted }}>
-                          background notes
-                        </small>
-                        <div className="text-white">{record.backgroundNotes || record.referrerMessage}</div>
-                        {record.referrerMessage && record.backgroundNotes && record.referrerMessage !== record.backgroundNotes ? (
-                          <div className="mt-2 text-[12px] text-[var(--foreground-secondary)]">{record.referrerMessage}</div>
-                        ) : null}
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {record.zCodeTags.length ? (
-                          record.zCodeTags.map((tag) => (
-                            <span key={`${record.id}-${tag}`} className="inline-flex rounded-full border px-2.5 py-1 text-[11px]" style={{ borderColor: '#ffffff24', color: '#d8e1ea' }}>
-                              {tag}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="inline-flex rounded-full border px-2.5 py-1 text-[11px]" style={{ borderColor: '#ffffff24', color: '#9eacb9' }}>
-                            z-code survey pending
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="atlas-empty-state">
-                No unassigned enrollees are waiting in the pickup queue.
-              </div>
-            )}
-          </div>
+          <NavigatorEnrollmentAssignmentsPanel
+            rows={navigatorEnrollmentAssignments}
+            isLoading={isLoadingNavigatorEnrollmentAssignments}
+            error={navigatorEnrollmentAssignmentsError}
+            assigningEnrollmentId={assigningEnrollmentId}
+            onToggleAssignment={onToggleEnrollmentAssignment}
+          />
         </section>
 
         <div className="grid gap-4">

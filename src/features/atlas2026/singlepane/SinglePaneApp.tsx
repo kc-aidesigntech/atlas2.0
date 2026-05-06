@@ -802,7 +802,10 @@ export default function SinglePaneApp() {
                     aggregateLoad={navigatorAggregateLoad}
                     assignedEnrolleeCount={enrollees.length}
                     assignedEnrollees={enrollees}
-                    pickupQueue={pickupQueue}
+                    navigatorEnrollmentAssignments={navigatorEnrollmentAssignments}
+                    navigatorEnrollmentAssignmentsError={navigatorEnrollmentAssignmentsError}
+                    isLoadingNavigatorEnrollmentAssignments={isLoadingNavigatorEnrollmentAssignments}
+                    assigningEnrollmentId={assigningNavigatorEnrollmentId}
                     competencySummary={navigatorAssignedCompetencySummary}
                     selfAssessmentSummary={navigatorSelfAssessmentSummary}
                     selfAssessments={navigatorSelfAssessments}
@@ -814,7 +817,7 @@ export default function SinglePaneApp() {
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
                     onOpenEnrolleeSurvey={(enrolleeId) => void openEnrolleeBurdenSurvey(enrolleeId)}
-                    onClaimPickupQueueRecord={claimPickupQueueRecord}
+                    onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
                     onSaveSelfAssessment={saveNavigatorSelfAssessment}
                     onSaveSupervisionSession={saveSupervisionSession}
                   />
