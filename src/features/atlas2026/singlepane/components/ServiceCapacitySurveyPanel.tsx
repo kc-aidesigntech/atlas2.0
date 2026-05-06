@@ -767,7 +767,7 @@ function ServiceCapacitySurveyForm({
     effectiveBlockingSaveError && dismissedBlockingSaveError !== effectiveBlockingSaveError ? effectiveBlockingSaveError : null
 
   return (
-    <div className="relative w-full rounded-[21px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: 'var(--surface-panel-soft)' }}>
+    <div className="atlas-surface-panel relative w-full px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40' }}>
       {visibleBlockingSaveError && blockingIssue ? (
         <BlockingSupportOverlay
           message={visibleBlockingSaveError}
@@ -779,13 +779,13 @@ function ServiceCapacitySurveyForm({
           onDismiss={() => setDismissedBlockingSaveError(visibleBlockingSaveError)}
         />
       ) : null}
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style={{ borderColor: '#ffffff20' }}>
+      <div className="atlas-divider flex flex-wrap items-start justify-between gap-4 border-b pb-4">
         <div className="max-w-[720px]">
-          <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
+          <small className="atlas-overline block md:text-[14px]" style={{ color: SP_COLORS.muted }}>
             partner service capacity
           </small>
-          <h3 className="mt-1 text-[28px] font-medium text-white md:text-[34px]">Z-code burden survey</h3>
-          <small className="block text-[14px] text-[#bdbdbd] md:text-[17px]">
+          <h3 className="atlas-h3 mt-1 text-[28px] font-medium text-white md:text-[34px]">Z-code burden survey</h3>
+          <small className="atlas-panel-copy block text-[#bdbdbd] md:text-[17px]">
             Capture how well your organization can handle each Z-code pressure area on a 1-9 burden scale.
           </small>
         </div>
@@ -829,8 +829,8 @@ function ServiceCapacitySurveyForm({
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-4">
-          <section className="rounded-[16px] border p-4" style={{ borderColor: '#ffffff25' }}>
-            <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[14px]">your details</small>
+          <section className="atlas-surface-raised p-4">
+            <small className="atlas-overline mb-3 block text-[#bdbdbd] md:text-[14px]">your details</small>
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="lg:col-span-2">
                 <Field label="Your Name*" requiredHint="This field is required.">
@@ -952,8 +952,8 @@ function ServiceCapacitySurveyForm({
           </section>
         </div>
 
-        <section className="rounded-[16px] border p-4" style={{ borderColor: '#ffffff25' }}>
-          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[14px]">scale guide</small>
+          <section className="atlas-surface-raised p-4">
+          <small className="atlas-overline mb-3 block text-[#bdbdbd] md:text-[14px]">scale guide</small>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {scale.map((option) => (
               <div key={option.value} className="rounded-[12px] border px-3 py-2" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>

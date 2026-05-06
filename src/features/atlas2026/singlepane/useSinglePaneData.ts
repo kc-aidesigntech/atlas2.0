@@ -1258,6 +1258,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setDemoTaggedEnrollmentIds([])
       return
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7427/ingest/c0c4a88c-235c-4687-9dae-1d73110ee993',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3c0370'},body:JSON.stringify({sessionId:'3c0370',runId:'pre-fix',hypothesisId:'H4',location:'useSinglePaneData.ts:1261',message:'Starting partner demo-tag scope fetch',data:{viewerRole},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     let isMounted = true
     loadDemoTaggedEnrollmentIds()
       .then((ids) => {
@@ -1266,6 +1269,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       })
       .catch((error) => {
         if (!isMounted) return
+        const typedError = error as { code?: string; message?: string } | null
+        // #region agent log
+        fetch('http://127.0.0.1:7427/ingest/c0c4a88c-235c-4687-9dae-1d73110ee993',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3c0370'},body:JSON.stringify({sessionId:'3c0370',runId:'pre-fix',hypothesisId:'H4',location:'useSinglePaneData.ts:1271',message:'Partner demo-tag scope fetch failed',data:{code:typedError?.code||null,message:String(typedError?.message||'unknown')},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         console.warn('Unable to load demo-tagged enrollment ids for partner scope.', error)
       })
     return () => {

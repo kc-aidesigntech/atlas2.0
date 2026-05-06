@@ -267,17 +267,14 @@ export default function RegulationTestsOverlay({
 
   return (
     <div className="absolute inset-0 z-40 flex items-start justify-center bg-black/70 px-5 py-6 backdrop-blur-[2px]">
-      <div
-        className="max-h-[calc(100vh-72px)] w-full max-w-[1220px] overflow-y-auto rounded-[30px] border px-5 py-5"
-        style={{ borderColor: SP_COLORS.white, backgroundColor: '#030303' }}
-      >
+      <div className="atlas-surface-shell max-h-[calc(100vh-72px)] w-full max-w-[1220px] overflow-y-auto px-5 py-5" style={{ borderColor: SP_COLORS.white, backgroundColor: '#030303' }}>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+            <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
               navigator assessments
             </small>
-            <h3 className="text-[28px] font-medium text-white">{enrollee.fullName}</h3>
-            <small className="text-[13px] text-[#cfcfcf]">
+            <h3 className="atlas-h3 text-[28px] font-medium text-white">{enrollee.fullName}</h3>
+            <small className="atlas-meta text-[#cfcfcf]">
               {enrollee.caseId} · {enrollee.email || 'no email on file'}
             </small>
           </div>
@@ -447,8 +444,7 @@ export default function RegulationTestsOverlay({
                       const parsed = nextValue === '' ? null : Number(nextValue)
                       updateAnswer(prompt.id, typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : null)
                     }}
-                    className="mt-3 w-full rounded-xl border bg-black px-3 py-2 text-[13px] text-white"
-                    style={{ borderColor: '#ffffff2f' }}
+                    className="atlas-input mt-3 bg-black text-[13px] text-white"
                     placeholder={selectedTestType === 'mh_sca' ? 'Enter MH-SCA placeholder value' : 'Enter SVS placeholder value (%)'}
                   />
                 </AtlasInsetCard>

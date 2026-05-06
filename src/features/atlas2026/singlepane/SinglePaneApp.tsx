@@ -702,11 +702,11 @@ export default function SinglePaneApp() {
           />
           {activeEnrolleeSurveyTarget ? (
             <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
-              <div className="max-h-[92vh] w-full max-w-[1180px] overflow-y-auto rounded-[28px] border border-white/15 bg-[color:var(--surface-panel)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.45)] md:p-5">
+              <div className="atlas-surface-panel max-h-[92vh] w-full max-w-[1180px] overflow-y-auto bg-[color:var(--surface-panel)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.45)] md:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
-                    <small className="block text-[10px] uppercase tracking-[0.18em] text-[#9fb0c1]">intervallic assessments</small>
-                    <div className="mt-1 text-[24px] font-medium text-white">enrollee burden survey</div>
+                    <small className="atlas-overline block text-[#9fb0c1]">intervallic assessments</small>
+                    <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">enrollee burden survey</div>
                   </div>
                   <AtlasCloseButton
                     onClick={() => setEnrolleeSurveyTargetId(null)}
@@ -738,24 +738,24 @@ export default function SinglePaneApp() {
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
-                    <div className="min-w-0 flex-1 basis-[520px] rounded-[26px] border p-4" style={{ borderColor: '#ffffff35' }}>
-                      <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+                    <div className="atlas-surface-panel min-w-0 flex-1 basis-[520px] p-4">
+                      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                         my station
                       </small>
-                      <div className="mt-1 text-[26px] font-medium text-white">
+                      <div className="atlas-h4 mt-1 text-[26px] font-medium text-white">
                         {partnerStationProfile?.stationName || accountSettings.organization?.trim() || '[My Station]'}
                       </div>
-                      <small className="mt-2 block text-[14px] text-white">
+                      <small className="atlas-meta mt-2 block text-white">
                         Org: {partnerStationProfile?.organizationName || accountSettings.organization || 'not configured'}
                       </small>
-                      <small className="mt-1 block text-[14px] text-white">
+                      <small className="atlas-meta mt-1 block text-white">
                         County: {partnerStationProfile?.countyName || 'not configured'}
                       </small>
-                      <small className="mt-1 block text-[14px] text-white">Contact: {partnerContactName}</small>
-                      <small className="mt-1 block text-[14px] text-white">
+                      <small className="atlas-meta mt-1 block text-white">Contact: {partnerContactName}</small>
+                      <small className="atlas-meta mt-1 block text-white">
                         E: {partnerStationProfile?.primaryContactEmail || accountSettings.email || 'not configured'}
                       </small>
-                      <small className="mt-1 block text-[14px] text-white">
+                      <small className="atlas-meta mt-1 block text-white">
                         unresolved categories: {partnerUnresolvedCodes.length ? partnerUnresolvedCodes.join(', ') : 'none'}
                       </small>
                       <div className="mt-4 flex justify-center">
@@ -848,10 +848,10 @@ export default function SinglePaneApp() {
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
-                    <div className="w-full rounded-[24px] border px-5 py-5 text-white" style={{ borderColor: '#ffffff30' }}>
-                      <small className="block text-[12px] uppercase tracking-[0.14em] text-[#bcbcbc]">my enrollees</small>
-                      <div className="mt-2 text-[18px] font-medium">No enrollees are currently assigned to you.</div>
-                      <small className="mt-2 block text-[12px] text-[#bcbcbc]">
+                    <div className="atlas-surface-panel w-full px-5 py-5 text-white">
+                      <small className="atlas-overline block text-[#bcbcbc]">my enrollees</small>
+                      <div className="atlas-h4 mt-2 text-[18px] font-medium">No enrollees are currently assigned to you.</div>
+                      <small className="atlas-caption mt-2 block text-[#bcbcbc]">
                         Use the dropdown next to "enrollees" and switch to "add enrollees" to claim one.
                       </small>
                     </div>

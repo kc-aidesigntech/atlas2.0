@@ -149,15 +149,15 @@ export function BurdenCard({
 
   return (
     <div
-      className={`rounded-[16px] border transition-[padding,border-radius,transform,height] duration-500 ease-out ${
+      className={`atlas-surface-raised transition-[padding,border-radius,transform,height] duration-500 ease-out ${
         compact ? 'flex h-full min-h-0 flex-col px-3 py-3 md:px-4 md:py-4' : 'px-4 py-4 md:px-5 md:py-5'
       }`}
-      style={{ borderColor: '#ffffff30', borderWidth: '1.5px', backgroundColor: 'var(--surface-panel-raised)' }}
+      style={{ borderColor: '#ffffff30', borderWidth: '1.5px' }}
       onClick={handleCardClick}
     >
-      <div className={`flex flex-wrap items-start justify-between gap-3 border-b ${compact ? 'pb-2.5' : 'pb-4'}`} style={{ borderColor: '#ffffff20' }}>
+      <div className={`atlas-divider flex flex-wrap items-start justify-between gap-3 border-b ${compact ? 'pb-2.5' : 'pb-4'}`}>
         <div className="min-w-0 flex-1">
-          <small className="block text-[12px] uppercase tracking-[0.14em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+          <small className="atlas-overline block md:text-[13px]" style={{ color: SP_COLORS.muted }}>
             question {currentIndex + 1} of {totalCount}
           </small>
           <div className={`mt-2 grid items-center gap-y-1.5 text-left ${compact ? 'grid-cols-[64px_minmax(0,1fr)] gap-x-3 md:grid-cols-[78px_minmax(0,1fr)] md:gap-x-3.5' : 'grid-cols-[72px_minmax(0,1fr)] gap-x-3 md:grid-cols-[88px_minmax(0,1fr)] md:gap-x-4'}`}>
@@ -182,12 +182,9 @@ export function BurdenCard({
         </div>
       </div>
 
-      <div
-        className={`${compact ? 'mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[14px] px-3 py-3 pr-2.5 md:px-3.5 md:py-3.5 md:pr-3' : 'mt-4 rounded-[16px] px-3 py-3 md:px-4 md:py-4'} border`}
-        style={{ borderColor: '#ffffff22', backgroundColor: 'var(--surface-panel-soft)' }}
-      >
+      <div className={`atlas-surface-panel ${compact ? 'mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[14px] px-3 py-3 pr-2.5 md:px-3.5 md:py-3.5 md:pr-3' : 'mt-4 rounded-[16px] px-3 py-3 md:px-4 md:py-4'}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <small className="text-[12px] uppercase tracking-[0.12em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+          <small className="atlas-overline md:text-[13px]" style={{ color: SP_COLORS.muted }}>
             assign a burden score
           </small>
           <AtlasTextButton
@@ -276,10 +273,9 @@ export function BurdenCard({
               onKeyDown={handleNumericInputKeyDown}
               inputMode="numeric"
               enterKeyHint={hasNext ? 'next' : 'done'}
-              className={`rounded-[8px] border bg-[var(--surface-panel-raised)] px-2 py-1 text-center text-white disabled:cursor-not-allowed disabled:opacity-45 ${
+              className={`atlas-input rounded-[8px] bg-[var(--surface-panel-raised)] px-2 py-1 text-center text-white disabled:cursor-not-allowed disabled:opacity-45 ${
                 compact ? 'w-[66px] text-[14px]' : 'w-[72px] text-[15px]'
               }`}
-              style={{ borderColor: '#ffffff30' }}
             />
           </label>
           <div className={`min-h-[20px] flex-1 ${compact ? 'text-[12px] leading-snug md:text-[13px]' : 'text-[12px] md:text-[14px]'}`} style={{ color: scaleState ? SP_COLORS.white : SP_COLORS.muted }}>
@@ -376,13 +372,10 @@ export function SurveyProgressHeader({
   const useLightText = usesLightTextOnZCodeColor(accentColor)
 
   return (
-    <div
-      className={`${pinToViewport ? 'sticky top-0 z-30' : 'relative'} mt-5 rounded-[16px] border bg-[color:var(--surface-panel-soft)] px-4 py-3 backdrop-blur-sm transition-[padding,border-radius,background-color] duration-500 ease-out md:px-5 ${className}`}
-      style={{ borderColor: '#ffffff24' }}
-    >
+    <div className={`atlas-surface-panel ${pinToViewport ? 'sticky top-0 z-30' : 'relative'} mt-5 bg-[color:var(--surface-panel-soft)] px-4 py-3 backdrop-blur-sm transition-[padding,border-radius,background-color] duration-500 ease-out md:px-5 ${className}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <small className="block text-[12px] uppercase tracking-[0.12em] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
+          <small className="atlas-overline block md:text-[13px]" style={{ color: SP_COLORS.muted }}>
             survey progress
           </small>
           <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -483,7 +476,7 @@ export function Field({
   requiredHint?: string
 }) {
   return (
-    <label className="flex h-full flex-col justify-end text-[12px] text-[#bcbcbc] md:text-[14px]">
+    <label className="atlas-meta flex h-full flex-col justify-end text-[12px] text-[#bcbcbc] md:text-[14px]">
       <div className="min-h-[48px] md:min-h-[54px]">
         <span className="block">{label}</span>
         <small className={`mt-1 block text-[11px] text-[#8f8f8f] md:text-[13px] ${requiredHint ? '' : 'opacity-0'}`}>
@@ -507,14 +500,7 @@ export function Input({
   inputRef?: React.Ref<HTMLInputElement>
 }) {
   return (
-    <input
-      ref={inputRef}
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded-[11px] border bg-[var(--surface-panel-raised)] px-3 py-2 text-[14px] text-white md:text-[16px]"
-      style={{ borderColor: '#ffffff30' }}
-    />
+    <input ref={inputRef} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className="atlas-input w-full bg-[var(--surface-panel-raised)] text-[14px] text-white md:text-[16px]" />
   )
 }
 
@@ -541,11 +527,8 @@ export function BlockingSupportOverlay({
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center rounded-[21px] bg-black/85 px-4 py-6 backdrop-blur-sm">
-      <div
-        className="w-full max-w-[620px] rounded-[20px] border px-5 py-5 text-center md:px-6 md:py-6"
-        style={{ borderColor: `${SP_COLORS.red}80`, backgroundColor: 'var(--surface-panel-soft)' }}
-      >
-        <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[13px]" style={{ color: SP_COLORS.red }}>
+      <div className="atlas-surface-panel w-full max-w-[620px] px-5 py-5 text-center md:px-6 md:py-6" style={{ borderColor: `${SP_COLORS.red}80` }}>
+        <small className="atlas-overline block md:text-[13px]" style={{ color: SP_COLORS.red }}>
           save error
         </small>
         <h4 className="mt-2 text-[22px] font-medium text-white md:text-[28px]">

@@ -49,18 +49,18 @@ export default function TopNav({
               className="inline-flex min-h-[30px] items-center rounded-full border px-4 text-white"
               style={{ borderColor: '#ffffff75' }}
             >
-              <small className="text-[15px] leading-none tracking-[0.01em]">{rolePillLabel}</small>
+              <small className="atlas-meta leading-none tracking-[0.01em]">{rolePillLabel}</small>
             </div>
           ) : (
             <>
-              <small className="text-[17px] font-medium tracking-[0.08em] text-white">ATLAS</small>
-              <small className="text-[13px] uppercase tracking-[0.16em] text-[#b9b9b9]">{role}</small>
+              <small className="atlas-font-heading text-[17px] font-medium tracking-[0.08em] text-white">ATLAS</small>
+              <small className="atlas-overline text-[#b9b9b9]">{role}</small>
             </>
           )}
         </div>
         <AtlasTextButton
           onClick={onOpenAccountSettings}
-          className="inline-flex items-center gap-2 px-4 py-1 text-[13px] text-white"
+          className="inline-flex items-center gap-2 px-4 py-1 text-[14px] text-white"
           style={{ ['--button-border-color' as const]: SP_COLORS.border, backgroundColor: '#000000' } as React.CSSProperties}
         >
           <span>Account Settings</span>
@@ -74,7 +74,7 @@ export default function TopNav({
             {showEnrolleeSelector ? (
               <div className="flex items-center gap-3">
                 <button
-                  className="whitespace-nowrap text-[15px] font-medium text-white"
+                  className="atlas-font-body whitespace-nowrap text-[15px] font-medium text-white"
                   onClick={() => onMenuSelect(firstMenu)}
                   style={{ textDecoration: activeMenu === firstMenu ? 'underline' : 'none' }}
                 >
@@ -92,8 +92,8 @@ export default function TopNav({
                       onNavigatorEnrolleeViewChange?.('my')
                       onSelectEnrollee(event.target.value)
                     }}
-                    className="appearance-none border border-white/30 bg-black pl-3 pr-9 text-[15px] font-medium text-white"
-                    style={{ textTransform: 'none', borderRadius: '999px', minHeight: '34px' }}
+                    className="atlas-select min-h-[34px] appearance-none rounded-full border-white/30 bg-black pl-3 pr-9 text-[15px] font-medium text-white"
+                    style={{ textTransform: 'none' }}
                     aria-label="Assigned enrollees"
                   >
                     {role === 'navigator' ? (
@@ -112,7 +112,7 @@ export default function TopNav({
               </div>
             ) : (
               <button
-                className="whitespace-nowrap text-[15px] font-medium text-white"
+                className="atlas-font-body whitespace-nowrap text-[15px] font-medium text-white"
                 onClick={() => onMenuSelect(firstMenu)}
                 style={{ textDecoration: activeMenu === firstMenu ? 'underline' : 'none' }}
               >
@@ -124,7 +124,7 @@ export default function TopNav({
           {roleConfig.topMenus.slice(1).map((menu) => (
             <button
               key={menu}
-              className="whitespace-nowrap text-[15px] font-medium text-white"
+              className="atlas-font-body whitespace-nowrap text-[15px] font-medium text-white"
               onClick={() => onMenuSelect(menu)}
               style={{ textDecoration: activeMenu === menu ? 'underline' : 'none' }}
             >

@@ -52,8 +52,8 @@ export default function PublicAtlasLandingPage() {
       <header className="border-b border-white/20">
         <div className="mx-auto flex w-full max-w-[1280px] items-center justify-between px-5 py-3">
           <div>
-            <div className="text-[13px] uppercase tracking-[0.16em] text-[#bdbdbd]">atlas x lucid living</div>
-            <div className="text-[20px] font-semibold">Community Navigation Platform</div>
+            <div className="atlas-overline text-[#bdbdbd]">atlas x lucid living</div>
+            <div className="atlas-h4 text-[20px] font-semibold">Community Navigation Platform</div>
           </div>
           <div className="flex items-center gap-2">
             <AtlasTextButton
@@ -88,9 +88,9 @@ export default function PublicAtlasLandingPage() {
       </header>
 
       <main className="mx-auto w-full max-w-[1280px] space-y-6 px-5 py-6">
-        <section className="rounded-[24px] border border-white/20 bg-[#0d0d0d] px-6 py-5">
-          <div className="text-[30px] font-semibold">Referral Portal</div>
-          <p className="mt-2 max-w-[880px] text-[14px] text-[#c9c9c9]">
+        <section className="atlas-surface-panel bg-[#0d0d0d] px-6 py-5">
+          <div className="atlas-h3 text-[30px] font-semibold">Referral Portal</div>
+          <p className="atlas-panel-copy mt-2 max-w-[880px] text-[14px] text-[#c9c9c9]">
             Submit referrals directly from the public website. Every submission enters the same in-system intake queue used by Atlas navigators and supervisors for follow-up.
           </p>
         </section>

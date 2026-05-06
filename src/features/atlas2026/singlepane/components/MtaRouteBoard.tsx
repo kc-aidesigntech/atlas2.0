@@ -59,13 +59,10 @@ export default function MtaRouteBoard({
   const summaryCandidate = selectedCandidate ?? routeCandidates[0] ?? null
 
   return (
-    <section
-      className={cn('w-full rounded-[30px] border px-3 py-3 text-white sm:px-4 sm:py-4', className)}
-      style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}
-    >
+    <section className={cn('atlas-surface-shell w-full px-3 py-3 text-white sm:px-4 sm:py-4', className)} style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}>
       <div className="flex flex-wrap items-start justify-between gap-3 px-1 pb-3">
         <div className="min-w-0">
-          <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+          <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
             {kicker}
           </small>
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -102,16 +99,12 @@ export default function MtaRouteBoard({
               />
             ) : null}
           </div>
-          {subtitle ? (
-            <small className="mt-2 block text-[11px] leading-[1.35]" style={{ color: '#aab6c3' }}>
-              {subtitle}
-            </small>
-          ) : null}
+          {subtitle ? <small className="atlas-caption mt-2 block leading-[1.35]" style={{ color: '#aab6c3' }}>{subtitle}</small> : null}
         </div>
         {headerActions ? <div className="flex flex-wrap items-center justify-end gap-2">{headerActions}</div> : null}
       </div>
 
-      <div className="overflow-hidden rounded-[26px] border" style={{ borderColor: '#ffffff24', backgroundColor: 'var(--surface-panel-raised)' }}>
+      <div className="atlas-surface-panel overflow-hidden bg-[var(--surface-panel-raised)]" style={{ borderColor: '#ffffff24' }}>
         {routeCandidates.length ? (
           routeCandidates.map((candidate, index) => {
             const isSelected = candidate.stationId === selectedCandidate?.stationId
@@ -218,7 +211,7 @@ export default function MtaRouteBoard({
                           />
                         ))
                       ) : (
-                        <div className="rounded-[14px] border px-3 py-2 text-[11px]" style={{ borderColor: '#ffffff18', color: '#9eacb9' }}>
+                        <div className="atlas-empty-state text-[11px]">
                           no aligned parents
                         </div>
                       )}
@@ -235,7 +228,7 @@ export default function MtaRouteBoard({
             )
           })
         ) : (
-          <div className="px-4 py-6 text-[13px]" style={{ color: '#cfd6de' }}>
+          <div className="atlas-body px-4 py-6 text-[13px]" style={{ color: '#cfd6de' }}>
             {emptyMessage}
           </div>
         )}

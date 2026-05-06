@@ -159,18 +159,18 @@ export default function ProfilePanel({
         </div>
       </div>
       <div className="min-w-[220px] flex-1 space-y-0.5 pt-[2px] text-white" style={{ textTransform: 'none' }}>
-        <h2 className="text-[34px] font-medium leading-[1.1]" style={{ textTransform: 'none' }}>
+        <h2 className="atlas-h3 text-[34px] font-medium leading-[1.1]" style={{ textTransform: 'none' }}>
           {enrollee.fullName}
         </h2>
-        <small className="block text-[13px] text-white">DOB: {enrollee.dob || 'not recorded'}</small>
-        <small className="block text-[13px] text-white">C: {enrollee.caseId}</small>
-        <small className="block text-[13px] text-white" style={{ textTransform: 'none' }}>
+        <small className="atlas-meta block text-white">DOB: {enrollee.dob || 'not recorded'}</small>
+        <small className="atlas-meta block text-white">C: {enrollee.caseId}</small>
+        <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
           E: {enrollee.email}
         </small>
-        <small className="block text-[13px] text-white" style={{ textTransform: 'none' }}>
+        <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
           N: {enrollee.assignedNavigator || 'unassigned'}
         </small>
-        <small className="block text-[13px] text-white">Enrollment start: {enrollmentStartLabel || 'not recorded'}</small>
+        <small className="atlas-meta block text-white">Enrollment start: {enrollmentStartLabel || 'not recorded'}</small>
       </div>
     </div>
   )

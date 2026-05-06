@@ -104,6 +104,7 @@ const routeCandidatesInFlight = new Map<string, Promise<RouteCandidateRecord[]>>
 const journeyStationMarkersCache = new Map<string, JourneyStationMarker[]>()
 const journeyStationMarkersInFlight = new Map<string, Promise<JourneyStationMarker[]>>()
 const DEMO_NAVIGATOR_NAME = 'atlas demo navigator'
+let demoTagsTableUnavailable = false
 
 export interface ReferralClaimMaterializationResult {
   enrollmentId: string
@@ -562,6 +563,7 @@ export async function upsertEnrollmentInferredZCodes(
 }
 
 export async function loadDemoTaggedEnrollmentIds(tag = 'atlas_demo') {
+  if (demoTagsTableUnavailable) return []
   if (!hasSupabaseConfig || !supabase) return []
   const { data, error } = await (supabase as any)
     .schema('atlas')
@@ -569,7 +571,20 @@ export async function loadDemoTaggedEnrollmentIds(tag = 'atlas_demo') {
     .select('record_id')
     .eq('tag', tag)
     .eq('record_type', 'enrollments')
-  if (error) throw error
+  if (error) {
+    const typedError = error as { code?: string; message?: string } | null
+    if (typedError?.code === 'PGRST205' || typedError?.code === '42P01') {
+      demoTagsTableUnavailable = true
+      return []
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7427/ingest/c0c4a88c-235c-4687-9dae-1d73110ee993',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3c0370'},body:JSON.stringify({sessionId:'3c0370',runId:'pre-fix',hypothesisId:'H5',location:'singlepaneRepository.ts:572',message:'demo_record_tags query failed',data:{code:typedError?.code||null,message:String(typedError?.message||'unknown')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    throw error
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7427/ingest/c0c4a88c-235c-4687-9dae-1d73110ee993',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3c0370'},body:JSON.stringify({sessionId:'3c0370',runId:'pre-fix',hypothesisId:'H5',location:'singlepaneRepository.ts:577',message:'demo_record_tags query succeeded',data:{rowCount:Array.isArray(data)?data.length:0},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   return (data || []).map((row: { record_id: string }) => row.record_id).filter(Boolean)
 }
 
