@@ -241,7 +241,7 @@ export function AtlasPlusButton({
       aria-label={label}
       title={title ?? label}
       className={cn('h-12 w-12 text-[29px] font-light', className)}
-      style={{ ['--button-border-color' as const]: ATLAS_LUCID_GREEN, color: ATLAS_LUCID_GREEN } as React.CSSProperties}
+      style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
     >
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 fill-none stroke-current" strokeWidth="1.9" strokeLinecap="round">
         <path d="M12 5v14" />

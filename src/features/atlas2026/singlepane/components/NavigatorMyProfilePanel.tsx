@@ -280,7 +280,7 @@ export default function NavigatorMyProfilePanel({
                       onClick={() => onOpenEnrolleeSurvey?.(enrollee.id)}
                       className="px-[14px] py-[7px] text-[13px] font-medium"
                       disabled={!onOpenEnrolleeSurvey}
-                      style={{ backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg } as React.CSSProperties}
+                      style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#ffffff' } as React.CSSProperties}
                     >
                       open survey
                     </AtlasTextButton>

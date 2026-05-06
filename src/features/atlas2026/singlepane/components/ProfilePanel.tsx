@@ -130,7 +130,7 @@ export default function ProfilePanel({
               type="button"
               onClick={onOpenBurdenSurvey}
               className="justify-center px-[19px] py-[10px] text-[14px] font-medium"
-              style={{ borderColor: 'var(--atlas-signal-lucid-green)', backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg }}
+              style={{ borderColor: '#ffffff', backgroundColor: '#ffffff', color: '#111111' }}
             >
               {burdenSurveyLabel}
             </AtlasTextButton>

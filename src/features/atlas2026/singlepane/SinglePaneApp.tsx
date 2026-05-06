@@ -6,7 +6,7 @@ import React from 'react'
 import { useSupabaseAuth } from '../../../auth/SupabaseAuthProvider'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled } from '../../../lib/supabaseClient'
 import AdminDataControlPanel from '../admin/AdminDataControlPanel'
-import { AtlasTextButton } from '../components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasTextButton } from '../components/AtlasPrimitives'
 import AccountSettingsPanel from './components/AccountSettingsPanel'
 import ContextPanels from './components/ContextPanels'
 import LiveAccessMatrixPanel from './components/LiveAccessMatrixPanel'
@@ -155,6 +155,7 @@ export default function SinglePaneApp() {
   const [isRegulationTestsOpen, setIsRegulationTestsOpen] = React.useState(false)
   const [assessmentInitialTestType, setAssessmentInitialTestType] = React.useState<'mh_sca' | 'svs' | 'ipf' | 'b_ipf' | null>(null)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
+  const [isReferralPortalOpen, setIsReferralPortalOpen] = React.useState(false)
   const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
@@ -185,10 +186,26 @@ export default function SinglePaneApp() {
   React.useEffect(() => {
     // Keep the last non-overlay menu so closing route planning returns users to
     // their previous content context instead of forcing default navigation.
-    if (activeMenu !== 'route planning') {
+    if (activeMenu !== 'route planning' && activeMenu !== 'referral portal' && activeMenu !== 'refer') {
       setLastContentMenu(activeMenu)
     }
   }, [activeMenu])
+
+  React.useEffect(() => {
+    const canOpenReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
+    const isReferralPortalSelection = activeMenu === 'referral portal' || activeMenu === 'refer'
+    if (!canOpenReferralPortal || !isReferralPortalSelection) return
+    setIsReferralPortalOpen(true)
+    const fallbackMenu =
+      (lastContentMenu && lastContentMenu !== 'route planning' && lastContentMenu !== 'referral portal' && lastContentMenu !== 'refer'
+        ? lastContentMenu
+        : selectedRoleConfig.topMenus.find((menu) => menu !== 'referral portal' && menu !== 'refer')) ||
+      selectedRoleConfig.topMenus[0] ||
+      'enrollees'
+    if (fallbackMenu !== activeMenu) {
+      setActiveMenu(fallbackMenu)
+    }
+  }, [activeMenu, lastContentMenu, selectedRoleConfig.topMenus, setActiveMenu, uiRole])
 
   React.useEffect(() => {
     if (!isAccountSettingsOpen || !showLiveAuthSecurity) return
@@ -422,6 +439,10 @@ export default function SinglePaneApp() {
       window.location.assign(standaloneSurveyUrl)
       return
     }
+    if (menu === 'referral portal' || menu === 'refer') {
+      setIsReferralPortalOpen(true)
+      return
+    }
     if (menu === 'route planning') {
       if (uiRole === 'navigator' && !isRegulationCleared) {
         setAssessmentInitialTestType('mh_sca')
@@ -527,6 +548,27 @@ export default function SinglePaneApp() {
       />
 
       <main className="atlas-shell-edge-buffer relative py-[10px]">
+        {isReferralPortalOpen && canUseReferralPortal ? (
+          <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-[2px]">
+            <div className="relative max-h-[92vh] w-full max-w-[1040px] overflow-y-auto">
+              <div className="mb-3 flex justify-end">
+                <AtlasCloseButton
+                  onClick={() => setIsReferralPortalOpen(false)}
+                  style={{ ['--button-border-color' as const]: '#ffffff30', color: '#ffffff' } as React.CSSProperties}
+                />
+              </div>
+              <PartnerReferralWorkflowPanel
+                defaultReferrerName={accountSettings.fullName}
+                defaultPartnerOrganizationName={
+                  partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
+                }
+                recentReferrals={pickupQueue}
+                onSubmit={submitPartnerReferral}
+                accentColor="var(--atlas-signal-lucid-green)"
+              />
+            </div>
+          </div>
+        ) : null}
         <section
           className="relative mx-auto min-h-[calc(100vh-112px)] w-full rounded-[38px] border bg-black px-[20px] pb-[12px] pt-[14px]"
           style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
@@ -666,9 +708,10 @@ export default function SinglePaneApp() {
                     <small className="block text-[10px] uppercase tracking-[0.18em] text-[#9fb0c1]">intervallic assessments</small>
                     <div className="mt-1 text-[24px] font-medium text-white">enrollee burden survey</div>
                   </div>
-                  <AtlasTextButton onClick={() => setEnrolleeSurveyTargetId(null)} className="px-[14px] py-[7px] text-[14px]">
-                    close
-                  </AtlasTextButton>
+                  <AtlasCloseButton
+                    onClick={() => setEnrolleeSurveyTargetId(null)}
+                    style={{ ['--button-border-color' as const]: '#ffffff30', color: '#ffffff' } as React.CSSProperties}
+                  />
                 </div>
                 <EnrolleeBurdenSurveyPanel
                   enrollee={activeEnrolleeSurveyTarget}
@@ -717,9 +760,9 @@ export default function SinglePaneApp() {
                       </small>
                       <div className="mt-4 flex justify-center">
                         <AtlasTextButton
-                          onClick={() => setActiveMenu('referral portal')}
+                          onClick={() => setIsReferralPortalOpen(true)}
                           className="px-4 py-1 text-[13px] text-white"
-                          style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
+                          style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
                           title="Open the referral workflow."
                         >
                           refer
@@ -848,9 +891,9 @@ export default function SinglePaneApp() {
                 {canUseReferralPortal && !isReferralPortalMenu ? (
                   <div className="flex items-center justify-center py-1">
                     <AtlasTextButton
-                      onClick={() => setActiveMenu('referral portal')}
+                      onClick={() => setIsReferralPortalOpen(true)}
                       className="px-[19px] py-[6px] text-[14px] text-white"
-                      style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
+                      style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
                       title="Open referral portal."
                     >
                       refer
@@ -858,17 +901,7 @@ export default function SinglePaneApp() {
                   </div>
                 ) : null}
 
-                {isReferralPortalMenu && canUseReferralPortal ? (
-                  <PartnerReferralWorkflowPanel
-                    defaultReferrerName={accountSettings.fullName}
-                    defaultPartnerOrganizationName={
-                      partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
-                    }
-                    recentReferrals={pickupQueue}
-                    onSubmit={submitPartnerReferral}
-                    accentColor="var(--atlas-signal-lucid-green)"
-                  />
-                ) : isAdminSection ? (
+                {isAdminSection ? (
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
                     <div className="w-full space-y-4">
                       <LiveAccessMatrixPanel

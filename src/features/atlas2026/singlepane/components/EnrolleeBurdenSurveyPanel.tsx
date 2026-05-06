@@ -195,7 +195,7 @@ export default function EnrolleeBurdenSurveyPanel({
                 <AtlasTextButton
                   onClick={() => openSurvey(latestDraftRecord)}
                   className="px-[14px] py-[7px] text-[14px]"
-                  style={{ backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg } as React.CSSProperties}
+                  style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#ffffff' } as React.CSSProperties}
                 >
                   {latestDraftRecord ? 'resume draft' : 'start survey'}
                 </AtlasTextButton>
@@ -301,7 +301,7 @@ export default function EnrolleeBurdenSurveyPanel({
                     onClick={() => void persist('completed')}
                     disabled={isSaving}
                     className="px-[14px] py-[7px] text-[14px]"
-                    style={{ backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg } as React.CSSProperties}
+                    style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#ffffff' } as React.CSSProperties}
                   >
                     submit completed
                   </AtlasTextButton>
