@@ -10,6 +10,7 @@ import type {
   EnrolleeProfile,
   EnrollmentRequestRecord,
   NavigatorCompetencyAssessmentRecord,
+  PartnerStationSpecialtyGroup,
   PartnerStationProfile,
   RoleMenuConfig,
   RouteAssignmentRecord,
@@ -31,6 +32,8 @@ import {
   loadSinglePaneBootstrap
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import {
+  buildPartnerBurdenBreakdownFromHistory,
+  derivePartnerStationSpecialtyGroups,
   buildSurveyDomainLoadBreakdown,
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
@@ -57,6 +60,7 @@ export interface SinglePaneBootstrapState {
   adminMetrics: AdminDataQualityMetric[]
   partnerLoad: DomainLoad | null
   partnerLoadBreakdown: DomainLoadBreakdown | null
+  partnerStationSpecialties: PartnerStationSpecialtyGroup[]
   accountSettings: AccountSettings
   partnerStationProfile: PartnerStationProfile | null
   intakeFormsByEnrolleeId: Record<string, EnrolleeIntakeRecord>
@@ -153,18 +157,20 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
     )
 
     const partnerSurveyHistory = await loadPartnerServiceCapacitySurveyHistory(nextAccountSettings.organization)
-    const latestCompletedPartnerSurvey =
-      partnerSurveyHistory.find((record) => record.status === 'completed') || partnerSurveyHistory[0] || null
+    const completedPartnerSurveyHistory = [...partnerSurveyHistory]
+      .filter((record) => record.status === 'completed')
+      .sort((left, right) => {
+        const leftTime = new Date(left.completedAtIso || left.updatedAtIso || left.submittedAtIso).getTime()
+        const rightTime = new Date(right.completedAtIso || right.updatedAtIso || right.submittedAtIso).getTime()
+        return rightTime - leftTime
+      })
+    const latestCompletedPartnerSurvey = completedPartnerSurveyHistory[0] || null
+    const partnerStationSpecialties = derivePartnerStationSpecialtyGroups(latestCompletedPartnerSurvey)
     const partnerViewLoadBreakdown =
-      latestCompletedPartnerSurvey
-        ? buildSurveyDomainLoadBreakdown({
-            subjectId: latestCompletedPartnerSurvey.partnerId || nextAccountSettings.organization,
-            subjectLabel: latestCompletedPartnerSurvey.header.organizationName || nextAccountSettings.organization,
-            sourceKind: 'partnerSurvey',
-            sourceLabel: 'partner burden survey',
-            answers: latestCompletedPartnerSurvey.answers
-          })
-        : legacyPartnerViewLoadBreakdown
+      buildPartnerBurdenBreakdownFromHistory(completedPartnerSurveyHistory, {
+        subjectId: latestCompletedPartnerSurvey?.partnerId || nextAccountSettings.organization,
+        subjectLabel: latestCompletedPartnerSurvey?.header.organizationName || nextAccountSettings.organization
+      }) || legacyPartnerViewLoadBreakdown
     const partnerViewLoad = toNormalizedRadialDomainLoad(partnerViewLoadBreakdown)
     const stationProfile = await loadPartnerStationProfile(nextAccountSettings.organization, {
       fullName: nextAccountSettings.fullName,
@@ -184,6 +190,7 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
       adminMetrics: quality,
       partnerLoad: partnerViewLoad,
       partnerLoadBreakdown: partnerViewLoadBreakdown,
+      partnerStationSpecialties,
       accountSettings: nextAccountSettings,
       partnerStationProfile: stationProfile,
       intakeFormsByEnrolleeId: savedIntakes,
@@ -217,6 +224,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
     adminMetrics: [],
     partnerLoad: null,
     partnerLoadBreakdown: null,
+    partnerStationSpecialties: [],
     accountSettings: DEFAULT_ACCOUNT_SETTINGS,
     partnerStationProfile: null,
     intakeFormsByEnrolleeId: {},
