@@ -78,13 +78,13 @@ export default {
         },
       },
       borderRadius: {
-        lg: "0.875rem",
-        md: "calc(0.875rem - 2px)",
-        sm: "calc(0.875rem - 4px)",
+        lg: "var(--atlas-radius-control)",
+        md: "calc(var(--atlas-radius-control) - 2px)",
+        sm: "calc(var(--atlas-radius-control) - 4px)",
       },
       fontFamily: {
-        sans: ['"Helvetica Neue"', 'Helvetica'],
-        display: ['"Helvetica Neue"', 'Helvetica'],
+        sans: ["var(--font-body)", "Helvetica", "Arial", "sans-serif"],
+        display: ["var(--font-heading)", "Helvetica", "Arial", "sans-serif"],
       },
       boxShadow: {
         glow: "0 0 28px rgba(255, 214, 0, 0.35)",

@@ -55,7 +55,6 @@ export default function StripMapControlOverlay({
           </div>
           <AtlasCloseButton
             onClick={onClose}
-            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: '#ffffff30', color: SP_COLORS.white } as React.CSSProperties}
           />
         </div>
@@ -94,14 +93,14 @@ export default function StripMapControlOverlay({
               <div className="flex items-center gap-2">
                 <AtlasTextButton
                   onClick={() => setDraftConfig((current) => adjustTimelineDuration(current, -1))}
-                  className="px-3 py-1.5 text-[12px] font-medium"
+                  className="px-[14px] py-[7px] text-[14px] font-medium"
                   style={{ ['--button-border-color' as const]: '#ffffff2c', color: SP_COLORS.white } as React.CSSProperties}
                 >
                   -30d
                 </AtlasTextButton>
                 <AtlasTextButton
                   onClick={() => setDraftConfig((current) => adjustTimelineDuration(current, 1))}
-                  className="px-3 py-1.5 text-[12px] font-medium"
+                  className="px-[14px] py-[7px] text-[14px] font-medium"
                   style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
                 >
                   +30d
@@ -132,14 +131,14 @@ export default function StripMapControlOverlay({
                     <div className="flex items-center gap-2">
                       <AtlasTextButton
                         onClick={() => setDraftConfig((current) => adjustTimelinePhaseLength(current, segment.phase, -1))}
-                        className="px-3 py-1.5 text-[12px] font-medium"
+                        className="px-[14px] py-[7px] text-[14px] font-medium"
                         style={{ ['--button-border-color' as const]: '#ffffff2c', color: SP_COLORS.white } as React.CSSProperties}
                       >
                         -30d
                       </AtlasTextButton>
                       <AtlasTextButton
                         onClick={() => setDraftConfig((current) => adjustTimelinePhaseLength(current, segment.phase, 1))}
-                        className="px-3 py-1.5 text-[12px] font-medium"
+                        className="px-[14px] py-[7px] text-[14px] font-medium"
                         style={{ ['--button-border-color' as const]: TIMELINE_PHASE_COLORS[segment.phase], color: TIMELINE_PHASE_COLORS[segment.phase] } as React.CSSProperties}
                       >
                         +30d
@@ -155,14 +154,14 @@ export default function StripMapControlOverlay({
         <div className="mt-5 flex items-center justify-end gap-2">
           <AtlasTextButton
             onClick={onClose}
-            className="px-4 py-2 text-[12px] font-medium"
+            className="px-[19px] py-[10px] text-[14px] font-medium"
             style={{ ['--button-border-color' as const]: '#ffffff2c', color: SP_COLORS.white } as React.CSSProperties}
           >
             cancel
           </AtlasTextButton>
           <AtlasTextButton
             onClick={() => onSave(normalizedDraftConfig)}
-            className="px-4 py-2 text-[12px] font-medium"
+            className="px-[19px] py-[10px] text-[14px] font-medium"
             style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
           >
             save timeline

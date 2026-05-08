@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import LocalDateInputBox from './LocalDateInputBox'
 import StripMapControlOverlay from './StripMapControlOverlay'
 import type {
@@ -23,11 +24,6 @@ import {
   mergeDateInputWithTime
 } from './timelineDateUtils'
 import { TIMELINE_PHASE_COLORS, TIMELINE_STATUS_COLORS } from './timelineVisualConfig'
-
-const arrowIconUrl = new URL(
-  '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
-  import.meta.url
-).href
 
 interface VerticalStripMapTimelineProps {
   events: RouteLogEvent[]
@@ -155,15 +151,15 @@ export default function VerticalStripMapTimeline({
   }
 
   return (
-    <div className="w-full rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff40' }}>
+    <div className="atlas-surface-panel w-full px-4 py-4" style={{ borderColor: '#ffffff40' }}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <small className="block text-[13px] text-white">route timeline</small>
-          <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
+          <small className="atlas-meta block text-white">route timeline</small>
+          <small className="atlas-caption block" style={{ color: SP_COLORS.muted }}>
             earliest milestone first
           </small>
         </div>
-        <small className="text-[11px]" style={{ color: SP_COLORS.muted }}>
+        <small className="atlas-caption" style={{ color: SP_COLORS.muted }}>
           {normalizedTimelineConfig.durationMonths * 30}-day plan
         </small>
       </div>
@@ -208,7 +204,7 @@ export default function VerticalStripMapTimeline({
                 <>
                   <AtlasTextButton
                     onClick={onRegulationTestsClick}
-                    className="px-3 py-1 text-[11px] font-medium"
+                    className="px-[14px] py-[6px] text-[13px] font-medium"
                     style={{
                       ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.regulation,
                       ['--button-line-color' as const]: SP_COLORS.white,
@@ -227,7 +223,7 @@ export default function VerticalStripMapTimeline({
               ) : isReadinessAction ? (
                 <AtlasTextButton
                   onClick={onRoutePlanningClick}
-                  className="inline-flex items-center gap-2 px-3 py-1 text-[11px] font-medium"
+                  className="inline-flex items-center gap-2 px-[14px] py-[6px] text-[13px] font-medium"
                   style={{
                     ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.readiness,
                     ['--button-line-color' as const]: SP_COLORS.bg,
@@ -236,18 +232,12 @@ export default function VerticalStripMapTimeline({
                   } as React.CSSProperties}
                 >
                   <span>plan route</span>
-                  <img
-                    src={arrowIconUrl}
-                    alt=""
-                    aria-hidden="true"
-                    className="h-[0.9rem] w-[0.9rem] rotate-90"
-                    style={{ filter: 'brightness(0) saturate(100%)' }}
-                  />
+                  <AtlasArrowIcon decorative direction="right" className="h-[0.9rem] w-[0.9rem] brightness-0" />
                 </AtlasTextButton>
               ) : isRenewalButton ? (
                 <AtlasTextButton
                   onClick={onRenewalTestsClick}
-                  className="px-3 py-1 text-[11px] font-medium"
+                  className="px-[14px] py-[6px] text-[13px] font-medium"
                   style={{
                     ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.renewal,
                     ['--button-line-color' as const]: SP_COLORS.white,
@@ -271,8 +261,8 @@ export default function VerticalStripMapTimeline({
       <div className="relative mt-5 pl-8">
         <div className="absolute bottom-3 left-[11px] top-2 w-[3px] rounded-full bg-white/20" />
         {regulationHistoryMarkers.length ? (
-          <div className="mb-5 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.red}70`, backgroundColor: 'var(--surface-panel-soft)' }}>
-            <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.red }}>
+          <div className="atlas-surface-panel mb-5 px-4 py-3" style={{ borderColor: `${SP_COLORS.red}70` }}>
+            <small className="atlas-overline block" style={{ color: SP_COLORS.red }}>
               regulation test history
             </small>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -300,7 +290,7 @@ export default function VerticalStripMapTimeline({
                 <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: statusColor }} />
               </div>
 
-              <div className="rounded-[24px] border px-4 py-3" style={{ borderColor: '#ffffff3a', backgroundColor: 'var(--surface-panel-raised)' }}>
+              <div className="atlas-surface-raised px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <small className="block text-[11px]" style={{ color: SP_COLORS.muted }}>
@@ -407,8 +397,8 @@ export default function VerticalStripMapTimeline({
       </div>
 
       {visibleSuggestedMarkers.length > 0 ? (
-        <div className="mt-4 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.yellow}70`, backgroundColor: 'var(--surface-panel-soft)' }}>
-          <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.yellow }}>
+        <div className="atlas-surface-panel mt-4 px-4 py-3" style={{ borderColor: `${SP_COLORS.yellow}70` }}>
+          <small className="atlas-overline block" style={{ color: SP_COLORS.yellow }}>
             ranked station suggestions
           </small>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -425,8 +415,8 @@ export default function VerticalStripMapTimeline({
         </div>
       ) : null}
       {visibleResolvedZCodeMarkers.length ? (
-        <div className="mt-4 rounded-[22px] border px-4 py-3" style={{ borderColor: `${SP_COLORS.deepGreen}70`, backgroundColor: 'var(--surface-panel-soft)' }}>
-          <small className="block text-[11px] uppercase tracking-[0.08em]" style={{ color: SP_COLORS.deepGreen }}>
+        <div className="atlas-surface-panel mt-4 px-4 py-3" style={{ borderColor: `${SP_COLORS.deepGreen}70` }}>
+          <small className="atlas-overline block" style={{ color: SP_COLORS.deepGreen }}>
             resolved z-codes
           </small>
           <div className="mt-2 grid gap-2">
@@ -437,8 +427,8 @@ export default function VerticalStripMapTimeline({
                   key={marker.id}
                   type="button"
                   onClick={() => setActiveResolvedMarkerId((current) => (current === marker.id ? null : marker.id))}
-                  className="rounded-[16px] border px-3 py-2 text-left"
-                  style={{ borderColor: '#ffffff22', color: SP_COLORS.white, backgroundColor: 'rgba(255,255,255,0.03)' }}
+                  className="atlas-surface-raised px-3 py-2 text-left"
+                  style={{ color: SP_COLORS.white, backgroundColor: 'rgba(255,255,255,0.03)' }}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-[12px] font-medium text-white">
@@ -465,7 +455,7 @@ export default function VerticalStripMapTimeline({
         </div>
       ) : null}
       {!showReadinessProgress ? (
-        <div className="mt-4 rounded-[18px] border px-4 py-2 text-[12px]" style={{ borderColor: `${SP_COLORS.red}90`, color: SP_COLORS.red }}>
+        <div className="atlas-surface-raised mt-4 px-4 py-2 text-[12px]" style={{ borderColor: `${SP_COLORS.red}90`, color: SP_COLORS.red }}>
           readiness hidden pending regulation clearance
         </div>
       ) : null}

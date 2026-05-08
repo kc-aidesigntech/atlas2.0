@@ -1,5 +1,6 @@
 import React from 'react'
-import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
+import { getZCodeParentColor } from '@atlas/shared'
+import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 
 interface EnrolleeParentBadgeRowProps {
@@ -29,24 +30,17 @@ export default function EnrolleeParentBadgeRow({
       {parentCodes.map((parentCode) => {
         const normalized = parentCode.trim().toUpperCase()
         const fill = getZCodeParentColor(normalized) || SP_COLORS.white
-        const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
         const isCompleted = completedSet.has(normalized)
         return (
-          <span
+          <ZCodeBadge
             key={normalized}
-            className={cn('relative inline-flex h-9 min-w-[2.25rem] items-center justify-center rounded-full border px-2 text-[13px] font-semibold tracking-[0.06em]', badgeClassName)}
-            style={{ backgroundColor: fill, borderColor: fill, color: textColor }}
-          >
-            {isCompleted ? (
-              <span
-                className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold"
-                style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
-              >
-                ✓
-              </span>
-            ) : null}
-            {normalized.replace(/^Z/, '')}
-          </span>
+            value={normalized}
+            fill={fill}
+            size="compact"
+            stripLeadingZ
+            checked={isCompleted}
+            className={badgeClassName}
+          />
         )
       })}
     </div>

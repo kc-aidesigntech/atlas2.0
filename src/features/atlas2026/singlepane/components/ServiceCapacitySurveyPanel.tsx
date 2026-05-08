@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { getZCodeParentColor } from '@atlas/shared'
 import { AtlasPlusButton, AtlasTextButton } from '../../components/AtlasPrimitives'
+import AtlasArrowIcon from '../../components/AtlasArrowIcon'
 import {
   SERVICE_CAPACITY_FORM_VERSION,
   flattenSurveyPrompts
@@ -46,6 +47,7 @@ interface ServiceCapacitySurveyPanelProps {
   defaultHeader: PartnerServiceCapacityHeader
   isSaving: boolean
   saveError: string | null
+  onBackToWorkspace?: () => void
   onSearchPartnerIdentifiers: (firstName: string, lastName: string) => Promise<PartnerIdentifierRecord[]>
   onEnsurePartnerIdentifier: (header: {
     firstName: string
@@ -86,16 +88,18 @@ const ROLE_OPTIONS: Array<{ value: PartnerSurveyRespondentRole; label: string }>
   { value: 'other', label: 'Other' }
 ]
 type PanelView = 'history' | 'survey'
-const arrowIconUrl = new URL(
-  '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
-  import.meta.url
-).href
 const SUPPORT_EMAIL = 'support@transitionalcare.net'
 const SERVICE_CAPACITY_SAVE_ERROR = 'Unable to save service capacity survey.'
 
 interface VisiblePromptEntry {
   section: ZCodeSurveySection
   prompt: ZCodeSurveyPrompt
+}
+
+function isSubmissionRecord(
+  value: PartnerServiceCapacitySubmissionRecord | void
+): value is PartnerServiceCapacitySubmissionRecord {
+  return Boolean(value && typeof value === 'object' && 'id' in value)
 }
 
 function getRespondentValidationMessage(header: PartnerServiceCapacityHeader) {
@@ -147,6 +151,7 @@ export default function ServiceCapacitySurveyPanel({
   defaultHeader,
   isSaving,
   saveError,
+  onBackToWorkspace,
   onSearchPartnerIdentifiers,
   onEnsurePartnerIdentifier,
   onSubmit,
@@ -269,6 +274,7 @@ export default function ServiceCapacitySurveyPanel({
       hasPersistedDraft={Boolean(persistedDraft)}
       isResolvingResumeDraft={isResolvingResumeDraft}
       resumeDraftError={resumeDraftError}
+      onBackToWorkspace={onBackToWorkspace}
       onCheckoutNewRecord={handleCheckoutNewRecord}
       onResumeDraft={handleResumeDraft}
       onEditDraftRecord={handleEditDraftRecord}
@@ -652,7 +658,7 @@ function ServiceCapacitySurveyForm({
       setBlockingSaveError(null)
       Promise.resolve(onSubmitRef.current(payload))
         .then((savedRecord) => {
-          if (savedRecord?.id) {
+          if (isSubmissionRecord(savedRecord)) {
             setCurrentRecordId(savedRecord.id)
             if (savedRecord.draftKey) setDraftKey(savedRecord.draftKey)
           }
@@ -713,7 +719,7 @@ function ServiceCapacitySurveyForm({
       setBlockingSaveError(getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR))
       return
     }
-    if (completedRecord?.id) setCurrentRecordId(completedRecord.id)
+    if (isSubmissionRecord(completedRecord)) setCurrentRecordId(completedRecord.id)
     persistSurveyDraft(null)
     setAutosaveState('saved')
     setBlockingSaveError(null)
@@ -764,7 +770,7 @@ function ServiceCapacitySurveyForm({
     effectiveBlockingSaveError && dismissedBlockingSaveError !== effectiveBlockingSaveError ? effectiveBlockingSaveError : null
 
   return (
-    <div className="relative w-full rounded-[21px] border px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40', backgroundColor: 'var(--surface-panel-soft)' }}>
+    <div className="atlas-surface-panel relative w-full px-4 py-4 md:px-5 md:py-5" style={{ borderColor: '#ffffff40' }}>
       {visibleBlockingSaveError && blockingIssue ? (
         <BlockingSupportOverlay
           message={visibleBlockingSaveError}
@@ -776,13 +782,13 @@ function ServiceCapacitySurveyForm({
           onDismiss={() => setDismissedBlockingSaveError(visibleBlockingSaveError)}
         />
       ) : null}
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b pb-4" style={{ borderColor: '#ffffff20' }}>
+      <div className="atlas-divider flex flex-wrap items-start justify-between gap-4 border-b pb-4">
         <div className="max-w-[720px]">
-          <small className="block text-[12px] uppercase tracking-[0.16em] md:text-[14px]" style={{ color: SP_COLORS.muted }}>
+          <small className="atlas-overline block md:text-[14px]" style={{ color: SP_COLORS.muted }}>
             partner service capacity
           </small>
-          <h3 className="mt-1 text-[28px] font-medium text-white md:text-[34px]">Z-code burden survey</h3>
-          <small className="block text-[14px] text-[#bdbdbd] md:text-[17px]">
+          <h3 className="atlas-h3 mt-1 text-[28px] font-medium text-white md:text-[34px]">Z-code burden survey</h3>
+          <small className="atlas-panel-copy block text-[#bdbdbd] md:text-[17px]">
             Capture how well your organization can handle each Z-code pressure area on a 1-9 burden scale.
           </small>
         </div>
@@ -790,10 +796,10 @@ function ServiceCapacitySurveyForm({
           <div className="flex flex-wrap justify-start gap-2 sm:justify-end">
             <AtlasTextButton
               onClick={onBackToRecords}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-[12px] md:text-[13px]"
+              className="inline-flex items-center gap-2 px-[14px] py-[7px] text-[14px] md:text-[16px]"
               style={{ ['--button-border-color' as const]: '#ffffff32', color: SP_COLORS.white } as React.CSSProperties}
             >
-              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.2rem] w-[1.2rem] -rotate-90 opacity-90" />
+              <AtlasArrowIcon decorative direction="left" className="h-[1.2rem] w-[1.2rem] opacity-90" />
               <span>back to list</span>
             </AtlasTextButton>
             <AtlasPlusButton
@@ -826,8 +832,8 @@ function ServiceCapacitySurveyForm({
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-4">
-          <section className="rounded-[16px] border p-4" style={{ borderColor: '#ffffff25' }}>
-            <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[14px]">your details</small>
+          <section className="atlas-surface-raised p-4">
+            <small className="atlas-overline mb-3 block text-[#bdbdbd] md:text-[14px]">your details</small>
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="lg:col-span-2">
                 <Field label="Your Name*" requiredHint="This field is required.">
@@ -920,7 +926,7 @@ function ServiceCapacitySurveyForm({
                       <AtlasTextButton
                         key={option.value}
                         onClick={() => toggleRole(option.value)}
-                        className="px-3 py-1.5 text-[12px] md:text-[13px]"
+                        className="px-[14px] py-[7px] text-[14px] md:text-[16px]"
                         style={{
                           ['--button-border-color' as const]: isSelected ? SP_COLORS.yellow : '#ffffff30',
                           color: isSelected ? SP_COLORS.yellow : SP_COLORS.white
@@ -949,8 +955,8 @@ function ServiceCapacitySurveyForm({
           </section>
         </div>
 
-        <section className="rounded-[16px] border p-4" style={{ borderColor: '#ffffff25' }}>
-          <small className="mb-3 block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd] md:text-[14px]">scale guide</small>
+          <section className="atlas-surface-raised p-4">
+          <small className="atlas-overline mb-3 block text-[#bdbdbd] md:text-[14px]">scale guide</small>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {scale.map((option) => (
               <div key={option.value} className="rounded-[12px] border px-3 py-2" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>

@@ -1,16 +1,12 @@
 import React, { useMemo, useState } from 'react'
 import { CalendarDays } from 'lucide-react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import type { RegulationTestStripMarker, RouteCandidateRecord, TimelineConfig } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import MtaRouteBoard from './MtaRouteBoard'
 import StripMapControlOverlay from './StripMapControlOverlay'
 import { formatDateLabelShort } from './timelineDateUtils'
-
-const arrowIconUrl = new URL(
-  '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
-  import.meta.url
-).href
 const PHASE_RAIL_COLUMN_WIDTH_PX = 26
 const PHASE_NODE_CENTER_OFFSET_PX = 42
 
@@ -71,7 +67,7 @@ export default function MobileRouteBoardPanel({
         <AtlasTextButton
           key="regulation-tests"
           onClick={onRegulationTestsClick}
-          className="px-3 py-1.5 text-[11px] font-medium"
+          className="px-[14px] py-[7px] text-[13px] font-medium"
           style={{
             ['--button-border-color' as const]: SP_COLORS.red,
             ['--button-line-color' as const]: SP_COLORS.white,
@@ -89,7 +85,7 @@ export default function MobileRouteBoardPanel({
         <AtlasTextButton
           key="route-planning"
           onClick={onRoutePlanningClick}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-medium"
+          className="inline-flex items-center gap-2 px-[14px] py-[7px] text-[13px] font-medium"
           style={{
             ['--button-border-color' as const]: SP_COLORS.yellow,
             ['--button-line-color' as const]: SP_COLORS.bg,
@@ -98,11 +94,10 @@ export default function MobileRouteBoardPanel({
           } as React.CSSProperties}
         >
           <span>plan route</span>
-          <img
-            src={arrowIconUrl}
-            alt=""
-            aria-hidden="true"
-            className="h-[0.9rem] w-[0.9rem] rotate-90"
+          <AtlasArrowIcon
+            decorative
+            direction="right"
+            className="h-[0.9rem] w-[0.9rem]"
             style={{ filter: 'brightness(0) saturate(100%)' }}
           />
         </AtlasTextButton>
@@ -114,13 +109,13 @@ export default function MobileRouteBoardPanel({
         <AtlasTextButton
           key="renewal-phase"
           onClick={onRenewalTestsClick}
-          className="px-3 py-1.5 text-[11px] font-medium"
+          className="px-[14px] py-[7px] text-[13px] font-medium"
           style={{
             ['--button-border-color' as const]: SP_COLORS.deepGreen,
             ['--button-line-color' as const]: SP_COLORS.white,
             backgroundColor: SP_COLORS.deepGreen,
             color: SP_COLORS.white
-          }}
+          } as React.CSSProperties}
         >
           renewal
         </AtlasTextButton>
@@ -132,7 +127,7 @@ export default function MobileRouteBoardPanel({
         {hasTimelineControls ? (
           <AtlasTextButton
             onClick={() => setIsControlOverlayOpen(true)}
-            className="inline-flex self-start items-center gap-2 px-3 py-1.5 text-[11px] font-medium"
+            className="inline-flex self-start items-center gap-2 px-[14px] py-[7px] text-[13px] font-medium"
             style={{ ['--button-border-color' as const]: '#ffffff3d', color: SP_COLORS.white } as React.CSSProperties}
           >
             <CalendarDays size={14} strokeWidth={2} />
@@ -154,13 +149,10 @@ export default function MobileRouteBoardPanel({
           aria-hidden="true"
         />
         <PhaseRailRow color={SP_COLORS.red}>
-          <section
-            className="rounded-[30px] border px-4 py-4 text-white"
-            style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}
-          >
+          <section className="atlas-surface-shell px-4 py-4 text-white" style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+                <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                   first step
                 </small>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -172,14 +164,14 @@ export default function MobileRouteBoardPanel({
                     {isRegulationCleared ? 'cleared' : 'pending'}
                   </span>
                 </div>
-                <small className="mt-2 block text-[11px] leading-[1.35]" style={{ color: '#aab6c3' }}>
+                <small className="atlas-caption mt-2 block leading-[1.35]" style={{ color: '#aab6c3' }}>
                   Complete regulation checks before moving into readiness routing.
                 </small>
               </div>
               {onRegulationTestsClick ? (
                 <AtlasTextButton
                   onClick={onRegulationTestsClick}
-                  className="px-3 py-1.5 text-[11px] font-medium"
+                  className="px-[14px] py-[7px] text-[13px] font-medium"
                   style={{
                     ['--button-border-color' as const]: SP_COLORS.red,
                     ['--button-line-color' as const]: SP_COLORS.white,
@@ -208,7 +200,7 @@ export default function MobileRouteBoardPanel({
                   </span>
                 ))
               ) : (
-                <div className="rounded-[14px] border px-3 py-2 text-[11px]" style={{ borderColor: '#ffffff18', color: '#9eacb9', backgroundColor: 'var(--surface-panel-raised)' }}>
+                <div className="atlas-empty-state bg-[var(--surface-panel-raised)]">
                   no completed regulation tests yet
                 </div>
               )}
@@ -239,13 +231,10 @@ export default function MobileRouteBoardPanel({
         </PhaseRailRow>
 
         <PhaseRailRow color={SP_COLORS.deepGreen}>
-          <section
-            className="rounded-[30px] border px-4 py-4 text-white"
-            style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}
-          >
+          <section className="atlas-surface-shell px-4 py-4 text-white" style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+                <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                   next phase
                 </small>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -257,14 +246,14 @@ export default function MobileRouteBoardPanel({
                     after readiness
                   </span>
                 </div>
-                <small className="mt-2 block text-[11px] leading-[1.35]" style={{ color: '#aab6c3' }}>
+                <small className="atlas-caption mt-2 block leading-[1.35]" style={{ color: '#aab6c3' }}>
                   Maintain the enrollee&apos;s stability plan once regulation clears and readiness routing is complete.
                 </small>
               </div>
               {onRenewalTestsClick ? (
                 <AtlasTextButton
                   onClick={onRenewalTestsClick}
-                  className="px-3 py-1.5 text-[11px] font-medium"
+                  className="px-[14px] py-[7px] text-[13px] font-medium"
                   style={{
                     ['--button-border-color' as const]: SP_COLORS.deepGreen,
                     ['--button-line-color' as const]: SP_COLORS.white,
@@ -276,7 +265,7 @@ export default function MobileRouteBoardPanel({
                 </AtlasTextButton>
               ) : null}
             </div>
-            <div className="mt-3 rounded-[16px] border px-3 py-3 text-[11px]" style={{ borderColor: '#ffffff18', color: '#cfd6de', backgroundColor: 'var(--surface-panel-raised)' }}>
+            <div className="atlas-empty-state mt-3 bg-[var(--surface-panel-raised)] text-[11px] text-[#cfd6de]">
               {timelineConfig.durationMonths * 30}d outlook anchored from {formatDateLabelShort(timelineConfig.planStartIso)}.
             </div>
           </section>

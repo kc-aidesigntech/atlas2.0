@@ -132,6 +132,19 @@ It is the canonical style source for design, product, and engineering decisions 
 - Keep line lengths short-to-medium for task surfaces.
 - Use increased letter spacing only for micro-labels and overlines.
 
+### Canonical Implementation Styles
+
+- `atlas-h1`: flagship view titles and public hero headings.
+- `atlas-h2`: major page sections and dashboard anchors.
+- `atlas-h3`: primary panel titles and modal titles.
+- `atlas-h4`: sub-panels, card headings, and dense operational blocks.
+- `atlas-panel-title`: shared primitive alias for panel-level heading treatment.
+- `atlas-panel-copy` / `atlas-subtitle`: supporting paragraph copy under a panel heading.
+- `atlas-body`: default operational copy.
+- `atlas-meta`: compact factual lines such as `dob`, `case id`, `contact`, and secondary status detail.
+- `atlas-caption`: helper copy, empty states, and tertiary context.
+- `atlas-overline` / `atlas-utility`: micro-labels, section kickers, and progress labels only.
+
 ## Spacing and Layout
 
 ### Spacing System
@@ -152,6 +165,13 @@ It is the canonical style source for design, product, and engineering decisions 
 - Baseline admin/public intake field radius: `14px`.
 - Panels/cards: larger radius for containment and hierarchy.
 - Keep radius values consistent by component type; avoid arbitrary one-offs.
+
+### Canonical Radius Tokens
+
+- `--atlas-radius-control`: standard inputs, selects, compact chips, and small field wrappers.
+- `--atlas-radius-card`: inset cards and raised detail blocks.
+- `--atlas-radius-panel`: default content panels and drawers.
+- `--atlas-radius-shell`: major shell containers, route-board shells, and large overlays.
 
 ## Surface and Border Treatment
 
@@ -188,6 +208,13 @@ It is the canonical style source for design, product, and engineering decisions 
 - Cards must communicate hierarchy with spacing and border/surface contrast.
 - Avoid stacked heavy shadows in dark mode; prefer subtle border + tonal separation.
 - Critical action panels require explicit status text in addition to color.
+
+### Canonical Surface Classes
+
+- `atlas-surface-panel`: default Atlas 2026 panel shell.
+- `atlas-surface-raised`: inset cards, empty states, inner content blocks.
+- `atlas-surface-shell`: largest route-board and modal shell containers.
+- `atlas-divider`: standard internal separator treatment.
 
 ### Data and Status Indicators
 
@@ -233,6 +260,13 @@ It is the canonical style source for design, product, and engineering decisions 
 - Avoid inline style drift when a reusable token/class pattern exists.
 - Preserve global Tailwind compatibility overrides for slate/background utilities on dark surfaces unless an approved migration replaces them.
 
+### Field and Control Standard
+
+- Use `atlas-input`, `atlas-select`, and `atlas-textarea` for standard Atlas 2026 fields.
+- Use `atlas-admin-input` only where legacy admin/public code still expects that class; keep it aligned with canonical field tokens.
+- Use `AtlasTextButton`, `AtlasIconButton`, `AtlasCloseButton`, `AtlasPanel`, and `AtlasInsetCard` before introducing new local button/card treatments.
+- When a button or panel needs a one-off semantic accent, prefer CSS custom properties such as `--button-border-color` over bespoke local class recipes.
+
 ## Governance and Change Management
 
 - Any change to color semantics, type scale, or universal behavior requires:
@@ -248,6 +282,9 @@ It is the canonical style source for design, product, and engineering decisions 
 - Do keep surfaces dark, calm, and high-contrast for long sessions.
 - Do prioritize readability over novelty.
 - Do align focus and interaction styling with the lucid accent layer.
+- Do use canonical Atlas utility classes before writing new `text-[...]` and `rounded-[...]` values.
 - Do not introduce random hex values for one-off components.
 - Do not rely on color alone to communicate critical state.
 - Do not ship new UI primitives without documenting token usage.
+- Do not add new local button motifs when an Atlas primitive variant can express the interaction.
+- Do not introduce arbitrary radius scales unless the shared radius system is being intentionally expanded.

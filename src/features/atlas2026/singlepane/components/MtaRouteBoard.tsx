@@ -1,11 +1,11 @@
 import React from 'react'
 import { Check } from 'lucide-react'
 import { AtlasIconButton } from '../../components/AtlasPrimitives'
+import AtlasArrowIcon from '../../components/AtlasArrowIcon'
+import ZCodeBadge from '../../components/ZCodeBadge'
 import type { RouteCandidateParentSummary, RouteCandidateRecord } from '../types'
 import { SP_COLORS } from '../theme'
-import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
-
-const arrowIconUrl = new URL('../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png', import.meta.url).href
+import { getZCodeParentColor } from '@atlas/shared'
 
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ')
@@ -59,13 +59,10 @@ export default function MtaRouteBoard({
   const summaryCandidate = selectedCandidate ?? routeCandidates[0] ?? null
 
   return (
-    <section
-      className={cn('w-full rounded-[30px] border px-3 py-3 text-white sm:px-4 sm:py-4', className)}
-      style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}
-    >
+    <section className={cn('atlas-surface-shell w-full px-3 py-3 text-white sm:px-4 sm:py-4', className)} style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}>
       <div className="flex flex-wrap items-start justify-between gap-3 px-1 pb-3">
         <div className="min-w-0">
-          <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+          <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
             {kicker}
           </small>
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -102,16 +99,12 @@ export default function MtaRouteBoard({
               />
             ) : null}
           </div>
-          {subtitle ? (
-            <small className="mt-2 block text-[11px] leading-[1.35]" style={{ color: '#aab6c3' }}>
-              {subtitle}
-            </small>
-          ) : null}
+          {subtitle ? <small className="atlas-caption mt-2 block leading-[1.35]" style={{ color: '#aab6c3' }}>{subtitle}</small> : null}
         </div>
         {headerActions ? <div className="flex flex-wrap items-center justify-end gap-2">{headerActions}</div> : null}
       </div>
 
-      <div className="overflow-hidden rounded-[26px] border" style={{ borderColor: '#ffffff24', backgroundColor: 'var(--surface-panel-raised)' }}>
+      <div className="atlas-surface-panel overflow-hidden bg-[var(--surface-panel-raised)]" style={{ borderColor: '#ffffff24' }}>
         {routeCandidates.length ? (
           routeCandidates.map((candidate, index) => {
             const isSelected = candidate.stationId === selectedCandidate?.stationId
@@ -156,7 +149,7 @@ export default function MtaRouteBoard({
                       <div className="min-w-0">
                         <div className="truncate text-[22px] font-medium leading-tight text-white sm:text-[24px]">{candidate.stationName}</div>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: rowGlow || '#b0bcc9' }}>
-                          <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.15rem] w-[1.15rem] shrink-0 rotate-90 opacity-90" />
+                          <AtlasArrowIcon decorative direction="right" className="h-[1.15rem] w-[1.15rem] opacity-90" />
                           <span>{index === 0 ? 'quickest route' : `route ${index + 1}`}</span>
                           {isAssigned ? <StateWord color={SP_COLORS.deepGreen}>assigned</StateWord> : null}
                         </div>
@@ -179,7 +172,7 @@ export default function MtaRouteBoard({
                                 color: isAssigned ? SP_COLORS.deepGreen : SP_COLORS.yellow
                               } as React.CSSProperties}
                             >
-                              <img src={arrowIconUrl} alt="" aria-hidden="true" className="h-[1.15rem] w-[1.15rem] rotate-90" />
+                              <AtlasArrowIcon decorative direction="right" className="h-[1.15rem] w-[1.15rem]" />
                             </AtlasIconButton>
                           ) : null}
 
@@ -218,7 +211,7 @@ export default function MtaRouteBoard({
                           />
                         ))
                       ) : (
-                        <div className="rounded-[14px] border px-3 py-2 text-[11px]" style={{ borderColor: '#ffffff18', color: '#9eacb9' }}>
+                        <div className="atlas-empty-state text-[11px]">
                           no aligned parents
                         </div>
                       )}
@@ -235,7 +228,7 @@ export default function MtaRouteBoard({
             )
           })
         ) : (
-          <div className="px-4 py-6 text-[13px]" style={{ color: '#cfd6de' }}>
+          <div className="atlas-body px-4 py-6 text-[13px]" style={{ color: '#cfd6de' }}>
             {emptyMessage}
           </div>
         )}
@@ -427,39 +420,14 @@ function ProfileStyleParentCircle({
   size?: 'board' | 'mobile'
 }) {
   const fill = getZCodeParentColor(parentCode) || SP_COLORS.white
-  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
-  const circleClassName =
-    size === 'mobile'
-      ? `relative inline-flex h-7 w-7 items-center justify-center rounded-full text-[19px] font-bold ${
-          textColor === SP_COLORS.white ? 'text-white' : 'text-black'
-        }`
-      : `relative inline-flex h-9 w-9 items-center justify-center rounded-full text-[24px] font-bold ${
-          textColor === SP_COLORS.white ? 'text-white' : 'text-black'
-        }`
-  const checkClassName =
-    size === 'mobile'
-      ? 'absolute -right-0.5 -top-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border text-[8px] font-semibold'
-      : 'absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold'
-  const content = (
-    <>
-      {isCompleted ? (
-        <span
-          className={checkClassName}
-          style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
-        >
-          ✓
-        </span>
-      ) : null}
-      {parentCode.replace(/^Z/i, '')}
-    </>
-  )
+  const badgeSize = size === 'mobile' ? 'mobile' : 'board'
+  const badge = <ZCodeBadge value={parentCode} fill={fill} size={badgeSize} stripLeadingZ checked={isCompleted} />
 
   if (onSelect) {
     return (
       <button
         type="button"
-        className={`${circleClassName} cursor-pointer`}
-        style={{ backgroundColor: fill }}
+        className="cursor-pointer"
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
@@ -469,19 +437,12 @@ function ProfileStyleParentCircle({
           })
         }}
       >
-        {content}
+        {badge}
       </button>
     )
   }
 
-  return (
-    <span
-      className={circleClassName}
-      style={{ backgroundColor: fill }}
-    >
-      {content}
-    </span>
-  )
+  return badge
 }
 
 function ParentScoreCard({

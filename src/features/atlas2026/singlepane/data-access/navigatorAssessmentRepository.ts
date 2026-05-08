@@ -56,7 +56,13 @@ async function ensurePersonId(displayName: string, roleKey: StaffRoleKey) {
     const conflictAssignments = Array.isArray(roleConflicts[0].people_role_assignments)
       ? roleConflicts[0].people_role_assignments
       : [roleConflicts[0].people_role_assignments]
-    const conflictRole = conflictAssignments[0]?.roles?.role_key || 'another role'
+    const conflictRoles = conflictAssignments[0]?.roles as
+      | { role_key?: string }
+      | Array<{ role_key?: string }>
+      | null
+      | undefined
+    const firstConflictRole = Array.isArray(conflictRoles) ? conflictRoles[0]?.role_key : conflictRoles?.role_key
+    const conflictRole = firstConflictRole || 'another role'
     throw new Error(`${trimmed} is already assigned as ${conflictRole}. Each person can only hold one role.`)
   }
 

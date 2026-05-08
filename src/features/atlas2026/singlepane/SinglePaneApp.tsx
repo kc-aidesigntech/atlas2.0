@@ -1,12 +1,8 @@
-/**
- * Primary Atlas (ATLAS) single-pane shell orchestrating role-based navigation, overlay
- * workflows, and timeline/context composition around shared data hooks.
- */
 import React from 'react'
 import { useSupabaseAuth } from '../../../auth/SupabaseAuthProvider'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled } from '../../../lib/supabaseClient'
 import AdminDataControlPanel from '../admin/AdminDataControlPanel'
-import { AtlasTextButton } from '../components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasTextButton } from '../components/AtlasPrimitives'
 import AccountSettingsPanel from './components/AccountSettingsPanel'
 import ContextPanels from './components/ContextPanels'
 import LiveAccessMatrixPanel from './components/LiveAccessMatrixPanel'
@@ -15,6 +11,7 @@ import EnrolleeBurdenSurveyPanel from './components/EnrolleeBurdenSurveyPanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
 import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
 import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
+import PartnerStationProfilePanel from './components/PartnerStationProfilePanel'
 import ProfilePanel from './components/ProfilePanel'
 import RadialLoadChart from './components/RadialLoadChart'
 import RadialLoadTableOverlay from './components/RadialLoadTableOverlay'
@@ -26,7 +23,7 @@ import StripMapTimeline from './components/StripMapTimeline'
 import TopNav from './components/TopNav'
 import VerticalStripMapTimeline from './components/VerticalStripMapTimeline'
 import { SP_COLORS } from './theme'
-import type { RouteCandidateRecord, StabilizationPhase } from './types'
+import type { AtlasRole, RouteCandidateRecord, StabilizationPhase } from './types'
 import { useSinglePaneData } from './useSinglePaneData'
 
 const PERSISTED_ACTION_LABELS = new Set([
@@ -41,8 +38,6 @@ interface ResolutionOverlayState {
   filterChildCodes?: string[]
 }
 
-// Only these labels are persisted as actionable menu intents; other role menu
-// strings remain informational and should not trigger workflow side effects.
 export default function SinglePaneApp() {
   const {
     role,
@@ -77,6 +72,10 @@ export default function SinglePaneApp() {
     navigatorAggregateLoad,
     navigatorAggregateLoadBreakdown,
     navigatorEnrollmentAssignments,
+    viewerCanViewNavigatorAssignmentNames,
+    viewerCanAccessAssignmentBoard,
+    viewerCanUseAssignmentActions,
+    viewerCanAccessAdminRegistryCards,
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
     assigningNavigatorEnrollmentId,
@@ -155,6 +154,7 @@ export default function SinglePaneApp() {
   const [isRegulationTestsOpen, setIsRegulationTestsOpen] = React.useState(false)
   const [assessmentInitialTestType, setAssessmentInitialTestType] = React.useState<'mh_sca' | 'svs' | 'ipf' | 'b_ipf' | null>(null)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
+  const [isReferralPortalOpen, setIsReferralPortalOpen] = React.useState(false)
   const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
@@ -164,6 +164,7 @@ export default function SinglePaneApp() {
   const transitionCycleRef = React.useRef(0)
   const transitionBootstrappedRef = React.useRef(false)
   const hashSyncBootstrappedRef = React.useRef(false)
+  const previousUiRoleRef = React.useRef<AtlasRole | null>(null)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const uiRole = viewerRole
   const activeEnrolleeSurveyTarget = React.useMemo(
@@ -183,12 +184,31 @@ export default function SinglePaneApp() {
   }, [])
 
   React.useEffect(() => {
-    // Keep the last non-overlay menu so closing route planning returns users to
-    // their previous content context instead of forcing default navigation.
-    if (activeMenu !== 'route planning') {
+    if (activeMenu !== 'route planning' && activeMenu !== 'referral portal' && activeMenu !== 'refer') {
       setLastContentMenu(activeMenu)
     }
   }, [activeMenu])
+
+  React.useEffect(() => {
+    const previousRole = previousUiRoleRef.current
+    previousUiRoleRef.current = uiRole
+    if (!previousRole || previousRole === uiRole) return
+
+    setIsReferralPortalOpen(false)
+
+    const isReferralPortalSelection = activeMenu === 'referral portal' || activeMenu === 'refer'
+    if (!isReferralPortalSelection || uiRole === 'partner') return
+
+    const fallbackMenu =
+      (lastContentMenu && lastContentMenu !== 'route planning' && lastContentMenu !== 'referral portal' && lastContentMenu !== 'refer'
+        ? lastContentMenu
+        : selectedRoleConfig.topMenus.find((menu) => menu !== 'referral portal' && menu !== 'refer')) ||
+      selectedRoleConfig.topMenus[0] ||
+      'enrollees'
+    if (fallbackMenu !== activeMenu) {
+      setActiveMenu(fallbackMenu)
+    }
+  }, [activeMenu, lastContentMenu, selectedRoleConfig.topMenus, setActiveMenu, uiRole])
 
   React.useEffect(() => {
     if (!isAccountSettingsOpen || !showLiveAuthSecurity) return
@@ -207,8 +227,6 @@ export default function SinglePaneApp() {
   React.useEffect(() => {
     if (typeof window === 'undefined') return
     if (!selectedRoleConfig.topMenus.length) return
-    // Initial hash bootstrap prefers Uniform Resource Locator (URL) intent, then canonicalizes hash to the
-    // exact current menu key for stable deep-link sharing.
     const hashTarget = hashToMenu(window.location.hash, selectedRoleConfig.topMenus)
     const fallbackMenu = hashTarget || selectedRoleConfig.topMenus[0]
     if (!fallbackMenu) return
@@ -234,9 +252,7 @@ export default function SinglePaneApp() {
       if (target.enrollmentId) {
         try {
           await reloadEnrolleeBurdenSurveyHistoryForEnrollment(target.enrollmentId)
-        } catch {
-          // Let the panel surface the load error instead of blocking the open action.
-        }
+        } catch {}
       }
     },
     [enrollees, reloadEnrolleeBurdenSurveyHistoryForEnrollment, setSelectedEnrolleeId]
@@ -252,8 +268,6 @@ export default function SinglePaneApp() {
     if (currentHash === nextHash) return
 
     const nextUrl = `${window.location.pathname}${window.location.search}#${nextHash}`
-    // First sync uses replaceState to avoid creating a duplicate history entry
-    // on mount; subsequent menu changes intentionally push user-visible history.
     if (!hashSyncBootstrappedRef.current) {
       window.history.replaceState(null, '', nextUrl)
       hashSyncBootstrappedRef.current = true
@@ -292,8 +306,6 @@ export default function SinglePaneApp() {
     setContentOpacity(0)
     const targetAvatarUrl = enrollees.find((enrollee) => enrollee.id === selectedEnrolleeId)?.avatarUrl || null
     void (async () => {
-      // Transition cycle token prevents stale async work from restoring opacity
-      // after a newer enrollee selection has already started rendering.
       await sleep(160)
       if (cycle !== transitionCycleRef.current) return
       await preloadImageIfNeeded(targetAvatarUrl)
@@ -346,6 +358,10 @@ export default function SinglePaneApp() {
   const canUseReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
   const isNavigatorMyProfile = uiRole === 'navigator' && activeMenu === 'my profile'
   const isNavigatorEnrolleeMenu = uiRole === 'navigator' && activeMenu === 'enrollees'
+  const assignmentBoardRows = viewerCanAccessAssignmentBoard ? navigatorEnrollmentAssignments : []
+  const assignmentBoardError = viewerCanAccessAssignmentBoard
+    ? navigatorEnrollmentAssignmentsError
+    : 'Assignment board is hidden by administrator policy.'
   const isSupervisorNavigatorManagementView =
     uiRole === 'supervisor' && (activeMenu === 'assigned navigators' || activeMenu === 'navigator assessments')
   const isReady = isPartnerRole ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu ? true : Boolean(selectedEnrollee && timelineConfig)
@@ -387,8 +403,14 @@ export default function SinglePaneApp() {
     [isRegulationCleared, selectedLogs]
   )
   const hasEnteredRenewalStage = React.useMemo(
-    () => selectedLogs.some((log) => log.phase === 'renewal') || nextSuggestedPhase === 'renewal',
-    [nextSuggestedPhase, selectedLogs]
+    () => {
+      const resolvedByZCodes = Boolean(
+        selectedEnrollee?.activeZCodeDetails.length &&
+        selectedEnrollee.activeZCodeDetails.every((detail) => detail.isResolved)
+      )
+      return selectedLogs.some((log) => log.phase === 'renewal') || nextSuggestedPhase === 'renewal' || resolvedByZCodes
+    },
+    [nextSuggestedPhase, selectedEnrollee?.activeZCodeDetails, selectedLogs]
   )
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
@@ -402,10 +424,27 @@ export default function SinglePaneApp() {
     const combined = `${firstName} ${lastName}`.trim()
     return combined || accountSettings.fullName || 'not configured'
   }, [accountSettings.fullName, partnerStationProfile?.primaryContactFirstName, partnerStationProfile?.primaryContactLastName])
+  const partnerUnresolvedCodes = React.useMemo(
+    () =>
+      (selectedEnrollee?.activeZCodeDetails || [])
+        .filter((detail) => !detail.isResolved)
+        .map((detail) => detail.zCode)
+        .slice(0, 8),
+    [selectedEnrollee?.activeZCodeDetails]
+  )
 
   function handleMenuSelect(menu: string) {
     if (!remoteSession?.isActive && uiRole === 'partner' && menu === 'service capacity') {
       window.location.assign(standaloneSurveyUrl)
+      return
+    }
+    if (menu === 'referral portal' || menu === 'refer') {
+      if (uiRole === 'partner') {
+        setActiveMenu(menu)
+        setIsReferralPortalOpen(false)
+        return
+      }
+      setIsReferralPortalOpen(true)
       return
     }
     if (menu === 'route planning') {
@@ -437,8 +476,6 @@ export default function SinglePaneApp() {
     }
     if (uiRole === 'supervisor' && label.trim().toLowerCase() === 'record navigator assessment') {
       if (!selectedEnrollee || !selectedLoadBreakdown) return
-      // Derive a compact score payload from current breakdown rows so supervisors
-      // can capture an assessment without leaving the workflow panel.
       const answers = selectedLoadBreakdown.rows.slice(0, 12).map((row) => ({
         parentCode: row.zCodeGroup.toUpperCase(),
         theme: row.mappedDomain,
@@ -507,10 +544,33 @@ export default function SinglePaneApp() {
         enrollees={enrollees}
         selectedEnrolleeId={selectedEnrolleeId}
         onSelectEnrollee={setSelectedEnrolleeId}
-        onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
+        navigatorEnrolleeView={navigatorEnrolleeView}
+        onNavigatorEnrolleeViewChange={setNavigatorEnrolleeView}
+        onOpenAccountSettings={() => setIsAccountSettingsOpen((current) => !current)}
       />
 
       <main className="atlas-shell-edge-buffer relative py-[10px]">
+        {isReferralPortalOpen && canUseReferralPortal && !isPartnerRole ? (
+          <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-[2px]">
+            <div className="relative max-h-[92vh] w-full max-w-[1040px] overflow-y-auto">
+              <div className="mb-3 flex justify-end">
+                <AtlasCloseButton
+                  onClick={() => setIsReferralPortalOpen(false)}
+                  style={{ ['--button-border-color' as const]: '#ffffff30', color: '#ffffff' } as React.CSSProperties}
+                />
+              </div>
+              <PartnerReferralWorkflowPanel
+                defaultReferrerName={accountSettings.fullName}
+                defaultPartnerOrganizationName={
+                  partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
+                }
+                recentReferrals={pickupQueue}
+                onSubmit={submitPartnerReferral}
+                accentColor="var(--atlas-signal-lucid-green)"
+              />
+            </div>
+          </div>
+        ) : null}
         <section
           className="relative mx-auto min-h-[calc(100vh-112px)] w-full rounded-[38px] border bg-black px-[20px] pb-[12px] pt-[14px]"
           style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
@@ -533,7 +593,7 @@ export default function SinglePaneApp() {
               </div>
               <AtlasTextButton
                 onClick={stopTroubleshootingSession}
-                className="px-4 py-2 text-[12px] font-medium text-white"
+                className="px-[19px] py-[10px] text-[14px] font-medium text-white"
                 style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
               >
                 exit troubleshooting
@@ -576,7 +636,12 @@ export default function SinglePaneApp() {
                       }
                     },
                     onSignOut: () => {
-                      void signOut()
+                      void (async () => {
+                        await signOut()
+                        if (typeof window !== 'undefined') {
+                          window.location.assign('/')
+                        }
+                      })()
                     }
                   }
                 : null
@@ -639,15 +704,16 @@ export default function SinglePaneApp() {
           />
           {activeEnrolleeSurveyTarget ? (
             <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
-              <div className="max-h-[92vh] w-full max-w-[1180px] overflow-y-auto rounded-[28px] border border-white/15 bg-[color:var(--surface-panel)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.45)] md:p-5">
+              <div className="atlas-surface-panel max-h-[92vh] w-full max-w-[1180px] overflow-y-auto bg-[color:var(--surface-panel)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.45)] md:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
-                    <small className="block text-[10px] uppercase tracking-[0.18em] text-[#9fb0c1]">intervallic assessments</small>
-                    <div className="mt-1 text-[24px] font-medium text-white">enrollee burden survey</div>
+                    <small className="atlas-overline block text-[#9fb0c1]">intervallic assessments</small>
+                    <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">enrollee burden survey</div>
                   </div>
-                  <AtlasTextButton onClick={() => setEnrolleeSurveyTargetId(null)} className="px-3 py-1.5 text-[12px]">
-                    close
-                  </AtlasTextButton>
+                  <AtlasCloseButton
+                    onClick={() => setEnrolleeSurveyTargetId(null)}
+                    style={{ ['--button-border-color' as const]: '#ffffff30', color: '#ffffff' } as React.CSSProperties}
+                  />
                 </div>
                 <EnrolleeBurdenSurveyPanel
                   enrollee={activeEnrolleeSurveyTarget}
@@ -674,50 +740,18 @@ export default function SinglePaneApp() {
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
-                    <div className="min-w-0 flex-1 basis-[520px] rounded-[26px] border p-4" style={{ borderColor: '#ffffff35' }}>
-                      <small className="block text-[12px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
-                        my station
-                      </small>
-                      <div className="mt-1 text-[26px] font-medium text-white">
-                        {partnerStationProfile?.stationName || accountSettings.organization?.trim() || '[My Station]'}
-                      </div>
-                      <small className="mt-2 block text-[14px] text-white">
-                        Org: {partnerStationProfile?.organizationName || accountSettings.organization || 'not configured'}
-                      </small>
-                      <small className="mt-1 block text-[14px] text-white">
-                        County: {partnerStationProfile?.countyName || 'not configured'}
-                      </small>
-                      <small className="mt-1 block text-[14px] text-white">Contact: {partnerContactName}</small>
-                      <small className="mt-1 block text-[14px] text-white">
-                        E: {partnerStationProfile?.primaryContactEmail || accountSettings.email || 'not configured'}
-                      </small>
-                      <div className="mt-4 flex justify-center">
-                        <AtlasTextButton
-                          onClick={() => setActiveMenu('referral portal')}
-                          className="px-4 py-1 text-[13px] text-white"
-                          style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
-                          title="Open the referral workflow."
-                        >
-                          refer
-                        </AtlasTextButton>
-                      </div>
-                      <div className="mt-4 flex flex-wrap items-center gap-2">
-                        {partnerStationBadgeCodes.map((code, index) => (
-                          <span
-                            key={`${code}-${index}`}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[28px] font-bold"
-                            style={{
-                              backgroundColor: index % 3 === 1 ? SP_COLORS.red : index % 3 === 2 ? SP_COLORS.blue : SP_COLORS.yellow,
-                              color: '#000000'
-                            }}
-                          >
-                            {code}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                    <PartnerStationProfilePanel
+                      accountSettings={accountSettings}
+                      partnerStationProfile={partnerStationProfile}
+                      partnerContactName={partnerContactName}
+                      partnerUnresolvedCodes={partnerUnresolvedCodes}
+                      partnerStationBadgeCodes={partnerStationBadgeCodes}
+                      isUploadingAvatar={isUploadingAccountProfileImage}
+                      avatarUploadError={accountProfileImageUploadError}
+                      onReplaceAvatar={remoteSession ? undefined : replaceAccountProfileImage}
+                    />
                     <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
-                      <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
+                      <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} />
                     </div>
                   </div>
                 ) : isNavigatorMyProfile ? (
@@ -727,7 +761,12 @@ export default function SinglePaneApp() {
                     aggregateLoad={navigatorAggregateLoad}
                     assignedEnrolleeCount={enrollees.length}
                     assignedEnrollees={enrollees}
-                    pickupQueue={pickupQueue}
+                    navigatorEnrollmentAssignments={assignmentBoardRows}
+                    navigatorEnrollmentAssignmentsError={assignmentBoardError}
+                    isLoadingNavigatorEnrollmentAssignments={viewerCanAccessAssignmentBoard && isLoadingNavigatorEnrollmentAssignments}
+                    assigningEnrollmentId={assigningNavigatorEnrollmentId}
+                    canViewNavigatorAssignmentNames={viewerCanViewNavigatorAssignmentNames}
+                    canToggleAssignmentActions={viewerCanUseAssignmentActions}
                     competencySummary={navigatorAssignedCompetencySummary}
                     selfAssessmentSummary={navigatorSelfAssessmentSummary}
                     selfAssessments={navigatorSelfAssessments}
@@ -739,7 +778,7 @@ export default function SinglePaneApp() {
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
                     onOpenEnrolleeSurvey={(enrolleeId) => void openEnrolleeBurdenSurvey(enrolleeId)}
-                    onClaimPickupQueueRecord={claimPickupQueueRecord}
+                    onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
                     onSaveSelfAssessment={saveNavigatorSelfAssessment}
                     onSaveSupervisionSession={saveSupervisionSession}
                   />
@@ -768,10 +807,12 @@ export default function SinglePaneApp() {
                   >
                     <div className="w-full">
                       <NavigatorEnrollmentAssignmentsPanel
-                        rows={navigatorEnrollmentAssignments}
-                        isLoading={isLoadingNavigatorEnrollmentAssignments}
-                        error={navigatorEnrollmentAssignmentsError}
+                        rows={assignmentBoardRows}
+                        isLoading={viewerCanAccessAssignmentBoard && isLoadingNavigatorEnrollmentAssignments}
+                        error={assignmentBoardError}
                         assigningEnrollmentId={assigningNavigatorEnrollmentId}
+                        canViewNavigatorAssignmentNames={viewerCanViewNavigatorAssignmentNames}
+                        canToggleAssignments={viewerCanUseAssignmentActions}
                         onToggleAssignment={assignNavigatorEnrollmentToSelf}
                       />
                     </div>
@@ -781,11 +822,11 @@ export default function SinglePaneApp() {
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
-                    <div className="w-full rounded-[24px] border px-5 py-5 text-white" style={{ borderColor: '#ffffff30' }}>
-                      <small className="block text-[12px] uppercase tracking-[0.14em] text-[#bcbcbc]">my enrollees</small>
-                      <div className="mt-2 text-[18px] font-medium">No enrollees are currently assigned to you.</div>
-                      <small className="mt-2 block text-[12px] text-[#bcbcbc]">
-                        Switch to "add enrollees" and use "assign to me" to claim one.
+                    <div className="atlas-surface-panel w-full px-5 py-5 text-white">
+                      <small className="atlas-overline block text-[#bcbcbc]">my enrollees</small>
+                      <div className="atlas-h4 mt-2 text-[18px] font-medium">No enrollees are currently assigned to you.</div>
+                      <small className="atlas-caption mt-2 block text-[#bcbcbc]">
+                        Use the dropdown next to "enrollees" and switch to "add enrollees" to claim one.
                       </small>
                     </div>
                   </div>
@@ -821,28 +862,19 @@ export default function SinglePaneApp() {
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
                   </div>
                 ) : null}
-                {isNavigatorEnrolleeMenu ? (
-                  <div className="flex items-center justify-center py-1">
-                    <label className="flex items-center gap-2 text-[12px] text-[#d6d6d6]">
-                      <span>enrollee view</span>
-                      <select
-                        value={navigatorEnrolleeView}
-                        onChange={(event) => setNavigatorEnrolleeView(event.target.value as 'my' | 'add')}
-                        className="atlas-admin-input min-w-[180px]"
-                      >
-                        <option value="my">my enrollees</option>
-                        <option value="add">add enrollees</option>
-                      </select>
-                    </label>
-                  </div>
-                ) : null}
-
                 {canUseReferralPortal && !isReferralPortalMenu ? (
                   <div className="flex items-center justify-center py-1">
                     <AtlasTextButton
-                      onClick={() => setActiveMenu('referral portal')}
-                      className="px-4 py-1 text-[12px] text-white"
-                      style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
+                      onClick={() => {
+                        if (uiRole === 'partner') {
+                          setActiveMenu('referral portal')
+                          setIsReferralPortalOpen(false)
+                          return
+                        }
+                        setIsReferralPortalOpen(true)
+                      }}
+                      className="px-[19px] py-[6px] text-[14px] text-white"
+                      style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
                       title="Open referral portal."
                     >
                       refer
@@ -850,50 +882,49 @@ export default function SinglePaneApp() {
                   </div>
                 ) : null}
 
-                {isReferralPortalMenu && canUseReferralPortal ? (
-                  <PartnerReferralWorkflowPanel
-                    defaultReferrerName={accountSettings.fullName}
-                    defaultPartnerOrganizationName={
-                      partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
-                    }
-                    recentReferrals={pickupQueue}
-                    onSubmit={submitPartnerReferral}
-                    accentColor="var(--atlas-signal-lucid-green)"
-                  />
-                ) : isAdminSection ? (
+                {isAdminSection ? (
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
-                    <div className="w-full space-y-4">
-                      <LiveAccessMatrixPanel
-                        dataset={accessMatrixDataset}
-                        error={accessMatrixError}
-                        isSaving={isSavingAccessMatrix}
-                        onSavePersonRoles={saveAccessMatrixPersonRoles}
-                        onSaveEnrollmentNavigator={saveAccessMatrixEnrollmentNavigators}
-                        onSaveSupervisorAssignment={saveAccessMatrixSupervisorAssignments}
-                        onSavePartnerPrimaryContact={saveAccessMatrixPartnerPrimaryContacts}
-                        remoteSession={remoteSession}
-                        partnerTroubleshootingGrants={partnerTroubleshootingGrants}
-                        onStartTroubleshooting={startTroubleshootingSession}
-                        onStopTroubleshooting={stopTroubleshootingSession}
-                      />
-                      <AdminDataControlPanel
-                        metrics={adminMetrics}
-                        enrollees={enrollees}
-                        intakeFormsByEnrolleeId={intakeFormsByEnrolleeId}
-                        selectedEnrollee={selectedEnrollee}
-                        accountSettings={accountSettings}
-                        enrollmentRequests={enrollmentRequests}
-                        supervisorNavigatorCompetency={supervisorNavigatorCompetency}
-                        navigatorProgramState={navigatorProgramState}
-                        navigatorIntervalDueItems={navigatorIntervalDueItems}
-                        registry={adminPortalRegistry}
-                        isSavingRegistry={isSavingAdminPortalRegistry}
-                        registryError={adminPortalRegistryError}
-                        onSaveRegistry={saveAdminPortalRegistry}
-                        onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
-                        onSaveIntake={saveEnrolleeIntake}
-                      />
-                    </div>
+                    {viewerCanAccessAdminRegistryCards ? (
+                      <div className="w-full space-y-4">
+                        <LiveAccessMatrixPanel
+                          dataset={accessMatrixDataset}
+                          error={accessMatrixError}
+                          isSaving={isSavingAccessMatrix}
+                          onSavePersonRoles={saveAccessMatrixPersonRoles}
+                          onSaveEnrollmentNavigator={saveAccessMatrixEnrollmentNavigators}
+                          onSaveSupervisorAssignment={saveAccessMatrixSupervisorAssignments}
+                          onSavePartnerPrimaryContact={saveAccessMatrixPartnerPrimaryContacts}
+                          remoteSession={remoteSession}
+                          partnerTroubleshootingGrants={partnerTroubleshootingGrants}
+                          onStartTroubleshooting={startTroubleshootingSession}
+                          onStopTroubleshooting={stopTroubleshootingSession}
+                        />
+                        <AdminDataControlPanel
+                          metrics={adminMetrics}
+                          enrollees={enrollees}
+                          intakeFormsByEnrolleeId={intakeFormsByEnrolleeId}
+                          selectedEnrollee={selectedEnrollee}
+                          accountSettings={accountSettings}
+                          enrollmentRequests={enrollmentRequests}
+                          supervisorNavigatorCompetency={supervisorNavigatorCompetency}
+                          navigatorProgramState={navigatorProgramState}
+                          navigatorIntervalDueItems={navigatorIntervalDueItems}
+                          accessMatrixDataset={accessMatrixDataset}
+                          registry={adminPortalRegistry}
+                          isSavingRegistry={isSavingAdminPortalRegistry}
+                          registryError={adminPortalRegistryError}
+                          onSaveRegistry={saveAdminPortalRegistry}
+                          onSaveEnrollmentNavigators={saveAccessMatrixEnrollmentNavigators}
+                          onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
+                          onSaveIntake={saveEnrolleeIntake}
+                        />
+                      </div>
+                    ) : (
+                      <div className="atlas-surface-panel w-full px-5 py-5 text-white">
+                        <small className="atlas-overline block text-[#bcbcbc]">administrator controls</small>
+                        <div className="atlas-h4 mt-2 text-[18px] font-medium">Admin registry tools are blocked by policy.</div>
+                      </div>
+                    )}
                   </div>
                 ) : isServiceCapacitySection ? (
                   remoteSession?.isActive ? (
@@ -906,15 +937,19 @@ export default function SinglePaneApp() {
                       </small>
                     </div>
                   ) : null
-                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView ? null : isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add' ? (
-                  <NavigatorEnrollmentAssignmentsPanel
-                    rows={navigatorEnrollmentAssignments}
-                    isLoading={isLoadingNavigatorEnrollmentAssignments}
-                    error={navigatorEnrollmentAssignmentsError}
-                    assigningEnrollmentId={assigningNavigatorEnrollmentId}
-                    onToggleAssignment={assignNavigatorEnrollmentToSelf}
-                  />
-                ) : isPartnerRole ? (
+                ) : isPartnerRole && isReferralPortalMenu ? (
+                  <div className="rounded-[24px] border px-4 py-4" style={{ borderColor: '#ffffff30' }}>
+                    <PartnerReferralWorkflowPanel
+                      defaultReferrerName={accountSettings.fullName}
+                      defaultPartnerOrganizationName={
+                        partnerStationProfile?.organizationName?.trim() || accountSettings.organization.trim()
+                      }
+                      recentReferrals={pickupQueue}
+                      onSubmit={submitPartnerReferral}
+                      accentColor="var(--atlas-signal-lucid-green)"
+                    />
+                  </div>
+                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerRole ? (
                   <>
                     {timelineConfig ? (
                       <>
@@ -1086,7 +1121,6 @@ function LoadingShell() {
 }
 
 function getNextSuggestedPhase(logs: { phase: StabilizationPhase; status: string }[], isRegulationCleared: boolean) {
-  // Invariant: never suggest readiness/renewal before regulation tests are cleared.
   const last = logs[logs.length - 1]
   if (!last) return isRegulationCleared ? 'readiness' : 'regulation'
   if (last.status !== 'active') return last.phase
@@ -1115,8 +1149,6 @@ function deriveEnrolleeParentCodes(
   enrollee: { activeZCodeDetails: { parentCode: string }[]; zCodeTags: string[] } | null
 ) {
   if (!enrollee) return []
-  // Prefer canonical parent codes from active details; only fall back to parsing
-  // legacy tag strings when detail records are unavailable.
   const fromDetails = enrollee.activeZCodeDetails
     .map((detail) => detail.parentCode.trim().toUpperCase())
     .filter(Boolean)
@@ -1145,11 +1177,10 @@ function hashToMenu(hashValue: string, menus: string[]) {
   return menus.find((menu) => menuToHash(menu) === normalizedHash) || null
 }
 
-function derivePartnerBadgeCodes(loadBreakdown: { rows: { zCodeGroup: string }[] } | null) {
-  const parsed = (loadBreakdown?.rows || [])
-    .flatMap((row) => row.zCodeGroup.match(/\d+/g) || [])
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-  const unique = Array.from(new Set(parsed))
-  return unique.length ? unique.slice(0, 3) : ['56', '55', '57']
+function derivePartnerBadgeCodes(loadBreakdown: { rows: Array<{ zCodeGroup: string; parentCode?: string }> } | null) {
+  const parentCodes = (loadBreakdown?.rows || [])
+    .map((row) => String(row.parentCode || row.zCodeGroup || '').trim().toUpperCase())
+    .filter((code) => /^Z\d{2}$/.test(code))
+  const unique = Array.from(new Set(parentCodes)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+  return (unique.length ? unique : ['Z55', 'Z56', 'Z57']).slice(0, 3).map((code) => code.replace(/^Z/i, ''))
 }

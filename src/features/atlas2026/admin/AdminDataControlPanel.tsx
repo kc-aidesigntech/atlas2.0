@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Building2, GitBranch, ShieldCheck, Users } from 'lucide-react'
-import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
+import { getZCodeParentColor } from '@atlas/shared'
 import {
   AtlasInsetCard,
   AtlasMetricPill,
@@ -8,9 +8,11 @@ import {
   AtlasStatusPill,
   AtlasTextButton
 } from '@/features/atlas2026/components/AtlasPrimitives'
+import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import { DEFAULT_SERVICE_CAPACITY_SECTIONS } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type {
+  AccessMatrixDataset,
   AdminPortalCustomEnrolleeRecord,
   AdminPortalOrganizationRecord,
   AdminPortalOrganizationType,
@@ -45,10 +47,12 @@ interface AdminDataControlPanelProps {
   supervisorNavigatorCompetency: SupervisorNavigatorCompetencySummary[]
   navigatorProgramState: NavigatorProgramState
   navigatorIntervalDueItems: IntervalAssessmentDueItem[]
+  accessMatrixDataset: AccessMatrixDataset | null
   registry: AdminPortalRegistry | null
   isSavingRegistry: boolean
   registryError: string | null
   onSaveRegistry: (registry: AdminPortalRegistry) => Promise<AdminPortalRegistry>
+  onSaveEnrollmentNavigators: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<unknown> | unknown
   onSaveIntervalAssessmentRule: (rule: IntervalAssessmentRule) => Promise<unknown> | unknown
   onSaveIntake: (intake: EnrolleeIntakeRecord) => Promise<unknown> | unknown
 }
@@ -68,6 +72,39 @@ const ADMIN_ACTIVE_SECTION_KEY = 'atlas2026.admin.session.active-section'
 const ADMIN_SELECTED_ENROLLEE_KEY = 'atlas2026.admin.session.selected-enrollee'
 const ADMIN_SELECTED_PERSON_KEY = 'atlas2026.admin.session.selected-person'
 const ADMIN_SELECTED_ORGANIZATION_KEY = 'atlas2026.admin.session.selected-organization'
+const ADMIN_POLICY_SCREEN_KEYS = [
+  'overview',
+  'enrollees',
+  'directory',
+  'organizations',
+  'relationships',
+  'assessments',
+  'assignmentBoard'
+] as const
+const ADMIN_POLICY_CARD_KEYS = ['navigatorCoverageCard', 'liveAccessMatrix', 'navigatorProfilePickupQueue'] as const
+const ADMIN_POLICY_ACTION_KEYS = ['assignmentBoard.viewNavigatorNames', 'assignmentBoard.assignSelf', 'admin.saveRegistry'] as const
+
+function createDefaultFeaturePolicy(): AdminPortalPersonRecord['featurePolicy'] {
+  return {
+    // Empty maps mean "allowed"; admins can explicitly set keys to false to tighten access.
+    screenToggles: {},
+    cardToggles: {},
+    actionToggles: {}
+  }
+}
+
+function isPolicyKeyAllowed(policyMap: Record<string, boolean>, key: string) {
+  return policyMap[key] !== false
+}
+
+function togglePolicyKey(policyMap: Record<string, boolean>, key: string) {
+  if (isPolicyKeyAllowed(policyMap, key)) {
+    return { ...policyMap, [key]: false }
+  }
+  const next = { ...policyMap }
+  delete next[key]
+  return next
+}
 
 const ADMIN_Z_CODE_OPTIONS = Array.from(
   DEFAULT_SERVICE_CAPACITY_SECTIONS.flatMap((section) => section.prompts).reduce(
@@ -186,12 +223,18 @@ function buildBlankCustomEnrollee(enrolleeId = createPortalId('custom-enrollee')
 }
 
 function buildBlankPerson(): AdminPortalPersonRecord {
+  const id = createPortalId('person')
   return {
-    id: createPortalId('person'),
+    id,
     fullName: '',
     email: '',
     title: '',
     roles: ['navigator'],
+    canViewNavigatorAssignmentNames: false,
+    approvalState: 'pending',
+    identityGroupId: id,
+    linkedEmails: [],
+    featurePolicy: createDefaultFeaturePolicy(),
     organizationId: null,
     reportsToPersonId: null,
     linkedEnrolleeId: null,
@@ -282,10 +325,12 @@ export default function AdminDataControlPanel({
   supervisorNavigatorCompetency,
   navigatorProgramState,
   navigatorIntervalDueItems,
+  accessMatrixDataset,
   registry,
   isSavingRegistry,
   registryError,
   onSaveRegistry,
+  onSaveEnrollmentNavigators,
   onSaveIntervalAssessmentRule,
   onSaveIntake
 }: AdminDataControlPanelProps) {
@@ -330,19 +375,55 @@ export default function AdminDataControlPanel({
 
   const seedPeople = useMemo<AdminPortalPersonRecord[]>(() => {
     const rows: AdminPortalPersonRecord[] = []
+    const seenIds = new Set<string>()
+    const seenEmails = new Set<string>()
+    const registerSeedPerson = (person: AdminPortalPersonRecord) => {
+      const normalizedEmail = person.email.trim().toLowerCase()
+      if (seenIds.has(person.id)) return
+      if (normalizedEmail && seenEmails.has(normalizedEmail)) return
+      rows.push(person)
+      seenIds.add(person.id)
+      if (normalizedEmail) seenEmails.add(normalizedEmail)
+    }
     if (accountSettings.fullName.trim() || accountSettings.email.trim()) {
-      rows.push({
+      registerSeedPerson({
         id: createSeedPersonId(accountSettings.fullName || accountSettings.email || 'atlas operator'),
         fullName: accountSettings.fullName || 'atlas operator',
         email: accountSettings.email,
         title: 'System administrator',
         roles: ['administrator'],
+        canViewNavigatorAssignmentNames: true,
+        approvalState: 'approved',
+        identityGroupId: createSeedPersonId(accountSettings.fullName || accountSettings.email || 'atlas operator'),
+        linkedEmails: accountSettings.email ? [accountSettings.email.trim().toLowerCase()] : [],
+        featurePolicy: createDefaultFeaturePolicy(),
         organizationId: accountSettings.organization.trim() ? createSeedOrganizationId(accountSettings.organization) : null,
         reportsToPersonId: null,
         linkedEnrolleeId: null,
         status: 'active',
         notes: 'Seeded from account settings.'
       })
+    }
+    if (accessMatrixDataset?.people.length) {
+      for (const person of accessMatrixDataset.people) {
+        registerSeedPerson({
+          id: person.id,
+          fullName: person.fullName,
+          email: person.email,
+          title: '',
+          roles: person.roleKeys,
+          canViewNavigatorAssignmentNames: person.roleKeys.includes('administrator'),
+          approvalState: 'approved',
+          identityGroupId: person.id,
+          linkedEmails: person.email ? [person.email.trim().toLowerCase()] : [],
+          featurePolicy: createDefaultFeaturePolicy(),
+          organizationId: null,
+          reportsToPersonId: null,
+          linkedEnrolleeId: null,
+          status: 'active',
+          notes: 'Seeded from access matrix dataset.'
+        })
+      }
     }
     const navigatorNames = Array.from(
       new Set([
@@ -351,12 +432,17 @@ export default function AdminDataControlPanel({
       ].map((value) => value.trim()).filter(Boolean))
     )
     for (const name of navigatorNames) {
-      rows.push({
+      registerSeedPerson({
         id: createSeedPersonId(name),
         fullName: name,
         email: '',
         title: 'Navigator',
         roles: ['navigator'],
+        canViewNavigatorAssignmentNames: false,
+        approvalState: 'approved',
+        identityGroupId: createSeedPersonId(name),
+        linkedEmails: [],
+        featurePolicy: createDefaultFeaturePolicy(),
         organizationId: null,
         reportsToPersonId: null,
         linkedEnrolleeId: null,
@@ -365,7 +451,7 @@ export default function AdminDataControlPanel({
       })
     }
     return rows
-  }, [accountSettings.email, accountSettings.fullName, accountSettings.organization, enrollees, supervisorNavigatorCompetency])
+  }, [accessMatrixDataset, accountSettings.email, accountSettings.fullName, accountSettings.organization, enrollees, supervisorNavigatorCompetency])
 
   const combinedOrganizations = useMemo(
     () => mergeById(seedOrganizations, effectiveRegistry.organizations, effectiveRegistry.archivedOrganizationIds),
@@ -406,6 +492,17 @@ export default function AdminDataControlPanel({
     () => combinedPeople.filter((person) => person.roles.includes('supervisor') || person.roles.includes('administrator')),
     [combinedPeople]
   )
+  const navigatorCoverageOptions = useMemo(() => {
+    const options = (accessMatrixDataset?.people || [])
+      .filter((person) => person.roleKeys.includes('navigator'))
+      .map((person) => ({
+        id: person.id,
+        label: person.fullName.trim() || person.email.trim() || person.id,
+        email: person.email.trim()
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label))
+    return options
+  }, [accessMatrixDataset?.people])
 
   useEffect(() => {
     // Keep first-row selection sticky for UX continuity when data loads/reset occurs.
@@ -637,7 +734,17 @@ export default function AdminDataControlPanel({
 
   async function handleSavePersonDraft() {
     if (!personDraft) return
-    await commitRegistry(withRegistryPerson(personDraft), `Saved ${personDraft.fullName || 'person'} in the directory.`)
+    const normalizedPrimaryEmail = personDraft.email.trim().toLowerCase()
+    const normalizedLinkedEmails = Array.from(
+      new Set([normalizedPrimaryEmail, ...personDraft.linkedEmails.map((value) => value.trim().toLowerCase())].filter(Boolean))
+    )
+    // Keep email linkage deterministic so multiple auth emails can map to one person identity.
+    const normalizedDraft: AdminPortalPersonRecord = {
+      ...personDraft,
+      linkedEmails: normalizedLinkedEmails,
+      identityGroupId: personDraft.identityGroupId.trim() || personDraft.id
+    }
+    await commitRegistry(withRegistryPerson(normalizedDraft), `Saved ${personDraft.fullName || 'person'} in the directory.`)
   }
 
   async function handleDeletePerson(person: AdminPortalPersonRecord) {
@@ -692,6 +799,22 @@ export default function AdminDataControlPanel({
         )
       },
       `Updated coverage assignment for ${row.record.fullName || row.record.caseId || 'custom enrollee'}.`
+    )
+  }
+
+  async function handleNavigatorCoverageSelection(row: CombinedEnrolleeRow, navigatorPersonIds: string[]) {
+    if (row.kind !== 'existing') {
+      const firstLabel = navigatorCoverageOptions.find((option) => option.id === navigatorPersonIds[0])?.label || ''
+      await handleNavigatorAssignment(row, firstLabel)
+      return
+    }
+    if (!row.profile.enrollmentId) {
+      setPortalMessage(`Unable to update ${row.intake.fullName || row.profile.fullName}: enrollment id is missing.`)
+      return
+    }
+    await Promise.resolve(onSaveEnrollmentNavigators(row.profile.enrollmentId, navigatorPersonIds))
+    setPortalMessage(
+      `Updated coverage for ${row.intake.fullName || row.profile.fullName} to ${navigatorPersonIds.length} navigator${navigatorPersonIds.length === 1 ? '' : 's'}.`
     )
   }
 
@@ -1112,7 +1235,7 @@ export default function AdminDataControlPanel({
                             <AtlasTextButton
                               type="button"
                               onClick={openZCodePicker}
-                              className="px-3 py-1.5 text-[12px]"
+                              className="px-[14px] py-[7px] text-[14px]"
                               style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
                             >
                               edit z-codes
@@ -1202,8 +1325,11 @@ export default function AdminDataControlPanel({
                         <div className="text-[13px] text-[var(--foreground-secondary)]">
                           {combinedOrganizations.find((organization) => organization.id === person.organizationId)?.name || 'unassigned'}
                         </div>
-                        <div>
+                        <div className="space-y-1">
                           <StatusPill status={person.status} />
+                          <small className="block text-[11px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">
+                            {person.approvalState}
+                          </small>
                         </div>
                       </button>
                     )
@@ -1220,12 +1346,45 @@ export default function AdminDataControlPanel({
                     </Field>
                     <div className="grid gap-3 md:grid-cols-2">
                       <Field label="email">
-                        <input value={personDraft.email} onChange={(event) => setPersonDraft({ ...personDraft, email: event.target.value })} className="atlas-admin-input" />
+                        <input
+                          value={personDraft.email}
+                          onChange={(event) =>
+                            setPersonDraft({
+                              ...personDraft,
+                              email: event.target.value,
+                              linkedEmails: Array.from(
+                                new Set(
+                                  [event.target.value.trim().toLowerCase(), ...personDraft.linkedEmails.map((value) => value.trim().toLowerCase())].filter(Boolean)
+                                )
+                              )
+                            })
+                          }
+                          className="atlas-admin-input"
+                        />
                       </Field>
                       <Field label="title">
                         <input value={personDraft.title} onChange={(event) => setPersonDraft({ ...personDraft, title: event.target.value })} className="atlas-admin-input" />
                       </Field>
                     </div>
+                    <Field label="linked emails (comma separated)">
+                      <input
+                        value={personDraft.linkedEmails.join(', ')}
+                        onChange={(event) =>
+                          setPersonDraft({
+                            ...personDraft,
+                            linkedEmails: Array.from(
+                              new Set(
+                                event.target.value
+                                  .split(',')
+                                  .map((value) => value.trim().toLowerCase())
+                                  .filter(Boolean)
+                              )
+                            )
+                          })
+                        }
+                        className="atlas-admin-input"
+                      />
+                    </Field>
                     <Field label="roles">
                       <div className="flex flex-wrap gap-2">
                         {ROLE_OPTIONS.map((role) => {
@@ -1245,7 +1404,7 @@ export default function AdminDataControlPanel({
                                     : current
                                 )
                               }
-                              className="px-3 py-1.5 text-[12px] font-medium"
+                              className="px-[14px] py-[7px] text-[14px] font-medium"
                               style={
                                 {
                                   ['--button-border-color' as const]: isActive ? SP_COLORS.yellow : '#ffffff25',
@@ -1290,6 +1449,184 @@ export default function AdminDataControlPanel({
                         </select>
                       </Field>
                     </div>
+                    <Field label="assignment board access">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AtlasTextButton
+                          onClick={() =>
+                            setPersonDraft((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    canViewNavigatorAssignmentNames: !current.canViewNavigatorAssignmentNames,
+                                    featurePolicy: {
+                                      ...current.featurePolicy,
+                                      actionToggles: !current.canViewNavigatorAssignmentNames
+                                        ? { ...current.featurePolicy.actionToggles, 'assignmentBoard.viewNavigatorNames': true }
+                                        : { ...current.featurePolicy.actionToggles, 'assignmentBoard.viewNavigatorNames': false }
+                                    }
+                                  }
+                                : current
+                            )
+                          }
+                          className="px-[14px] py-[7px] text-[13px] font-medium"
+                          style={
+                            {
+                              ['--button-border-color' as const]: personDraft.canViewNavigatorAssignmentNames ? SP_COLORS.deepGreen : '#ffffff25',
+                              color: personDraft.canViewNavigatorAssignmentNames ? SP_COLORS.deepGreen : SP_COLORS.white,
+                              backgroundColor: personDraft.canViewNavigatorAssignmentNames ? 'rgba(69,191,85,0.12)' : 'transparent'
+                            } as React.CSSProperties
+                          }
+                        >
+                          {personDraft.canViewNavigatorAssignmentNames ? 'navigator names enabled' : 'navigator names disabled'}
+                        </AtlasTextButton>
+                        <small className="text-[12px] text-[var(--foreground-secondary)]">
+                          Allows this user to click assignment-count labels and view assigned navigator names.
+                        </small>
+                      </div>
+                    </Field>
+                    <Field label="signup approval">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <AtlasTextButton
+                          onClick={() =>
+                            setPersonDraft((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    approvalState: current.approvalState === 'approved' ? 'pending' : 'approved'
+                                  }
+                                : current
+                            )
+                          }
+                          className="px-[14px] py-[7px] text-[13px] font-medium"
+                          style={
+                            {
+                              ['--button-border-color' as const]:
+                                personDraft.approvalState === 'approved' ? SP_COLORS.deepGreen : SP_COLORS.yellow,
+                              color: personDraft.approvalState === 'approved' ? SP_COLORS.deepGreen : SP_COLORS.yellow,
+                              backgroundColor:
+                                personDraft.approvalState === 'approved' ? 'rgba(69,191,85,0.12)' : 'rgba(252,192,26,0.08)'
+                            } as React.CSSProperties
+                          }
+                        >
+                          {personDraft.approvalState === 'approved' ? 'approved \u2713' : 'pending approval'}
+                        </AtlasTextButton>
+                        <small className="text-[12px] text-[var(--foreground-secondary)]">
+                          Pending users keep broad access by default until policy toggles are tightened.
+                        </small>
+                      </div>
+                    </Field>
+                    <Field label="feature policy controls">
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">screens</small>
+                          <div className="flex flex-wrap gap-2">
+                            {ADMIN_POLICY_SCREEN_KEYS.map((key) => {
+                              const isAllowed = isPolicyKeyAllowed(personDraft.featurePolicy.screenToggles, key)
+                              return (
+                                <AtlasTextButton
+                                  key={key}
+                                  onClick={() =>
+                                    setPersonDraft((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            featurePolicy: {
+                                              ...current.featurePolicy,
+                                              screenToggles: togglePolicyKey(current.featurePolicy.screenToggles, key)
+                                            }
+                                          }
+                                        : current
+                                    )
+                                  }
+                                  className="px-[12px] py-[6px] text-[12px] font-medium"
+                                  style={
+                                    {
+                                      ['--button-border-color' as const]: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
+                                      color: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
+                                      backgroundColor: isAllowed ? 'rgba(69,191,85,0.12)' : 'rgba(239,68,68,0.1)'
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  {key}: {isAllowed ? 'allow' : 'block'}
+                                </AtlasTextButton>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">cards</small>
+                          <div className="flex flex-wrap gap-2">
+                            {ADMIN_POLICY_CARD_KEYS.map((key) => {
+                              const isAllowed = isPolicyKeyAllowed(personDraft.featurePolicy.cardToggles, key)
+                              return (
+                                <AtlasTextButton
+                                  key={key}
+                                  onClick={() =>
+                                    setPersonDraft((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            featurePolicy: {
+                                              ...current.featurePolicy,
+                                              cardToggles: togglePolicyKey(current.featurePolicy.cardToggles, key)
+                                            }
+                                          }
+                                        : current
+                                    )
+                                  }
+                                  className="px-[12px] py-[6px] text-[12px] font-medium"
+                                  style={
+                                    {
+                                      ['--button-border-color' as const]: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
+                                      color: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
+                                      backgroundColor: isAllowed ? 'rgba(69,191,85,0.12)' : 'rgba(239,68,68,0.1)'
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  {key}: {isAllowed ? 'allow' : 'block'}
+                                </AtlasTextButton>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">actions</small>
+                          <div className="flex flex-wrap gap-2">
+                            {ADMIN_POLICY_ACTION_KEYS.map((key) => {
+                              const isAllowed = isPolicyKeyAllowed(personDraft.featurePolicy.actionToggles, key)
+                              return (
+                                <AtlasTextButton
+                                  key={key}
+                                  onClick={() =>
+                                    setPersonDraft((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            featurePolicy: {
+                                              ...current.featurePolicy,
+                                              actionToggles: togglePolicyKey(current.featurePolicy.actionToggles, key)
+                                            }
+                                          }
+                                        : current
+                                    )
+                                  }
+                                  className="px-[12px] py-[6px] text-[12px] font-medium"
+                                  style={
+                                    {
+                                      ['--button-border-color' as const]: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
+                                      color: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
+                                      backgroundColor: isAllowed ? 'rgba(69,191,85,0.12)' : 'rgba(239,68,68,0.1)'
+                                    } as React.CSSProperties
+                                  }
+                                >
+                                  {key}: {isAllowed ? 'allow' : 'block'}
+                                </AtlasTextButton>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </Field>
                     <Field label="status">
                       <select
                         value={personDraft.status}
@@ -1514,7 +1851,13 @@ export default function AdminDataControlPanel({
                 <div className="space-y-3">
                   {visibleEnrollees.map((row) => {
                     const label = row.kind === 'existing' ? row.intake.fullName || row.profile.fullName : row.record.fullName || row.record.caseId || 'untitled enrollee'
-                    const currentNavigator = row.kind === 'existing' ? row.intake.assignedNavigator : row.record.assignedNavigator
+                    const assignment =
+                      row.kind === 'existing' && row.profile.enrollmentId
+                        ? accessMatrixDataset?.enrollmentAssignments.find(
+                            (entry) => entry.enrollmentId === row.profile.enrollmentId
+                          ) || null
+                        : null
+                    const selectedNavigatorIds = assignment?.navigatorPersonIds || []
                     return (
                       <div key={row.id} className="rounded-[18px] border border-white/10 bg-white/5 px-4 py-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1524,19 +1867,45 @@ export default function AdminDataControlPanel({
                               {row.kind === 'existing' ? row.intake.caseId || row.profile.caseId : row.record.caseId || 'case id pending'}
                             </small>
                           </div>
-                          <select
-                            value={currentNavigator}
-                            onChange={(event) => void handleNavigatorAssignment(row, event.target.value)}
-                            className="atlas-admin-input min-w-[220px]"
-                          >
-                            <option value="">Unassigned</option>
-                            {navigators.map((navigator) => (
-                              <option key={navigator.id} value={navigator.fullName}>
-                                {navigator.fullName}
-                              </option>
-                            ))}
-                          </select>
+                          {row.kind === 'existing' ? (
+                            <select
+                              multiple
+                              value={selectedNavigatorIds}
+                              onChange={(event) =>
+                                void handleNavigatorCoverageSelection(
+                                  row,
+                                  Array.from(event.target.selectedOptions).map((option) => option.value)
+                                )
+                              }
+                              className="atlas-admin-input min-h-[102px] min-w-[280px]"
+                            >
+                              {navigatorCoverageOptions.map((navigator) => (
+                                <option key={navigator.id} value={navigator.id}>
+                                  {navigator.label}
+                                  {navigator.email ? ` (${navigator.email})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <select
+                              value={row.record.assignedNavigator}
+                              onChange={(event) => void handleNavigatorAssignment(row, event.target.value)}
+                              className="atlas-admin-input min-w-[220px]"
+                            >
+                              <option value="">Unassigned</option>
+                              {navigatorCoverageOptions.map((navigator) => (
+                                <option key={navigator.id} value={navigator.label}>
+                                  {navigator.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                         </div>
+                        {row.kind === 'existing' ? (
+                          <small className="mt-2 block text-[12px] text-[var(--foreground-secondary)]">
+                            Multi-select enabled. Hold Command/Ctrl to toggle multiple navigators quickly.
+                          </small>
+                        ) : null}
                       </div>
                     )
                   })}
@@ -1830,7 +2199,7 @@ export default function AdminDataControlPanel({
                 <AtlasTextButton
                   type="button"
                   onClick={() => setIsZCodePickerOpen(false)}
-                  className="px-4 py-2 text-[12px]"
+                  className="px-[19px] py-[10px] text-[14px]"
                   style={{ ['--button-border-color' as const]: '#ffffff30', color: '#f1f1f1' } as React.CSSProperties}
                 >
                   close
@@ -1894,26 +2263,19 @@ function ZCodeParentFilterCircle({
 }) {
   const normalized = parentCode.trim().toUpperCase()
   const fill = getZCodeParentColor(normalized) || SP_COLORS.white
-  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
   return (
     <span
-      className="relative inline-flex h-12 w-12 items-center justify-center rounded-full border text-[22px] font-bold transition-all duration-200 ease-out"
-      style={{
-        backgroundColor: fill,
-        borderColor: selected ? SP_COLORS.white : fill,
-        color: textColor,
-        boxShadow: selected ? `0 0 0 2px ${SP_COLORS.yellow}` : 'none'
-      }}
+      className="inline-flex rounded-full transition-all duration-200 ease-out"
+      style={{ boxShadow: selected ? `0 0 0 2px ${SP_COLORS.yellow}` : 'none' }}
     >
-      {selected ? (
-        <span
-          className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border text-[10px] font-semibold"
-          style={{ borderColor: SP_COLORS.white, backgroundColor: SP_COLORS.deepGreen, color: SP_COLORS.white }}
-        >
-          ✓
-        </span>
-      ) : null}
-      {normalized.replace(/^Z/i, '')}
+      <ZCodeBadge
+        value={normalized}
+        fill={fill}
+        size="filter"
+        stripLeadingZ
+        checked={selected}
+        borderColor={selected ? SP_COLORS.white : fill}
+      />
     </span>
   )
 }
@@ -1922,16 +2284,7 @@ function ZCodeCircleChip({ code }: { code: string }) {
   const normalized = code.trim().toUpperCase()
   const parentCode = normalized.split('.')[0] || normalized
   const fill = getZCodeParentColor(parentCode) || SP_COLORS.white
-  const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
-  return (
-    <span
-      className="inline-flex h-11 min-w-[4.25rem] items-center justify-center rounded-full border px-3 text-[11px] font-semibold tracking-[0.04em] transition-all duration-200 ease-out"
-      style={{ backgroundColor: fill, borderColor: fill, color: textColor }}
-      title={normalized}
-    >
-      {normalized}
-    </span>
-  )
+  return <ZCodeBadge value={normalized} fill={fill} size="chip" className="transition-all duration-200 ease-out" />
 }
 
 function ZCodeOptionCard({

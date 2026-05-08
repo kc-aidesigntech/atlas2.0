@@ -2,6 +2,7 @@ import type { UnassignedEnrolleePickupRecord } from '@/features/atlas2026/single
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 const LOCAL_PUBLIC_REFERRAL_QUEUE_KEY = 'atlas2026.public.referral-queue.v1'
+let remoteQueueTableUnavailable = false
 
 function canUseLocalStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -54,6 +55,7 @@ function parseRemotePayload(payload: unknown): UnassignedEnrolleePickupRecord | 
 }
 
 async function loadRemoteQueueRecords() {
+  if (remoteQueueTableUnavailable) return []
   if (!hasSupabaseConfig || !supabase) return []
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
   if (sessionError || !sessionData.session) return []
@@ -63,7 +65,12 @@ async function loadRemoteQueueRecords() {
     .select('payload')
     .order('submitted_at', { ascending: false })
     .limit(100)
-  if (error) return []
+  if (error) {
+    // Some deployments omit this optional table and can return different error codes
+    // depending on schema cache state; stop retrying after first failure.
+    remoteQueueTableUnavailable = true
+    return []
+  }
   return (data || [])
     .map((row: { payload?: unknown }) => parseRemotePayload(row.payload))
     .filter((row: UnassignedEnrolleePickupRecord | null): row is UnassignedEnrolleePickupRecord => row !== null)
