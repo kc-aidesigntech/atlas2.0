@@ -148,7 +148,7 @@ export default function NavigatorMyProfilePanel({
             </div>
           </div>
         </div>
-        <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-0 md:-mr-4 lg:-mr-10 xl:-mr-16 2xl:-mr-24">
+        <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-0 md:-mr-1 lg:-mr-3 xl:-mr-6 2xl:-mr-10">
           <RadialLoadChart load={aggregateLoad} onClick={onOpenLoadTable} />
         </div>
       </div>

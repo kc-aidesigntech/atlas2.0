@@ -775,7 +775,7 @@ export default function SinglePaneApp() {
                       avatarUploadError={accountProfileImageUploadError}
                       onReplaceAvatar={remoteSession ? undefined : replaceAccountProfileImage}
                     />
-                    <div className="flex w-full justify-center justify-self-center lg:w-auto lg:justify-self-end lg:justify-end md:-mr-4 lg:-mr-10 xl:-mr-16 2xl:-mr-24">
+                    <div className="flex w-full justify-center justify-self-center lg:w-auto lg:justify-self-end lg:justify-end md:-mr-1 lg:-mr-3 xl:-mr-6 2xl:-mr-10">
                       <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} size="large" />
                     </div>
                   </div>
@@ -876,7 +876,7 @@ export default function SinglePaneApp() {
                         burdenSurveyLabel={viewerRole === 'supervisor' ? 'review burden survey' : 'open burden survey'}
                       />
                     </div>
-                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-0 md:-mr-4 lg:-mr-10 xl:-mr-16 2xl:-mr-24">
+                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-0 md:-mr-1 lg:-mr-3 xl:-mr-6 2xl:-mr-10">
                       <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
                     </div>
                   </div>

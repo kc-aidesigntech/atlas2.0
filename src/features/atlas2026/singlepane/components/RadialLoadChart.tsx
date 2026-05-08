@@ -128,23 +128,23 @@ export default function RadialLoadChart({ load, onClick, size = 'default' }: Rad
   const isLarge = size === 'large'
   /** Tight wrapper: chart block is fixed height; no percentage split (avoids empty band above helper). */
   const wrapperClassName = isLarge
-    ? 'w-fit max-w-[min(100vw-2rem,720px)] pl-2 pr-0 sm:pl-3'
+    ? 'w-fit max-w-[min(100vw-2rem,780px)] pl-2 pr-0 sm:pl-3'
     : 'w-fit max-w-[min(100vw-2rem,400px)] pl-1.5 pr-0 sm:pl-2'
   const chartShellClassName = 'h-full min-h-0 w-full max-w-full'
-  const chartBlockHeightClass = isLarge ? 'h-[320px] sm:h-[360px] lg:h-[380px]' : 'h-[210px] sm:h-[230px]'
-  const chartBlockWidthClass = isLarge ? 'w-[min(100%,560px)] min-w-[280px] sm:w-[min(100%,600px)]' : 'w-[min(100%,320px)] min-w-[236px] sm:w-[min(100%,340px)]'
+  const chartBlockHeightClass = isLarge ? 'h-[320px] sm:h-[346px] lg:h-[366px]' : 'h-[210px] sm:h-[230px]'
+  const chartBlockWidthClass = isLarge ? 'w-[min(100%,728px)] min-w-[364px] sm:w-[min(100%,780px)]' : 'w-[min(100%,320px)] min-w-[236px] sm:w-[min(100%,340px)]'
   /** Less right than left: reserve label space on dominant sides; tighter outer edge. */
   const chartMargin = isLarge
-    ? { top: 14, right: 34, bottom: 34, left: 76 }
+    ? { top: 0, right: 56, bottom: 6, left: 94 }
     : { top: 8, right: 22, bottom: 20, left: 50 }
-  const outerRadius = isLarge ? '90%' : '86%'
-  const chartCy = isLarge ? '50%' : '50%'
+  const outerRadius = isLarge ? '92%' : '86%'
+  const chartCy = isLarge ? '46%' : '50%'
   const axisFontSize = isLarge ? '17' : '13'
-  const axisDx = isLarge ? 16 : 12
+  const axisDx = isLarge ? 18 : 12
   const axisUpperDy = isLarge ? -10 : -8
   const axisLowerDy = isLarge ? 12 : 10
   const helperClassName = isLarge
-    ? 'mt-1 block w-full max-w-[min(100%,420px)] text-center text-[12px] uppercase leading-tight tracking-[0.08em] text-[#9f9f9f]'
+    ? 'mt-0 block w-full max-w-[min(100%,420px)] text-center text-[12px] uppercase leading-tight tracking-[0.08em] text-[#9f9f9f]'
     : 'mt-0.5 block w-full max-w-[min(100%,360px)] text-center text-[10px] uppercase leading-tight tracking-[0.08em] text-[#9f9f9f]'
   const radarStrokeWidth = isLarge ? 1.5 : 2
   const radarDot = isLarge
