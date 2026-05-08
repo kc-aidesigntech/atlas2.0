@@ -5,6 +5,7 @@ import LocalDateInputBox from './LocalDateInputBox'
 import StripMapControlOverlay from './StripMapControlOverlay'
 import type {
   JourneyStationMarker,
+  PartnerStripAggregateDot,
   RegulationTestStripMarker,
   ResolvedZCodeStripMarker,
   RouteLogEvent,
@@ -35,6 +36,10 @@ interface VerticalStripMapTimelineProps {
   regulationTestMarkers?: RegulationTestStripMarker[]
   isRegulationCleared?: boolean
   showReadinessProgress?: boolean
+  isPartnerAggregateView?: boolean
+  partnerAggregateReferredDots?: PartnerStripAggregateDot[]
+  partnerAggregateActiveDots?: PartnerStripAggregateDot[]
+  onPartnerHistoryClick?: () => void
   showRoutePlanningQuickAction?: boolean
   onRoutePlanningClick?: () => void
   onRegulationTestsClick?: () => void
@@ -66,6 +71,10 @@ export default function VerticalStripMapTimeline({
   regulationTestMarkers = [],
   isRegulationCleared = false,
   showReadinessProgress = true,
+  isPartnerAggregateView = false,
+  partnerAggregateReferredDots = [],
+  partnerAggregateActiveDots = [],
+  onPartnerHistoryClick,
   showRoutePlanningQuickAction = false,
   onRoutePlanningClick,
   onRegulationTestsClick,
@@ -116,6 +125,21 @@ export default function VerticalStripMapTimeline({
   const phaseSegments = useMemo(() => {
     return buildTimelinePhaseSegments(normalizedTimelineConfig)
   }, [normalizedTimelineConfig])
+  const isPartnerAggregateMode = isPartnerAggregateView && (partnerAggregateReferredDots.length > 0 || partnerAggregateActiveDots.length > 0)
+  const groupedPartnerReferredDots = useMemo(
+    () =>
+      partnerAggregateReferredDots
+        .slice()
+        .sort((left, right) => new Date(left.occurredAtIso).getTime() - new Date(right.occurredAtIso).getTime()),
+    [partnerAggregateReferredDots]
+  )
+  const groupedPartnerActiveDots = useMemo(
+    () =>
+      partnerAggregateActiveDots
+        .slice()
+        .sort((left, right) => new Date(left.occurredAtIso).getTime() - new Date(right.occurredAtIso).getTime()),
+    [partnerAggregateActiveDots]
+  )
 
   function handleStartDateClick() {
     if (!onTimelineConfigChange && !onStartDateChange) return
@@ -189,6 +213,8 @@ export default function VerticalStripMapTimeline({
           const isRegulationAction = segment.phase === 'regulation' && Boolean(onRegulationTestsClick)
           const isReadinessAction = segment.phase === 'readiness' && Boolean(onRoutePlanningClick) && showRoutePlanningQuickAction
           const isRenewalButton = segment.phase === 'renewal' && Boolean(onRenewalTestsClick)
+          const isPartnerStaticRegulation = isPartnerAggregateView && segment.phase === 'regulation' && !isRegulationAction
+          const isPartnerStaticReadiness = isPartnerAggregateView && segment.phase === 'readiness' && !isReadinessAction
           return (
             <div
               key={segment.phase}
@@ -220,6 +246,22 @@ export default function VerticalStripMapTimeline({
                     </span>
                   ) : null}
                 </>
+              ) : isPartnerStaticRegulation ? (
+                <AtlasTextButton
+                  type="button"
+                  onClick={() => {}}
+                  className="px-[14px] py-[6px] text-[13px] font-medium"
+                  style={
+                    {
+                      ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.regulation,
+                      ['--button-line-color' as const]: SP_COLORS.white,
+                      color: SP_COLORS.white,
+                      backgroundColor: TIMELINE_PHASE_COLORS.regulation
+                    } as React.CSSProperties
+                  }
+                >
+                  regulation
+                </AtlasTextButton>
               ) : isReadinessAction ? (
                 <AtlasTextButton
                   onClick={onRoutePlanningClick}
@@ -233,6 +275,22 @@ export default function VerticalStripMapTimeline({
                 >
                   <span>plan route</span>
                   <AtlasArrowIcon decorative direction="right" className="h-[0.9rem] w-[0.9rem] brightness-0" />
+                </AtlasTextButton>
+              ) : isPartnerStaticReadiness ? (
+                <AtlasTextButton
+                  type="button"
+                  onClick={() => {}}
+                  className="px-[14px] py-[6px] text-[13px] font-medium"
+                  style={
+                    {
+                      ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.readiness,
+                      ['--button-line-color' as const]: SP_COLORS.bg,
+                      color: SP_COLORS.bg,
+                      backgroundColor: TIMELINE_PHASE_COLORS.readiness
+                    } as React.CSSProperties
+                  }
+                >
+                  readiness
                 </AtlasTextButton>
               ) : isRenewalButton ? (
                 <AtlasTextButton
@@ -258,6 +316,57 @@ export default function VerticalStripMapTimeline({
         })}
       </div>
 
+      {isPartnerAggregateMode ? (
+        <div className="mt-5 space-y-3">
+          <div className="atlas-surface-panel px-4 py-3" style={{ borderColor: `${SP_COLORS.yellow}70` }}>
+            <small className="atlas-overline block" style={{ color: SP_COLORS.yellow }}>
+              referred journeys
+            </small>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {groupedPartnerReferredDots.map((dot) => (
+                <span
+                  key={dot.id}
+                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]"
+                  style={{ borderColor: `${TIMELINE_PHASE_COLORS[dot.phase]}90`, color: TIMELINE_PHASE_COLORS[dot.phase] }}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TIMELINE_PHASE_COLORS[dot.phase] }} />
+                  {dot.phase} · {formatDateLabel(dot.occurredAtIso)}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="atlas-surface-panel px-4 py-3" style={{ borderColor: `${TIMELINE_STATUS_COLORS.active}70` }}>
+            <small className="atlas-overline block" style={{ color: TIMELINE_STATUS_COLORS.active }}>
+              active tended journeys
+            </small>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {groupedPartnerActiveDots.map((dot) => (
+                <span
+                  key={dot.id}
+                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px]"
+                  style={{ borderColor: `${TIMELINE_STATUS_COLORS.active}90`, color: TIMELINE_STATUS_COLORS.active }}
+                >
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: TIMELINE_STATUS_COLORS.active }} />
+                  {dot.phase} · {formatDateLabel(dot.occurredAtIso)}
+                </span>
+              ))}
+            </div>
+          </div>
+          <AtlasTextButton
+            onClick={() => onPartnerHistoryClick?.()}
+            className="px-[14px] py-[6px] text-[13px] font-medium"
+            style={{
+              ['--button-border-color' as const]: TIMELINE_PHASE_COLORS.renewal,
+              ['--button-line-color' as const]: SP_COLORS.white,
+              color: SP_COLORS.white,
+              backgroundColor: TIMELINE_PHASE_COLORS.renewal
+            } as React.CSSProperties}
+          >
+            open renewal history
+          </AtlasTextButton>
+        </div>
+      ) : (
+      <>
       <div className="relative mt-5 pl-8">
         <div className="absolute bottom-3 left-[11px] top-2 w-[3px] rounded-full bg-white/20" />
         {regulationHistoryMarkers.length ? (
@@ -459,6 +568,8 @@ export default function VerticalStripMapTimeline({
           readiness hidden pending regulation clearance
         </div>
       ) : null}
+      </>
+      )}
     </div>
   )
 }

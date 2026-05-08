@@ -113,7 +113,7 @@ export default function NavigatorMyProfilePanel({
   return (
     <div className="flex flex-col gap-4">
       <div
-        className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+        className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px] lg:gap-x-8 xl:gap-x-12"
         style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
       >
         <div className="min-w-0 flex-1 basis-[520px]">
@@ -148,7 +148,7 @@ export default function NavigatorMyProfilePanel({
             </div>
           </div>
         </div>
-        <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
+        <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-0 md:-mr-4 lg:-mr-10 xl:-mr-16 2xl:-mr-24">
           <RadialLoadChart load={aggregateLoad} onClick={onOpenLoadTable} />
         </div>
       </div>

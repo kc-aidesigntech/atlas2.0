@@ -11,6 +11,7 @@ import EnrolleeBurdenSurveyPanel from './components/EnrolleeBurdenSurveyPanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
 import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
 import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
+import PartnerStripHistoryOverlay from './components/PartnerStripHistoryOverlay'
 import PartnerSpecialtyOverlay from './components/PartnerSpecialtyOverlay'
 import PartnerStationProfilePanel from './components/PartnerStationProfilePanel'
 import ProfilePanel from './components/ProfilePanel'
@@ -68,6 +69,9 @@ export default function SinglePaneApp() {
     accessMatrixError,
     navigatorProgramError,
     journeyStationMarkers,
+    partnerStripReferredDots,
+    partnerStripActiveDots,
+    partnerStripSuccessHistory,
     resolvedZCodeStripMarkers,
     currentNavigatorName,
     navigatorAggregateLoad,
@@ -157,6 +161,7 @@ export default function SinglePaneApp() {
   const [assessmentInitialTestType, setAssessmentInitialTestType] = React.useState<'mh_sca' | 'svs' | 'ipf' | 'b_ipf' | null>(null)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [isReferralPortalOpen, setIsReferralPortalOpen] = React.useState(false)
+  const [isPartnerHistoryOpen, setIsPartnerHistoryOpen] = React.useState(false)
   const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
@@ -191,6 +196,12 @@ export default function SinglePaneApp() {
       setLastContentMenu(activeMenu)
     }
   }, [activeMenu])
+
+  React.useEffect(() => {
+    if (uiRole !== 'partner') {
+      setIsPartnerHistoryOpen(false)
+    }
+  }, [uiRole])
 
   React.useEffect(() => {
     const previousRole = previousUiRoleRef.current
@@ -696,6 +707,11 @@ export default function SinglePaneApp() {
             onSelectSpecialty={setSelectedPartnerSpecialtyGroup}
             onClose={() => setSelectedPartnerSpecialtyGroup(null)}
           />
+          <PartnerStripHistoryOverlay
+            isOpen={isPartnerHistoryOpen}
+            records={partnerStripSuccessHistory}
+            onClose={() => setIsPartnerHistoryOpen(false)}
+          />
           <RegulationTestsOverlay
             isOpen={isRegulationTestsOpen}
             enrollee={selectedEnrollee}
@@ -745,7 +761,7 @@ export default function SinglePaneApp() {
               <>
                 {isPartnerRole ? (
                   <div
-                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+                    className="grid min-h-[282px] grid-cols-1 items-start gap-x-4 gap-y-5 border-b pb-[12px] lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-x-10 lg:gap-y-4 xl:gap-x-14 2xl:gap-x-20"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
                     <PartnerStationProfilePanel
@@ -759,7 +775,7 @@ export default function SinglePaneApp() {
                       avatarUploadError={accountProfileImageUploadError}
                       onReplaceAvatar={remoteSession ? undefined : replaceAccountProfileImage}
                     />
-                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:self-start">
+                    <div className="flex w-full justify-center justify-self-center lg:w-auto lg:justify-self-end lg:justify-end md:-mr-4 lg:-mr-10 xl:-mr-16 2xl:-mr-24">
                       <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} size="large" />
                     </div>
                   </div>
@@ -841,7 +857,7 @@ export default function SinglePaneApp() {
                   </div>
                 ) : (
                   <div
-                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px] lg:gap-x-8 xl:gap-x-12"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
                     <div className="min-w-0 flex-1 basis-[520px]">
@@ -860,7 +876,7 @@ export default function SinglePaneApp() {
                         burdenSurveyLabel={viewerRole === 'supervisor' ? 'review burden survey' : 'open burden survey'}
                       />
                     </div>
-                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
+                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-0 md:-mr-4 lg:-mr-10 xl:-mr-16 2xl:-mr-24">
                       <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
                     </div>
                   </div>
@@ -970,6 +986,11 @@ export default function SinglePaneApp() {
                             resolvedZCodeMarkers={resolvedZCodeStripMarkers}
                             stationMarkers={visibleJourneyStationMarkers}
                             highlightedStationName={highlightedStationName}
+                            isPartnerAggregateView
+                            partnerAggregateReferredDots={partnerStripReferredDots}
+                            partnerAggregateActiveDots={partnerStripActiveDots}
+                            onPartnerHistoryClick={() => setIsPartnerHistoryOpen(true)}
+                            onRenewalTestsClick={() => setIsPartnerHistoryOpen(true)}
                             onEventDelete={deleteRouteLog}
                             onEventPositionChange={updateRouteLogTimelinePosition}
                             onEventDateChange={updateRouteLogDate}
@@ -984,6 +1005,11 @@ export default function SinglePaneApp() {
                             resolvedZCodeMarkers={resolvedZCodeStripMarkers}
                             stationMarkers={visibleJourneyStationMarkers}
                             highlightedStationName={highlightedStationName}
+                            isPartnerAggregateView
+                            partnerAggregateReferredDots={partnerStripReferredDots}
+                            partnerAggregateActiveDots={partnerStripActiveDots}
+                            onPartnerHistoryClick={() => setIsPartnerHistoryOpen(true)}
+                            onRenewalTestsClick={() => setIsPartnerHistoryOpen(true)}
                             onEventDelete={deleteRouteLog}
                             onEventDateChange={updateRouteLogDate}
                             onStartDateChange={updateTimelineStartDate}
