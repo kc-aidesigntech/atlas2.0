@@ -391,6 +391,8 @@ export interface PartnerStationSpecialtyGroup {
   parentCode: string
   childCodes: string[]
   zCodes: PartnerStationSpecialtyZCode[]
+  strengthCount: number
+  totalCount: number
 }
 
 export interface EnrolleeIntakeRecord {

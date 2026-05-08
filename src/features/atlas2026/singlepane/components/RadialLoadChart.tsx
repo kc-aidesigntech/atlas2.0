@@ -3,7 +3,7 @@
  * profile and station panels, with optional click-through behavior.
  */
 import React from 'react'
-import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart } from 'recharts'
+import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from 'recharts'
 import type { DomainLoad } from '../types'
 import { SP_COLORS } from '../theme'
 
@@ -14,6 +14,7 @@ interface RadialLoadChartProps {
 
 interface ChartAxisPoint {
   axis: string
+  label: string
   value: number
 }
 
@@ -28,8 +29,10 @@ function AxisTick(props: {
   cx?: number
   cy?: number
   payload?: { value?: string }
+  labelMap?: ReadonlyMap<string, string>
 }) {
-  const label = props.payload?.value || ''
+  const axisKey = props.payload?.value || ''
+  const label = props.labelMap?.get(axisKey) || ''
   if (!label.trim()) return null
 
   const x = props.x ?? 0
@@ -38,8 +41,8 @@ function AxisTick(props: {
   const cy = props.cy ?? 0
   const lines = wrapAxisLabel(label)
   const anchor = Math.abs(x - cx) < 8 ? 'middle' : x > cx ? 'start' : 'end'
-  const dx = anchor === 'middle' ? 0 : anchor === 'start' ? 8 : -8
-  const baseDy = y < cy ? -4 : y > cy ? 6 : 4
+  const dx = anchor === 'middle' ? 0 : anchor === 'start' ? 12 : -12
+  const baseDy = y < cy ? -8 : y > cy ? 10 : 4
 
   return (
     <text
@@ -48,11 +51,11 @@ function AxisTick(props: {
       textAnchor={anchor}
       fill={SP_COLORS.text}
       fontFamily="Helvetica, Arial, sans-serif"
-      fontSize="14"
+      fontSize="13"
       fontWeight={500}
     >
       {lines.map((line, index) => (
-        <tspan key={`${label}-${line}-${index}`} x={x + dx} dy={index === 0 ? 0 : 14}>
+        <tspan key={`${label}-${line}-${index}`} x={x + dx} dy={index === 0 ? 0 : 13}>
           {line}
         </tspan>
       ))}
@@ -67,8 +70,6 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
   const habitatWorkBlend = (habitat + work) / 2
   const workSocialBlend = (work + social) / 2
   const socialHabitatBlend = (social + habitat) / 2
-  const chartWidth = 340
-  const chartHeight = 220
   const maxDomainValue = Math.max(
     habitat,
     habitatWorkBlend,
@@ -78,71 +79,68 @@ export default function RadialLoadChart({ load, onClick }: RadialLoadChartProps)
     socialHabitatBlend,
     1
   )
+  const chartDomainMax = Math.max(6, Math.min(9, Math.ceil(maxDomainValue + 2)))
 
   const data: ChartAxisPoint[] = [
-    { axis: 'habitat', value: habitat },
-    { axis: '', value: habitatWorkBlend },
-    { axis: 'work', value: work },
-    { axis: '', value: workSocialBlend },
-    { axis: 'social networks', value: social },
-    { axis: '', value: socialHabitatBlend }
+    { axis: 'habitat', label: 'habitat', value: habitat },
+    { axis: 'habitat-work-blend', label: '', value: habitatWorkBlend },
+    { axis: 'work', label: 'work', value: work },
+    { axis: 'work-social-blend', label: '', value: workSocialBlend },
+    { axis: 'social-networks', label: 'social networks', value: social },
+    { axis: 'social-habitat-blend', label: '', value: socialHabitatBlend }
   ]
-  const tickCount = Math.min(Math.max(Math.ceil(maxDomainValue), 3), 6)
+  const axisLabelMap = React.useMemo(() => new Map(data.map((point) => [point.axis, point.label])), [data])
+  const tickCount = Math.min(Math.max(Math.ceil(chartDomainMax), 3), 6)
   const Wrapper = onClick ? 'button' : 'div'
 
   return (
     <Wrapper
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      className={`flex h-[250px] w-full max-w-[400px] flex-col items-center justify-center overflow-visible pr-3 sm:h-[280px] sm:max-w-[420px] sm:pr-4 ${
+      className={`flex h-[320px] w-full max-w-[520px] flex-col items-center justify-center overflow-visible px-4 sm:h-[350px] sm:max-w-[560px] sm:px-5 ${
         onClick ? 'cursor-pointer rounded-[28px] transition-opacity hover:opacity-90' : ''
       }`}
       aria-label={onClick ? 'Open radial load source table' : undefined}
     >
-      <div className="flex h-[84%] w-full items-center justify-center overflow-visible">
-        <RadarChart
-          width={chartWidth}
-          height={chartHeight}
-          cx={chartWidth * 0.47}
-          cy={chartHeight * 0.53}
-          outerRadius={chartHeight * 0.39}
-          data={data}
-          startAngle={90}
-          endAngle={-270}
-          margin={{ top: 10, right: 48, bottom: 18, left: 28 }}
-        >
-          <PolarGrid
-            gridType="polygon"
-            radialLines
-            stroke={SP_COLORS.text}
-            strokeOpacity={0.5}
-            strokeWidth={0.4}
-          />
-          <PolarRadiusAxis
-            domain={[0, maxDomainValue]}
-            tickCount={tickCount}
-            tick={{ fill: 'transparent', fontSize: 1 }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <PolarAngleAxis
-            dataKey="axis"
-            tick={<AxisTick />}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Radar
-            dataKey="value"
-            stroke={SP_COLORS.blue}
-            fill={SP_COLORS.blue}
-            fillOpacity={0.34}
-            strokeOpacity={1}
-            strokeWidth={2}
-            isAnimationActive={false}
-          />
-        </RadarChart>
+      <div className="flex h-[80%] w-full items-center justify-center overflow-visible">
+        <div className="h-full w-full max-w-[470px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart data={data} cx="50%" cy="51%" outerRadius="76%" startAngle={90} endAngle={-270} margin={{ top: 22, right: 84, bottom: 32, left: 84 }}>
+              <PolarGrid
+                gridType="polygon"
+                radialLines
+                stroke={SP_COLORS.text}
+                strokeOpacity={0.38}
+                strokeWidth={0.55}
+              />
+              <PolarRadiusAxis
+                domain={[0, chartDomainMax]}
+                tickCount={tickCount}
+                tick={{ fill: 'transparent', fontSize: 1 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <PolarAngleAxis
+                dataKey="axis"
+                tick={(tickProps) => <AxisTick {...tickProps} labelMap={axisLabelMap} />}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Radar
+                dataKey="value"
+                stroke={SP_COLORS.white}
+                fill="var(--atlas-signal-lucid-teal)"
+                fillOpacity={0.5}
+                strokeOpacity={1}
+                strokeWidth={2}
+                isAnimationActive={false}
+                dot={{ r: 3.5, fill: SP_COLORS.white, stroke: 'var(--atlas-signal-lucid-teal)', strokeWidth: 1.5 }}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
-      <div className="mt-[2px] flex w-[92%] items-center justify-between">
+      <div className="mt-1 flex w-full items-center justify-between px-3">
         <small className="text-[14px]" style={{ color: SP_COLORS.text }}>
           manageable strain
         </small>

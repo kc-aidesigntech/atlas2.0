@@ -82,6 +82,7 @@ export function buildSurveyDomainLoadBreakdown<TAnswer extends BurdenAnswerLike>
   const rows = Array.from(strongestAnswerByZCode.values()).map<DomainLoadBreakdownRow>((answer) => ({
     id: answer.normalizedZCode,
     zCodeGroup: answer.zCode,
+    parentCode: normalizeParentCode(answer.parentCode),
     mappedDomain: mapZCodeToDomainBucket(answer.parentCode, answer.normalizedZCode),
     rawCount: answer.score ?? 0,
     responseCount: 1
@@ -104,11 +105,19 @@ export function derivePartnerStationSpecialtyGroups(
   if (!submission) return []
 
   const grouped = new Map<string, PartnerStationSpecialtyGroup['zCodes']>()
+  const totalByParent = new Map<string, Set<string>>()
+  const strengthByParent = new Map<string, Set<string>>()
   submission.answers.forEach((answer) => {
-    if (answer.notEncountered || typeof answer.score !== 'number' || answer.score <= 6) return
     const parentCode = normalizeParentCode(answer.parentCode)
     const normalizedZCode = normalizeZCode(answer.normalizedZCode || answer.zCode)
     if (!parentCode || !normalizedZCode) return
+    const totalCodes = totalByParent.get(parentCode) || new Set<string>()
+    totalCodes.add(normalizedZCode)
+    totalByParent.set(parentCode, totalCodes)
+    if (answer.notEncountered || typeof answer.score !== 'number' || answer.score <= 6) return
+    const strengthCodes = strengthByParent.get(parentCode) || new Set<string>()
+    strengthCodes.add(normalizedZCode)
+    strengthByParent.set(parentCode, strengthCodes)
     const current = grouped.get(parentCode) || []
     const existingIndex = current.findIndex((item) => item.normalizedZCode === normalizedZCode)
     const nextItem = {
@@ -134,7 +143,9 @@ export function derivePartnerStationSpecialtyGroups(
       return {
         parentCode,
         childCodes: sortedZCodes.map((item) => item.zCode),
-        zCodes: sortedZCodes
+        zCodes: sortedZCodes,
+        strengthCount: strengthByParent.get(parentCode)?.size || sortedZCodes.length,
+        totalCount: totalByParent.get(parentCode)?.size || sortedZCodes.length
       }
     })
 }
@@ -171,7 +182,7 @@ export function buildPartnerBurdenBreakdownFromHistory(
       const normalizedZCode = normalizeZCode(answer.normalizedZCode || answer.zCode)
       const parentCode = normalizeParentCode(answer.parentCode)
       if (!normalizedZCode || !parentCode) return
-      const burdenScore = 10 - answer.score
+      const burdenScore = Math.max(0, 9 - answer.score)
       const current = burdenByZCode.get(normalizedZCode) || {
         zCodeGroup: answer.zCode,
         parentCode,

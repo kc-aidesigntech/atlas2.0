@@ -54,7 +54,7 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
               <small className="block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd]">derived source rows</small>
               <small className="text-[12px] text-[#8f8f8f]">
                 {isPartnerSurvey
-                  ? 'Partner chart values are weighted domain averages from the latest burden survey.'
+                  ? 'Partner chart values are inverted burden averages from the last three completed service-capacity surveys.'
                   : isWeightedSurvey
                     ? 'Enrollee chart values are weighted domain averages from the latest burden survey.'
                     : 'Enrollee chart values are derived from active Z-Code records mapped into habitat, work, and social domains.'}
@@ -70,8 +70,8 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
                   <tr className="text-[11px] uppercase tracking-[0.08em] text-[#9f9f9f]">
                     <th className="border-b border-white/10 px-3 py-2 font-medium">z-code</th>
                     <th className="border-b border-white/10 px-3 py-2 font-medium">mapped domain</th>
-                    <th className="border-b border-white/10 px-3 py-2 font-medium text-right">chart input</th>
-                    {isPartnerSurvey ? <th className="border-b border-white/10 px-3 py-2 font-medium text-right">interfere</th> : null}
+                    <th className="border-b border-white/10 px-3 py-2 font-medium text-right">{isPartnerSurvey ? 'avg burden' : 'chart input'}</th>
+                    {isPartnerSurvey ? <th className="border-b border-white/10 px-3 py-2 font-medium text-right">surveys</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -79,11 +79,9 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
                     <tr key={row.id}>
                       <td className="border-b border-white/5 px-3 py-3">{row.zCodeGroup.toUpperCase()}</td>
                       <td className="border-b border-white/5 px-3 py-3">{formatBucketLabel(row.mappedDomain)}</td>
-                      <td className="border-b border-white/5 px-3 py-3 text-right">
-                        {formatMetricValue(isPartnerSurvey ? row.specializeCount || row.rawCount : row.rawCount)}
-                      </td>
+                      <td className="border-b border-white/5 px-3 py-3 text-right">{formatMetricValue(row.rawCount)}</td>
                       {isPartnerSurvey ? (
-                        <td className="border-b border-white/5 px-3 py-3 text-right">{row.interfereCount || 0}</td>
+                        <td className="border-b border-white/5 px-3 py-3 text-right">{row.responseCount || 0}</td>
                       ) : null}
                     </tr>
                   ))}

@@ -11,6 +11,7 @@ import EnrolleeBurdenSurveyPanel from './components/EnrolleeBurdenSurveyPanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
 import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
 import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
+import PartnerSpecialtyOverlay from './components/PartnerSpecialtyOverlay'
 import PartnerStationProfilePanel from './components/PartnerStationProfilePanel'
 import ProfilePanel from './components/ProfilePanel'
 import RadialLoadChart from './components/RadialLoadChart'
@@ -143,6 +144,7 @@ export default function SinglePaneApp() {
     saveNavigatorRegulationTest,
     deleteNavigatorRegulationTestDraft,
     deleteEnrolleeBurdenSurveyDraft,
+    partnerStationSpecialties,
     reloadEnrolleeBurdenSurveyHistoryForEnrollment
   } = useSinglePaneData()
   const { session, signOut, refreshIdentities, linkOAuthProvider } = useSupabaseAuth()
@@ -158,6 +160,7 @@ export default function SinglePaneApp() {
   const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
+  const [selectedPartnerSpecialtyGroup, setSelectedPartnerSpecialtyGroup] = React.useState<(typeof partnerStationSpecialties)[number] | null>(null)
   const [navigatorEnrolleeView, setNavigatorEnrolleeView] = React.useState<'my' | 'add'>('my')
   const [lastContentMenu, setLastContentMenu] = React.useState('enrollees')
   const [contentOpacity, setContentOpacity] = React.useState(1)
@@ -417,7 +420,6 @@ export default function SinglePaneApp() {
     : selectedRouteAssignment?.stationName || null
   const displayLoad = isNavigatorMyProfile ? navigatorAggregateLoad : selectedLoad
   const displayLoadBreakdown = isNavigatorMyProfile ? navigatorAggregateLoadBreakdown : selectedLoadBreakdown
-  const partnerStationBadgeCodes = React.useMemo(() => derivePartnerBadgeCodes(selectedLoadBreakdown), [selectedLoadBreakdown])
   const partnerContactName = React.useMemo(() => {
     const firstName = partnerStationProfile?.primaryContactFirstName?.trim() || ''
     const lastName = partnerStationProfile?.primaryContactLastName?.trim() || ''
@@ -688,6 +690,12 @@ export default function SinglePaneApp() {
             breakdown={displayLoadBreakdown}
             onClose={() => setIsLoadTableOpen(false)}
           />
+          <PartnerSpecialtyOverlay
+            specialtyGroup={selectedPartnerSpecialtyGroup}
+            specialtyGroups={partnerStationSpecialties}
+            onSelectSpecialty={setSelectedPartnerSpecialtyGroup}
+            onClose={() => setSelectedPartnerSpecialtyGroup(null)}
+          />
           <RegulationTestsOverlay
             isOpen={isRegulationTestsOpen}
             enrollee={selectedEnrollee}
@@ -745,7 +753,8 @@ export default function SinglePaneApp() {
                       partnerStationProfile={partnerStationProfile}
                       partnerContactName={partnerContactName}
                       partnerUnresolvedCodes={partnerUnresolvedCodes}
-                      partnerStationBadgeCodes={partnerStationBadgeCodes}
+                      specialtyGroups={partnerStationSpecialties}
+                      onSelectSpecialty={setSelectedPartnerSpecialtyGroup}
                       isUploadingAvatar={isUploadingAccountProfileImage}
                       avatarUploadError={accountProfileImageUploadError}
                       onReplaceAvatar={remoteSession ? undefined : replaceAccountProfileImage}
@@ -1177,10 +1186,3 @@ function hashToMenu(hashValue: string, menus: string[]) {
   return menus.find((menu) => menuToHash(menu) === normalizedHash) || null
 }
 
-function derivePartnerBadgeCodes(loadBreakdown: { rows: Array<{ zCodeGroup: string; parentCode?: string }> } | null) {
-  const parentCodes = (loadBreakdown?.rows || [])
-    .map((row) => String(row.parentCode || row.zCodeGroup || '').trim().toUpperCase())
-    .filter((code) => /^Z\d{2}$/.test(code))
-  const unique = Array.from(new Set(parentCodes)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
-  return (unique.length ? unique : ['Z55', 'Z56', 'Z57']).slice(0, 3).map((code) => code.replace(/^Z/i, ''))
-}
