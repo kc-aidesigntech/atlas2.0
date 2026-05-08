@@ -759,8 +759,8 @@ export default function SinglePaneApp() {
                       avatarUploadError={accountProfileImageUploadError}
                       onReplaceAvatar={remoteSession ? undefined : replaceAccountProfileImage}
                     />
-                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-2">
-                      <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} />
+                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:self-start">
+                      <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} size="large" />
                     </div>
                   </div>
                 ) : isNavigatorMyProfile ? (
