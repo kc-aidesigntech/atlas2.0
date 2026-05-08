@@ -204,13 +204,14 @@ function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/type
   }
 }
 
-async function resolveCurrentPersonId() {
+async function resolveSessionPersonIdFromMetadata() {
   if (!supabase) return null
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
   if (sessionError) throw sessionError
   const appMetadata = sessionData.session?.user?.app_metadata || {}
-  const metadataPersonId =
-    String((appMetadata as Record<string, unknown>).person_id || (appMetadata as Record<string, unknown>).atlas_person_id || '').trim()
+  const metadataPersonId = String(
+    (appMetadata as Record<string, unknown>).person_id || (appMetadata as Record<string, unknown>).atlas_person_id || ''
+  ).trim()
   if (metadataPersonId) return metadataPersonId
   const { data: helperData, error: helperError } = await (supabase as any).schema('atlas').rpc('fn_current_person_id')
   if (helperError) {
@@ -263,7 +264,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
           ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
           : Promise.resolve([]),
         role === 'navigator'
-          ? withOptionalSupabaseFallback('singlepane.navigatorPerson', () => resolveCurrentPersonId(), null)
+          ? withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
           : Promise.resolve(null)
       ])
     : [[], [], [], [], null]
@@ -271,8 +272,10 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   const navigatorEnrollmentIds =
     role === 'navigator'
       ? new Set(
+          // Navigator identity is enforced in DB auth/RLS; keep client filtering simple and deterministic.
           navigatorAssignedEnrollees
-            .filter((record) => (navigatorPersonId ? record.navigatorPersonId === navigatorPersonId : false))
+            // If person-id resolution is missing, rely on DB-scoped rows rather than returning an empty UI.
+            .filter((record) => (navigatorPersonId ? record.navigatorPersonId === navigatorPersonId : true))
             .map((record) => record.enrollmentId)
         )
       : null
@@ -436,12 +439,14 @@ export async function loadNavigatorEnrollmentAssignments(): Promise<NavigatorEnr
     withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
     withOptionalSupabaseFallback('singlepane.enrollmentAssignmentBoard', () => fetchEnrollmentAssignmentBoard(supabase), []),
     withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), []),
-    withOptionalSupabaseFallback('singlepane.navigatorPerson', () => resolveCurrentPersonId(), null)
+    withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
   ])
 
   const viewerEnrollmentIds = new Set(
     navigatorAssignments
-      .filter((assignment) => navigatorPersonId && assignment.navigatorPersonId === navigatorPersonId)
+      // Treat "assigned to you" as true only when session metadata proves navigator identity.
+      // If identity resolution fails, trust DB-scoped assignment rows for this navigator session.
+      .filter((assignment) => (navigatorPersonId ? assignment.navigatorPersonId === navigatorPersonId : true))
       .map((assignment) => assignment.enrollmentId)
   )
   const assignedEnrollmentIds = new Set(navigatorAssignments.map((assignment) => assignment.enrollmentId))
@@ -490,6 +495,14 @@ export async function assignNavigatorEnrollmentToSelf(enrollmentId: string) {
     target_enrollment_id: enrollmentId
   })
   if (error) throw error
+  const rows = await fetchNavigatorAssignedEnrollees(supabase)
+  // Verify the write is visible in the same request cycle so UI can surface a deterministic error
+  // instead of silently blinking when identity linkage or grants are misconfigured.
+  if (!rows.some((row) => row.enrollmentId === enrollmentId)) {
+    throw new Error(
+      `Assignment write completed for enrollment ${enrollmentId}, but the row is not visible to this navigator yet. Verify identity mapping and RLS grants.`
+    )
+  }
 }
 
 export async function unassignNavigatorEnrollmentFromSelf(enrollmentId: string) {

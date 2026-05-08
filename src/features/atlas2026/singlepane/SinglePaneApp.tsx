@@ -1177,11 +1177,10 @@ function hashToMenu(hashValue: string, menus: string[]) {
   return menus.find((menu) => menuToHash(menu) === normalizedHash) || null
 }
 
-function derivePartnerBadgeCodes(loadBreakdown: { rows: { zCodeGroup: string }[] } | null) {
-  const parsed = (loadBreakdown?.rows || [])
-    .flatMap((row) => row.zCodeGroup.match(/\d+/g) || [])
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-  const unique = Array.from(new Set(parsed))
-  return unique.length ? unique.slice(0, 3) : ['56', '55', '57']
+function derivePartnerBadgeCodes(loadBreakdown: { rows: Array<{ zCodeGroup: string; parentCode?: string }> } | null) {
+  const parentCodes = (loadBreakdown?.rows || [])
+    .map((row) => String(row.parentCode || row.zCodeGroup || '').trim().toUpperCase())
+    .filter((code) => /^Z\d{2}$/.test(code))
+  const unique = Array.from(new Set(parentCodes)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+  return (unique.length ? unique : ['Z55', 'Z56', 'Z57']).slice(0, 3).map((code) => code.replace(/^Z/i, ''))
 }

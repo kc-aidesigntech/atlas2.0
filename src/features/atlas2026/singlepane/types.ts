@@ -78,6 +78,7 @@ export type DomainLoadSourceKind = 'partnerSurvey' | 'enrolleeRecords' | 'enroll
 export interface DomainLoadBreakdownRow {
   id: string
   zCodeGroup: string
+  parentCode?: string
   mappedDomain: DomainLoadBucket
   rawCount: number
   responseCount?: number

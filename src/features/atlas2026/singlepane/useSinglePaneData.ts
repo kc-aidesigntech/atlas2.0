@@ -2046,13 +2046,24 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         reloadBootstrapState()
       ])
     } catch (error) {
-      const databaseErrorCode = (error as { code?: string } | null)?.code
+      const typedDatabaseError = error as { code?: string; message?: string; details?: string; hint?: string } | null
+      const databaseErrorCode = typedDatabaseError?.code
       if (databaseErrorCode === 'PGRST202') {
         setNavigatorEnrollmentAssignmentsError(
           mode === 'unassign'
             ? 'Navigator self-unassignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
             : 'Navigator self-assignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
         )
+        return
+      }
+      if (typedDatabaseError?.message) {
+        const detailParts = [
+          typedDatabaseError.message,
+          typedDatabaseError.details ? `details: ${typedDatabaseError.details}` : '',
+          typedDatabaseError.hint ? `hint: ${typedDatabaseError.hint}` : '',
+          databaseErrorCode ? `code: ${databaseErrorCode}` : ''
+        ].filter(Boolean)
+        setNavigatorEnrollmentAssignmentsError(detailParts.join(' | '))
         return
       }
       setNavigatorEnrollmentAssignmentsError(

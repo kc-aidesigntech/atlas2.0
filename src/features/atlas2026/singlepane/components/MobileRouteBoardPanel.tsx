@@ -94,7 +94,12 @@ export default function MobileRouteBoardPanel({
           } as React.CSSProperties}
         >
           <span>plan route</span>
-          <AtlasArrowIcon decorative direction="right" className="h-[0.9rem] w-[0.9rem] brightness-0" />
+          <AtlasArrowIcon
+            decorative
+            direction="right"
+            className="h-[0.9rem] w-[0.9rem]"
+            style={{ filter: 'brightness(0) saturate(100%)' }}
+          />
         </AtlasTextButton>
       )
     }

@@ -47,6 +47,7 @@ interface ServiceCapacitySurveyPanelProps {
   defaultHeader: PartnerServiceCapacityHeader
   isSaving: boolean
   saveError: string | null
+  onBackToWorkspace?: () => void
   onSearchPartnerIdentifiers: (firstName: string, lastName: string) => Promise<PartnerIdentifierRecord[]>
   onEnsurePartnerIdentifier: (header: {
     firstName: string
@@ -150,6 +151,7 @@ export default function ServiceCapacitySurveyPanel({
   defaultHeader,
   isSaving,
   saveError,
+  onBackToWorkspace,
   onSearchPartnerIdentifiers,
   onEnsurePartnerIdentifier,
   onSubmit,
@@ -272,6 +274,7 @@ export default function ServiceCapacitySurveyPanel({
       hasPersistedDraft={Boolean(persistedDraft)}
       isResolvingResumeDraft={isResolvingResumeDraft}
       resumeDraftError={resumeDraftError}
+      onBackToWorkspace={onBackToWorkspace}
       onCheckoutNewRecord={handleCheckoutNewRecord}
       onResumeDraft={handleResumeDraft}
       onEditDraftRecord={handleEditDraftRecord}
