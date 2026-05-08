@@ -11,9 +11,9 @@ import type {
   RouteTemplate,
   RoutingStep,
 } from "../atlas2026/contracts";
-import type { AtlasDatabase } from "./contracts";
 
-type AnySupabaseClient = SupabaseClient<AtlasDatabase>;
+type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
+let canonicalEnrollmentRosterUnauthorized = false;
 
 export interface AppRoleNavigationRecord {
   roleKey: string;
@@ -128,6 +128,7 @@ export interface PartnerLoadBreakdownRecord {
   rows: Array<{
     id: string;
     zCodeGroup: string;
+    parentCode: string;
     mappedDomain: "habitat" | "work" | "socialNetworks";
     rawCount: number;
   }>;
@@ -586,26 +587,61 @@ export async function fetchSinglePaneSurveyDefinition(
 }
 
 export async function fetchSinglePaneEnrolleeProfiles(client: AnySupabaseClient) {
-  const { data, error } = await (client as SupabaseClient<any>)
+  if (!canonicalEnrollmentRosterUnauthorized) {
+    const canonicalResult = await (client as SupabaseClient<any>)
+      .schema("atlas")
+      .from("v_active_enrollment_roster")
+      .select("*")
+      .order("enrollee_name", { ascending: true });
+
+    if (!canonicalResult.error) {
+      return (canonicalResult.data || []).map(
+        (row): SinglePaneEnrolleeProfileRecord => ({
+          enrolleeId: row.enrollee_id,
+          enrollmentId: row.enrollment_id,
+          fullName: row.enrollee_name,
+          dob: row.dob,
+          caseId: row.case_id || "",
+          email: row.enrollee_email || "",
+          avatarUrl: row.avatar_url,
+          assignedNavigator: row.assigned_navigator,
+          zCodeTags: asStringArray(row.z_code_tags),
+          activeZCodeDetails: asEnrolleeActiveZCodeArray(row.active_z_code_details),
+          completedParentCodes: asStringArray(row.completed_parent_codes),
+          enrollmentStartIso: row.start_date,
+          targetDurationMonths: Number(row.target_duration_months || 9),
+          currentPhase: row.current_phase,
+        }),
+      );
+    }
+
+    const fallbackCode = (canonicalResult.error as { code?: string } | null)?.code;
+    // Compatibility fallback for environments where canonical views are present
+    // but underlying table grants are not yet aligned for navigator sessions.
+    if (fallbackCode !== "42501") throw canonicalResult.error;
+    canonicalEnrollmentRosterUnauthorized = true;
+  }
+
+  const { data: legacyData, error: legacyError } = await (client as SupabaseClient<any>)
     .schema("atlas")
-    .from("v_active_enrollment_roster")
+    .from("v_singlepane_enrollee_profiles")
     .select("*")
-    .order("enrollee_name", { ascending: true });
-  if (error) throw error;
-  return (data || []).map(
+    .order("full_name", { ascending: true });
+  if (legacyError) throw legacyError;
+  return (legacyData || []).map(
     (row): SinglePaneEnrolleeProfileRecord => ({
       enrolleeId: row.enrollee_id,
       enrollmentId: row.enrollment_id,
-      fullName: row.enrollee_name,
+      fullName: row.full_name,
       dob: row.dob,
-      caseId: row.case_id || "",
-      email: row.enrollee_email || "",
+      caseId: row.case_id,
+      email: row.email,
       avatarUrl: row.avatar_url,
       assignedNavigator: row.assigned_navigator,
       zCodeTags: asStringArray(row.z_code_tags),
       activeZCodeDetails: asEnrolleeActiveZCodeArray(row.active_z_code_details),
       completedParentCodes: asStringArray(row.completed_parent_codes),
-      enrollmentStartIso: row.start_date,
+      enrollmentStartIso: row.enrollment_start_iso,
       targetDurationMonths: Number(row.target_duration_months || 9),
       currentPhase: row.current_phase,
     }),
@@ -751,34 +787,66 @@ export async function fetchSinglePaneRouteCandidates(
 export async function fetchPartnerLoadBreakdown(client: AnySupabaseClient) {
   const { data, error } = await (client as SupabaseClient<any>)
     .schema("atlas")
-    .from("v_partner_z_code_burden")
-    .select("*")
-    .order("category_key", { ascending: true });
+    .from("partner_z_code_capabilities")
+    .select("partner_id,z_code_id,z_codes!inner(z_group)")
+    .eq("is_active", true)
+    .eq("relation_type", "specialize");
   if (error) throw error;
 
-  const rows = (data || []).map((row) => {
-    const categoryKey = String(row.category_key || "").trim().toLowerCase();
-    // Unknown categories default to socialNetworks to preserve historical dashboard behavior
-    // where non-work/non-habitat codes were bucketed into the social domain.
-    const mappedDomain =
-      categoryKey === "work"
-        ? "work"
-        : categoryKey === "habitat"
-          ? "habitat"
-          : "socialNetworks";
-    const zCodeGroup =
-      mappedDomain === "work"
-        ? "Z55-Z57"
-        : mappedDomain === "habitat"
-          ? "Z58-Z59"
-          : "Z60-Z65";
+  const groupCounts = new Map<number, number>();
+  for (const row of data || []) {
+    const record = asRecord(row);
+    const zCodesRecord = asRecord(record.z_codes);
+    const groupValue = Number(zCodesRecord.z_group || 0);
+    if (!Number.isFinite(groupValue) || groupValue <= 0) continue;
+    groupCounts.set(groupValue, (groupCounts.get(groupValue) || 0) + 1);
+  }
+
+  const groups = Array.from(groupCounts.keys()).sort((left, right) => left - right);
+  if (!groups.length) {
     return {
-      id: `${row.station_id}:${categoryKey}`,
-      zCodeGroup,
-      mappedDomain,
-      rawCount: Number(row.z_code_count || 0),
-    } as PartnerLoadBreakdownRecord["rows"][number];
-  });
+      subjectId: "partner-network",
+      subjectLabel: "Partner network",
+      sourceKind: "partnerSurvey",
+      sourceLabel: "Supabase partner capability network",
+      habitatTotal: 0,
+      workTotal: 0,
+      socialNetworksTotal: 0,
+      rows: [],
+    } satisfies PartnerLoadBreakdownRecord;
+  }
+
+  const { data: headerRows, error: headerError } = await (client as SupabaseClient<any>)
+    .schema("atlas")
+    .from("z_code_headers")
+    .select("z_group")
+    .in("z_group", groups);
+  if (headerError) throw headerError;
+
+  const validGroups = new Set(
+    (headerRows || [])
+      .map((row) => Number(asRecord(row).z_group || 0))
+      .filter((value) => Number.isFinite(value) && value > 0),
+  );
+
+  const rows = groups
+    .filter((groupValue) => validGroups.has(groupValue))
+    .map((groupValue) => {
+      const parentCode = `Z${String(groupValue).padStart(2, "0")}`;
+      const mappedDomain =
+        groupValue >= 55 && groupValue <= 57
+          ? "work"
+          : groupValue >= 58 && groupValue <= 59
+            ? "habitat"
+            : "socialNetworks";
+      return {
+        id: `partner-network:${parentCode}`,
+        zCodeGroup: parentCode,
+        parentCode,
+        mappedDomain,
+        rawCount: groupCounts.get(groupValue) || 0,
+      } satisfies PartnerLoadBreakdownRecord["rows"][number];
+    });
 
   const totals = rows.reduce(
     (acc, row) => {

@@ -1,13 +1,14 @@
 import React from 'react'
 import { Check } from 'lucide-react'
 import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import type {
   EnrolleeProfile,
   EnrolleeZCodeResolutionInput,
   RouteCandidateRecord
 } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
+import { getZCodeParentColor } from '@atlas/shared'
 
 interface ResolvedZCodesOverlayProps {
   isOpen: boolean
@@ -112,17 +113,14 @@ export default function ResolvedZCodesOverlay({
 
   return (
     <div className="absolute inset-0 z-40 flex items-start justify-center bg-black/72 px-5 py-6 backdrop-blur-[2px]">
-      <div
-        className="max-h-[calc(100vh-72px)] w-full max-w-[920px] overflow-y-auto rounded-[34px] border px-4 py-4 sm:px-5 sm:py-5"
-        style={{ borderColor: SP_COLORS.white, backgroundColor: 'var(--surface-panel-soft)' }}
-      >
+      <div className="atlas-surface-shell max-h-[calc(100vh-72px)] w-full max-w-[920px] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5" style={{ borderColor: SP_COLORS.white, backgroundColor: 'var(--surface-panel-soft)' }}>
         <div className="mb-5 flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <small className="block text-[11px] uppercase tracking-[0.18em]" style={{ color: '#9ea8b4' }}>
+            <small className="atlas-overline block" style={{ color: '#9ea8b4' }}>
               {isRouteBoardLaunch ? 'route resolution' : 'zcode resolution'}
             </small>
-            <h3 className="text-[30px] font-medium text-white">which zcodes were resolved?</h3>
-            <small className="mt-2 block text-[12px] leading-[1.45]" style={{ color: '#b1bcc8' }}>
+            <h3 className="atlas-h3 text-[30px] font-medium text-white">which zcodes were resolved?</h3>
+            <small className="atlas-caption mt-2 block leading-[1.45]" style={{ color: '#b1bcc8' }}>
               {isRouteBoardLaunch
                 ? `${candidate?.stationName || 'selected station'} assigned`
                 : normalizedFilterParentCode
@@ -132,33 +130,25 @@ export default function ResolvedZCodesOverlay({
           </div>
           <AtlasCloseButton
             onClick={onClose}
-            className="h-8 w-8"
             style={{ ['--button-border-color' as const]: '#ffffff45', color: SP_COLORS.white } as React.CSSProperties}
           />
         </div>
 
         {isRouteBoardLaunch ? (
-          <div
-            className="mb-4 rounded-[20px] border px-4 py-3 text-[12px]"
-            style={{ borderColor: '#ffffff24', backgroundColor: 'var(--surface-panel-raised)', color: '#d3dbe4' }}
-          >
+          <div className="atlas-surface-raised mb-4 px-4 py-3 text-[12px]" style={{ color: '#d3dbe4' }}>
             Partner attribution will be saved to <span className="font-medium text-white">{candidate?.stationName}</span>.
           </div>
         ) : (
-          <div
-            className="mb-4 grid gap-3 rounded-[24px] border px-4 py-4"
-            style={{ borderColor: '#ffffff24', backgroundColor: 'var(--surface-panel-raised)' }}
-          >
+          <div className="atlas-surface-panel mb-4 grid gap-3 px-4 py-4">
             <div className="grid gap-1">
-              <label className="text-[11px] uppercase tracking-[0.18em]" style={{ color: '#9ea8b4' }} htmlFor="resolution-partner">
+              <label className="atlas-overline" style={{ color: '#9ea8b4' }} htmlFor="resolution-partner">
                 partner station
               </label>
               <select
                 id="resolution-partner"
                 value={selectedPartnerId}
                 onChange={(event) => setSelectedPartnerId(event.target.value)}
-                className="h-11 rounded-[14px] border px-3 text-[14px] text-white outline-none"
-                style={{ borderColor: '#ffffff24', backgroundColor: 'rgba(255,255,255,0.02)' }}
+                className="atlas-select h-11 bg-[rgba(255,255,255,0.02)] text-[14px] text-white"
               >
                 <option value="" style={{ color: '#111111' }}>
                   select a partner station
@@ -171,7 +161,7 @@ export default function ResolvedZCodesOverlay({
               </select>
             </div>
             <div className="grid gap-1">
-              <label className="text-[11px] uppercase tracking-[0.18em]" style={{ color: '#9ea8b4' }} htmlFor="resolution-note">
+              <label className="atlas-overline" style={{ color: '#9ea8b4' }} htmlFor="resolution-note">
                 note
               </label>
               <textarea
@@ -180,8 +170,7 @@ export default function ResolvedZCodesOverlay({
                 onChange={(event) => setResolutionNote(event.target.value)}
                 rows={3}
                 placeholder="Add context if the partner is not in the list, or to explain how the resolution happened."
-                className="resize-none rounded-[14px] border px-3 py-2 text-[14px] text-white outline-none placeholder:text-[#94a0ad]"
-                style={{ borderColor: '#ffffff24', backgroundColor: 'rgba(255,255,255,0.02)' }}
+                className="atlas-textarea resize-none bg-[rgba(255,255,255,0.02)] text-[14px] text-white outline-none placeholder:text-[#94a0ad]"
               />
             </div>
             <small className="text-[12px] leading-[1.45]" style={{ color: validationMessage ? '#ff9a9a' : '#b5c0cb' }}>
@@ -194,7 +183,6 @@ export default function ResolvedZCodesOverlay({
           {detailsToRender.length ? (
             detailsToRender.map((detail) => {
               const parentFill = getZCodeParentColor(detail.parentCode) || SP_COLORS.yellow
-              const parentTextColor = usesLightTextOnZCodeColor(parentFill) ? SP_COLORS.white : SP_COLORS.bg
               const isSaving = savingIds.includes(detail.enrolleeZCodeId)
               return (
                 <button
@@ -208,12 +196,7 @@ export default function ResolvedZCodesOverlay({
                     backgroundColor: detail.isResolved ? 'rgba(111,207,151,0.08)' : 'var(--surface-panel-raised)'
                   }}
                 >
-                  <span
-                    className="inline-flex h-12 min-w-[3rem] items-center justify-center rounded-full border px-2 text-[18px] font-semibold"
-                    style={{ backgroundColor: parentFill, borderColor: parentFill, color: parentTextColor }}
-                  >
-                    {detail.zCode.replace(/^Z/i, '')}
-                  </span>
+                  <ZCodeBadge value={detail.zCode} fill={parentFill} size="resolved" stripLeadingZ />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[18px] font-medium text-white">{detail.title || detail.zCode}</span>
@@ -245,7 +228,7 @@ export default function ResolvedZCodesOverlay({
               )
             })
           ) : (
-            <div className="rounded-[20px] border px-4 py-5 text-[13px]" style={{ borderColor: '#ffffff24', color: '#c7d0d9' }}>
+            <div className="atlas-empty-state px-4 py-5 text-[13px]" style={{ color: '#c7d0d9' }}>
               {normalizedFilterParentCode
                 ? `No active ${normalizedFilterParentCode} Z-codes are available for this enrollee.`
                 : 'No active Z-codes are available for this enrollee.'}

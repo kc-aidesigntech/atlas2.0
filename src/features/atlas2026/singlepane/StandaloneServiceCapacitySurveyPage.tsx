@@ -7,6 +7,9 @@ import ServiceCapacitySurveyPanel from '@/features/atlas2026/singlepane/componen
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePaneData'
 
+const SESSION_ROLE_KEY = 'atlas2026.singlepane.session.role'
+const SESSION_ACTIVE_MENU_KEY = 'atlas2026.singlepane.session.active-menu'
+
 export default function StandaloneServiceCapacitySurveyPage() {
   const {
     role,
@@ -37,6 +40,13 @@ export default function StandaloneServiceCapacitySurveyPage() {
     }
   }, [])
 
+  function backToWorkspace() {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.setItem(SESSION_ROLE_KEY, 'partner')
+    window.sessionStorage.setItem(SESSION_ACTIVE_MENU_KEY, 'my station')
+    window.location.assign(new URL('/app#my-station', window.location.origin).toString())
+  }
+
   return (
     <div
       className="atlas-shell-edge-buffer min-h-screen overflow-x-hidden bg-black py-6 text-white md:py-8"
@@ -48,6 +58,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
           defaultHeader={partnerServiceCapacityDefaultHeader}
           isSaving={isSavingPartnerServiceCapacitySurvey}
           saveError={partnerServiceCapacitySurveyError}
+          onBackToWorkspace={backToWorkspace}
           onSearchPartnerIdentifiers={searchPartnerIdentifierMatches}
           onEnsurePartnerIdentifier={ensurePartnerIdentifier}
           onSubmit={savePartnerServiceCapacitySurvey}

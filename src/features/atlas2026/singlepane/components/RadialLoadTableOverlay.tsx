@@ -33,7 +33,6 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
           </div>
           <AtlasCloseButton
             onClick={onClose}
-            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           />
         </div>

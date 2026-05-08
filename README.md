@@ -234,6 +234,7 @@ This scenario is intended to make the mobile route board and readiness routing o
 - Security and governance model notes: `docs/atlas-2026-security-model.md`
 - Repo cutover plan: `docs/atlas-2026-repo-cutover.md`
 - Seeding guide: `docs/atlas-2026-seeding.md`
+- RunPod and MCP deployment handshake: `Runpod_VM.md`
 
 ## Contribution Guidance
 

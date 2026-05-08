@@ -194,20 +194,20 @@ export default function EnrolleeBurdenSurveyPanel({
               <>
                 <AtlasTextButton
                   onClick={() => openSurvey(latestDraftRecord)}
-                  className="px-3 py-1.5 text-[12px]"
-                  style={{ backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg } as React.CSSProperties}
+                  className="px-[14px] py-[7px] text-[14px]"
+                  style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#ffffff' } as React.CSSProperties}
                 >
                   {latestDraftRecord ? 'resume draft' : 'start survey'}
                 </AtlasTextButton>
                 <AtlasTextButton
                   onClick={() => openSurvey(null)}
-                  className="px-3 py-1.5 text-[12px]"
+                  className="px-[14px] py-[7px] text-[14px]"
                 >
                   new blank survey
                 </AtlasTextButton>
               </>
             ) : latestCompletedRecord ? (
-              <AtlasTextButton onClick={() => openSurvey(latestCompletedRecord)} className="px-3 py-1.5 text-[12px]">
+              <AtlasTextButton onClick={() => openSurvey(latestCompletedRecord)} className="px-[14px] py-[7px] text-[14px]">
                 review latest
               </AtlasTextButton>
             ) : null}
@@ -232,7 +232,7 @@ export default function EnrolleeBurdenSurveyPanel({
                 {respondentRole} {organizationName ? `· ${organizationName}` : ''}
               </div>
             </div>
-            <AtlasTextButton onClick={() => setMode('history')} className="px-3 py-1.5 text-[12px]">
+            <AtlasTextButton onClick={() => setMode('history')} className="px-[14px] py-[7px] text-[14px]">
               back to records
             </AtlasTextButton>
           </div>
@@ -294,14 +294,14 @@ export default function EnrolleeBurdenSurveyPanel({
             <div className="flex flex-wrap gap-2">
               {canEdit ? (
                 <>
-                  <AtlasTextButton onClick={() => void persist('draft')} disabled={isSaving} className="px-3 py-1.5 text-[12px]">
+                  <AtlasTextButton onClick={() => void persist('draft')} disabled={isSaving} className="px-[14px] py-[7px] text-[14px]">
                     save draft
                   </AtlasTextButton>
                   <AtlasTextButton
                     onClick={() => void persist('completed')}
                     disabled={isSaving}
-                    className="px-3 py-1.5 text-[12px]"
-                    style={{ backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg } as React.CSSProperties}
+                    className="px-[14px] py-[7px] text-[14px]"
+                    style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#ffffff' } as React.CSSProperties}
                   >
                     submit completed
                   </AtlasTextButton>
@@ -337,13 +337,13 @@ export default function EnrolleeBurdenSurveyPanel({
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <AtlasTextButton onClick={() => openSurvey(record)} className="px-3 py-1.5 text-[12px]">
+                      <AtlasTextButton onClick={() => openSurvey(record)} className="px-[14px] py-[7px] text-[14px]">
                         {record.status === 'draft' && canEdit ? 'edit' : 'view'}
                       </AtlasTextButton>
                       {record.status === 'draft' && canEdit ? (
                         <AtlasTextButton
                           onClick={() => void onDeleteDraft(record.id, enrollee.enrollmentId || '')}
-                          className="px-3 py-1.5 text-[12px]"
+                          className="px-[14px] py-[7px] text-[14px]"
                         >
                           delete draft
                         </AtlasTextButton>

@@ -117,7 +117,7 @@ export default function LiveAccessMatrixPanel({
                           )
                         }}
                         disabled={busyKey === `role:${person.id}:${role}`}
-                        className="px-2.5 py-1 text-[11px] font-medium"
+                        className="px-3 py-[6px] text-[13px] font-medium"
                         style={
                           {
                             ['--button-border-color' as const]: active ? SP_COLORS.yellow : '#ffffff24',
@@ -157,7 +157,7 @@ export default function LiveAccessMatrixPanel({
                             void onStartTroubleshooting(person.id, candidateRole)
                           }}
                           disabled={disabled}
-                          className="px-2.5 py-1 text-[11px] font-medium"
+                          className="px-3 py-[6px] text-[13px] font-medium"
                           style={
                             {
                               ['--button-border-color' as const]: isActiveSession ? SP_COLORS.deepGreen : '#ffffff24',

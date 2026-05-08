@@ -48,7 +48,7 @@ export default function LocalDateInputBox({
         {onDelete ? (
           <AtlasTextButton
             onClick={onDelete}
-            className="px-3 py-1 text-[11px]"
+            className="px-[14px] py-[6px] text-[13px]"
             style={{ ['--button-border-color' as const]: `${SP_COLORS.red}90`, color: SP_COLORS.red } as React.CSSProperties}
           >
             {deleteLabel}
@@ -56,14 +56,14 @@ export default function LocalDateInputBox({
         ) : null}
         <AtlasTextButton
           onClick={onCancel}
-          className="px-3 py-1 text-[11px] text-white"
+          className="px-[14px] py-[6px] text-[13px] text-white"
           style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
         >
           cancel
         </AtlasTextButton>
         <AtlasTextButton
           onClick={onSave}
-          className="px-3 py-1 text-[11px]"
+          className="px-[14px] py-[6px] text-[13px]"
           style={{ ['--button-border-color' as const]: `${SP_COLORS.yellow}90`, color: SP_COLORS.yellow } as React.CSSProperties}
         >
           save

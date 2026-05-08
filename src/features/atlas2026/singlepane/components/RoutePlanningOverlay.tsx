@@ -67,7 +67,6 @@ export default function RoutePlanningOverlay({
           </div>
           <AtlasCloseButton
             onClick={onClose}
-            className="h-9 w-9"
             style={{ ['--button-border-color' as const]: SP_COLORS.white } as React.CSSProperties}
           />
         </div>
@@ -98,7 +97,6 @@ export default function RoutePlanningOverlay({
           headerActions={
             <AtlasCloseButton
               onClick={onClose}
-              className="h-8 w-8"
               style={{ ['--button-border-color' as const]: '#ffffff45', color: SP_COLORS.white } as React.CSSProperties}
             />
           }
@@ -112,7 +110,7 @@ export default function RoutePlanningOverlay({
 function MetaPill({ label, value, accentColor }: { label: string; value: string; accentColor?: string }) {
   return (
     <div
-      className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px]"
+      className="inline-flex items-center gap-2 rounded-full border px-[14px] py-[7px] text-[13px]"
       style={{ borderColor: '#ffffff20', backgroundColor: 'var(--surface-panel-raised)', color: accentColor || '#d2d9e2' }}
     >
       <span style={{ color: '#9fa8b4' }}>{label}</span>

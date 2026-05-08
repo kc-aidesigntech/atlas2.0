@@ -1,6 +1,7 @@
 import React from 'react'
 import { Trash2 } from 'lucide-react'
 import { AtlasIconButton, AtlasInsetCard, AtlasPanel, AtlasPlusButton, AtlasStatusPill, AtlasTextButton } from '../../../components/AtlasPrimitives'
+import AtlasArrowIcon from '../../../components/AtlasArrowIcon'
 import { SP_COLORS } from '../../theme'
 import type { PartnerServiceCapacitySubmissionRecord } from '../../types'
 import { formatDateTimeLabel } from './draft'
@@ -13,6 +14,7 @@ export function RecordManagementView({
   hasPersistedDraft,
   isResolvingResumeDraft,
   resumeDraftError,
+  onBackToWorkspace,
   onCheckoutNewRecord,
   onResumeDraft,
   onEditDraftRecord,
@@ -25,6 +27,7 @@ export function RecordManagementView({
   hasPersistedDraft: boolean
   isResolvingResumeDraft: boolean
   resumeDraftError: string | null
+  onBackToWorkspace?: () => void
   onCheckoutNewRecord: () => void
   onResumeDraft: () => void
   onEditDraftRecord: (record: PartnerServiceCapacitySubmissionRecord) => void
@@ -59,6 +62,22 @@ export function RecordManagementView({
               {isResolvingResumeDraft ? 'Checking saved draft…' : resumeDraftError ? 'Resume unavailable' : 'Resume draft'}
             </AtlasTextButton>
           ) : null}
+          {onBackToWorkspace ? (
+            <AtlasIconButton
+              onClick={onBackToWorkspace}
+              aria-label="Back to workspace"
+              title="Back to workspace"
+              className="h-12 w-12"
+              style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
+            >
+              <AtlasArrowIcon
+                decorative
+                direction="left"
+                className="h-[1.15rem] w-[1.15rem]"
+                style={{ filter: 'brightness(0) saturate(100%)' }}
+              />
+            </AtlasIconButton>
+          ) : null}
           <AtlasPlusButton
             onClick={onCheckoutNewRecord}
             label="Start a new survey"
@@ -81,7 +100,7 @@ export function RecordManagementView({
                         <>
                           <AtlasIconButton
                             onClick={() => onEditDraftRecord(record)}
-                            className="h-7 w-7"
+                            className="h-9 w-9"
                             style={{ ['--button-border-color' as const]: '#ffffff2f', color: SP_COLORS.white } as React.CSSProperties}
                             aria-label={`Edit draft record ${record.id}`}
                             title="Edit draft"
@@ -93,7 +112,7 @@ export function RecordManagementView({
                           </AtlasIconButton>
                           <AtlasIconButton
                             onClick={() => onDeleteDraftRecord(record)}
-                            className="h-7 w-7"
+                            className="h-9 w-9"
                             style={{ ['--button-border-color' as const]: '#ffffff2f', color: SP_COLORS.red } as React.CSSProperties}
                             aria-label={`Delete draft record ${record.id}`}
                             title="Delete draft"

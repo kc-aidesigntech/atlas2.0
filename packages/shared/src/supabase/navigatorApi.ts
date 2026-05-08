@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AtlasDatabase } from "./contracts";
+let canonicalNavigatorAssignmentsUnauthorized = false;
 
 export interface NavigatorAssignedEnrollee {
   navigatorPersonId: string;
@@ -59,17 +60,43 @@ function mapEnrollmentStationMarkerRow(row: EnrollmentStationMarkerRow): Enrollm
 export async function fetchNavigatorAssignedEnrollees(
   client: SupabaseClient<AtlasDatabase>,
 ): Promise<NavigatorAssignedEnrollee[]> {
-  const { data, error } = await client
+  if (!canonicalNavigatorAssignmentsUnauthorized) {
+    const canonicalResult = await client
+      .schema("atlas")
+      .from("v_active_navigator_assignment_edges")
+      .select(
+        "navigator_person_id,enrollment_id,enrollee_id,enrollee_name,case_id,current_phase,avatar_url",
+      )
+      .order("enrollee_name", { ascending: true });
+
+    if (!canonicalResult.error) {
+      // Supabase can return null data with no error for empty views.
+      return (canonicalResult.data || []).map(mapNavigatorAssignedEnrolleeRow);
+    }
+
+    const fallbackCode = (canonicalResult.error as { code?: string } | null)?.code;
+    // Compatibility fallback while canonical table/view grants are being aligned.
+    if (fallbackCode !== "42501") throw canonicalResult.error;
+    canonicalNavigatorAssignmentsUnauthorized = true;
+  }
+
+  const { data: legacyData, error: legacyError } = await client
     .schema("atlas")
-    .from("v_active_navigator_assignment_edges")
+    .from("v_navigator_assigned_enrollees")
     .select(
       "navigator_person_id,enrollment_id,enrollee_id,enrollee_name,case_id,current_phase,avatar_url",
     )
     .order("enrollee_name", { ascending: true });
-
-  if (error) throw error;
-  // Supabase can return null data with no error for empty views.
-  return (data || []).map(mapNavigatorAssignedEnrolleeRow);
+  if (legacyError) throw legacyError;
+  return (legacyData || []).map((row) => ({
+    navigatorPersonId: row.navigator_person_id,
+    enrollmentId: row.enrollment_id,
+    enrolleeId: row.enrollee_id,
+    enrolleeName: row.enrollee_name,
+    caseId: row.case_id,
+    currentPhase: row.current_phase,
+    avatarUrl: row.avatar_url,
+  }));
 }
 
 export async function fetchEnrollmentStationMarkers(

@@ -9,7 +9,8 @@ import type {
   JourneyStationMarker,
   NavigatorEnrollmentAssignmentRecord,
   PartnerStationProfile,
-  RouteCandidateRecord
+  RouteCandidateRecord,
+  UnassignedEnrolleePickupRecord
 } from '@/features/atlas2026/singlepane/types'
 import {
   fetchAppRoleNavigation,
@@ -81,14 +82,6 @@ import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/da
 import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 
-/**
- * Single-pane data-access facade.
- *
- * Purpose:
- * - composes per-feature repositories into a single orchestration boundary.
- * - returns User Interface (UI)-shaped records while insulating callers from backend topology.
- */
-
 export interface SinglePaneBootstrapData {
   enrollees: import('@/features/atlas2026/singlepane/types').EnrolleeProfile[]
   loads: DomainLoad[]
@@ -103,14 +96,15 @@ const routeCandidatesCache = new Map<string, RouteCandidateRecord[]>()
 const routeCandidatesInFlight = new Map<string, Promise<RouteCandidateRecord[]>>()
 const journeyStationMarkersCache = new Map<string, JourneyStationMarker[]>()
 const journeyStationMarkersInFlight = new Map<string, Promise<JourneyStationMarker[]>>()
+const DEMO_NAVIGATOR_NAME = 'atlas demo navigator'
+let demoTagsTableUnavailable = false
 
-/**
- * Repository facade for single-pane orchestration.
- *
- * Boundary contract:
- * - consolidates reads from Supabase-backed domain views plus local config overlays.
- * - exposes normalized UI-ready records so hooks/components avoid storage-specific logic.
- */
+export interface ReferralClaimMaterializationResult {
+  enrollmentId: string
+  enrolleeId: string
+  enrolleeName: string
+  createdAtIso: string
+}
 
 function normalizeNavigatorTopMenus(menus: string[]) {
   const normalized = menus
@@ -169,6 +163,35 @@ function dedupeProfilesByEnrollmentId<T extends { enrollmentId?: string; enrolle
   })
 }
 
+function deriveParentCodesForAssignmentBoard(profile: {
+  activeZCodeDetails?: Array<{ parentCode?: string }>
+  zCodeTags?: string[]
+}) {
+  const fromDetails = (profile.activeZCodeDetails || [])
+    .map((detail) => String(detail.parentCode || '').trim().toUpperCase())
+    .filter((code) => /^Z\d{2}$/.test(code))
+
+  const source = fromDetails.length
+    ? fromDetails
+    : (profile.zCodeTags || [])
+        .map((tag) => {
+          const match = String(tag || '')
+            .trim()
+            .toUpperCase()
+            .match(/^Z(\d{2})/)
+          return match ? `Z${match[1]}` : ''
+        })
+        .filter((code) => /^Z\d{2}$/.test(code))
+
+  return Array.from(new Set(source)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+}
+
+function normalizeRosterAssignedNavigatorLabel(value: string | null | undefined) {
+  const normalized = (value || '').trim()
+  if (!normalized) return ''
+  return normalized.toLowerCase() === 'unassigned' ? '' : normalized
+}
+
 function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]): SinglePaneBootstrapData {
   return {
     enrollees: [],
@@ -181,20 +204,18 @@ function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/type
   }
 }
 
-async function resolveCurrentPersonId() {
+async function resolveSessionPersonIdFromMetadata() {
   if (!supabase) return null
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
   if (sessionError) throw sessionError
   const appMetadata = sessionData.session?.user?.app_metadata || {}
-  const metadataPersonId =
-    String((appMetadata as Record<string, unknown>).person_id || (appMetadata as Record<string, unknown>).atlas_person_id || '').trim()
+  const metadataPersonId = String(
+    (appMetadata as Record<string, unknown>).person_id || (appMetadata as Record<string, unknown>).atlas_person_id || ''
+  ).trim()
   if (metadataPersonId) return metadataPersonId
-  // Metadata can be missing/stale for some sessions even when assignment RPCs succeed.
-  // Fall back to the authorization helper function so navigator scoping still resolves.
-  const { data: helperData, error: helperError } = await (supabase as any).rpc('fn_current_person_id')
+  const { data: helperData, error: helperError } = await (supabase as any).schema('atlas').rpc('fn_current_person_id')
   if (helperError) {
     const helperCode = (helperError as { code?: string } | null)?.code
-    // Older environments may not have this helper yet; preserve safe null fallback.
     if (helperCode === 'PGRST202') return null
     throw helperError
   }
@@ -212,8 +233,6 @@ async function resolveCurrentPersonId() {
 }
 
 export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePaneBootstrapData> {
-  // Local overrides are loaded even in cloud mode because intake/timeline edits may
-  // be made offline and must be projected over server bootstrap data.
   const logs = await loadLocalLogs()
   const intakeOverrides = await loadEnrolleeIntakes()
   const timelineOverrides = await loadTimelineConfigs()
@@ -232,8 +251,6 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   ])
 
   const shouldLoadEnrolleeDomain = role !== 'partner'
-  // Domain datasets are fetched in one branch so filtering decisions are applied
-  // consistently across profiles, aggregate loads, and breakdown rows.
   const [profiles, loadRows, breakdownRows, navigatorAssignedEnrollees, navigatorPersonId] = shouldLoadEnrolleeDomain
     ? await Promise.all([
         withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
@@ -247,7 +264,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
           ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
           : Promise.resolve([]),
         role === 'navigator'
-          ? withOptionalSupabaseFallback('singlepane.navigatorPerson', () => resolveCurrentPersonId(), null)
+          ? withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
           : Promise.resolve(null)
       ])
     : [[], [], [], [], null]
@@ -255,13 +272,13 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   const navigatorEnrollmentIds =
     role === 'navigator'
       ? new Set(
+          // Navigator identity is enforced in DB auth/RLS; keep client filtering simple and deterministic.
           navigatorAssignedEnrollees
-            .filter((record) => (navigatorPersonId ? record.navigatorPersonId === navigatorPersonId : false))
+            // If person-id resolution is missing, rely on DB-scoped rows rather than returning an empty UI.
+            .filter((record) => (navigatorPersonId ? record.navigatorPersonId === navigatorPersonId : true))
             .map((record) => record.enrollmentId)
         )
       : null
-  // Navigator scope is always assignment-bound: if identity linkage fails or no active
-  // assignments exist, return an empty profile set instead of leaking global enrollee rows.
   const visibleProfiles =
     role === 'navigator'
       ? profiles.filter((profile) => navigatorEnrollmentIds?.has(profile.enrollmentId))
@@ -386,8 +403,6 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   const firstEnrolleeId = enrollees[0]?.id || ''
   const mergedTimelineConfigs = Object.fromEntries(
     enrollees.map((enrollee) => {
-      // Prefer persisted timeline override (enrollment key first) to preserve edits
-      // across bootstrap refreshes and legacy key migrations.
       const persistedTimelineConfig =
         timelineOverrides[`enrollment:${enrollee.enrollmentId}`] ||
         timelineOverrides[`enrollee:${enrollee.id}`] ||
@@ -420,36 +435,187 @@ export async function loadEnrollmentRequests(role: AtlasRole): Promise<Enrollmen
 
 export async function loadNavigatorEnrollmentAssignments(): Promise<NavigatorEnrollmentAssignmentRecord[]> {
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
-  const [boardRows, navigatorPersonId] = await Promise.all([
+  const [profiles, assignmentBoardRows, navigatorAssignments, navigatorPersonId] = await Promise.all([
+    withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
     withOptionalSupabaseFallback('singlepane.enrollmentAssignmentBoard', () => fetchEnrollmentAssignmentBoard(supabase), []),
-    withOptionalSupabaseFallback('singlepane.navigatorPerson', () => resolveCurrentPersonId(), null)
+    withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), []),
+    withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
   ])
-  return boardRows
-    .map((row) => ({
-      enrollmentId: row.enrollmentId,
-      enrolleeId: row.enrolleeId,
-      enrolleeName: row.enrolleeName,
-      caseId: row.caseId || '',
-      assignedNavigatorLabel: row.assignedNavigatorLabel?.trim() || 'unassigned',
-      isAssignedToViewer: Boolean(navigatorPersonId && row.navigatorPersonIds.includes(navigatorPersonId))
-    }))
+
+  const viewerEnrollmentIds = new Set(
+    navigatorAssignments
+      // Treat "assigned to you" as true only when session metadata proves navigator identity.
+      // If identity resolution fails, trust DB-scoped assignment rows for this navigator session.
+      .filter((assignment) => (navigatorPersonId ? assignment.navigatorPersonId === navigatorPersonId : true))
+      .map((assignment) => assignment.enrollmentId)
+  )
+  const assignedEnrollmentIds = new Set(navigatorAssignments.map((assignment) => assignment.enrollmentId))
+  const assignmentCountsByEnrollmentId = navigatorAssignments.reduce<Record<string, Set<string>>>((accumulator, assignment) => {
+    if (!accumulator[assignment.enrollmentId]) {
+      accumulator[assignment.enrollmentId] = new Set<string>()
+    }
+    accumulator[assignment.enrollmentId].add(assignment.navigatorPersonId)
+    return accumulator
+  }, {})
+  const assignmentBoardByEnrollmentId = new Map(assignmentBoardRows.map((row) => [row.enrollmentId, row]))
+
+  return profiles
+    .map((profile) => {
+      const boardRow = assignmentBoardByEnrollmentId.get(profile.enrollmentId)
+      const edgeNavigatorCount = assignmentCountsByEnrollmentId[profile.enrollmentId]?.size || 0
+      const boardNavigatorCount = boardRow?.navigatorPersonIds.length || 0
+      const navigatorAssignmentCount = Math.max(edgeNavigatorCount, boardNavigatorCount)
+      const isAssignedToAnyNavigator = navigatorAssignmentCount > 0
+      const boardNames = boardRow?.navigatorNames || []
+      const normalizedRosterNavigatorName = normalizeRosterAssignedNavigatorLabel(profile.assignedNavigator)
+      const assignedNavigatorNames = boardNames.length
+        ? Array.from(new Set(boardNames.map((name) => name.trim()).filter(Boolean)))
+        : isAssignedToAnyNavigator && normalizedRosterNavigatorName
+          ? [normalizedRosterNavigatorName]
+          : []
+      return {
+        enrollmentId: profile.enrollmentId,
+        enrolleeId: profile.enrolleeId,
+        enrolleeName: profile.fullName,
+        caseId: profile.caseId,
+        assignedNavigatorLabel: isAssignedToAnyNavigator ? 'assigned' : 'unassigned',
+        navigatorAssignmentCount,
+        assignedNavigatorNames,
+        zCodeParentCodes: deriveParentCodesForAssignmentBoard(profile),
+        isAssignedToAnyNavigator,
+        isAssignedToViewer: viewerEnrollmentIds.has(profile.enrollmentId)
+      }
+    })
     .sort((left, right) => left.enrolleeName.localeCompare(right.enrolleeName))
 }
 
 export async function assignNavigatorEnrollmentToSelf(enrollmentId: string) {
   if (!enrollmentId || !hasSupabaseConfig || !supabase) return
-  const { error } = await (supabase as any).rpc('fn_navigator_assign_enrollment_to_self', {
+  const { error } = await (supabase as any).schema('atlas').rpc('fn_navigator_assign_enrollment_to_self', {
+    target_enrollment_id: enrollmentId
+  })
+  if (error) throw error
+  const rows = await fetchNavigatorAssignedEnrollees(supabase)
+  // Verify the write is visible in the same request cycle so UI can surface a deterministic error
+  // instead of silently blinking when identity linkage or grants are misconfigured.
+  if (!rows.some((row) => row.enrollmentId === enrollmentId)) {
+    throw new Error(
+      `Assignment write completed for enrollment ${enrollmentId}, but the row is not visible to this navigator yet. Verify identity mapping and RLS grants.`
+    )
+  }
+}
+
+export async function unassignNavigatorEnrollmentFromSelf(enrollmentId: string) {
+  if (!enrollmentId || !hasSupabaseConfig || !supabase) return
+  const { error } = await (supabase as any).schema('atlas').rpc('fn_navigator_unassign_enrollment_from_self', {
     target_enrollment_id: enrollmentId
   })
   if (error) throw error
 }
 
-export async function unassignNavigatorEnrollmentFromSelf(enrollmentId: string) {
-  if (!enrollmentId || !hasSupabaseConfig || !supabase) return
-  const { error } = await (supabase as any).rpc('fn_navigator_unassign_enrollment_from_self', {
-    target_enrollment_id: enrollmentId
-  })
+export async function materializeClaimedReferralIntoEnrollment(record: UnassignedEnrolleePickupRecord) {
+  if (!record.id || !hasSupabaseConfig || !supabase) return null
+  const payload = {
+    queue_record_id: record.id,
+    full_name: record.fullName,
+    email: record.email || null,
+    phone: record.phone || null,
+    case_id: record.caseId || null,
+    referrer_name: record.referrerName || null,
+    referrer_organization: record.referrerOrganization || null,
+    background_notes: record.backgroundNotes || null,
+    metadata: {
+      demo_tag: 'atlas_demo',
+      demo_record: true,
+      demo_navigator_name: DEMO_NAVIGATOR_NAME
+    }
+  }
+  const { data, error } = await (supabase as any).schema('atlas').rpc('fn_claim_referral_queue_to_enrollment', payload)
   if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || typeof row !== 'object') return null
+  const typed = row as Record<string, unknown>
+  const enrollmentId = String(typed.enrollment_id || typed.enrollmentId || '').trim()
+  const enrolleeId = String(typed.enrollee_id || typed.enrolleeId || '').trim()
+  if (!enrollmentId || !enrolleeId) return null
+  return {
+    enrollmentId,
+    enrolleeId,
+    enrolleeName: String(typed.enrollee_name || typed.enrolleeName || record.fullName || ''),
+    createdAtIso: String(typed.created_at || typed.createdAt || new Date().toISOString())
+  } satisfies ReferralClaimMaterializationResult
+}
+
+export async function upsertEnrollmentInferredZCodes(
+  enrollmentId: string,
+  zCodes: string[],
+  sourceLabel = 'demo_ollama_inference'
+) {
+  if (!enrollmentId || !hasSupabaseConfig || !supabase) return []
+  const normalizedCodes = Array.from(
+    new Set(
+      zCodes
+        .map((value) => value.trim().toUpperCase())
+        .filter((value) => /^Z\d{2}(\.\d+)?$/.test(value))
+    )
+  )
+  if (!normalizedCodes.length) return []
+
+  const { data: zRows, error: zRowsError } = await (supabase as any)
+    .schema('atlas')
+    .from('z_codes')
+    .select('id,z_code')
+    .in('z_code', normalizedCodes)
+  if (zRowsError) throw zRowsError
+  const activeRows = (zRows || []) as Array<{ id: string; z_code: string }>
+  if (!activeRows.length) return []
+
+  const payload = activeRows.map((row) => ({
+    enrollment_id: enrollmentId,
+    z_code_id: row.id,
+    is_resolved: false,
+    resolution_at: null,
+    source: sourceLabel,
+    ended_at: null
+  }))
+
+  const { data: existingRows, error: existingError } = await (supabase as any)
+    .schema('atlas')
+    .from('enrollee_z_codes')
+    .select('z_code_id')
+    .eq('enrollment_id', enrollmentId)
+    .is('ended_at', null)
+  if (existingError) throw existingError
+  const existingZCodeIds = new Set((existingRows || []).map((row: { z_code_id: string }) => row.z_code_id))
+  const nextRows = payload.filter((row) => !existingZCodeIds.has(row.z_code_id))
+  if (!nextRows.length) return activeRows.map((row) => row.z_code)
+
+  const { error: insertError } = await (supabase as any)
+    .schema('atlas')
+    .from('enrollee_z_codes')
+    .insert(nextRows)
+  if (insertError) throw insertError
+  return activeRows.map((row) => row.z_code)
+}
+
+export async function loadDemoTaggedEnrollmentIds(tag = 'atlas_demo') {
+  if (demoTagsTableUnavailable) return []
+  if (!hasSupabaseConfig || !supabase) return []
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('demo_record_tags')
+    .select('record_id')
+    .eq('tag', tag)
+    .eq('record_type', 'enrollments')
+  if (error) {
+    const typedError = error as { code?: string; message?: string } | null
+    if (typedError?.code === 'PGRST205' || typedError?.code === '42P01') {
+      demoTagsTableUnavailable = true
+      return []
+    }
+    throw error
+  }
+  return (data || []).map((row: { record_id: string }) => row.record_id).filter(Boolean)
 }
 
 export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteCandidateRecord[]> {
@@ -488,8 +654,6 @@ export async function loadRouteCandidates(enrollmentId?: string): Promise<RouteC
 }
 
 export async function prefetchRouteCandidatesForEnrollments(enrollmentIds: string[]) {
-  // Warm route-candidate cache for likely-next enrollee selections so route planning
-  // opens instantly instead of waiting on a fresh query after menu navigation.
   const uniqueEnrollmentIds = Array.from(new Set(enrollmentIds.map((value) => value.trim()).filter(Boolean)))
   await Promise.all(uniqueEnrollmentIds.map((enrollmentId) => loadRouteCandidates(enrollmentId).catch(() => [])))
 }
@@ -517,8 +681,6 @@ export async function loadJourneyStationMarkers(enrollmentId?: string, enrolleeI
   const existingRequest = journeyStationMarkersInFlight.get(enrollmentId)
   if (existingRequest) return existingRequest
 
-  // Marker history only includes completed route stops; active assignments are shown
-  // from in-memory route planning state and should not appear as timeline history yet.
   const request = (hasSupabaseConfig && supabase
     ? withOptionalSupabaseFallback(
         `singlepane.stationMarkers:${enrollmentId}`,
@@ -552,8 +714,6 @@ export async function loadJourneyStationMarkers(enrollmentId?: string, enrolleeI
 export async function prefetchJourneyStationMarkersForEnrollments(
   enrollments: Array<{ enrollmentId?: string; enrolleeId?: string }>
 ) {
-  // Timeline history for non-active enrollees is prefetched in the background so
-  // switching enrollees keeps the strip map populated without a visible delay.
   await Promise.all(
     enrollments.map((entry) =>
       loadJourneyStationMarkers(entry.enrollmentId, entry.enrolleeId).catch(() => [])
@@ -627,8 +787,6 @@ export async function uploadEnrolleeProfileImage(
   if (updatePrimaryError) throw updatePrimaryError
 
   if (!updatedPrimaryRows?.length) {
-    // Upsert behavior here is split on purpose: update existing primary image when present,
-    // otherwise insert a new primary row for first-time uploads.
     const { error: profileImageInsertError } = await (supabase as any)
       .schema('atlas')
       .from('profile_images')
@@ -649,8 +807,6 @@ export async function setEnrolleeZCodeResolution(
   input: EnrolleeZCodeResolutionInput = {}
 ) {
   if (!enrolleeZCodeId || !hasSupabaseConfig || !supabase) {
-    // Local fallback mirrors persisted response shape so callers can apply one
-    // merge path regardless of online/offline persistence mode.
     return {
       enrolleeZCodeId,
       isResolved,
@@ -749,17 +905,13 @@ export async function loadPartnerStationProfile(
     const splitName = splitFullName(fallback?.fullName || '')
     if (splitName.firstName && splitName.lastName) {
       try {
-        // Best-effort registration backfills partner directory records when a known
-        // contact submits from an org that has not been indexed yet.
         await ensurePartnerIdentifierRecordForSurvey({
           firstName: splitName.firstName,
           lastName: splitName.lastName,
           organizationName,
           email: fallback?.email || null
         })
-      } catch {
-        // best-effort auto-registration; UI still gets fallback profile below
-      }
+      } catch {}
 
       data = await withOptionalSupabaseFallback(
         `singlepane.partnerStationProfile.refresh:${normalized}`,

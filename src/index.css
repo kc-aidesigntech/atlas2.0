@@ -1,11 +1,13 @@
 .atlas-admin-input {
   width: 100%;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--atlas-radius-control, 14px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.04);
-  color: #ffffff;
-  padding: 0.7rem 0.85rem;
-  font-size: 0.875rem;
+  color: var(--foreground-primary, #ffffff);
+  min-height: var(--atlas-control-height-md, 44px);
+  padding: 0.72rem 0.9rem;
+  font-size: 0.9375rem;
+  line-height: 1.35;
   outline: none;
   transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
 }
@@ -31,8 +33,20 @@
 
     --font-body: Helvetica, Arial, sans-serif;
     --font-heading: Helvetica, Arial, sans-serif;
+    --font-subtitle: Helvetica, Arial, sans-serif;
+    --font-caption: Helvetica, Arial, sans-serif;
+    --font-utility: Helvetica, Arial, sans-serif;
     --text-base: 17px;
     --line-height-base: 1.65;
+    --type-h1: clamp(2.75rem, 2.4vw + 1.5rem, 3.75rem);
+    --type-h2: clamp(2.1rem, 1.6vw + 1.1rem, 3rem);
+    --type-h3: clamp(1.6rem, 1.2vw + 0.9rem, 2.25rem);
+    --type-h4: 1.4rem;
+    --type-subtitle: 1.0625rem;
+    --type-body: 1rem;
+    --type-caption: 0.875rem;
+    --type-utility: 0.75rem;
+    --type-kicker: 0.6875rem;
 
     --atlas-signal-yellow: #fcc01a;
     --atlas-signal-lucid-green: rgb(129 188 54);
@@ -74,6 +88,14 @@
     --accent-color: var(--atlas-signal-lucid-green);
     --accent-muted: color-mix(in srgb, var(--atlas-signal-lucid-green) 28%, transparent);
     --atlas-shell-edge-buffer: clamp(0.25in, 5vw, 0.75in);
+    --atlas-radius-control: 14px;
+    --atlas-radius-card: 16px;
+    --atlas-radius-panel: 24px;
+    --atlas-radius-shell: 30px;
+    --atlas-control-height-md: 44px;
+    --atlas-control-height-lg: 48px;
+    --atlas-panel-padding: 1rem;
+    --atlas-panel-padding-lg: 1.25rem;
   }
 
   .dark {
@@ -123,7 +145,7 @@
   }
 
   h1 {
-    font-size: clamp(2.75rem, 2.4vw + 1.5rem, 3.75rem);
+    font-size: var(--type-h1);
     line-height: 1.05;
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -132,7 +154,7 @@
   }
 
   h2 {
-    font-size: clamp(2.1rem, 1.6vw + 1.1rem, 3rem);
+    font-size: var(--type-h2);
     line-height: 1.1;
     font-weight: 600;
     letter-spacing: -0.006em;
@@ -141,7 +163,7 @@
   }
 
   h3 {
-    font-size: clamp(1.6rem, 1.2vw + 0.9rem, 2.25rem);
+    font-size: var(--type-h3);
     line-height: 1.2;
     font-weight: 600;
     letter-spacing: -0.002em;
@@ -150,7 +172,7 @@
   }
 
   h4 {
-    font-size: 1.4rem;
+    font-size: var(--type-h4);
     line-height: 1.35;
     font-weight: 600;
     letter-spacing: 0em;
@@ -159,14 +181,14 @@
   }
 
   p {
-    font-size: 1.0625rem;
+    font-size: var(--type-subtitle);
     line-height: 1.7;
     color: var(--foreground-secondary);
     letter-spacing: 0.01em;
   }
 
   small {
-    font-size: 0.9rem;
+    font-size: var(--type-caption);
     line-height: 1.4;
     color: var(--foreground-tertiary);
     letter-spacing: 0.008em;
@@ -175,6 +197,162 @@
   ::selection {
     background-color: var(--accent-muted);
     color: var(--surface-base);
+  }
+}
+
+@layer components {
+  .atlas-font-heading {
+    font-family: var(--font-heading);
+  }
+
+  .atlas-font-subtitle {
+    font-family: var(--font-subtitle);
+  }
+
+  .atlas-font-body {
+    font-family: var(--font-body);
+  }
+
+  .atlas-font-caption,
+  .atlas-font-utility {
+    font-family: var(--font-caption);
+  }
+
+  .atlas-h1,
+  .atlas-h2,
+  .atlas-h3,
+  .atlas-h4,
+  .atlas-subtitle,
+  .atlas-body,
+  .atlas-caption,
+  .atlas-utility,
+  .atlas-overline,
+  .atlas-panel-title,
+  .atlas-panel-copy,
+  .atlas-meta,
+  .atlas-meta-muted {
+    text-transform: lowercase !important;
+  }
+
+  .atlas-h1 {
+    font-family: var(--font-heading);
+    font-size: var(--type-h1);
+    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--foreground-primary);
+  }
+
+  .atlas-h2 {
+    font-family: var(--font-heading);
+    font-size: var(--type-h2);
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -0.006em;
+    color: var(--foreground-primary);
+  }
+
+  .atlas-h3,
+  .atlas-panel-title {
+    font-family: var(--font-heading);
+    font-size: var(--type-h3);
+    line-height: 1.15;
+    font-weight: 500;
+    letter-spacing: -0.004em;
+    color: var(--foreground-primary);
+  }
+
+  .atlas-h4 {
+    font-family: var(--font-heading);
+    font-size: var(--type-h4);
+    line-height: 1.3;
+    font-weight: 500;
+    color: var(--foreground-primary);
+  }
+
+  .atlas-subtitle,
+  .atlas-panel-copy {
+    font-family: var(--font-subtitle);
+    font-size: var(--type-subtitle);
+    line-height: 1.55;
+    color: var(--foreground-secondary);
+  }
+
+  .atlas-body {
+    font-family: var(--font-body);
+    font-size: var(--type-body);
+    line-height: var(--line-height-base);
+    color: var(--foreground-secondary);
+  }
+
+  .atlas-caption {
+    font-family: var(--font-caption);
+    font-size: var(--type-caption);
+    line-height: 1.45;
+    color: var(--foreground-tertiary);
+  }
+
+  .atlas-meta {
+    font-family: var(--font-caption);
+    font-size: var(--type-caption);
+    line-height: 1.4;
+    color: var(--foreground-primary);
+  }
+
+  .atlas-meta-muted {
+    font-family: var(--font-caption);
+    font-size: var(--type-caption);
+    line-height: 1.4;
+    color: var(--foreground-secondary);
+  }
+
+  .atlas-overline,
+  .atlas-utility {
+    font-family: var(--font-utility);
+    font-size: var(--type-kicker);
+    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    color: var(--foreground-secondary);
+  }
+
+  .atlas-surface-panel {
+    border-radius: var(--atlas-radius-panel);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: var(--surface-panel-soft);
+  }
+
+  .atlas-surface-raised {
+    border-radius: var(--atlas-radius-card);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background-color: var(--surface-panel-raised);
+  }
+
+  .atlas-surface-shell {
+    border-radius: var(--atlas-radius-shell);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background-color: var(--surface-panel);
+  }
+
+  .atlas-divider {
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .atlas-field-label {
+    display: block;
+    color: var(--foreground-secondary);
+    font-family: var(--font-utility);
+    font-size: var(--type-utility);
+    letter-spacing: 0.12em;
+  }
+
+  .atlas-field-kicker {
+    display: block;
+    color: var(--foreground-secondary);
+    font-family: var(--font-utility);
+    font-size: var(--type-kicker);
+    font-weight: 600;
+    letter-spacing: 0.16em;
   }
 }
 
@@ -305,8 +483,8 @@
   .atlas-sign-button {
     position: relative;
     overflow: hidden;
-    padding-top: calc(var(--button-radius, 10px) + 3px);
-    padding-bottom: calc(var(--button-radius, 10px) * 0.5);
+    padding-top: calc(var(--button-radius, 10px) + 4px);
+    padding-bottom: calc(var(--button-radius, 10px) * 0.6);
     border-color: var(--button-border-color, currentColor);
     background-color: var(--button-fill-color, var(--surface-button));
     transition:
@@ -348,6 +526,52 @@
   .atlas-sign-button:not(:disabled):hover,
   .atlas-sign-button:not(:disabled):active {
     filter: brightness(var(--button-interaction-brightness, 1.18));
+  }
+
+  .atlas-input,
+  .atlas-select,
+  .atlas-textarea {
+    width: 100%;
+    border-radius: var(--atlas-radius-control);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--foreground-primary);
+    outline: none;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  }
+
+  .atlas-input,
+  .atlas-select {
+    min-height: var(--atlas-control-height-md);
+    padding: 0.72rem 0.9rem;
+    font-size: 0.9375rem;
+    line-height: 1.35;
+  }
+
+  .atlas-textarea {
+    min-height: 6rem;
+    padding: 0.72rem 0.9rem;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    resize: vertical;
+  }
+
+  .atlas-input:focus,
+  .atlas-select:focus,
+  .atlas-textarea:focus {
+    border-color: rgb(58 104 130 / 0.78);
+    box-shadow: 0 0 0 1px rgb(58 104 130 / 0.42), 0 0 0 6px rgb(58 104 130 / 0.14);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .atlas-empty-state {
+    border-radius: var(--atlas-radius-card);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.875rem 1rem;
+    font-size: var(--type-caption);
+    line-height: 1.5;
+    color: var(--foreground-secondary);
+    background-color: var(--surface-panel-raised);
   }
 }
 

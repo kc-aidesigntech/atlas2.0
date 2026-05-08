@@ -1,0 +1,42 @@
+---
+description: Enforce design-system-first UI implementation and exception workflow
+alwaysApply: true
+---
+
+# UI Design-System Enforcement
+
+This rule applies to all User Interface (UI) work in this repository.
+
+## Non-negotiable defaults
+
+- Do not create new local style variants for existing motifs.
+- Reuse canonical components/tokens for:
+  - buttons
+  - circles/chips/badges
+  - cards/surfaces
+  - arrows/connectors
+  - common form controls
+- Prefer composition over one-off styling.
+- Avoid inline motif styling when a shared motif exists.
+
+## Required workflow for UI changes
+
+1. Audit existing motif/component usage in touched areas.
+2. Identify canonical component(s) and use them.
+3. If duplicates exist, standardize to one shared component first (or in the same change when small).
+4. Apply feature changes only after canonical path is clear.
+5. Keep behavior unchanged unless explicitly requested.
+
+## Exception protocol (mandatory)
+
+- If a requested UI change cannot use canonical motifs/components, the agent must ask for an explicit exception before implementing a local variant.
+- Exception request must include:
+  - why canonical reuse is blocked
+  - scope of proposed exception
+  - rollback plan to return to canonical design system
+
+## Completion checks
+
+- Verify no new avoidable motif duplication was introduced in touched files.
+- Confirm lints/types are clean for touched files.
+- Summarize which canonical components were reused or standardized.
