@@ -133,7 +133,7 @@ export default function RadialLoadChart({ load, onClick, size = 'default' }: Rad
   const chartShellClassName = 'h-full min-h-0 w-full max-w-full'
   const chartBlockHeightClass = isLarge ? 'h-[320px] sm:h-[360px] lg:h-[380px]' : 'h-[210px] sm:h-[230px]'
   const chartBlockWidthClass = isLarge ? 'w-[min(100%,560px)] min-w-[280px] sm:w-[min(100%,600px)]' : 'w-[min(100%,320px)] min-w-[236px] sm:w-[min(100%,340px)]'
-  /** Tighter right margin than left: labels need room on habitat / social sides; frees ~1"+ dead space on the outer edge. */
+  /** Less right than left: reserve label space on dominant sides; tighter outer edge. */
   const chartMargin = isLarge
     ? { top: 14, right: 34, bottom: 34, left: 76 }
     : { top: 8, right: 22, bottom: 20, left: 50 }
