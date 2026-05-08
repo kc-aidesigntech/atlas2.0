@@ -94,7 +94,12 @@ export default function MobileRouteBoardPanel({
           } as React.CSSProperties}
         >
           <span>plan route</span>
-          <AtlasArrowIcon decorative direction="right" className="h-[0.9rem] w-[0.9rem] brightness-0" />
+          <AtlasArrowIcon
+            decorative
+            direction="right"
+            className="h-[0.9rem] w-[0.9rem]"
+            style={{ filter: 'brightness(0) saturate(100%)' }}
+          />
         </AtlasTextButton>
       )
     }
@@ -144,13 +149,10 @@ export default function MobileRouteBoardPanel({
           aria-hidden="true"
         />
         <PhaseRailRow color={SP_COLORS.red}>
-          <section
-            className="rounded-[30px] border px-4 py-4 text-white"
-            style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}
-          >
+          <section className="atlas-surface-shell px-4 py-4 text-white" style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+                <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                   first step
                 </small>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -162,7 +164,7 @@ export default function MobileRouteBoardPanel({
                     {isRegulationCleared ? 'cleared' : 'pending'}
                   </span>
                 </div>
-                <small className="mt-2 block text-[11px] leading-[1.35]" style={{ color: '#aab6c3' }}>
+                <small className="atlas-caption mt-2 block leading-[1.35]" style={{ color: '#aab6c3' }}>
                   Complete regulation checks before moving into readiness routing.
                 </small>
               </div>
@@ -198,7 +200,7 @@ export default function MobileRouteBoardPanel({
                   </span>
                 ))
               ) : (
-                <div className="rounded-[14px] border px-3 py-2 text-[11px]" style={{ borderColor: '#ffffff18', color: '#9eacb9', backgroundColor: 'var(--surface-panel-raised)' }}>
+                <div className="atlas-empty-state bg-[var(--surface-panel-raised)]">
                   no completed regulation tests yet
                 </div>
               )}
@@ -229,13 +231,10 @@ export default function MobileRouteBoardPanel({
         </PhaseRailRow>
 
         <PhaseRailRow color={SP_COLORS.deepGreen}>
-          <section
-            className="rounded-[30px] border px-4 py-4 text-white"
-            style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}
-          >
+          <section className="atlas-surface-shell px-4 py-4 text-white" style={{ borderColor: '#ffffff38', backgroundColor: 'var(--surface-panel-soft)' }}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+                <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                   next phase
                 </small>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -247,7 +246,7 @@ export default function MobileRouteBoardPanel({
                     after readiness
                   </span>
                 </div>
-                <small className="mt-2 block text-[11px] leading-[1.35]" style={{ color: '#aab6c3' }}>
+                <small className="atlas-caption mt-2 block leading-[1.35]" style={{ color: '#aab6c3' }}>
                   Maintain the enrollee&apos;s stability plan once regulation clears and readiness routing is complete.
                 </small>
               </div>
@@ -266,7 +265,7 @@ export default function MobileRouteBoardPanel({
                 </AtlasTextButton>
               ) : null}
             </div>
-            <div className="mt-3 rounded-[16px] border px-3 py-3 text-[11px]" style={{ borderColor: '#ffffff18', color: '#cfd6de', backgroundColor: 'var(--surface-panel-raised)' }}>
+            <div className="atlas-empty-state mt-3 bg-[var(--surface-panel-raised)] text-[11px] text-[#cfd6de]">
               {timelineConfig.durationMonths * 30}d outlook anchored from {formatDateLabelShort(timelineConfig.planStartIso)}.
             </div>
           </section>

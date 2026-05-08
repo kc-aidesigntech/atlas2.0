@@ -125,6 +125,36 @@ interface AtlasPanelProps {
   children: React.ReactNode
 }
 
+export function AtlasOverline({
+  className,
+  children
+}: {
+  className?: string
+  children: React.ReactNode
+}) {
+  return <small className={cn('atlas-overline block', className)}>{children}</small>
+}
+
+export function AtlasMetaText({
+  className,
+  children
+}: {
+  className?: string
+  children: React.ReactNode
+}) {
+  return <small className={cn('atlas-meta', className)}>{children}</small>
+}
+
+export function AtlasBodyText({
+  className,
+  children
+}: {
+  className?: string
+  children: React.ReactNode
+}) {
+  return <p className={cn('atlas-body', className)}>{children}</p>
+}
+
 export function AtlasPanel({
   kicker,
   title,
@@ -135,13 +165,13 @@ export function AtlasPanel({
   children
 }: AtlasPanelProps) {
   return (
-    <section className={cn('rounded-2xl border border-white/15 bg-[var(--surface-panel-soft)] text-white', className)}>
+    <section className={cn('atlas-surface-panel text-white', className)}>
       {(kicker || title || description || actions) && (
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 px-6 pb-4 pt-6">
+        <div className="atlas-divider flex flex-wrap items-start justify-between gap-4 border-b px-6 pb-4 pt-6">
           <div className="min-w-0 flex-1">
-            {kicker ? <small className="block text-xs font-black tracking-[0.12em] text-[var(--foreground-secondary)]">{kicker}</small> : null}
-            {title ? <h3 className="mt-1 text-[28px] font-medium text-white md:text-[34px]">{title}</h3> : null}
-            {description ? <small className="mt-1 block text-[14px] text-[var(--foreground-secondary)] md:text-[17px]">{description}</small> : null}
+            {kicker ? <AtlasOverline>{kicker}</AtlasOverline> : null}
+            {title ? <h3 className="atlas-panel-title mt-1">{title}</h3> : null}
+            {description ? <small className="atlas-panel-copy mt-1 block">{description}</small> : null}
           </div>
           {actions ? <div className="shrink-0">{actions}</div> : null}
         </div>
@@ -160,7 +190,7 @@ export function AtlasInsetCard({
   className?: string
   children: React.ReactNode
 }) {
-  return <div className={cn('rounded-[20px] border border-white/15 bg-[var(--surface-panel-raised)] px-4 py-3', className)}>{children}</div>
+  return <div className={cn('atlas-surface-raised px-4 py-3', className)}>{children}</div>
 }
 
 export function AtlasMetricPill({
@@ -176,7 +206,7 @@ export function AtlasMetricPill({
 }) {
   return (
     <AtlasInsetCard className={cn('px-3 py-2', className)}>
-      <small className="block text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">{label}</small>
+      <small className="atlas-overline block">{label}</small>
       <small className="mt-1 block text-base font-black text-white" style={accentColor ? { color: accentColor } : undefined}>
         {value}
       </small>
@@ -195,7 +225,7 @@ export function AtlasStatusPill({
 }) {
   return (
     <span
-      className={cn('inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] md:text-[12px]', className)}
+      className={cn('atlas-utility inline-flex items-center rounded-full border px-2.5 py-1 md:text-[12px]', className)}
       style={{ borderColor: `${color}90`, color }}
     >
       {children}
@@ -241,7 +271,7 @@ export function AtlasPlusButton({
       aria-label={label}
       title={title ?? label}
       className={cn('h-12 w-12 text-[29px] font-light', className)}
-      style={{ ['--button-border-color' as const]: ATLAS_LUCID_GREEN, color: ATLAS_LUCID_GREEN } as React.CSSProperties}
+      style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
     >
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-6 w-6 fill-none stroke-current" strokeWidth="1.9" strokeLinecap="round">
         <path d="M12 5v14" />
@@ -264,7 +294,7 @@ export function AtlasCloseButton({
       onClick={onClick}
       aria-label={title}
       title={title}
-      className={cn('h-11 w-11 text-white', className)}
+      className={cn('h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 aspect-square p-0 text-white', className)}
       {...props}
     >
       <X className="h-5 w-5" strokeWidth={2.1} />
@@ -283,7 +313,7 @@ export const AtlasTextButton = React.forwardRef<HTMLButtonElement, React.ButtonH
       {...props}
       style={resolveSolidButtonStyle(style)}
       className={cn(
-        'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border px-[14px] text-[14px] font-medium transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none md:text-[17px]',
+        'atlas-sign-button atlas-font-body [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border px-[14px] text-[14px] font-medium transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none md:text-[17px]',
         className
       )}
     >
@@ -303,7 +333,7 @@ export const AtlasIconButton = React.forwardRef<HTMLButtonElement, React.ButtonH
       {...props}
       style={resolveSolidButtonStyle(style)}
       className={cn(
-        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-10 w-10 items-center justify-center rounded-[10px] border transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
+        'atlas-sign-button atlas-sign-button-icon [--button-line-inset:6px] [--button-radius:10px] inline-flex h-10 w-10 min-h-[40px] min-w-[40px] shrink-0 aspect-square items-center justify-center rounded-[10px] border p-0 leading-none transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_18px_rgba(255,255,255,0.1)] disabled:opacity-60 disabled:hover:brightness-100 disabled:hover:shadow-none',
         className
       )}
     >
@@ -322,7 +352,7 @@ export const AtlasTextLink = React.forwardRef<HTMLAnchorElement, React.AnchorHTM
       {...props}
       style={resolveSolidButtonStyle(style)}
       className={cn(
-        'atlas-sign-button [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border px-[14px] text-[14px] font-medium transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] md:text-[17px]',
+        'atlas-sign-button atlas-font-body [--button-line-inset:0px] [--button-line-top:8px] [--button-radius:6px] rounded-[6px] border px-[14px] text-[14px] font-medium transition-[box-shadow,border-color,opacity,filter] duration-150 ease-out hover:border-white/60 hover:brightness-110 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.2),0_0_22px_rgba(255,255,255,0.14)] md:text-[17px]',
         className
       )}
     >

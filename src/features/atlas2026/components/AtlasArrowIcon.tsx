@@ -23,22 +23,23 @@ interface AtlasArrowIconProps {
   direction?: AtlasArrowDirection
   invert?: boolean
   decorative?: boolean
+  style?: React.CSSProperties
 }
 
 export default function AtlasArrowIcon({
   className,
   direction = 'right',
   invert = false,
-  decorative = true
+  decorative = true,
+  style
 }: AtlasArrowIconProps) {
-  // Keep the arrow asset mapping centralized so every connector uses one canonical source and rotation contract.
   return (
     <img
       src={atlasArrowIconUrl}
       alt=""
       aria-hidden={decorative}
       className={cn('h-[1.1rem] w-[1.1rem] shrink-0 opacity-90', DIRECTION_CLASSNAME[direction], className)}
-      style={invert ? { filter: 'brightness(0) saturate(100%) invert(100%)' } : undefined}
+      style={invert ? { ...style, filter: 'brightness(0) saturate(100%) invert(100%)' } : style}
     />
   )
 }

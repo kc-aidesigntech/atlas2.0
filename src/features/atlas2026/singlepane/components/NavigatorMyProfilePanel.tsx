@@ -10,15 +10,16 @@ import type {
   DomainLoad,
   EnrolleeProfile,
   IntervalAssessmentDueItem,
+  NavigatorEnrollmentAssignmentRecord,
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
   SupervisionSessionRecord,
-  SupervisorNavigatorCompetencySummary,
-  UnassignedEnrolleePickupRecord
+  SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import RadialLoadChart from './RadialLoadChart'
+import NavigatorEnrollmentAssignmentsPanel from './NavigatorEnrollmentAssignmentsPanel'
 
 interface NavigatorMyProfilePanelProps {
   accountSettings: AccountSettings
@@ -26,7 +27,12 @@ interface NavigatorMyProfilePanelProps {
   aggregateLoad: DomainLoad | null
   assignedEnrolleeCount: number
   assignedEnrollees: EnrolleeProfile[]
-  pickupQueue: UnassignedEnrolleePickupRecord[]
+  navigatorEnrollmentAssignments: NavigatorEnrollmentAssignmentRecord[]
+  navigatorEnrollmentAssignmentsError: string | null
+  isLoadingNavigatorEnrollmentAssignments: boolean
+  assigningEnrollmentId: string | null
+  canViewNavigatorAssignmentNames: boolean
+  canToggleAssignmentActions: boolean
   competencySummary: SupervisorNavigatorCompetencySummary | null
   selfAssessmentSummary: NavigatorSelfAssessmentSummary
   selfAssessments: NavigatorSelfAssessmentRecord[]
@@ -38,7 +44,7 @@ interface NavigatorMyProfilePanelProps {
   avatarUploadError?: string | null
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenEnrolleeSurvey?: (enrolleeId: string) => void
-  onClaimPickupQueueRecord: (recordId: string) => Promise<unknown> | unknown
+  onToggleEnrollmentAssignment: (enrollmentId: string, mode: 'assign' | 'unassign') => Promise<void> | void
   onSaveSelfAssessment: (record: NavigatorSelfAssessmentRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
 }
@@ -60,7 +66,12 @@ export default function NavigatorMyProfilePanel({
   aggregateLoad,
   assignedEnrolleeCount,
   assignedEnrollees,
-  pickupQueue,
+  navigatorEnrollmentAssignments,
+  navigatorEnrollmentAssignmentsError,
+  isLoadingNavigatorEnrollmentAssignments,
+  assigningEnrollmentId,
+  canViewNavigatorAssignmentNames,
+  canToggleAssignmentActions,
   competencySummary,
   selfAssessmentSummary,
   selfAssessments,
@@ -72,7 +83,7 @@ export default function NavigatorMyProfilePanel({
   avatarUploadError = null,
   onReplaceAvatar,
   onOpenEnrolleeSurvey,
-  onClaimPickupQueueRecord,
+  onToggleEnrollmentAssignment,
   onSaveSelfAssessment,
   onSaveSupervisionSession
 }: NavigatorMyProfilePanelProps) {
@@ -129,11 +140,11 @@ export default function NavigatorMyProfilePanel({
               </div>
             </div>
             <div className="min-w-[220px] flex-1 space-y-0.5 pt-[2px] text-white">
-              <h2 className="text-[34px] font-medium leading-[1.1]">{currentNavigatorName}</h2>
-              <small className="block text-[13px] text-white">E: {accountSettings.email || 'not recorded'}</small>
-              <small className="block text-[13px] text-white">Org: {accountSettings.organization || 'not recorded'}</small>
-              <small className="block text-[13px] text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
-              <small className="block text-[13px] text-white">Profile view: my profile</small>
+              <h2 className="atlas-h3 text-[34px] font-medium leading-[1.1]">{currentNavigatorName}</h2>
+              <small className="atlas-meta block text-white">E: {accountSettings.email || 'not recorded'}</small>
+              <small className="atlas-meta block text-white">Org: {accountSettings.organization || 'not recorded'}</small>
+              <small className="atlas-meta block text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
+              <small className="atlas-meta block text-white">Profile view: my profile</small>
             </div>
           </div>
         </div>
@@ -149,120 +160,24 @@ export default function NavigatorMyProfilePanel({
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <section className="rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff35', backgroundColor: 'var(--surface-panel-soft)' }}>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
-                pickup queue
-              </small>
-              <div className="mt-1 text-[24px] font-medium text-white">unassigned enrollees</div>
-            </div>
-            <span className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
-              {pickupQueue.filter((item) => item.status === 'available').length} available
-            </span>
-          </div>
-          <div className="mt-4 space-y-3">
-            {pickupQueue.length ? (
-              pickupQueue.map((record, index) => (
-                <div
-                  key={record.id}
-                  className="rounded-[22px] border px-4 py-4"
-                  style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className="mt-[2px] flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold"
-                      style={{ borderColor: '#ffffff2c', color: '#d8e1ea' }}
-                    >
-                      {index + 1}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-[22px] font-medium leading-tight text-white">{record.fullName}</div>
-                          <div className="mt-1 flex flex-wrap gap-3 text-[12px]" style={{ color: '#aab6c3' }}>
-                            <span>DOB: {record.dob || 'pending'}</span>
-                            <span>C: {record.caseId || 'pending'}</span>
-                            <span>E: {record.email || 'pending'}</span>
-                          </div>
-                        </div>
-                        {record.status === 'available' ? (
-                          <AtlasTextButton
-                            onClick={() => void onClaimPickupQueueRecord(record.id)}
-                            className="px-[14px] py-[7px] text-[13px] font-medium"
-                            style={{
-                              ['--button-border-color' as const]: SP_COLORS.yellow,
-                              ['--button-line-color' as const]: SP_COLORS.bg,
-                              color: SP_COLORS.bg,
-                              backgroundColor: SP_COLORS.yellow
-                            } as React.CSSProperties}
-                          >
-                            pick up
-                          </AtlasTextButton>
-                        ) : (
-                          <span className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: `${SP_COLORS.deepGreen}90`, color: SP_COLORS.deepGreen }}>
-                            claimed
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <small className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
-                            referred by
-                          </small>
-                          <div className="mt-1 text-[13px] text-white">
-                            {record.referrerName} · {record.referrerOrganization}
-                          </div>
-                        </div>
-                        <div>
-                          <small className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
-                            demographics
-                          </small>
-                          <div className="mt-1 text-[13px] text-white">{record.demographicsSummary}</div>
-                        </div>
-                      </div>
-                      <div className="mt-3 rounded-[16px] border px-3 py-3 text-[13px] leading-[1.45]" style={{ borderColor: '#ffffff18' }}>
-                        <small className="mb-1 block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
-                          background notes
-                        </small>
-                        <div className="text-white">{record.backgroundNotes || record.referrerMessage}</div>
-                        {record.referrerMessage && record.backgroundNotes && record.referrerMessage !== record.backgroundNotes ? (
-                          <div className="mt-2 text-[12px] text-[var(--foreground-secondary)]">{record.referrerMessage}</div>
-                        ) : null}
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {record.zCodeTags.length ? (
-                          record.zCodeTags.map((tag) => (
-                            <span key={`${record.id}-${tag}`} className="inline-flex rounded-full border px-2.5 py-1 text-[11px]" style={{ borderColor: '#ffffff24', color: '#d8e1ea' }}>
-                              {tag}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="inline-flex rounded-full border px-2.5 py-1 text-[11px]" style={{ borderColor: '#ffffff24', color: '#9eacb9' }}>
-                            z-code survey pending
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-[16px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff18', color: '#9eacb9' }}>
-                No unassigned enrollees are waiting in the pickup queue.
-              </div>
-            )}
-          </div>
-        </section>
+        <NavigatorEnrollmentAssignmentsPanel
+          rows={navigatorEnrollmentAssignments}
+          isLoading={isLoadingNavigatorEnrollmentAssignments}
+          error={navigatorEnrollmentAssignmentsError}
+          assigningEnrollmentId={assigningEnrollmentId}
+          canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
+          canToggleAssignments={canToggleAssignmentActions}
+          onToggleAssignment={onToggleEnrollmentAssignment}
+        />
 
         <div className="grid gap-4">
-          <section className="rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff35', backgroundColor: 'var(--surface-panel-soft)' }}>
+          <section className="atlas-surface-panel px-4 py-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+                <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                   enrollees
                 </small>
-                <div className="mt-1 text-[24px] font-medium text-white">enrollee burden surveys</div>
+                <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">enrollee burden surveys</div>
               </div>
               <span className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
                 {assignedEnrollees.length} assigned
@@ -271,7 +186,7 @@ export default function NavigatorMyProfilePanel({
             <div className="mt-4 space-y-2">
               {assignedEnrollees.length ? (
                 assignedEnrollees.slice(0, 6).map((enrollee) => (
-                  <div key={enrollee.id} className="flex items-center justify-between gap-3 rounded-[16px] border px-3 py-3" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
+                  <div key={enrollee.id} className="atlas-surface-raised flex items-center justify-between gap-3 px-3 py-3">
                     <div className="min-w-0">
                       <div className="truncate text-[14px] font-medium text-white">{enrollee.fullName}</div>
                       <small style={{ color: '#9eacb9' }}>{enrollee.caseId || 'pending case id'}</small>
@@ -280,25 +195,25 @@ export default function NavigatorMyProfilePanel({
                       onClick={() => onOpenEnrolleeSurvey?.(enrollee.id)}
                       className="px-[14px] py-[7px] text-[13px] font-medium"
                       disabled={!onOpenEnrolleeSurvey}
-                      style={{ backgroundColor: 'var(--atlas-signal-lucid-green)', color: SP_COLORS.bg } as React.CSSProperties}
+                      style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#ffffff' } as React.CSSProperties}
                     >
                       open survey
                     </AtlasTextButton>
                   </div>
                 ))
               ) : (
-                <div className="rounded-[16px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff18', color: '#9eacb9' }}>
+                <div className="atlas-empty-state">
                   No assigned enrollees are available for survey capture yet.
                 </div>
               )}
             </div>
           </section>
 
-          <section className="rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff35', backgroundColor: 'var(--surface-panel-soft)' }}>
-            <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+          <section className="atlas-surface-panel px-4 py-4">
+            <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
               competency
             </small>
-            <div className="mt-1 text-[24px] font-medium text-white">navigator competency</div>
+            <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">navigator competency</div>
             <div className="mt-4 grid grid-cols-3 gap-3">
               <MetricCard label="weighted avg" value={competencySummary ? formatRelativeRoleValue(competencySummary.weightedRollingAverage) : '--'} accent={SP_COLORS.yellow} />
               <MetricCard label="assessments" value={String(competencySummary?.assessmentCount || 0)} accent={SP_COLORS.blue} />
@@ -306,14 +221,14 @@ export default function NavigatorMyProfilePanel({
             </div>
           </section>
 
-          <section className="rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff35', backgroundColor: 'var(--surface-panel-soft)' }}>
-            <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+          <section className="atlas-surface-panel px-4 py-4">
+            <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
               intervals
             </small>
-            <div className="mt-1 text-[24px] font-medium text-white">scheduled assessments</div>
+            <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">scheduled assessments</div>
             <div className="mt-4 space-y-2">
               {dueItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between rounded-[16px] border px-3 py-2 text-[12px]" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
+                <div key={item.id} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
                   <div>
                     <div className="text-white">{item.title}</div>
                     <small style={{ color: '#9eacb9' }}>{formatDateLabel(item.dueAtIso)} · {item.cadence}</small>
@@ -329,13 +244,13 @@ export default function NavigatorMyProfilePanel({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff35', backgroundColor: 'var(--surface-panel-soft)' }}>
+        <section className="atlas-surface-panel px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+              <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                 weekly self assessment
               </small>
-              <div className="mt-1 text-[24px] font-medium text-white">weekly averages</div>
+              <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">weekly averages</div>
             </div>
             <span className="rounded-full border px-3 py-1 text-[11px]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
               {selfAssessmentSummary.responseCount} responses
@@ -367,8 +282,7 @@ export default function NavigatorMyProfilePanel({
           <textarea
             value={draftAssessment.note}
             onChange={(event) => setDraftAssessment((current) => ({ ...current, note: event.target.value }))}
-            className="mt-3 min-h-[82px] w-full rounded-[16px] border bg-transparent px-3 py-2 text-[13px] text-white"
-            style={{ borderColor: '#ffffff24' }}
+            className="atlas-textarea mt-3 min-h-[82px] bg-transparent text-[13px] text-white"
             placeholder="Record weekly self assessment notes..."
           />
           <div className="mt-3 flex justify-end">
@@ -411,7 +325,7 @@ export default function NavigatorMyProfilePanel({
           </div>
           <div className="mt-4 space-y-2">
             {selfAssessments.slice(0, 4).map((record) => (
-              <div key={record.id} className="rounded-[16px] border px-3 py-3 text-[12px]" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
+              <div key={record.id} className="atlas-surface-raised px-3 py-3 text-[12px]">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-white">{formatDateLabel(record.submittedAtIso)}</span>
                   <span style={{ color: '#9eacb9' }}>
@@ -424,15 +338,15 @@ export default function NavigatorMyProfilePanel({
           </div>
         </section>
 
-        <section className="rounded-[28px] border px-4 py-4" style={{ borderColor: '#ffffff35', backgroundColor: 'var(--surface-panel-soft)' }}>
-          <small className="block text-[10px] uppercase tracking-[0.18em]" style={{ color: SP_COLORS.muted }}>
+        <section className="atlas-surface-panel px-4 py-4">
+          <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
             supervision archive
           </small>
-          <div className="mt-1 text-[24px] font-medium text-white">session notes</div>
+          <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">session notes</div>
           <div className="mt-4 space-y-3">
             {supervisionSessions.length ? (
               supervisionSessions.map((session) => (
-                <div key={session.id} className="rounded-[18px] border px-4 py-4" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
+                <div key={session.id} className="atlas-surface-raised px-4 py-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-[16px] text-white">{formatDateLabel(session.sessionAtIso)}</div>
@@ -446,13 +360,13 @@ export default function NavigatorMyProfilePanel({
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div>
-                      <small className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+                      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                         supervisor note
                       </small>
                       <div className="mt-1 text-[13px] leading-[1.45] text-white">{session.supervisorNote || 'No supervisor note recorded.'}</div>
                     </div>
                     <div>
-                      <small className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+                      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                         navigator note
                       </small>
                       <textarea
@@ -468,13 +382,12 @@ export default function NavigatorMyProfilePanel({
                           if (nextValue === session.navigatorNote) return
                           void onSaveSupervisionSession({ ...session, navigatorNote: nextValue })
                         }}
-                        className="mt-1 min-h-[78px] w-full rounded-[14px] border bg-transparent px-3 py-2 text-[13px] text-white"
-                        style={{ borderColor: '#ffffff22' }}
+                        className="atlas-textarea mt-1 min-h-[78px] bg-transparent text-[13px] text-white"
                       />
                     </div>
                   </div>
                   {session.actionItems ? (
-                    <div className="mt-3 rounded-[14px] border px-3 py-2 text-[12px]" style={{ borderColor: '#ffffff18', color: '#d7e0e9' }}>
+                    <div className="atlas-surface-raised mt-3 px-3 py-2 text-[12px]" style={{ color: '#d7e0e9' }}>
                       next steps: {session.actionItems}
                     </div>
                   ) : null}
@@ -486,7 +399,7 @@ export default function NavigatorMyProfilePanel({
                 </div>
               ))
             ) : (
-              <div className="rounded-[16px] border px-4 py-3 text-[13px]" style={{ borderColor: '#ffffff18', color: '#9eacb9' }}>
+              <div className="atlas-empty-state">
                 No supervision sessions have been archived yet.
               </div>
             )}
@@ -499,8 +412,8 @@ export default function NavigatorMyProfilePanel({
 
 function MetricCard({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div className="rounded-[16px] border px-3 py-3" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
-      <small className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+    <div className="atlas-surface-raised px-3 py-3">
+      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
         {label}
       </small>
       <div className="mt-2 text-[22px] font-medium" style={{ color: accent }}>
@@ -521,14 +434,13 @@ function AssessmentSelect({
 }) {
   return (
     <label className="block">
-      <small className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
         {label}
       </small>
       <select
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-1 h-10 w-full rounded-[14px] border bg-transparent px-3 text-[13px] text-white"
-        style={{ borderColor: '#ffffff24' }}
+        className="atlas-select mt-1 h-10 bg-transparent text-[13px] text-white"
       >
         {[1, 2, 3, 4, 5].map((option) => (
           <option key={option} value={option} className="bg-black text-white">

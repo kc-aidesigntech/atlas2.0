@@ -1,7 +1,3 @@
-/**
- * Account settings drawer for profile basics, role toggles, and optional live
- * auth provider linking/sign-out controls.
- */
 import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
@@ -44,6 +40,25 @@ function buildInitialExpandedSections(hasSecurity: boolean, hasTroubleshootingGr
   }
 }
 
+function areAccountSettingsEqual(left: AccountSettings, right: AccountSettings) {
+  if (left.fullName !== right.fullName) return false
+  if (left.email !== right.email) return false
+  if (left.organization !== right.organization) return false
+  if (left.enabledRoles.length !== right.enabledRoles.length) return false
+  return left.enabledRoles.every((value, index) => value === right.enabledRoles[index])
+}
+
+function arePartnerGrantEqual(left: PartnerTroubleshootingGrant | null, right: PartnerTroubleshootingGrant | null) {
+  if (left === right) return true
+  if (!left || !right) return false
+  if (left.partnerId !== right.partnerId) return false
+  if (left.organizationName !== right.organizationName) return false
+  if (left.allowWrite !== right.allowWrite) return false
+  if (left.updatedAtIso !== right.updatedAtIso) return false
+  if (left.allowedMenus.length !== right.allowedMenus.length) return false
+  return left.allowedMenus.every((menu, index) => menu === right.allowedMenus[index])
+}
+
 export default function AccountSettingsPanel({
   isOpen,
   role,
@@ -62,13 +77,13 @@ export default function AccountSettingsPanel({
   )
 
   useEffect(() => {
-    // Reset draft state whenever panel opens or upstream settings change so
-    // unsaved edits from previous sessions do not leak into new opens.
-    setDraft(settings)
+    if (!isOpen) return
+    setDraft((current) => (areAccountSettingsEqual(current, settings) ? current : settings))
   }, [settings, isOpen])
 
   useEffect(() => {
-    setGrantDraft(partnerTroubleshootingGrant)
+    if (!isOpen) return
+    setGrantDraft((current) => (arePartnerGrantEqual(current, partnerTroubleshootingGrant) ? current : partnerTroubleshootingGrant))
   }, [partnerTroubleshootingGrant, isOpen])
 
   useEffect(() => {
@@ -128,9 +143,9 @@ export default function AccountSettingsPanel({
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <small className="block text-[12px] uppercase tracking-[0.18em] text-[#9f9f9f]">top right controls</small>
-            <h3 className="text-[24px] font-medium text-white">Account Settings</h3>
-            <small className="text-[12px] text-[#c7c7c7]">
+            <small className="atlas-overline block text-[#9f9f9f]">top right controls</small>
+            <h3 className="atlas-h4 text-[24px] font-medium text-white">Account Settings</h3>
+            <small className="atlas-caption text-[#c7c7c7]">
               Switch roles, define operator basics, and keep core access controls in one place.
             </small>
           </div>
@@ -147,13 +162,12 @@ export default function AccountSettingsPanel({
             isExpanded={expandedSections.activeExperience}
             onToggle={() => toggleSection('activeExperience')}
           >
-            <label className="block text-[13px] text-[#c7c7c7]">
+            <label className="atlas-meta block text-[#c7c7c7]">
               Current role view
               <select
                 value={role}
                 onChange={(event) => onRoleChange(event.target.value as AtlasRole)}
-                className="mt-2 w-full rounded-2xl border bg-black px-4 py-3 text-[16px] text-white"
-                style={{ borderColor: '#ffffff30' }}
+                className="atlas-select mt-2 bg-black text-[16px] text-white"
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
@@ -170,31 +184,28 @@ export default function AccountSettingsPanel({
             onToggle={() => toggleSection('basicInformation')}
           >
             <div className="space-y-4">
-              <label className="block text-[13px] text-[#c7c7c7]">
+              <label className="atlas-meta block text-[#c7c7c7]">
                 Full name
                 <input
                   value={draft.fullName}
                   onChange={(event) => setDraft((current) => ({ ...current, fullName: event.target.value }))}
-                  className="mt-2 w-full rounded-2xl border bg-black px-4 py-3 text-[15px] text-white"
-                  style={{ borderColor: '#ffffff30' }}
+                  className="atlas-input mt-2 bg-black text-[15px] text-white"
                 />
               </label>
-              <label className="block text-[13px] text-[#c7c7c7]">
+              <label className="atlas-meta block text-[#c7c7c7]">
                 Email
                 <input
                   value={draft.email}
                   onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
-                  className="mt-2 w-full rounded-2xl border bg-black px-4 py-3 text-[15px] text-white"
-                  style={{ borderColor: '#ffffff30' }}
+                  className="atlas-input mt-2 bg-black text-[15px] text-white"
                 />
               </label>
-              <label className="block text-[13px] text-[#c7c7c7]">
+              <label className="atlas-meta block text-[#c7c7c7]">
                 Organization
                 <input
                   value={draft.organization}
                   onChange={(event) => setDraft((current) => ({ ...current, organization: event.target.value }))}
-                  className="mt-2 w-full rounded-2xl border bg-black px-4 py-3 text-[15px] text-white"
-                  style={{ borderColor: '#ffffff30' }}
+                  className="atlas-input mt-2 bg-black text-[15px] text-white"
                 />
               </label>
             </div>
@@ -208,11 +219,11 @@ export default function AccountSettingsPanel({
               onToggle={() => toggleSection('security')}
             >
               {security.sessionEmail ? (
-                <p className="mb-4 text-[15px] text-white">
+                <p className="atlas-body mb-4 text-[15px] text-white">
                   Signed in as <span className="font-medium">{security.sessionEmail}</span>
                 </p>
               ) : null}
-              <p className="mb-2 text-[12px] uppercase tracking-[0.14em] text-[#9f9f9f]">connected providers</p>
+              <p className="atlas-overline mb-2 text-[#9f9f9f]">connected providers</p>
               <ul className="mb-4 space-y-1 text-[14px] text-[#dedede]">
                 {security.linkedProviders === null ? (
                   <li className="text-[#9f9f9f]">Loading…</li>
@@ -266,8 +277,8 @@ export default function AccountSettingsPanel({
           >
             <div className="space-y-2">
               {ROLE_OPTIONS.map((option) => (
-                <label key={option} className="flex items-center justify-between rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff20' }}>
-                  <span className="text-[15px] capitalize text-white">{option}</span>
+                <label key={option} className="atlas-surface-raised flex items-center justify-between px-4 py-3">
+                  <span className="atlas-meta text-[15px] capitalize text-white">{option}</span>
                   <input
                     type="checkbox"
                     checked={enabledRoleSet.has(option)}
@@ -288,8 +299,8 @@ export default function AccountSettingsPanel({
             >
               <div className="space-y-2">
                 {['referral portal', 'my station', 'service capacity', 'county commons'].map((menu) => (
-                  <label key={menu} className="flex items-center justify-between rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff20' }}>
-                    <span className="text-[15px] text-white">{menu}</span>
+                  <label key={menu} className="atlas-surface-raised flex items-center justify-between px-4 py-3">
+                    <span className="atlas-meta text-[15px] text-white">{menu}</span>
                     <input
                       type="checkbox"
                       checked={grantDraft.allowedMenus.includes(menu)}
@@ -298,8 +309,8 @@ export default function AccountSettingsPanel({
                     />
                   </label>
                 ))}
-                <label className="mt-3 flex items-center justify-between rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff20' }}>
-                  <span className="text-[15px] text-white">Allow write access during troubleshooting</span>
+                <label className="atlas-surface-raised mt-3 flex items-center justify-between px-4 py-3">
+                  <span className="atlas-meta text-[15px] text-white">Allow write access during troubleshooting</span>
                   <input
                     type="checkbox"
                     checked={grantDraft.allowWrite}
@@ -360,15 +371,15 @@ function CollapsibleAccountSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="overflow-hidden rounded-[24px] border" style={{ borderColor: '#ffffff30' }}>
+    <section className="atlas-surface-panel overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
         className="flex w-full items-start justify-between gap-4 px-4 py-4 text-left"
       >
         <div className="min-w-0">
-          <small className="mb-1 block text-[13px] font-semibold uppercase tracking-[0.12em] text-white">{title}</small>
-          {description ? <small className="block text-[13px] text-[#bcbcbc]">{description}</small> : null}
+          <small className="atlas-overline mb-1 block text-white">{title}</small>
+          {description ? <small className="atlas-caption block text-[#bcbcbc]">{description}</small> : null}
         </div>
         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border" style={{ borderColor: '#ffffff24' }}>
           <ChevronDown
@@ -378,7 +389,7 @@ function CollapsibleAccountSection({
         </span>
       </button>
       {isExpanded ? (
-        <div className="border-t px-4 pb-4 pt-4" style={{ borderColor: '#ffffff14' }}>
+        <div className="atlas-divider border-t px-4 pb-4 pt-4">
           {children}
         </div>
       ) : null}

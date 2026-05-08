@@ -128,6 +128,7 @@ export interface PartnerLoadBreakdownRecord {
   rows: Array<{
     id: string;
     zCodeGroup: string;
+    parentCode: string;
     mappedDomain: "habitat" | "work" | "socialNetworks";
     rawCount: number;
   }>;
@@ -786,34 +787,66 @@ export async function fetchSinglePaneRouteCandidates(
 export async function fetchPartnerLoadBreakdown(client: AnySupabaseClient) {
   const { data, error } = await (client as SupabaseClient<any>)
     .schema("atlas")
-    .from("v_partner_z_code_burden")
-    .select("*")
-    .order("category_key", { ascending: true });
+    .from("partner_z_code_capabilities")
+    .select("partner_id,z_code_id,z_codes!inner(z_group)")
+    .eq("is_active", true)
+    .eq("relation_type", "specialize");
   if (error) throw error;
 
-  const rows = (data || []).map((row) => {
-    const categoryKey = String(row.category_key || "").trim().toLowerCase();
-    // Unknown categories default to socialNetworks to preserve historical dashboard behavior
-    // where non-work/non-habitat codes were bucketed into the social domain.
-    const mappedDomain =
-      categoryKey === "work"
-        ? "work"
-        : categoryKey === "habitat"
-          ? "habitat"
-          : "socialNetworks";
-    const zCodeGroup =
-      mappedDomain === "work"
-        ? "Z55-Z57"
-        : mappedDomain === "habitat"
-          ? "Z58-Z59"
-          : "Z60-Z65";
+  const groupCounts = new Map<number, number>();
+  for (const row of data || []) {
+    const record = asRecord(row);
+    const zCodesRecord = asRecord(record.z_codes);
+    const groupValue = Number(zCodesRecord.z_group || 0);
+    if (!Number.isFinite(groupValue) || groupValue <= 0) continue;
+    groupCounts.set(groupValue, (groupCounts.get(groupValue) || 0) + 1);
+  }
+
+  const groups = Array.from(groupCounts.keys()).sort((left, right) => left - right);
+  if (!groups.length) {
     return {
-      id: `${row.station_id}:${categoryKey}`,
-      zCodeGroup,
-      mappedDomain,
-      rawCount: Number(row.z_code_count || 0),
-    } as PartnerLoadBreakdownRecord["rows"][number];
-  });
+      subjectId: "partner-network",
+      subjectLabel: "Partner network",
+      sourceKind: "partnerSurvey",
+      sourceLabel: "Supabase partner capability network",
+      habitatTotal: 0,
+      workTotal: 0,
+      socialNetworksTotal: 0,
+      rows: [],
+    } satisfies PartnerLoadBreakdownRecord;
+  }
+
+  const { data: headerRows, error: headerError } = await (client as SupabaseClient<any>)
+    .schema("atlas")
+    .from("z_code_headers")
+    .select("z_group")
+    .in("z_group", groups);
+  if (headerError) throw headerError;
+
+  const validGroups = new Set(
+    (headerRows || [])
+      .map((row) => Number(asRecord(row).z_group || 0))
+      .filter((value) => Number.isFinite(value) && value > 0),
+  );
+
+  const rows = groups
+    .filter((groupValue) => validGroups.has(groupValue))
+    .map((groupValue) => {
+      const parentCode = `Z${String(groupValue).padStart(2, "0")}`;
+      const mappedDomain =
+        groupValue >= 55 && groupValue <= 57
+          ? "work"
+          : groupValue >= 58 && groupValue <= 59
+            ? "habitat"
+            : "socialNetworks";
+      return {
+        id: `partner-network:${parentCode}`,
+        zCodeGroup: parentCode,
+        parentCode,
+        mappedDomain,
+        rawCount: groupCounts.get(groupValue) || 0,
+      } satisfies PartnerLoadBreakdownRecord["rows"][number];
+    });
 
   const totals = rows.reduce(
     (acc, row) => {

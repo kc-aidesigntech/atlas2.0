@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type {
   AccessMatrixDataset,
+  AdminPortalPersonRecord,
   AdminPortalRegistry,
   AdminPortalPersonRole,
   AdminDataQualityMetric,
@@ -118,14 +119,6 @@ import { loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { inferZCodesForReferral } from '@/services/atlas2026/demoInferenceService'
 
-/**
- * Primary single-pane orchestration hook.
- *
- * Purpose:
- * - composes bootstrap state, role workflows, and persistence writes.
- * - provides a stable Application Programming Interface (API) consumed by single-pane User Interface (UI) surfaces.
- */
-
 const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'route planning': ['housing', 'work'],
   'log contact': ['social'],
@@ -162,9 +155,7 @@ function writeSessionStorageValue(key: string, value: string | null) {
       return
     }
     window.sessionStorage.setItem(key, value)
-  } catch {
-    // Session restore is a progressive enhancement; storage failures stay non-fatal.
-  }
+  } catch {}
 }
 
 function readSessionRole(initialRole: AtlasRole) {
@@ -398,8 +389,6 @@ function mergeNavigatorProgramState(
   enrollmentRequests: EnrollmentRequestRecord[],
   publicQueueRecords: UnassignedEnrolleePickupRecord[]
 ): NavigatorProgramState {
-  // Preserve previously persisted records, but seed deterministic starter data when
-  // no state exists yet so navigator dashboards always have actionable baseline rows.
   const base = rawState || createNavigatorProgramState()
   const mergedPickupQueue = [...publicQueueRecords, ...base.pickupQueue]
     .filter(Boolean)
@@ -592,14 +581,6 @@ interface SupervisorNavigatorDirectoryEntry {
 }
 
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
-  /**
-   * Orchestrates single-pane read/write state across UI memory and persistence adapters.
-   *
-   * Data-flow boundary:
-   * - `setBootstrapState` mutates immediate UI state for responsiveness.
-   * - repository calls persist into local storage and/or Supabase depending on availability.
-   * - hook-level helpers keep those two surfaces eventually consistent.
-   */
   const [role, setRole] = useState<AtlasRole>(() => readSessionRole(initialRole))
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>(() => readSessionStorageValue(SESSION_SELECTED_ENROLLEE_KEY) || '')
   const [activeMenu, setActiveMenu] = useState<string>(() => readSessionStorageValue(SESSION_ACTIVE_MENU_KEY) || '')
@@ -670,6 +651,25 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   } = useSinglePaneBootstrapState(role)
 
   const viewerRole = remoteSession?.targetRole || role
+  const targetViewerEmail = (remoteSession?.isActive ? remoteSession.targetEmail : sessionEmail || accountSettings.email || '')
+    .trim()
+    .toLowerCase()
+  const viewerPolicyRecord = useMemo(() => {
+    if (!adminPortalRegistry || !targetViewerEmail) return null
+    return (
+      adminPortalRegistry.people.find((person) => {
+        const primaryEmail = person.email.trim().toLowerCase()
+        const linkedEmails = person.linkedEmails.map((value) => value.trim().toLowerCase())
+        return primaryEmail === targetViewerEmail || linkedEmails.includes(targetViewerEmail)
+      }) || null
+    )
+  }, [adminPortalRegistry, targetViewerEmail])
+  const viewerFeaturePolicy = viewerPolicyRecord?.featurePolicy || {
+    screenToggles: {},
+    cardToggles: {},
+    actionToggles: {}
+  }
+  const isPolicyAllowed = (scope: Record<string, boolean> | undefined, key: string) => (scope?.[key] ?? true) !== false
   const viewerPerson = useMemo(() => {
     if (!accessMatrixDataset) return null
     const normalizedCandidates = new Set(
@@ -680,6 +680,25 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     if (!normalizedCandidates.size) return null
     return accessMatrixDataset.people.find((person) => normalizedCandidates.has(person.email.trim().toLowerCase())) || null
   }, [accessMatrixDataset, accountSettings.email, sessionEmail])
+  const viewerCanViewNavigatorAssignmentNames = useMemo(() => {
+    if (viewerRole === 'administrator') return true
+    return Boolean(viewerPolicyRecord?.canViewNavigatorAssignmentNames) && isPolicyAllowed(viewerFeaturePolicy.actionToggles, 'assignmentBoard.viewNavigatorNames')
+  }, [viewerFeaturePolicy.actionToggles, viewerPolicyRecord?.canViewNavigatorAssignmentNames, viewerRole])
+  const viewerCanAccessAssignmentBoard = useMemo(
+    () => isPolicyAllowed(viewerFeaturePolicy.screenToggles, 'assignmentBoard'),
+    [viewerFeaturePolicy.screenToggles]
+  )
+  const viewerCanUseAssignmentActions = useMemo(
+    () => isPolicyAllowed(viewerFeaturePolicy.actionToggles, 'assignmentBoard.assignSelf'),
+    [viewerFeaturePolicy.actionToggles]
+  )
+  const viewerCanAccessAdminRegistryCards = useMemo(
+    () =>
+      isPolicyAllowed(viewerFeaturePolicy.cardToggles, 'navigatorCoverageCard') &&
+      isPolicyAllowed(viewerFeaturePolicy.cardToggles, 'liveAccessMatrix') &&
+      isPolicyAllowed(viewerFeaturePolicy.actionToggles, 'admin.saveRegistry'),
+    [viewerFeaturePolicy.actionToggles, viewerFeaturePolicy.cardToggles]
+  )
   const remotePartnerAssignment =
     remoteSession?.targetRole === 'partner' && accessMatrixDataset
       ? accessMatrixDataset.partnerAssignments.find((partner) => partner.primaryContactPersonIds.includes(remoteSession.targetPersonId)) || null
@@ -817,20 +836,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     },
     [remoteSession?.partnerGrant?.allowedMenus, remoteSession?.targetRole, roleConfigs, viewerRole]
   )
+  const selectedRoleTopMenus = useMemo(
+    () => selectedRoleConfig.topMenus.filter((menu) => Boolean(menu && menu.trim())),
+    [selectedRoleConfig.topMenus]
+  )
+  const selectedRoleTopMenusKey = useMemo(() => selectedRoleTopMenus.join('||'), [selectedRoleTopMenus])
 
   useEffect(() => {
-    // Keep deep-linked menu state valid when role config changes.
-    // Invariant: `activeMenu` must always be one of the current role's top menus.
-    const firstMenu = selectedRoleConfig.topMenus?.[0]
+    const firstMenu = selectedRoleTopMenus[0]
     if (!firstMenu) return
-    if (!selectedRoleConfig.topMenus.includes(activeMenu)) {
-      setActiveMenu(firstMenu)
-    }
-  }, [activeMenu, selectedRoleConfig])
+    setActiveMenu((current) => (selectedRoleTopMenus.includes(current) ? current : firstMenu))
+  }, [selectedRoleTopMenus, selectedRoleTopMenusKey])
 
   useEffect(() => {
-    // Maintain a stable selected enrollee pointer after bootstrap reloads
-    // and role changes that may swap the visible enrollee list.
     if (!scopedEnrollees[0]?.id) return
     if (!selectedEnrolleeId || !scopedEnrollees.some((enrollee) => enrollee.id === selectedEnrolleeId)) {
       setSelectedEnrolleeId(scopedEnrollees[0].id)
@@ -890,7 +908,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   )
   const supervisorNavigatorDirectory = useMemo<SupervisorNavigatorDirectoryEntry[]>(() => {
     if (!accessMatrixDataset) {
-      // Fallback path for offline/mock states: derive navigator labels from enrollee headers.
       const entries = Array.from(new Set(scopedEnrollees.map((enrollee) => enrollee.assignedNavigator).filter(Boolean))).map((name) => ({
         navigatorPersonId: `fallback:${name.toLowerCase()}`,
         navigatorName: name,
@@ -982,7 +999,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           .sort((left, right) => new Date(right.referredAtIso).getTime() - new Date(left.referredAtIso).getTime())
       }
 
-      // Partner users should only see their own station submissions in partner-facing flows.
       const normalizedOrg = normalizeOrganizationKey(effectivePartnerOrganizationName)
       const scopedQueue = normalizedOrg
         ? visibleQueue.filter(
@@ -1019,8 +1035,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   useEffect(() => {
     if (!backgroundPrefetchEnrollments.length) return
     if (typeof window === 'undefined') return
-    // Defer prefetch slightly so visible screen work commits first, then warm route
-    // and timeline caches for likely-next enrollees in the same navigator session.
     const timeoutId = window.setTimeout(() => {
       void prefetchRouteCandidatesForEnrollments(
         backgroundPrefetchEnrollments
@@ -1042,8 +1056,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     let isMounted = true
     supabase.auth.getSession().then(({ data, error }) => {
       if (!isMounted || error) return
-      // Resolve identity linkage from live auth session first so role propagation
-      // does not depend on potentially stale local account-settings email values.
       setSessionEmail(data.session?.user?.email?.trim() || '')
     })
     return () => {
@@ -1053,8 +1065,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   useEffect(() => {
     let isMounted = true
-    // Fire-and-forget bootstrap read; guard with `isMounted` to avoid setting stale
-    // state if a role switch unmounts before the request resolves.
     loadAdminPortalRegistry()
       .then((registry) => {
         if (!isMounted) return
@@ -1072,8 +1082,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   useEffect(() => {
     let isMounted = true
-    // Program state has its own persistence stream because it can be mutated from
-    // multiple UI surfaces (profile panel, referral flow, admin controls).
     loadNavigatorProgramState()
       .then((state) => {
         if (!isMounted) return
@@ -1090,9 +1098,70 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [])
 
   useEffect(() => {
+    if (!adminPortalRegistry || remoteSession?.isActive) return
+    const normalizedEmail = (sessionEmail || accountSettings.email || '').trim().toLowerCase()
+    if (!normalizedEmail) return
+    const existingPerson =
+      adminPortalRegistry.people.find(
+        (person) =>
+          person.email.trim().toLowerCase() === normalizedEmail ||
+          person.linkedEmails.map((value) => value.trim().toLowerCase()).includes(normalizedEmail)
+      ) || null
+    const normalizedRole = (role === 'administrator' || role === 'supervisor' || role === 'navigator' || role === 'partner'
+      ? role
+      : 'navigator') as AdminPortalPersonRole
+    const createdPerson: AdminPortalPersonRecord = {
+      id: `person-${Date.now().toString(36)}`,
+      fullName: accountSettings.fullName.trim() || normalizedEmail,
+      email: normalizedEmail,
+      title: '',
+      roles: [normalizedRole],
+      canViewNavigatorAssignmentNames: normalizedRole === 'administrator',
+      approvalState: 'pending',
+      identityGroupId: `identity-${normalizedEmail}`,
+      linkedEmails: [normalizedEmail],
+      featurePolicy: { screenToggles: {}, cardToggles: {}, actionToggles: {} },
+      organizationId: null,
+      reportsToPersonId: null,
+      linkedEnrolleeId: null,
+      status: 'active',
+      notes: 'Auto-created from auth signup continuity.'
+    }
+    const registryToSave = existingPerson
+      ? {
+          ...adminPortalRegistry,
+          people: adminPortalRegistry.people.map((person) =>
+            person.id === existingPerson.id
+              ? {
+                  ...person,
+                  linkedEmails: Array.from(new Set([normalizedEmail, ...person.linkedEmails.map((value) => value.trim().toLowerCase())])),
+                  identityGroupId: person.identityGroupId.trim() || person.id,
+                  featurePolicy: person.featurePolicy || { screenToggles: {}, cardToggles: {}, actionToggles: {} }
+                }
+              : person
+          ),
+          updatedAtIso: new Date().toISOString()
+        }
+      : {
+          ...adminPortalRegistry,
+          people: [
+            ...adminPortalRegistry.people,
+            createdPerson
+          ],
+          updatedAtIso: new Date().toISOString()
+        }
+    const changed = JSON.stringify(registryToSave.people) !== JSON.stringify(adminPortalRegistry.people)
+    if (!changed) return
+    // Persist deterministic auth-email -> person linkage so signup identity survives across sessions.
+    void persistAdminPortalRegistry(registryToSave)
+      .then((saved) => setAdminPortalRegistry(saved))
+      .catch((error) => {
+        console.warn('Unable to persist signup/person continuity update.', error)
+      })
+  }, [accountSettings.email, accountSettings.fullName, adminPortalRegistry, remoteSession?.isActive, role, sessionEmail])
+
+  useEffect(() => {
     if (viewerRole !== 'administrator') {
-      // Access-matrix tables are admin-scoped. Clear stale values when role
-      // changes away from admin to avoid permission-noise and stale UI state.
       setAccessMatrixDataset(null)
       setAccessMatrixError(null)
       return
@@ -1130,8 +1199,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [])
 
   useEffect(() => {
-    // Regulation history is navigator + enrollee scoped; clear stale records eagerly
-    // when either dimension changes to avoid rendering prior enrollee results.
     if (viewerRole !== 'navigator' || !selectedEnrollee?.id) {
       setRegulationTestHistory([])
       setRegulationTestError(null)
@@ -1162,7 +1229,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     if (remoteSession || !viewerPerson) return
     const derivedRoles = normalizeAtlasRoleKeys(viewerPerson.roleKeys)
     if (!derivedRoles.length || haveSameRoles(derivedRoles, accountSettings.enabledRoles)) return
-    // Keep UI role options aligned to live role assignments for the signed-in identity.
     setBootstrapState((current) => ({
       ...current,
       accountSettings: {
@@ -1266,6 +1332,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       })
       .catch((error) => {
         if (!isMounted) return
+        const typedError = error as { code?: string; message?: string } | null
         console.warn('Unable to load demo-tagged enrollment ids for partner scope.', error)
       })
     return () => {
@@ -1376,10 +1443,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
             }
           : log
       )
-      persistRouteLogs(nextLogs)
-        // Timeline drag should never block UI updates; failed writes stay non-fatal
-        // and are retried on future log persistence operations.
-        .catch((error) => console.warn('Failed to persist route log timeline position.', error))
+      persistRouteLogs(nextLogs).catch((error) => console.warn('Failed to persist route log timeline position.', error))
       return nextLogs
     })
   }
@@ -1426,8 +1490,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   function updateTimelineConfig(nextConfig: TimelineConfig) {
     if (!selectedEnrollee) return
     const normalizedTimelineConfig = normalizeTimelineConfig(nextConfig)
-    // Update in-memory timeline immediately for smooth editing interactions, then
-    // persist both timeline config and intake start date so those two fields cannot drift.
     setBootstrapState((current) => ({
       ...current,
       timelineConfig: normalizedTimelineConfig,
@@ -1549,7 +1611,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }))
 
     try {
-      // Optimistic preview is replaced with canonical persisted Uniform Resource Locator (URL) once upload succeeds.
       const uploaded = await uploadEnrolleeProfileImage(selectedEnrollee.id, file)
       setBootstrapState((current) => ({
         ...current,
@@ -1559,7 +1620,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       }))
       return uploaded
     } catch (error) {
-      // Roll back to the prior avatar on failure so UI does not keep a dead blob URL.
       setBootstrapState((current) => ({
         ...current,
         enrollees: current.enrollees.map((enrollee) =>
@@ -1570,7 +1630,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setProfileImageUploadError(message)
       throw error
     } finally {
-      // Blob Uniform Resource Locators (URLs) are process-local browser resources and must be revoked to avoid leaks.
       URL.revokeObjectURL(previewUrl)
       setIsUploadingProfileImage(false)
     }
@@ -1578,8 +1637,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
     ensureWriteAllowed()
-    // Intake edits are a cross-surface source of truth: they update the intake record
-    // and denormalized enrollee header fields consumed across profile and timeline views.
     persistEnrolleeIntake(nextIntake).then((saved) => {
       setBootstrapState((current) => ({
         ...current,
@@ -1639,8 +1696,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   ) {
     ensureWriteAllowed()
     if (!selectedEnrollee || !enrolleeZCodeId) return null
-    // Persist first, then project the response into enrollee state so completed parent
-    // code badges remain consistent with the resolved child-code set.
     const saved = await persistEnrolleeZCodeResolution(enrolleeZCodeId, isResolved, input)
     setBootstrapState((current) => ({
       ...current,
@@ -1685,8 +1740,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         ...current,
         accountSettings: nextAccountSettings
       }))
-      // Best-effort account settings sync: survey completion should succeed even if
-      // profile metadata persistence fails later.
       persistAccountSettings(nextAccountSettings)
       return saved
     } catch (error) {
@@ -1826,7 +1879,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     answers: NavigatorCompetencyAssessmentRecord['answers']
   }) {
     ensureWriteAllowed()
-    // Insert newest-first to keep supervisor views sorted without recomputing entire list.
     const saved = await persistNavigatorCompetencyAssessment(input)
     setBootstrapState((current) => ({
       ...current,
@@ -1836,6 +1888,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveAdminPortalRegistry(registry: AdminPortalRegistry) {
+    if (!viewerCanAccessAdminRegistryCards) {
+      throw new Error('Admin registry updates are disabled by policy for this account.')
+    }
     setIsSavingAdminPortalRegistry(true)
     setAdminPortalRegistryError(null)
     try {
@@ -1854,6 +1909,16 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     const dataset = await loadAccessMatrixDataset()
     setAccessMatrixDataset(dataset)
     return dataset
+  }
+
+  async function refreshAssignmentParityViews() {
+    await Promise.all([
+      loadNavigatorEnrollmentAssignments().then((rows) => {
+        setNavigatorEnrollmentAssignments(rows)
+        setNavigatorEnrollmentAssignmentsError(null)
+      }),
+      reloadBootstrapState()
+    ])
   }
 
   async function savePartnerGrant(grant: PartnerTroubleshootingGrant) {
@@ -1920,11 +1985,15 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveAccessMatrixEnrollmentNavigators(enrollmentId: string, navigatorPersonIds: string[]) {
+    if (!viewerCanAccessAdminRegistryCards) {
+      throw new Error('Coverage updates are disabled by policy for this account.')
+    }
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
     try {
       await persistAccessMatrixEnrollmentNavigators(enrollmentId, navigatorPersonIds)
       await refreshAccessMatrixDataset()
+      await refreshAssignmentParityViews()
     } catch (error) {
       setAccessMatrixError(error instanceof Error ? error.message : 'Unable to save navigator enrollment assignments.')
       throw error
@@ -1960,6 +2029,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function assignNavigatorEnrollmentToSelf(enrollmentId: string, mode: 'assign' | 'unassign' = 'assign') {
+    if (!viewerCanUseAssignmentActions) {
+      setNavigatorEnrollmentAssignmentsError('Assignment actions are disabled by admin policy for this account.')
+      return
+    }
     setAssigningNavigatorEnrollmentId(enrollmentId)
     setNavigatorEnrollmentAssignmentsError(null)
     try {
@@ -1973,13 +2046,24 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         reloadBootstrapState()
       ])
     } catch (error) {
-      const databaseErrorCode = (error as { code?: string } | null)?.code
+      const typedDatabaseError = error as { code?: string; message?: string; details?: string; hint?: string } | null
+      const databaseErrorCode = typedDatabaseError?.code
       if (databaseErrorCode === 'PGRST202') {
         setNavigatorEnrollmentAssignmentsError(
           mode === 'unassign'
             ? 'Navigator self-unassignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
             : 'Navigator self-assignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
         )
+        return
+      }
+      if (typedDatabaseError?.message) {
+        const detailParts = [
+          typedDatabaseError.message,
+          typedDatabaseError.details ? `details: ${typedDatabaseError.details}` : '',
+          typedDatabaseError.hint ? `hint: ${typedDatabaseError.hint}` : '',
+          databaseErrorCode ? `code: ${databaseErrorCode}` : ''
+        ].filter(Boolean)
+        setNavigatorEnrollmentAssignmentsError(detailParts.join(' | '))
         return
       }
       setNavigatorEnrollmentAssignmentsError(
@@ -2011,7 +2095,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   async function saveNavigatorProgramState(state: NavigatorProgramState) {
     setNavigatorProgramError(null)
     try {
-      // Treat repository return as canonical because persistence layer normalizes payloads.
       const saved = await persistNavigatorProgramState(state)
       setNavigatorProgramState(saved)
       return saved
@@ -2040,16 +2123,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     const savedState = await saveNavigatorProgramState(nextState)
     if (claimedRecord) {
       try {
-        // Keep claim conversion transactional with queue claim so demo flow can
-        // open immediately into a real navigator-bound enrollee. We still apply
-        // an explicit self-assignment guard because some environments materialize
-        // enrollment rows without wiring navigator edges to the active operator.
         const materialized = await materializeClaimedReferralIntoEnrollment(claimedRecord)
         if (materialized?.enrollmentId) {
           await persistAssignNavigatorEnrollmentToSelf(materialized.enrollmentId)
           try {
-            // Inference enrichment is non-blocking for claim ownership; keep claim
-            // successful even when inference service or z-code upsert is unavailable.
             const inferred = await inferZCodesForReferral({
               fullName: claimedRecord.fullName,
               situationCategories: claimedRecord.zCodeTags,
@@ -2062,8 +2139,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           }
         }
       } catch (error) {
-        // Surface a visible failure so the queue status does not look "claimed"
-        // while navigator assignment never appears in "my enrollees".
         setNavigatorProgramError(
           error instanceof Error
             ? error.message
@@ -2117,8 +2192,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   async function submitPartnerReferral(input: PartnerReferralSubmissionInput) {
     ensureWriteAllowed()
-    // Shared mapper keeps referral normalization logic consistent regardless of
-    // where referral submissions are initiated in the product.
     const { nextRecord, nextState } = buildReferralQueueUpdate(input, mergedNavigatorProgramState, {
       accountFullName: accountSettings.fullName,
       accountOrganization: effectiveAccountSettings.organization,
@@ -2237,6 +2310,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
     navigatorEnrollmentAssignments,
+    viewerCanViewNavigatorAssignmentNames,
+    viewerCanAccessAssignmentBoard,
+    viewerCanUseAssignmentActions,
+    viewerCanAccessAdminRegistryCards,
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
     assigningNavigatorEnrollmentId,

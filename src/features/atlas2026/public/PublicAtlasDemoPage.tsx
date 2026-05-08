@@ -81,7 +81,6 @@ export default function PublicAtlasDemoPage() {
 
   React.useEffect(() => {
     if (isAdministrator && !isUnlocked) {
-      // Administrators can always access demo preview without sharing passcodes.
       setIsUnlocked(true)
       persistDemoAccessState(true)
       void logDemoAccessEvent('administrator_bypass', session?.user?.email || null)
@@ -106,8 +105,6 @@ export default function PublicAtlasDemoPage() {
 
   function setSinglePaneRole(role: 'navigator' | 'partner') {
     if (typeof window === 'undefined') return
-    // The embedded workspace reads role from session storage. We set it before opening
-    // the modal so the mounted shell loads the exact perspective requested by the demo step.
     window.sessionStorage.setItem(SINGLE_PANE_ROLE_SESSION_KEY, role)
   }
 
@@ -303,6 +300,7 @@ export default function PublicAtlasDemoPage() {
         <LiveWorkspaceModal
           title="step 1 · live referral workspace"
           onClose={() => setActiveWorkspace(null)}
+          scrollContent
         >
           <PartnerReferralWorkflowPanel
             defaultReferrerName={session?.user.user_metadata?.full_name || ''}
@@ -346,11 +344,13 @@ export default function PublicAtlasDemoPage() {
 function LiveWorkspaceModal({
   title,
   onClose,
-  children
+  children,
+  scrollContent = false
 }: {
   title: string
   onClose: () => void
   children: React.ReactNode
+  scrollContent?: boolean
 }) {
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 px-4 py-5 backdrop-blur-sm">
@@ -366,7 +366,7 @@ function LiveWorkspaceModal({
             X
           </AtlasTextButton>
         </div>
-        <div className="min-h-0 flex-1">{children}</div>
+        <div className={`min-h-0 flex-1 ${scrollContent ? 'overflow-y-auto pr-1' : ''}`}>{children}</div>
       </div>
     </div>
   )
