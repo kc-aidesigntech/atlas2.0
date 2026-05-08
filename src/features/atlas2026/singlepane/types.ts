@@ -357,6 +357,25 @@ export interface JourneyStationMarker {
   markerType?: 'history' | 'suggested' | 'selected'
 }
 
+// Partner strip map uses anonymized aggregate dots grouped by source and phase.
+export type PartnerStripDotSource = 'referred' | 'active'
+
+export interface PartnerStripAggregateDot {
+  id: string
+  source: PartnerStripDotSource
+  phase: StabilizationPhase
+  occurredAtIso: string
+  anonymousLabel: string
+}
+
+export interface PartnerStripHistoryRecord {
+  id: string
+  source: PartnerStripDotSource
+  reachedRenewalAtIso: string
+  outcomeLabel: string
+  anonymousLabel: string
+}
+
 export interface AccountSettings {
   fullName: string
   email: string

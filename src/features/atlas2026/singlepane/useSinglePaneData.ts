@@ -25,6 +25,8 @@ import type {
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
   PartnerTroubleshootingGrant,
+  PartnerStripAggregateDot,
+  PartnerStripHistoryRecord,
   PartnerIdentifierRecord,
   PartnerReferralSubmissionInput,
   PartnerServiceCapacityHeader,
@@ -277,6 +279,18 @@ function normalizeOrganizationKey(value: string | null | undefined) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
+}
+
+function getEnrollmentJourneyPhase(logs: RouteLogEvent[], fallback: StabilizationPhase = 'regulation'): StabilizationPhase {
+  if (!logs.length) return fallback
+  return logs[logs.length - 1]?.phase || fallback
+}
+
+function getPhaseEntryIso(logs: RouteLogEvent[], phase: StabilizationPhase) {
+  const first = logs.find((log) => log.phase === phase)
+  if (first) return first.timestampIso
+  const last = logs[logs.length - 1]
+  return last?.timestampIso || new Date().toISOString()
 }
 
 function buildSeedPickupQueue(enrollmentRequests: EnrollmentRequestRecord[]): UnassignedEnrolleePickupRecord[] {
@@ -942,6 +956,134 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     () => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, enrollmentRequests, publicQueueRecords),
     [currentNavigatorName, enrollmentRequests, navigatorProgramState, publicQueueRecords]
   )
+  const partnerStripJourneyModel = useMemo(() => {
+    if (viewerRole !== 'partner') {
+      return {
+        referredDots: [] as PartnerStripAggregateDot[],
+        activeDots: [] as PartnerStripAggregateDot[],
+        successHistory: [] as PartnerStripHistoryRecord[]
+      }
+    }
+
+    const normalizedPartnerOrganization = normalizeOrganizationKey(effectivePartnerOrganizationName)
+    const partnerReferralRecords = mergedNavigatorProgramState.pickupQueue.filter((record) => {
+      if (record.status === 'archived') return false
+      if (!normalizedPartnerOrganization) return true
+      return normalizeOrganizationKey(record.referrerOrganization) === normalizedPartnerOrganization
+    })
+    const referralIsoByCaseId = new Map(
+      partnerReferralRecords
+        .filter((record) => record.caseId.trim())
+        .map((record) => [record.caseId.trim().toLowerCase(), record.referredAtIso] as const)
+    )
+    const scopedLogsByEnrolleeId = new Map<string, RouteLogEvent[]>()
+    logs.forEach((log) => {
+      if (!scopedEnrolleeIdSet.has(log.enrolleeId)) return
+      const current = scopedLogsByEnrolleeId.get(log.enrolleeId) || []
+      current.push(log)
+      scopedLogsByEnrolleeId.set(log.enrolleeId, current)
+    })
+    scopedLogsByEnrolleeId.forEach((value, key) => {
+      value.sort((left, right) => new Date(left.timestampIso).getTime() - new Date(right.timestampIso).getTime())
+      scopedLogsByEnrolleeId.set(key, value)
+    })
+    const regulationByEnrollmentId = new Map<string, RegulationTestSubmissionRecord[]>()
+    regulationTestHistory.forEach((record) => {
+      const enrollmentId = (record.enrollmentId || '').trim()
+      if (!enrollmentId) return
+      const current = regulationByEnrollmentId.get(enrollmentId) || []
+      current.push(record)
+      regulationByEnrollmentId.set(enrollmentId, current)
+    })
+    regulationByEnrollmentId.forEach((value, key) => {
+      value.sort((left, right) => new Date(left.updatedAtIso).getTime() - new Date(right.updatedAtIso).getTime())
+      regulationByEnrollmentId.set(key, value)
+    })
+
+    const referredDots: PartnerStripAggregateDot[] = []
+    const activeDots: PartnerStripAggregateDot[] = []
+    const successHistory: PartnerStripHistoryRecord[] = []
+    const orderedEnrollees = scopedEnrollees
+      .slice()
+      .sort((left, right) => String(left.caseId || left.id).localeCompare(String(right.caseId || right.id), undefined, { numeric: true }))
+
+    orderedEnrollees.forEach((enrollee, index) => {
+      const logsForEnrollee = scopedLogsByEnrolleeId.get(enrollee.id) || []
+      const routeAssignment = routeAssignmentsByEnrolleeId[enrollee.id] || null
+      const enrollmentId = (enrollee.enrollmentId || '').trim()
+      const completedRegulationForEnrollee = (regulationByEnrollmentId.get(enrollmentId) || []).filter(
+        (record) =>
+          record.status === 'completed' &&
+          record.passed !== null &&
+          (record.testType === 'mh_sca' || record.testType === 'svs')
+      )
+      const latestMhSca = [...completedRegulationForEnrollee]
+        .reverse()
+        .find((record) => record.testType === 'mh_sca')
+      const latestSvs = [...completedRegulationForEnrollee]
+        .reverse()
+        .find((record) => record.testType === 'svs')
+      const latestRegulationFailureIso = [latestMhSca, latestSvs]
+        .filter((record): record is RegulationTestSubmissionRecord => Boolean(record && record.passed === false))
+        .map((record) => record.updatedAtIso)
+        .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0]
+      const inferredPhaseFromLogs = getEnrollmentJourneyPhase(logsForEnrollee, routeAssignment?.phase || 'regulation')
+      const effectivePhase = latestRegulationFailureIso ? 'regulation' : inferredPhaseFromLogs
+      const hasRenewalEvidence =
+        effectivePhase === 'renewal' || logsForEnrollee.some((record) => record.phase === 'renewal') || routeAssignment?.phase === 'renewal'
+      const referralIsoFromQueue = referralIsoByCaseId.get((enrollee.caseId || '').trim().toLowerCase()) || null
+      const phaseEntryIso = latestRegulationFailureIso || getPhaseEntryIso(logsForEnrollee, effectivePhase)
+      const occurredAtIso = referralIsoFromQueue || routeAssignment?.assignedAtIso || phaseEntryIso
+      const anonymousLabel = `participant-${String(index + 1).padStart(3, '0')}`
+
+      if (hasRenewalEvidence) {
+        successHistory.push({
+          id: `success-${enrollee.id}`,
+          source: 'referred',
+          reachedRenewalAtIso: getPhaseEntryIso(logsForEnrollee, 'renewal'),
+          outcomeLabel: 'renewal reached',
+          anonymousLabel
+        })
+      } else {
+        referredDots.push({
+          id: `referred-${enrollee.id}`,
+          source: 'referred',
+          phase: effectivePhase,
+          occurredAtIso,
+          anonymousLabel
+        })
+      }
+
+      if (routeAssignment) {
+        activeDots.push({
+          id: `active-${enrollee.id}`,
+          source: 'active',
+          phase: effectivePhase,
+          occurredAtIso: latestRegulationFailureIso || routeAssignment.assignedAtIso || occurredAtIso,
+          anonymousLabel
+        })
+      }
+    })
+
+    successHistory.sort(
+      (left, right) => new Date(right.reachedRenewalAtIso).getTime() - new Date(left.reachedRenewalAtIso).getTime()
+    )
+
+    return {
+      referredDots,
+      activeDots,
+      successHistory
+    }
+  }, [
+    effectivePartnerOrganizationName,
+    logs,
+    mergedNavigatorProgramState.pickupQueue,
+    regulationTestHistory,
+    routeAssignmentsByEnrolleeId,
+    scopedEnrolleeIdSet,
+    scopedEnrollees,
+    viewerRole
+  ])
   const navigatorSelfAssessments = useMemo(
     () =>
       mergedNavigatorProgramState.selfAssessments
@@ -2283,6 +2425,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     navigatorProgramState: mergedNavigatorProgramState,
     navigatorProgramError,
     journeyStationMarkers,
+    partnerStripReferredDots: partnerStripJourneyModel.referredDots,
+    partnerStripActiveDots: partnerStripJourneyModel.activeDots,
+    partnerStripSuccessHistory: partnerStripJourneyModel.successHistory,
     resolvedZCodeStripMarkers,
     partnerServiceCapacitySurveyHistory,
     enrolleeBurdenSurveyHistoryByEnrollmentId,

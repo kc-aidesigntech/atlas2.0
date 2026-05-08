@@ -12,6 +12,7 @@ import StripMapControlOverlay from './StripMapControlOverlay'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import type {
   JourneyStationMarker,
+  PartnerStripAggregateDot,
   RegulationTestStripMarker,
   ResolvedZCodeStripMarker,
   RouteLogEvent,
@@ -40,6 +41,10 @@ interface StripMapTimelineProps {
   regulationTestMarkers?: RegulationTestStripMarker[]
   isRegulationCleared?: boolean
   showReadinessProgress?: boolean
+  isPartnerAggregateView?: boolean
+  partnerAggregateReferredDots?: PartnerStripAggregateDot[]
+  partnerAggregateActiveDots?: PartnerStripAggregateDot[]
+  onPartnerHistoryClick?: () => void
   showRoutePlanningQuickAction?: boolean
   onRoutePlanningClick?: () => void
   onRegulationTestsClick?: () => void
@@ -145,6 +150,10 @@ export default function StripMapTimeline({
   regulationTestMarkers = [],
   isRegulationCleared = false,
   showReadinessProgress = true,
+  isPartnerAggregateView = false,
+  partnerAggregateReferredDots = [],
+  partnerAggregateActiveDots = [],
+  onPartnerHistoryClick,
   showRoutePlanningQuickAction = false,
   onRoutePlanningClick,
   onRegulationTestsClick,
@@ -309,6 +318,81 @@ export default function StripMapTimeline({
   const phaseSegments = useMemo(() => {
     return buildTimelinePhaseSegments(normalizedTimelineConfig)
   }, [normalizedTimelineConfig])
+  const isPartnerAggregateMode = isPartnerAggregateView && (partnerAggregateReferredDots.length > 0 || partnerAggregateActiveDots.length > 0)
+  const phaseBoundsByPhase = useMemo(() => {
+    const next = new Map<StabilizationPhase, { xStart: number; xEnd: number }>()
+    phaseSegments.forEach((segment) => {
+      const startDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.startOffset || 0)
+      const endDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.endOffset || 0)
+      next.set(segment.phase, {
+        xStart: Number(timeScale(startDate)),
+        xEnd: Number(timeScale(endDate))
+      })
+    })
+    return next
+  }, [normalizedTimelineConfig.planStartIso, phaseSegments, timeScale])
+  const partnerReferredDotLayouts = useMemo(() => {
+    const stackDepthByKey = new Map<string, number>()
+    return partnerAggregateReferredDots
+      .slice()
+      .sort((left, right) => new Date(left.occurredAtIso).getTime() - new Date(right.occurredAtIso).getTime())
+      .map((dot) => {
+        const bounds = phaseBoundsByPhase.get(dot.phase)
+        if (!bounds) return null
+        const dotDate = new Date(dot.occurredAtIso)
+        const monthStart = Number.isFinite(dotDate.getTime())
+          ? Date.UTC(dotDate.getUTCFullYear(), dotDate.getUTCMonth(), 1)
+          : Date.UTC(safePlanStart.getUTCFullYear(), safePlanStart.getUTCMonth(), 1)
+        const key = `${dot.phase}:${monthStart}`
+        const stackIndex = stackDepthByKey.get(key) || 0
+        stackDepthByKey.set(key, stackIndex + 1)
+        const clampedRatio = Number.isFinite(dotDate.getTime())
+          ? Math.max(0, Math.min(1, (dotDate.getTime() - safePlanStart.getTime()) / Math.max(safePlanEnd.getTime() - safePlanStart.getTime(), 1)))
+          : 0.5
+        const projectedX = marginX + (width - marginX * 2) * clampedRatio
+        const x = Math.max(bounds.xStart + 10, Math.min(bounds.xEnd - 10, projectedX))
+        return {
+          id: dot.id,
+          x,
+          y: baselineY - 18 - stackIndex * 14,
+          fill: TIMELINE_PHASE_COLORS[dot.phase],
+          phase: dot.phase,
+          occurredAtIso: dot.occurredAtIso
+        }
+      })
+      .filter(Boolean) as Array<{ id: string; x: number; y: number; fill: string; phase: StabilizationPhase; occurredAtIso: string }>
+  }, [baselineY, marginX, partnerAggregateReferredDots, phaseBoundsByPhase, safePlanEnd, safePlanStart, width])
+  const partnerActiveDotLayouts = useMemo(() => {
+    const stackDepthByKey = new Map<string, number>()
+    return partnerAggregateActiveDots
+      .slice()
+      .sort((left, right) => new Date(left.occurredAtIso).getTime() - new Date(right.occurredAtIso).getTime())
+      .map((dot) => {
+        const bounds = phaseBoundsByPhase.get(dot.phase)
+        if (!bounds) return null
+        const dotDate = new Date(dot.occurredAtIso)
+        const monthStart = Number.isFinite(dotDate.getTime())
+          ? Date.UTC(dotDate.getUTCFullYear(), dotDate.getUTCMonth(), 1)
+          : Date.UTC(safePlanStart.getUTCFullYear(), safePlanStart.getUTCMonth(), 1)
+        const key = `${dot.phase}:${monthStart}`
+        const stackIndex = stackDepthByKey.get(key) || 0
+        stackDepthByKey.set(key, stackIndex + 1)
+        const clampedRatio = Number.isFinite(dotDate.getTime())
+          ? Math.max(0, Math.min(1, (dotDate.getTime() - safePlanStart.getTime()) / Math.max(safePlanEnd.getTime() - safePlanStart.getTime(), 1)))
+          : 0.5
+        const projectedX = marginX + (width - marginX * 2) * clampedRatio
+        const x = Math.max(bounds.xStart + 10, Math.min(bounds.xEnd - 10, projectedX))
+        return {
+          id: dot.id,
+          x,
+          y: baselineY + 18 + stackIndex * 14,
+          fill: TIMELINE_STATUS_COLORS.active,
+          phase: dot.phase,
+          occurredAtIso: dot.occurredAtIso
+        }
+      })
+      .filter(Boolean) as Array<{ id: string; x: number; y: number; fill: string; phase: StabilizationPhase; occurredAtIso: string }>
+  }, [baselineY, marginX, partnerAggregateActiveDots, phaseBoundsByPhase, safePlanEnd, safePlanStart, width])
   const phaseSeparatorPositions = useMemo(
     () =>
       phaseSegments.slice(0, -1).map((segment) => {
@@ -330,6 +414,17 @@ export default function StripMapTimeline({
         const xEnd = Number(timeScale(endDate))
         const centerX = (xStart + xEnd) / 2
 
+        if (isPartnerAggregateView && segment.phase === 'regulation') {
+          return {
+            key: segment.phase,
+            label: 'regulation',
+            onClick: () => {},
+            centerX,
+            color: TIMELINE_PHASE_COLORS.regulation,
+            textColor: SP_COLORS.white
+          }
+        }
+
         if (segment.phase === 'regulation' && onRegulationTestsClick) {
           return {
             key: segment.phase,
@@ -338,6 +433,17 @@ export default function StripMapTimeline({
             centerX,
             color: TIMELINE_PHASE_COLORS.regulation,
             textColor: SP_COLORS.white
+          }
+        }
+
+        if (isPartnerAggregateView && segment.phase === 'readiness') {
+          return {
+            key: segment.phase,
+            label: 'readiness',
+            onClick: () => {},
+            centerX,
+            color: TIMELINE_PHASE_COLORS.readiness,
+            textColor: SP_COLORS.bg
           }
         }
 
@@ -376,7 +482,15 @@ export default function StripMapTimeline({
       iconHref?: string
       disabled?: boolean
     }>
-  }, [normalizedTimelineConfig.planStartIso, onRegulationTestsClick, onRoutePlanningClick, phaseSegments, showRoutePlanningQuickAction, timeScale])
+  }, [
+    isPartnerAggregateView,
+    normalizedTimelineConfig.planStartIso,
+    onRegulationTestsClick,
+    onRoutePlanningClick,
+    phaseSegments,
+    showRoutePlanningQuickAction,
+    timeScale
+  ])
 
   const incrementMarkers = useMemo(() => {
     const configuredMilestones = normalizedTimelineConfig.durationMonths > 6 ? [60, 120, 180, 240, 300, 360] : [60, 120, 180]
@@ -393,8 +507,11 @@ export default function StripMapTimeline({
       .filter((marker) => marker.incrementDate.getTime() < safePlanEnd.getTime())
   }, [normalizedTimelineConfig.durationMonths, safePlanEnd, safePlanStart, timeScale])
   const deepestResolvedMarkerBottom = maxResolvedStackDepth ? baselineY + (maxResolvedStackDepth - 1) * 40 + 18 : baselineY
+  const deepestPartnerActiveBottom = partnerActiveDotLayouts.length
+    ? Math.max(...partnerActiveDotLayouts.map((layout) => layout.y)) + 10
+    : baselineY
   const incrementLabelBottom = incrementMarkers.length ? baselineY + 34 : baselineY
-  const phaseButtonsTop = Math.max(deepestResolvedMarkerBottom, incrementLabelBottom) + 42
+  const phaseButtonsTop = Math.max(deepestResolvedMarkerBottom, deepestPartnerActiveBottom, incrementLabelBottom) + 42
   const focusedStationTop = phaseButtonsTop + 64
   const containerHeight = highlightedStationName ? Math.max(height, focusedStationTop + 72) : Math.max(height, phaseButtonsTop + 64)
 
@@ -601,6 +718,7 @@ export default function StripMapTimeline({
           }}
         >
           <AtlasTextButton
+            type="button"
             onClick={button.onClick}
             disabled={button.disabled}
             className="inline-flex items-center gap-2 px-5 py-1.5 text-[22px] font-medium"
@@ -646,9 +764,9 @@ export default function StripMapTimeline({
                   strokeWidth={6}
                   strokeOpacity={isHiddenReadinessSegment ? 0.18 : 0.8}
                 />
-                {segment.phase === 'regulation' && onRegulationTestsClick
+                {segment.phase === 'regulation' && (onRegulationTestsClick || isPartnerAggregateView)
                   ? null
-                  : segment.phase === 'readiness' && onRoutePlanningClick && showRoutePlanningQuickAction
+                  : segment.phase === 'readiness' && ((onRoutePlanningClick && showRoutePlanningQuickAction) || isPartnerAggregateView)
                     ? null
                     : segment.phase === 'renewal'
                       ? null
@@ -707,11 +825,29 @@ export default function StripMapTimeline({
             )
           })}
 
-          <g transform={`translate(${width - marginX}, ${baselineY})`} aria-hidden="true">
-            <circle r="10.5" fill="#000000" stroke={SP_COLORS.white} strokeWidth="2.2" />
+          <g
+            transform={`translate(${width - marginX}, ${baselineY})`}
+            style={{ cursor: isPartnerAggregateMode && onPartnerHistoryClick ? 'pointer' : 'default' }}
+            onClick={() => {
+              if (!isPartnerAggregateMode) return
+              onPartnerHistoryClick?.()
+            }}
+          >
+            <title>
+              {isPartnerAggregateMode && onPartnerHistoryClick
+                ? 'Open partner renewal history'
+                : 'Timeline endpoint'}
+            </title>
+            <circle
+              r="10.5"
+              fill="#000000"
+              stroke={isPartnerAggregateMode ? TIMELINE_PHASE_COLORS.renewal : SP_COLORS.white}
+              strokeWidth="2.2"
+            />
           </g>
 
-          {positionedEvents.map(({ event, index, x, lane }) => {
+          {!isPartnerAggregateMode
+            ? positionedEvents.map(({ event, index, x, lane }) => {
             const color = TIMELINE_STATUS_COLORS[event.status]
             const y = baselineY - lane * laneStep
             const isDragging = dragState?.eventId === event.id
@@ -751,9 +887,28 @@ export default function StripMapTimeline({
                 </text>
               </g>
             )
-          })}
+            })
+            : null}
 
-          {readinessSegment && visibleSuggestedMarkers.map((marker, index) => {
+          {isPartnerAggregateMode
+            ? partnerReferredDotLayouts.map((dot) => (
+                <g key={dot.id} transform={`translate(${dot.x}, ${dot.y})`}>
+                  <title>{`referred · ${dot.phase} · ${formatDateLabel(dot.occurredAtIso)}`}</title>
+                  <circle r="6.5" fill={dot.fill} stroke={SP_COLORS.white} strokeWidth="1.2" />
+                </g>
+              ))
+            : null}
+
+          {isPartnerAggregateMode
+            ? partnerActiveDotLayouts.map((dot) => (
+                <g key={dot.id} transform={`translate(${dot.x}, ${dot.y})`}>
+                  <title>{`active assignment · ${dot.phase} · ${formatDateLabel(dot.occurredAtIso)}`}</title>
+                  <circle r="6.5" fill={dot.fill} stroke={TIMELINE_PHASE_COLORS[dot.phase]} strokeWidth="1.2" />
+                </g>
+              ))
+            : null}
+
+          {!isPartnerAggregateMode && readinessSegment && visibleSuggestedMarkers.map((marker, index) => {
             const segmentWidth = readinessSegment.xEnd - readinessSegment.xStart
             const slotWidth = segmentWidth / Math.max(visibleSuggestedMarkers.length + 1, 1)
             const ratio = (index + 1) / (visibleSuggestedMarkers.length + 1)
@@ -805,7 +960,7 @@ export default function StripMapTimeline({
             )
           })}
 
-          {readinessSegment &&
+          {!isPartnerAggregateMode && readinessSegment &&
             (visibleResolvedZCodeMarkers.length
               ? [
                   ...resolvedMarkerLayouts.map(({ marker, xRatio, y, fill, stemOffsetX, stemStrokeWidth, labelX, labelY, lineLift }) => {
@@ -931,7 +1086,7 @@ export default function StripMapTimeline({
                   )
                 }))}
 
-          {regulationSegment && regulationHistoryMarkers.map((marker, index) => {
+          {!isPartnerAggregateMode && regulationSegment && regulationHistoryMarkers.map((marker, index) => {
             const segmentWidth = regulationSegment.xEnd - regulationSegment.xStart
             const slotWidth = segmentWidth / Math.max(regulationHistoryMarkers.length + 1, 1)
             const ratio = (index + 1) / (regulationHistoryMarkers.length + 1)
