@@ -361,6 +361,21 @@ export interface PartnerStationProfile {
   capacityAvailable: number | null
 }
 
+export interface PartnerStationSpecialtyZCode {
+  promptId: string
+  zCode: string
+  normalizedZCode: string
+  title: string
+  description: string
+  score: number
+}
+
+export interface PartnerStationSpecialtyGroup {
+  parentCode: string
+  childCodes: string[]
+  zCodes: PartnerStationSpecialtyZCode[]
+}
+
 export interface EnrolleeIntakeRecord {
   enrolleeId: string
   fullName: string
