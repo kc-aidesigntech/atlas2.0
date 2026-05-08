@@ -150,6 +150,10 @@ export interface NavigatorEnrollmentAssignmentRecord {
   enrolleeName: string
   caseId: string
   assignedNavigatorLabel: string
+  navigatorAssignmentCount: number
+  assignedNavigatorNames: string[]
+  zCodeParentCodes: string[]
+  isAssignedToAnyNavigator: boolean
   isAssignedToViewer: boolean
 }
 
@@ -234,9 +238,16 @@ export interface AdminDataQualityMetric {
 
 export type AdminPortalPersonRole = AtlasRole | 'enrollee'
 export type AdminPortalPersonStatus = 'active' | 'invited' | 'inactive'
+export type AdminPortalAccessApprovalState = 'pending' | 'approved'
 export type AdminPortalOrganizationType = 'partner' | 'internal' | 'public_agency' | 'community'
 export type AdminPortalOrganizationStatus = 'active' | 'draft' | 'inactive'
 export type AdminPortalCustomEnrolleeStatus = 'active' | 'draft' | 'archived'
+
+export interface AdminPortalFeaturePolicy {
+  screenToggles: Record<string, boolean>
+  cardToggles: Record<string, boolean>
+  actionToggles: Record<string, boolean>
+}
 
 export interface AdminPortalPersonRecord {
   id: string
@@ -244,6 +255,11 @@ export interface AdminPortalPersonRecord {
   email: string
   title: string
   roles: AdminPortalPersonRole[]
+  canViewNavigatorAssignmentNames: boolean
+  approvalState: AdminPortalAccessApprovalState
+  identityGroupId: string
+  linkedEmails: string[]
+  featurePolicy: AdminPortalFeaturePolicy
   organizationId: string | null
   reportsToPersonId: string | null
   linkedEnrolleeId: string | null

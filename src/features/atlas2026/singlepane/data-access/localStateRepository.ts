@@ -18,16 +18,6 @@ import {
   upsertConfigPayload
 } from '@/features/atlas2026/singlepane/data-access/configDocumentPersistence'
 
-/**
- * Single-pane local/config repository.
- *
- * Purpose:
- * - owns normalization + persistence of User Interface (UI)-managed config documents.
- * - keeps localStorage and Supabase writes aligned under a local-first contract.
- */
-
-// Contract constants mirror app_config_documents identity fields so reads/writes
-// stay addressable across local-only and Supabase-backed runtime modes.
 const SETTINGS_CONFIG_KEY = 'account_settings'
 const ENROLLEE_INTAKE_CONFIG_KEY_PREFIX = 'enrollee_intake:'
 const ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX = 'route_assignment:'
@@ -43,13 +33,6 @@ const LOCAL_NAVIGATOR_PROGRAM_STATE_KEY = 'atlas2026.singlepane.navigator-progra
 const PARTNER_TROUBLESHOOTING_GRANT_CONFIG_KEY_PREFIX = 'partner_troubleshooting_grant:'
 const LOCAL_PARTNER_TROUBLESHOOTING_GRANTS_KEY = 'atlas2026.singlepane.partner-troubleshooting-grants.v1'
 const ALLOW_SENSITIVE_LOCAL_CACHE = import.meta.env.VITE_ALLOW_SENSITIVE_LOCAL_CACHE === 'true'
-
-/**
- * Persistence strategy:
- * - account-level preferences can use localStorage for User Experience (UX) continuity.
- * - sensitive clinical/program payloads are local-cached only when explicitly enabled.
- * - Supabase writes are attempted for all config domains when configured.
- */
 
 function getDefaultAccountSettings(): AccountSettings {
   return {
@@ -137,9 +120,44 @@ function getDefaultAdminPortalRegistry(): AdminPortalRegistry {
   }
 }
 
+function getDefaultFeaturePolicy() {
+  return {
+    // Default-open posture: admins can tighten access by screen/card/action later.
+    screenToggles: {},
+    cardToggles: {},
+    actionToggles: {}
+  }
+}
+
 function normalizeAdminPortalRegistry(payload: Partial<AdminPortalRegistry> | null | undefined): AdminPortalRegistry {
   return {
-    people: Array.isArray(payload?.people) ? payload!.people.filter(Boolean) : [],
+    people: Array.isArray(payload?.people)
+      ? payload!.people.filter(Boolean).map((person) => ({
+          ...person,
+          canViewNavigatorAssignmentNames: Boolean((person as { canViewNavigatorAssignmentNames?: boolean }).canViewNavigatorAssignmentNames),
+          approvalState:
+            (person as { approvalState?: string }).approvalState === 'pending'
+              ? 'pending'
+              : 'approved',
+          identityGroupId: String((person as { identityGroupId?: string }).identityGroupId || (person as { id: string }).id),
+          linkedEmails: Array.from(
+            new Set(
+              [String((person as { email?: string }).email || ''), ...(((person as { linkedEmails?: string[] }).linkedEmails || []) as string[])]
+                .map((value) => value.trim().toLowerCase())
+                .filter(Boolean)
+            )
+          ),
+          featurePolicy:
+            (person as { featurePolicy?: unknown }).featurePolicy &&
+            typeof (person as { featurePolicy?: unknown }).featurePolicy === 'object'
+              ? {
+                  screenToggles: { ...getDefaultFeaturePolicy().screenToggles, ...(((person as any).featurePolicy?.screenToggles || {}) as Record<string, boolean>) },
+                  cardToggles: { ...getDefaultFeaturePolicy().cardToggles, ...(((person as any).featurePolicy?.cardToggles || {}) as Record<string, boolean>) },
+                  actionToggles: { ...getDefaultFeaturePolicy().actionToggles, ...(((person as any).featurePolicy?.actionToggles || {}) as Record<string, boolean>) }
+                }
+              : getDefaultFeaturePolicy()
+        }))
+      : [],
     organizations: Array.isArray(payload?.organizations) ? payload!.organizations.filter(Boolean) : [],
     customEnrollees: Array.isArray(payload?.customEnrollees) ? payload!.customEnrollees.filter(Boolean) : [],
     archivedPersonIds: Array.isArray(payload?.archivedPersonIds)
@@ -321,8 +339,6 @@ export async function loadEnrolleeIntakes(): Promise<Record<string, EnrolleeInta
   return normalized
 }
 
-// Intake/route/timeline writes optionally update local cache first when enabled
-// for controlled non-production/offline workflows.
 export async function saveEnrolleeIntake(intake: EnrolleeIntakeRecord): Promise<EnrolleeIntakeRecord> {
   persistLocalEnrolleeIntakeState({
     ...loadLocalEnrolleeIntakeState(),
@@ -390,8 +406,6 @@ export async function loadTimelineConfigs(): Promise<Record<string, TimelineConf
 }
 
 function buildTimelineConfigKeys(enrolleeId: string, enrollmentId?: string | null) {
-  // Keep both key variants in sync so migrations between enrollment-scoped and
-  // enrollee-scoped lookups can read the same timeline configuration.
   const keys = [`enrollee:${enrolleeId}`]
   if (enrollmentId?.trim()) {
     keys.unshift(`enrollment:${enrollmentId.trim()}`)
@@ -412,8 +426,6 @@ export async function saveTimelineConfig(
   }
   persistLocalTimelineConfigState(nextLocalState)
 
-  // Persist each addressable key to keep reads consistent regardless of which
-  // identifier a caller currently has available.
   for (const key of keys) {
     const error = await upsertConfigPayload(`${TIMELINE_CONFIG_KEY_PREFIX}${key}`, config)
     if (error) {
@@ -467,8 +479,6 @@ export async function saveNavigatorProgramState(state: NavigatorProgramState): P
     ...state,
     updatedAtIso: new Date().toISOString()
   })
-  // Updated timestamp is owned by persistence boundary to prevent clients from
-  // accidentally writing stale metadata.
   persistLocalNavigatorProgramState(normalized)
   const error = await upsertConfigPayload(NAVIGATOR_PROGRAM_STATE_CONFIG_KEY, normalized)
   if (error) {

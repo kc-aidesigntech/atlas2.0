@@ -31,6 +31,8 @@ interface NavigatorMyProfilePanelProps {
   navigatorEnrollmentAssignmentsError: string | null
   isLoadingNavigatorEnrollmentAssignments: boolean
   assigningEnrollmentId: string | null
+  canViewNavigatorAssignmentNames: boolean
+  canToggleAssignmentActions: boolean
   competencySummary: SupervisorNavigatorCompetencySummary | null
   selfAssessmentSummary: NavigatorSelfAssessmentSummary
   selfAssessments: NavigatorSelfAssessmentRecord[]
@@ -68,6 +70,8 @@ export default function NavigatorMyProfilePanel({
   navigatorEnrollmentAssignmentsError,
   isLoadingNavigatorEnrollmentAssignments,
   assigningEnrollmentId,
+  canViewNavigatorAssignmentNames,
+  canToggleAssignmentActions,
   competencySummary,
   selfAssessmentSummary,
   selfAssessments,
@@ -161,6 +165,8 @@ export default function NavigatorMyProfilePanel({
           isLoading={isLoadingNavigatorEnrollmentAssignments}
           error={navigatorEnrollmentAssignmentsError}
           assigningEnrollmentId={assigningEnrollmentId}
+          canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
+          canToggleAssignments={canToggleAssignmentActions}
           onToggleAssignment={onToggleEnrollmentAssignment}
         />
 

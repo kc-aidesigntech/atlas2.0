@@ -1,8 +1,4 @@
-/**
- * Account settings drawer for profile basics, role toggles, and optional live
- * auth provider linking/sign-out controls.
- */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AccountSettings, AtlasRole, PartnerTroubleshootingGrant } from '@/features/atlas2026/singlepane/types'
@@ -76,44 +72,22 @@ export default function AccountSettingsPanel({
 }: AccountSettingsPanelProps) {
   const [draft, setDraft] = useState<AccountSettings>(settings)
   const [grantDraft, setGrantDraft] = useState<PartnerTroubleshootingGrant | null>(partnerTroubleshootingGrant)
-  const renderCountRef = useRef(0)
-  const previousSecurityRef = useRef<AccountSecurityPanelProps | null | undefined>(undefined)
-  const previousPartnerGrantRef = useRef<PartnerTroubleshootingGrant | null | undefined>(undefined)
-  const previousSaveGrantRef = useRef<AccountSettingsPanelProps['onSavePartnerTroubleshootingGrant'] | undefined>(undefined)
   const [expandedSections, setExpandedSections] = useState<Record<AccountSectionKey, boolean>>(() =>
     buildInitialExpandedSections(Boolean(security), Boolean(partnerTroubleshootingGrant && onSavePartnerTroubleshootingGrant))
   )
 
   useEffect(() => {
-    renderCountRef.current += 1
-    // #region agent log
-    fetch('http://127.0.0.1:7427/ingest/c0c4a88c-235c-4687-9dae-1d73110ee993',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3c0370'},body:JSON.stringify({sessionId:'3c0370',runId:'pre-fix',hypothesisId:'H1',location:'AccountSettingsPanel.tsx:66',message:'AccountSettingsPanel committed render',data:{renderCount:renderCountRef.current,isOpen,securityRefChanged:previousSecurityRef.current!==security,partnerGrantRefChanged:previousPartnerGrantRef.current!==partnerTroubleshootingGrant,saveGrantCallbackRefChanged:previousSaveGrantRef.current!==onSavePartnerTroubleshootingGrant},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    previousSecurityRef.current = security
-    previousPartnerGrantRef.current = partnerTroubleshootingGrant
-    previousSaveGrantRef.current = onSavePartnerTroubleshootingGrant
-  })
-
-  useEffect(() => {
-    // Reset draft state whenever panel opens or upstream settings change so
-    // unsaved edits from previous sessions do not leak into new opens.
     if (!isOpen) return
     setDraft((current) => (areAccountSettingsEqual(current, settings) ? current : settings))
   }, [settings, isOpen])
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7427/ingest/c0c4a88c-235c-4687-9dae-1d73110ee993',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3c0370'},body:JSON.stringify({sessionId:'3c0370',runId:'pre-fix',hypothesisId:'H3',location:'AccountSettingsPanel.tsx:84',message:'Syncing grantDraft from partner grant prop',data:{isOpen,hasGrantProp:Boolean(partnerTroubleshootingGrant)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!isOpen) return
     setGrantDraft((current) => (arePartnerGrantEqual(current, partnerTroubleshootingGrant) ? current : partnerTroubleshootingGrant))
   }, [partnerTroubleshootingGrant, isOpen])
 
   useEffect(() => {
     if (!isOpen) return
-    // #region agent log
-    fetch('http://127.0.0.1:7427/ingest/c0c4a88c-235c-4687-9dae-1d73110ee993',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3c0370'},body:JSON.stringify({sessionId:'3c0370',runId:'pre-fix',hypothesisId:'H2',location:'AccountSettingsPanel.tsx:92',message:'Resetting expanded sections from props',data:{hasSecurity:Boolean(security),hasGrantProp:Boolean(partnerTroubleshootingGrant),hasSaveGrantCallback:Boolean(onSavePartnerTroubleshootingGrant)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setExpandedSections(buildInitialExpandedSections(Boolean(security), Boolean(partnerTroubleshootingGrant && onSavePartnerTroubleshootingGrant)))
   }, [isOpen, security, partnerTroubleshootingGrant, onSavePartnerTroubleshootingGrant])
 
