@@ -156,15 +156,13 @@ export default function NavigatorMyProfilePanel({
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <section className="atlas-surface-panel px-4 py-4">
-          <NavigatorEnrollmentAssignmentsPanel
-            rows={navigatorEnrollmentAssignments}
-            isLoading={isLoadingNavigatorEnrollmentAssignments}
-            error={navigatorEnrollmentAssignmentsError}
-            assigningEnrollmentId={assigningEnrollmentId}
-            onToggleAssignment={onToggleEnrollmentAssignment}
-          />
-        </section>
+        <NavigatorEnrollmentAssignmentsPanel
+          rows={navigatorEnrollmentAssignments}
+          isLoading={isLoadingNavigatorEnrollmentAssignments}
+          error={navigatorEnrollmentAssignmentsError}
+          assigningEnrollmentId={assigningEnrollmentId}
+          onToggleAssignment={onToggleEnrollmentAssignment}
+        />
 
         <div className="grid gap-4">
           <section className="atlas-surface-panel px-4 py-4">
