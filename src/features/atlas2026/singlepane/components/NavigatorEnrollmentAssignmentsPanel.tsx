@@ -71,11 +71,11 @@ export default function NavigatorEnrollmentAssignmentsPanel({
                   ) : null}
                 </small>
                 <small className="atlas-caption mt-2 block text-[#9bd4a5]">
-                  {row.isAssignedToViewer
+                  {row.statusNote || (row.isAssignedToViewer
                     ? 'assigned to you'
                     : row.isAssignedToAnyNavigator
                       ? 'already assigned to a navigator'
-                      : 'not yet assigned'}
+                      : 'not yet assigned')}
                 </small>
                 {canViewNavigatorAssignmentNames &&
                 expandedEnrollmentIds.includes(row.enrollmentId) &&
@@ -114,12 +114,17 @@ export default function NavigatorEnrollmentAssignmentsPanel({
                 </div>
               </div>
               <AtlasTextButton
-                onClick={() => void onToggleAssignment(row.enrollmentId, row.isAssignedToViewer ? 'unassign' : 'assign')}
-                disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
+                onClick={() => {
+                  if (row.isActionable === false) return
+                  void onToggleAssignment(row.enrollmentId, row.isAssignedToViewer ? 'unassign' : 'assign')
+                }}
+                disabled={!canToggleAssignments || row.isActionable === false || assigningEnrollmentId === row.enrollmentId}
                 className="px-[19px] py-[10px] text-[15px] font-medium text-white"
                 style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
               >
-                {!canToggleAssignments
+                {row.isActionable === false
+                  ? 'claim in pickup queue'
+                  : !canToggleAssignments
                   ? 'action disabled by policy'
                   : assigningEnrollmentId === row.enrollmentId
                   ? row.isAssignedToViewer

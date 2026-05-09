@@ -105,10 +105,16 @@ create trigger trg_audit_supervisor_navigator_assignments
 after insert or update or delete on atlas.supervisor_navigator_assignments
 for each row execute function atlas.fn_log_audit_with_actor();
 
-drop trigger if exists trg_audit_partner_contact_assignments on atlas.partner_contact_assignments;
-create trigger trg_audit_partner_contact_assignments
-after insert or update or delete on atlas.partner_contact_assignments
-for each row execute function atlas.fn_log_audit_with_actor();
+do $$
+begin
+  if to_regclass('atlas.partner_contact_assignments') is not null then
+    execute 'drop trigger if exists trg_audit_partner_contact_assignments on atlas.partner_contact_assignments';
+    execute 'create trigger trg_audit_partner_contact_assignments
+      after insert or update or delete on atlas.partner_contact_assignments
+      for each row execute function atlas.fn_log_audit_with_actor()';
+  end if;
+end
+$$;
 
 drop trigger if exists trg_audit_people_role_assignments on atlas.people_role_assignments;
 create trigger trg_audit_people_role_assignments

@@ -246,10 +246,9 @@ as $$
           and (
             exists (
               select 1
-              from atlas.partner_contact_assignments pca
+              from atlas.v_active_partner_contact_edges pca
               where pca.partner_id = target_partner_id
-                and pca.person_id = cp.person_id
-                and pca.ends_on is null
+                and pca.contact_person_id = cp.person_id
             )
             or exists (
               select 1

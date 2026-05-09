@@ -51,6 +51,20 @@ $$;
 revoke all on function atlas.fn_current_person_id() from public;
 grant execute on function atlas.fn_current_person_id() to authenticated;
 
+-- Normalize legacy environments where these views already exist with a
+-- different shape. Dropping with CASCADE prevents "cannot drop columns from
+-- view" failures during create-or-replace.
+drop view if exists atlas.v_dw_fact_enrollment_snapshot cascade;
+drop view if exists atlas.v_dw_dim_person_role_active cascade;
+drop view if exists atlas.v_dw_dim_partner_station cascade;
+drop view if exists atlas.v_dw_dim_county cascade;
+drop view if exists atlas.v_county_commons_daily_metrics cascade;
+drop view if exists atlas.v_enrollment_assignment_board cascade;
+drop view if exists atlas.v_active_enrollment_roster cascade;
+drop view if exists atlas.v_active_partner_contact_edges cascade;
+drop view if exists atlas.v_active_supervisor_assignment_edges cascade;
+drop view if exists atlas.v_active_navigator_assignment_edges cascade;
+
 create or replace view atlas.v_active_navigator_assignment_edges
 with (security_invoker = true)
 as

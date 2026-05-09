@@ -93,12 +93,19 @@ create unique index if not exists ux_people_role_assignments_active_primary_per_
 -- Assignment mutations must go through constrained Remote Procedure Calls (RPCs).
 revoke insert, update, delete on atlas.navigator_assignments from anon, authenticated;
 revoke insert, update, delete on atlas.supervisor_navigator_assignments from anon, authenticated;
-revoke insert, update, delete on atlas.partner_contact_assignments from anon, authenticated;
 revoke insert, update, delete on atlas.people_role_assignments from anon, authenticated;
 
 grant select on atlas.navigator_assignments to authenticated;
 grant select on atlas.supervisor_navigator_assignments to authenticated;
-grant select on atlas.partner_contact_assignments to authenticated;
 grant select on atlas.people_role_assignments to authenticated;
+
+do $$
+begin
+  if to_regclass('atlas.partner_contact_assignments') is not null then
+    execute 'revoke insert, update, delete on atlas.partner_contact_assignments from anon, authenticated';
+    execute 'grant select on atlas.partner_contact_assignments to authenticated';
+  end if;
+end
+$$;
 
 notify pgrst, 'reload schema';

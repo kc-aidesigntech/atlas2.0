@@ -156,6 +156,8 @@ export interface NavigatorEnrollmentAssignmentRecord {
   zCodeParentCodes: string[]
   isAssignedToAnyNavigator: boolean
   isAssignedToViewer: boolean
+  isActionable?: boolean
+  statusNote?: string
 }
 
 export interface RouteCandidateRecord {

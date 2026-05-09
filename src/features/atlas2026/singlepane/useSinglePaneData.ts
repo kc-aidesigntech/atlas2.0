@@ -281,6 +281,59 @@ function normalizeOrganizationKey(value: string | null | undefined) {
     .trim()
 }
 
+function derivePickupQueueParentCodes(zCodeTags: string[]) {
+  const parentCodes = zCodeTags
+    .map((tag) => {
+      const match = String(tag || '')
+        .trim()
+        .toUpperCase()
+        .match(/^Z(\d{2})/)
+      return match ? `Z${match[1]}` : ''
+    })
+    .filter((value) => /^Z\d{2}$/.test(value))
+  return Array.from(new Set(parentCodes)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
+}
+
+function buildPendingReferralAssignmentRows(
+  pickupQueue: UnassignedEnrolleePickupRecord[],
+  enrollmentRows: NavigatorEnrollmentAssignmentRecord[]
+) {
+  const existingCaseIds = new Set(
+    enrollmentRows
+      .map((row) => row.caseId.trim().toLowerCase())
+      .filter(Boolean)
+  )
+  const existingNameKeys = new Set(
+    enrollmentRows
+      .map((row) => row.enrolleeName.trim().toLowerCase())
+      .filter(Boolean)
+  )
+
+  return pickupQueue
+    .filter((record) => record.status !== 'archived')
+    .filter((record) => {
+      const caseKey = record.caseId.trim().toLowerCase()
+      if (caseKey && existingCaseIds.has(caseKey)) return false
+      const nameKey = record.fullName.trim().toLowerCase()
+      if (!caseKey && nameKey && existingNameKeys.has(nameKey)) return false
+      return true
+    })
+    .map<NavigatorEnrollmentAssignmentRecord>((record) => ({
+      enrollmentId: `pickup:${record.id}`,
+      enrolleeId: `pickup:${record.id}`,
+      enrolleeName: record.fullName || 'pending referral',
+      caseId: record.caseId || 'case id pending',
+      assignedNavigatorLabel: 'pending intake',
+      navigatorAssignmentCount: 0,
+      assignedNavigatorNames: [],
+      zCodeParentCodes: derivePickupQueueParentCodes(record.zCodeTags),
+      isAssignedToAnyNavigator: false,
+      isAssignedToViewer: false,
+      isActionable: false,
+      statusNote: 'submitted via referral form; claim from pickup queue to assign'
+    }))
+}
+
 function getEnrollmentJourneyPhase(logs: RouteLogEvent[], fallback: StabilizationPhase = 'regulation'): StabilizationPhase {
   if (!logs.length) return fallback
   return logs[logs.length - 1]?.phase || fallback
@@ -1154,6 +1207,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     },
     [effectivePartnerOrganizationName, mergedNavigatorProgramState.pickupQueue, viewerRole]
   )
+  const navigatorAssignmentBoardRows = useMemo(() => {
+    const pendingReferralRows = buildPendingReferralAssignmentRows(pickupQueue, navigatorEnrollmentAssignments)
+    return [...pendingReferralRows, ...navigatorEnrollmentAssignments].sort((left, right) =>
+      left.enrolleeName.localeCompare(right.enrolleeName)
+    )
+  }, [navigatorEnrollmentAssignments, pickupQueue])
   const routeCandidates = useRouteCandidates(selectedEnrollee)
   const { journeyStationMarkers, setJourneyStationMarkers } = useJourneyStationMarkers(selectedEnrollee, selectedLogs, routeCandidates)
   const {
@@ -2456,7 +2515,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     pickupQueue,
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
-    navigatorEnrollmentAssignments,
+    navigatorEnrollmentAssignments: navigatorAssignmentBoardRows,
     viewerCanViewNavigatorAssignmentNames,
     viewerCanAccessAssignmentBoard,
     viewerCanUseAssignmentActions,
