@@ -75,6 +75,7 @@ export default function AccountSettingsPanel({
   const [expandedSections, setExpandedSections] = useState<Record<AccountSectionKey, boolean>>(() =>
     buildInitialExpandedSections(Boolean(security), Boolean(partnerTroubleshootingGrant && onSavePartnerTroubleshootingGrant))
   )
+  const canEditRoleAssignments = role === 'administrator'
 
   useEffect(() => {
     if (!isOpen) return
@@ -108,7 +109,13 @@ export default function AccountSettingsPanel({
   }
 
   function handleSave() {
-    const sanitizedRoles = draft.enabledRoles.length ? draft.enabledRoles : [role]
+    const sanitizedRoles = canEditRoleAssignments
+      ? draft.enabledRoles.length
+        ? draft.enabledRoles
+        : [role]
+      : settings.enabledRoles.length
+        ? settings.enabledRoles
+        : (['partner'] as AtlasRole[])
     onSave({
       ...draft,
       enabledRoles: sanitizedRoles
@@ -275,19 +282,25 @@ export default function AccountSettingsPanel({
             isExpanded={expandedSections.roleAssignments}
             onToggle={() => toggleSection('roleAssignments')}
           >
-            <div className="space-y-2">
-              {ROLE_OPTIONS.map((option) => (
-                <label key={option} className="atlas-surface-raised flex items-center justify-between px-4 py-3">
-                  <span className="atlas-meta text-[15px] capitalize text-white">{option}</span>
-                  <input
-                    type="checkbox"
-                    checked={enabledRoleSet.has(option)}
-                    onChange={() => toggleRole(option)}
-                    className="h-5 w-5 accent-white"
-                  />
-                </label>
-              ))}
-            </div>
+            {canEditRoleAssignments ? (
+              <div className="space-y-2">
+                {ROLE_OPTIONS.map((option) => (
+                  <label key={option} className="atlas-surface-raised flex items-center justify-between px-4 py-3">
+                    <span className="atlas-meta text-[15px] capitalize text-white">{option}</span>
+                    <input
+                      type="checkbox"
+                      checked={enabledRoleSet.has(option)}
+                      onChange={() => toggleRole(option)}
+                      className="h-5 w-5 accent-white"
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <small className="atlas-panel-copy block text-[#cfcfcf]">
+                Role assignments are managed by administrators. New signups default to partner access.
+              </small>
+            )}
           </CollapsibleAccountSection>
 
           {role === 'partner' && grantDraft && onSavePartnerTroubleshootingGrant ? (

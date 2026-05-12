@@ -8,13 +8,27 @@ import type { AtlasDatabase } from '@atlas/shared'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 export type OAuthProviderId = 'google' | 'apple'
+export interface AuthPartnerOrganizationOption {
+  id: string
+  organizationName: string
+}
+
+export interface AuthSignUpInput {
+  email: string
+  password: string
+  fullName: string
+  phoneNumber: string
+  organizationName: string
+  partnerId: string | null
+}
 
 type SupabaseAuthContextValue = {
   supabaseClient: SupabaseClient<AtlasDatabase> | null
   session: Session | null
   isLoading: boolean
   signInWithPassword: (email: string, password: string) => Promise<{ error: Error | null }>
-  signUpWithPassword: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>
+  signUpWithPassword: (input: AuthSignUpInput) => Promise<{ error: Error | null }>
+  searchPartnerOrganizations: (query: string) => Promise<AuthPartnerOrganizationOption[]>
   signInWithOAuth: (provider: OAuthProviderId) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   refreshIdentities: () => Promise<UserIdentity[]>
@@ -89,27 +103,53 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
     return { error: error ? new Error(error.message) : null }
   }, [])
 
-  const signUpWithPassword = useCallback(async (email: string, password: string, fullName: string) => {
+  const signUpWithPassword = useCallback(async (input: AuthSignUpInput) => {
     if (!supabase) return { error: new Error('Supabase is not configured') }
-    const trimmed = fullName.trim()
+    const trimmedEmail = input.email.trim().toLowerCase()
+    const trimmed = input.fullName.trim()
+    const trimmedPhone = input.phoneNumber.trim()
+    const trimmedOrganization = input.organizationName.trim()
     const parts = trimmed.split(/\s+/).filter(Boolean)
     // Keep profile metadata non-empty for downstream displays even when the
     // caller submits a blank or single-token full name.
     const firstName = parts.length > 1 ? parts.slice(0, -1).join(' ') : (parts[0] || 'Atlas')
     const lastName = parts.length > 1 ? (parts[parts.length - 1] || 'User') : 'User'
     const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
+      email: trimmedEmail,
+      password: input.password,
       options: {
         emailRedirectTo: authRedirectBaseUrl(),
         data: {
           full_name: trimmed || `${firstName} ${lastName}`,
           first_name: firstName,
-          last_name: lastName
+          last_name: lastName,
+          phone_number: trimmedPhone,
+          organization_name: trimmedOrganization,
+          partner_id: input.partnerId || null,
+          requested_role: 'partner'
         }
       }
     })
     return { error: error ? new Error(error.message) : null }
+  }, [])
+
+  const searchPartnerOrganizations = useCallback(async (query: string) => {
+    if (!supabase) return []
+    const trimmedQuery = query.trim()
+    if (trimmedQuery.length < 2) return []
+    const { data, error } = await (supabase as any)
+      .schema('atlas')
+      .from('partners')
+      .select('id,organization_name')
+      .eq('is_active', true)
+      .ilike('organization_name', `%${trimmedQuery}%`)
+      .order('organization_name', { ascending: true })
+      .limit(8)
+    if (error) return []
+    return (data || []).map((row: { id: string; organization_name: string }) => ({
+      id: row.id,
+      organizationName: row.organization_name || 'unnamed partner'
+    }))
   }, [])
 
   const signInWithOAuth = useCallback(async (provider: OAuthProviderId) => {
@@ -155,6 +195,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
       isLoading,
       signInWithPassword,
       signUpWithPassword,
+      searchPartnerOrganizations,
       signInWithOAuth,
       signOut,
       refreshIdentities,
@@ -165,6 +206,7 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
       isLoading,
       signInWithPassword,
       signUpWithPassword,
+      searchPartnerOrganizations,
       signInWithOAuth,
       signOut,
       refreshIdentities,

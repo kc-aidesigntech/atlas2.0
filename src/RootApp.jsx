@@ -9,6 +9,7 @@ import PublicAtlasLandingPage from '@/features/atlas2026/public/PublicAtlasLandi
 import PublicAtlasDemoPage from '@/features/atlas2026/public/PublicAtlasDemoPage'
 import SinglePaneApp from '@/features/atlas2026/singlepane/SinglePaneApp'
 import StandaloneServiceCapacitySurveyPage from '@/features/atlas2026/singlepane/StandaloneServiceCapacitySurveyPage'
+import StandaloneZCodeDomainSurveyPage from '@/features/atlas2026/singlepane/StandaloneZCodeDomainSurveyPage'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 
 function normalizePathname(pathname) {
@@ -26,6 +27,11 @@ function isStandaloneServiceCapacityPath(pathname) {
     normalizedPath === '/partner/service-capacity-survey' ||
     normalizedPath.endsWith('/service-capacity-survey')
   )
+}
+
+function isStandaloneZCodeDomainPath(pathname) {
+  const normalizedPath = normalizePathname(pathname)
+  return normalizedPath === '/zcode-domain' || normalizedPath.endsWith('/zcode-domain')
 }
 
 function isWorkspacePath(pathname) {
@@ -53,6 +59,9 @@ function RootAppInner() {
   // completions remain accessible even when the main app requires auth.
   if (typeof window !== 'undefined' && isStandaloneServiceCapacityPath(pathname)) {
     return <StandaloneServiceCapacitySurveyPage />
+  }
+  if (typeof window !== 'undefined' && isStandaloneZCodeDomainPath(pathname)) {
+    return <StandaloneZCodeDomainSurveyPage />
   }
 
   if (typeof window !== 'undefined' && isDemoPath(pathname)) {

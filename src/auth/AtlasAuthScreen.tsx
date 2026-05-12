@@ -8,13 +8,33 @@ const MIN_PASSWORD_LEN = 12
 type Mode = 'sign_in' | 'sign_up'
 
 export default function AtlasAuthScreen() {
-  const { isLoading, signInWithPassword, signUpWithPassword, signInWithOAuth } = useSupabaseAuth()
+  const { isLoading, signInWithPassword, signUpWithPassword, searchPartnerOrganizations, signInWithOAuth } = useSupabaseAuth()
   const [mode, setMode] = useState<Mode>('sign_in')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [organizationName, setOrganizationName] = useState('')
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null)
+  const [partnerOptions, setPartnerOptions] = useState<Array<{ id: string; organizationName: string }>>([])
+  const [isPartnerLookupLoading, setIsPartnerLookupLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+
+  async function handleOrganizationLookup(nextValue: string) {
+    setOrganizationName(nextValue)
+    setSelectedPartnerId(null)
+    const trimmed = nextValue.trim()
+    if (mode !== 'sign_up' || trimmed.length < 2) {
+      setPartnerOptions([])
+      setIsPartnerLookupLoading(false)
+      return
+    }
+    setIsPartnerLookupLoading(true)
+    const options = await searchPartnerOrganizations(trimmed)
+    setPartnerOptions(options)
+    setIsPartnerLookupLoading(false)
+  }
 
   async function onEmailAuthSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -33,6 +53,14 @@ export default function AtlasAuthScreen() {
         setMessage('Enter your full name.')
         return
       }
+      if (!phoneNumber.trim()) {
+        setMessage('Enter your phone number.')
+        return
+      }
+      if (!organizationName.trim()) {
+        setMessage('Enter your organization.')
+        return
+      }
     }
 
     setBusy(true)
@@ -42,11 +70,18 @@ export default function AtlasAuthScreen() {
         if (error) setMessage(error.message)
       } else {
         // Sign-up switches back to sign-in so confirmation-email flows do not leave users on a dead-end form.
-        const { error } = await signUpWithPassword(trimmedEmail, password, fullName)
+        const { error } = await signUpWithPassword({
+          email: trimmedEmail,
+          password,
+          fullName,
+          phoneNumber,
+          organizationName,
+          partnerId: selectedPartnerId
+        })
         if (error) {
           setMessage(error.message)
         } else {
-          setMessage('Check your email to confirm the account, then sign in.')
+          setMessage('Check your email to confirm the account. New signups default to partner access.')
           setMode('sign_in')
         }
       }
@@ -120,16 +155,59 @@ export default function AtlasAuthScreen() {
 
         <form className="space-y-3" onSubmit={onEmailAuthSubmit}>
           {mode === 'sign_up' ? (
-            <label className="block text-[12px] text-[#bcbcbc]">
-              Full name
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="name"
-                className="mt-2 w-full rounded-2xl border bg-black px-3 py-2 text-[14px] text-white"
-                style={{ borderColor: '#ffffff30' }}
-              />
-            </label>
+            <div className="space-y-3">
+              <label className="block text-[12px] text-[#bcbcbc]">
+                Full name
+                <input
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  autoComplete="name"
+                  className="mt-2 w-full rounded-2xl border bg-black px-3 py-2 text-[14px] text-white"
+                  style={{ borderColor: '#ffffff30' }}
+                />
+              </label>
+              <label className="block text-[12px] text-[#bcbcbc]">
+                Phone number
+                <input
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  autoComplete="tel"
+                  className="mt-2 w-full rounded-2xl border bg-black px-3 py-2 text-[14px] text-white"
+                  style={{ borderColor: '#ffffff30' }}
+                />
+              </label>
+              <label className="block text-[12px] text-[#bcbcbc]">
+                Organization
+                <input
+                  value={organizationName}
+                  onChange={(e) => void handleOrganizationLookup(e.target.value)}
+                  autoComplete="organization"
+                  className="mt-2 w-full rounded-2xl border bg-black px-3 py-2 text-[14px] text-white"
+                  style={{ borderColor: '#ffffff30' }}
+                />
+                {isPartnerLookupLoading ? (
+                  <small className="mt-1 block text-[11px] text-[#8a8a8a]">Searching partner organizations...</small>
+                ) : null}
+                {!isPartnerLookupLoading && partnerOptions.length ? (
+                  <div className="mt-2 max-h-[180px] space-y-1 overflow-y-auto rounded-xl border border-white/20 bg-[#0a0a0a] p-1">
+                    {partnerOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          setOrganizationName(option.organizationName)
+                          setSelectedPartnerId(option.id)
+                          setPartnerOptions([])
+                        }}
+                        className="w-full rounded-lg border border-transparent px-3 py-2 text-left text-[12px] text-white transition-colors hover:border-white/25 hover:bg-white/10"
+                      >
+                        {option.organizationName}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </label>
+            </div>
           ) : null}
           <label className="block text-[12px] text-[#bcbcbc]">
             Email
@@ -155,8 +233,8 @@ export default function AtlasAuthScreen() {
           </label>
           {mode === 'sign_up' ? (
             <p className="text-[11px] text-[#8a8a8a]">
-              Minimum {MIN_PASSWORD_LEN} characters. Prefer a unique passphrase; pairing with MFA in your Supabase
-              project is recommended for regulated workloads.
+              Minimum {MIN_PASSWORD_LEN} characters. New accounts are created as partner profiles; administrators can
+              grant additional roles later.
             </p>
           ) : null}
           <AtlasTextButton

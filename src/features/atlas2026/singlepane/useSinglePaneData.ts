@@ -102,9 +102,13 @@ import {
 } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
 import {
+  buildPartnerBurdenBreakdownFromHistory,
+  derivePartnerStationSpecialtyGroups,
   buildSurveyDomainLoadBreakdown,
+  mapZCodeToDomainBucket,
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
+import { isCapabilityAllowedForRole } from '@/features/atlas2026/singlepane/roleCapabilityPolicy'
 import {
   buildPartnerServiceCapacityDefaultHeader,
   buildSupervisorNavigatorCompetencySummaries,
@@ -294,6 +298,16 @@ function derivePickupQueueParentCodes(zCodeTags: string[]) {
   return Array.from(new Set(parentCodes)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
 }
 
+type NavigatorEnrollmentAssignmentAction = 'accept' | 'archive' | 'assign' | 'unassign'
+
+function isPickupEnrollmentRow(enrollmentId: string) {
+  return enrollmentId.startsWith('pickup:')
+}
+
+function getPickupRecordIdFromEnrollmentId(enrollmentId: string) {
+  return isPickupEnrollmentRow(enrollmentId) ? enrollmentId.slice('pickup:'.length).trim() : ''
+}
+
 function buildPendingReferralAssignmentRows(
   pickupQueue: UnassignedEnrolleePickupRecord[],
   enrollmentRows: NavigatorEnrollmentAssignmentRecord[]
@@ -323,14 +337,30 @@ function buildPendingReferralAssignmentRows(
       enrolleeId: `pickup:${record.id}`,
       enrolleeName: record.fullName || 'pending referral',
       caseId: record.caseId || 'case id pending',
-      assignedNavigatorLabel: 'pending intake',
+      assignedNavigatorLabel:
+        record.status === 'claimed'
+          ? 'claimed'
+          : record.status === 'accepted'
+          ? 'accepted'
+          : record.status === 'archived'
+            ? 'archived'
+            : 'pending intake',
       navigatorAssignmentCount: 0,
       assignedNavigatorNames: [],
       zCodeParentCodes: derivePickupQueueParentCodes(record.zCodeTags),
       isAssignedToAnyNavigator: false,
       isAssignedToViewer: false,
-      isActionable: false,
-      statusNote: 'submitted via referral form; claim from pickup queue to assign'
+      isActionable: record.status === 'accepted',
+      statusNote:
+        record.status === 'claimed'
+          ? 'marked claimed in intake queue; enrollee/enrollment rows are created when referral sync completes'
+          : record.status === 'accepted'
+            ? 'accepted referral; ready to be claimed by a navigator'
+          : record.status === 'archived'
+            ? 'archived referral'
+            : 'submitted via referral form; accept or archive before assignment',
+      pickupStatus: record.status,
+      pickupRecordId: record.id
     }))
 }
 
@@ -457,7 +487,9 @@ function mergeNavigatorProgramState(
   publicQueueRecords: UnassignedEnrolleePickupRecord[]
 ): NavigatorProgramState {
   const base = rawState || createNavigatorProgramState()
-  const mergedPickupQueue = [...publicQueueRecords, ...base.pickupQueue]
+  // Persisted queue first so accept/archive/claim updates are not overwritten by the
+  // last public/remote fetch snapshot when both sources share the same record id.
+  const mergedPickupQueue = [...base.pickupQueue, ...publicQueueRecords]
     .filter(Boolean)
     .filter((record, index, records) => records.findIndex((candidate) => candidate.id === record.id) === index)
   return {
@@ -626,6 +658,71 @@ function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadB
   }
 }
 
+function normalizeZCode(value: string) {
+  return value.trim().toUpperCase()
+}
+
+function buildNavigatorRouteBoardLoadBreakdown(
+  selectedEnrollee: EnrolleeProfile | null,
+  routeCandidates: RouteCandidateRecord[]
+): DomainLoadBreakdown | null {
+  if (!selectedEnrollee) return null
+  if (!routeCandidates.length) return null
+
+  const rows = selectedEnrollee.activeZCodeDetails
+    .map((detail) => {
+      const normalizedParentCode = detail.parentCode.trim().toUpperCase()
+      const normalizedZCode = normalizeZCode(detail.zCode)
+      if (!normalizedParentCode || !normalizedZCode) return null
+      const partnerScoreTrace = routeCandidates.map((candidate) => {
+        const matchingSummary = candidate.matchedParentSummaries.find((summary) => {
+          if (summary.parentCode.trim().toUpperCase() !== normalizedParentCode) return false
+          const childZCodes = summary.matchedChildZCodes.map((code) => normalizeZCode(code))
+          if (childZCodes.length) return childZCodes.includes(normalizedZCode)
+          return true
+        })
+        const candidateStrength = matchingSummary && matchingSummary.avgBurdenScore > 0 ? matchingSummary.avgBurdenScore : 0
+        return {
+          partnerId: candidate.partnerId || null,
+          partnerLabel: candidate.stationName,
+          score: candidateStrength
+        }
+      })
+      const cumulativeStrength = partnerScoreTrace.reduce((sum, traceRow) => sum + traceRow.score, 0)
+      const averageStrength = routeCandidates.length ? cumulativeStrength / routeCandidates.length : 0
+      // Higher partner strength means lower burden on the enrollee axis.
+      const invertedBurden = Math.max(1, Math.min(9, 10 - averageStrength))
+      return {
+        id: `route-board:${detail.enrolleeZCodeId}`,
+        zCodeGroup: normalizedZCode,
+        parentCode: normalizedParentCode,
+        mappedDomain: mapZCodeToDomainBucket(normalizedParentCode, normalizedZCode),
+        rawCount: invertedBurden,
+        responseCount: routeCandidates.length,
+        partnerScoreTrace,
+        averagePartnerStrength: averageStrength
+      } satisfies DomainLoadBreakdown['rows'][number]
+    })
+    .filter(Boolean) as DomainLoadBreakdown['rows']
+
+  if (!rows.length) return null
+
+  const habitatRows = rows.filter((row) => row.mappedDomain === 'habitat')
+  const workRows = rows.filter((row) => row.mappedDomain === 'work')
+  const socialRows = rows.filter((row) => row.mappedDomain === 'socialNetworks')
+
+  return {
+    subjectId: selectedEnrollee.id,
+    subjectLabel: selectedEnrollee.fullName,
+    sourceKind: 'enrolleeRecords',
+    sourceLabel: `route-board capacity inversion · ${routeCandidates.length} prospective partners`,
+    habitatTotal: habitatRows.length ? habitatRows.reduce((sum, row) => sum + row.rawCount, 0) / habitatRows.length : 0,
+    workTotal: workRows.length ? workRows.reduce((sum, row) => sum + row.rawCount, 0) / workRows.length : 0,
+    socialNetworksTotal: socialRows.length ? socialRows.reduce((sum, row) => sum + row.rawCount, 0) / socialRows.length : 0,
+    rows
+  }
+}
+
 function getEnrolleeSurveySortTime(record: EnrolleeBurdenSurveySubmissionRecord) {
   return new Date(record.updatedAtIso || record.submittedAtIso).getTime()
 }
@@ -737,7 +834,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     cardToggles: {},
     actionToggles: {}
   }
-  const isPolicyAllowed = (scope: Record<string, boolean> | undefined, key: string) => (scope?.[key] ?? true) !== false
+  const isViewerPolicyAllowed = (
+    scope: 'screenToggles' | 'cardToggles' | 'actionToggles',
+    key: string
+  ) => isCapabilityAllowedForRole(viewerRole, scope, key, viewerFeaturePolicy[scope])
   const viewerPerson = useMemo(() => {
     if (!accessMatrixDataset) return null
     const normalizedCandidates = new Set(
@@ -750,22 +850,25 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [accessMatrixDataset, accountSettings.email, sessionEmail])
   const viewerCanViewNavigatorAssignmentNames = useMemo(() => {
     if (viewerRole === 'administrator') return true
-    return Boolean(viewerPolicyRecord?.canViewNavigatorAssignmentNames) && isPolicyAllowed(viewerFeaturePolicy.actionToggles, 'assignmentBoard.viewNavigatorNames')
-  }, [viewerFeaturePolicy.actionToggles, viewerPolicyRecord?.canViewNavigatorAssignmentNames, viewerRole])
+    return (
+      Boolean(viewerPolicyRecord?.canViewNavigatorAssignmentNames) &&
+      isViewerPolicyAllowed('actionToggles', 'assignmentBoard.viewNavigatorNames')
+    )
+  }, [isViewerPolicyAllowed, viewerPolicyRecord?.canViewNavigatorAssignmentNames, viewerRole])
   const viewerCanAccessAssignmentBoard = useMemo(
-    () => isPolicyAllowed(viewerFeaturePolicy.screenToggles, 'assignmentBoard'),
-    [viewerFeaturePolicy.screenToggles]
+    () => isViewerPolicyAllowed('screenToggles', 'assignmentBoard'),
+    [isViewerPolicyAllowed]
   )
   const viewerCanUseAssignmentActions = useMemo(
-    () => isPolicyAllowed(viewerFeaturePolicy.actionToggles, 'assignmentBoard.assignSelf'),
-    [viewerFeaturePolicy.actionToggles]
+    () => isViewerPolicyAllowed('actionToggles', 'assignmentBoard.assignSelf'),
+    [isViewerPolicyAllowed]
   )
   const viewerCanAccessAdminRegistryCards = useMemo(
     () =>
-      isPolicyAllowed(viewerFeaturePolicy.cardToggles, 'navigatorCoverageCard') &&
-      isPolicyAllowed(viewerFeaturePolicy.cardToggles, 'liveAccessMatrix') &&
-      isPolicyAllowed(viewerFeaturePolicy.actionToggles, 'admin.saveRegistry'),
-    [viewerFeaturePolicy.actionToggles, viewerFeaturePolicy.cardToggles]
+      isViewerPolicyAllowed('cardToggles', 'navigatorCoverageCard') &&
+      isViewerPolicyAllowed('cardToggles', 'liveAccessMatrix') &&
+      isViewerPolicyAllowed('actionToggles', 'admin.saveRegistry'),
+    [isViewerPolicyAllowed]
   )
   const remotePartnerAssignment =
     remoteSession?.targetRole === 'partner' && accessMatrixDataset
@@ -841,6 +944,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     () => scopedEnrollees.find((item) => item.id === selectedEnrolleeId) || scopedEnrollees[0] || null,
     [scopedEnrollees, selectedEnrolleeId]
   )
+  const routeCandidates = useRouteCandidates(selectedEnrollee)
 
   const selectedLoad = useMemo(
     () => {
@@ -860,6 +964,18 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       )
     },
     [partnerLoadBreakdown, scopedLoadBreakdownsByEnrolleeId, selectedEnrollee, viewerRole]
+  )
+  const navigatorRouteBoardLoadBreakdown = useMemo(
+    () => (viewerRole === 'navigator' ? buildNavigatorRouteBoardLoadBreakdown(selectedEnrollee, routeCandidates) : null),
+    [routeCandidates, selectedEnrollee, viewerRole]
+  )
+  const effectiveSelectedLoadBreakdown = useMemo(
+    () => navigatorRouteBoardLoadBreakdown || selectedLoadBreakdown,
+    [navigatorRouteBoardLoadBreakdown, selectedLoadBreakdown]
+  )
+  const effectiveSelectedLoad = useMemo(
+    () => toNormalizedRadialDomainLoad(effectiveSelectedLoadBreakdown) || selectedLoad,
+    [effectiveSelectedLoadBreakdown, selectedLoad]
   )
 
   const selectedTimelineConfig = useMemo(
@@ -1207,13 +1323,23 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     },
     [effectivePartnerOrganizationName, mergedNavigatorProgramState.pickupQueue, viewerRole]
   )
+  const pickupQueueForAssignmentBoard = useMemo(() => {
+    const normalizedOrg = normalizeOrganizationKey(effectivePartnerOrganizationName)
+    if (viewerRole === 'partner') {
+      return normalizedOrg
+        ? mergedNavigatorProgramState.pickupQueue.filter(
+            (item) => normalizeOrganizationKey(item.referrerOrganization) === normalizedOrg
+          )
+        : mergedNavigatorProgramState.pickupQueue
+    }
+    return mergedNavigatorProgramState.pickupQueue
+  }, [effectivePartnerOrganizationName, mergedNavigatorProgramState.pickupQueue, viewerRole])
   const navigatorAssignmentBoardRows = useMemo(() => {
-    const pendingReferralRows = buildPendingReferralAssignmentRows(pickupQueue, navigatorEnrollmentAssignments)
+    const pendingReferralRows = buildPendingReferralAssignmentRows(pickupQueueForAssignmentBoard, navigatorEnrollmentAssignments)
     return [...pendingReferralRows, ...navigatorEnrollmentAssignments].sort((left, right) =>
       left.enrolleeName.localeCompare(right.enrolleeName)
     )
-  }, [navigatorEnrollmentAssignments, pickupQueue])
-  const routeCandidates = useRouteCandidates(selectedEnrollee)
+  }, [navigatorEnrollmentAssignments, pickupQueueForAssignmentBoard])
   const { journeyStationMarkers, setJourneyStationMarkers } = useJourneyStationMarkers(selectedEnrollee, selectedLogs, routeCandidates)
   const {
     partnerServiceCapacitySurveyHistory,
@@ -1931,7 +2057,32 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setPartnerServiceCapacitySurveyError(null)
     try {
       const saved = await persistPartnerServiceCapacitySurvey(input)
-      setPartnerServiceCapacitySurveyHistory((current) => upsertServiceCapacitySubmissionHistory(current, saved))
+      setPartnerServiceCapacitySurveyHistory((current) => {
+        const nextHistory = upsertServiceCapacitySubmissionHistory(current, saved)
+        if (saved.status === 'completed') {
+          const completedHistory = nextHistory
+            .filter((record) => record.status === 'completed')
+            .sort((left, right) => {
+              const leftTime = new Date(left.completedAtIso || left.updatedAtIso || left.submittedAtIso).getTime()
+              const rightTime = new Date(right.completedAtIso || right.updatedAtIso || right.submittedAtIso).getTime()
+              return rightTime - leftTime
+            })
+          const latestCompleted = completedHistory[0] || null
+          const nextBreakdown = buildPartnerBurdenBreakdownFromHistory(completedHistory, {
+            subjectId: latestCompleted?.partnerId || input.header.organizationName,
+            subjectLabel: latestCompleted?.header.organizationName || input.header.organizationName
+          })
+          const nextLoad = toNormalizedRadialDomainLoad(nextBreakdown)
+          const nextSpecialties = derivePartnerStationSpecialtyGroups(latestCompleted)
+          setBootstrapState((bootstrapCurrent) => ({
+            ...bootstrapCurrent,
+            partnerLoadBreakdown: nextBreakdown,
+            partnerLoad: nextLoad,
+            partnerStationSpecialties: nextSpecialties
+          }))
+        }
+        return nextHistory
+      })
       const nextAccountSettings = {
         ...accountSettings,
         fullName: `${input.header.firstName} ${input.header.lastName}`.trim() || accountSettings.fullName,
@@ -2090,6 +2241,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveAdminPortalRegistry(registry: AdminPortalRegistry) {
+    ensureAdminPermissionWrite('update registry permissions')
     if (!viewerCanAccessAdminRegistryCards) {
       throw new Error('Admin registry updates are disabled by policy for this account.')
     }
@@ -2124,6 +2276,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function savePartnerGrant(grant: PartnerTroubleshootingGrant) {
+    ensureAdminPermissionWrite('update troubleshooting grant exceptions')
     const saved = await persistPartnerTroubleshootingGrant(grant)
     setPartnerTroubleshootingGrants((current) => ({
       ...current,
@@ -2138,6 +2291,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function startTroubleshootingSession(targetPersonId: string, targetRole: AtlasRole) {
+    ensureAdminPermissionWrite('start troubleshooting sessions')
     const targetPerson = accessMatrixDataset?.people.find((person) => person.id === targetPersonId) || null
     if (!targetPerson) {
       throw new Error(toRemoteSessionErrorMessage(targetRole))
@@ -2172,7 +2326,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  function ensureAdminPermissionWrite(actionLabel: string) {
+    // Permission overrides and access-matrix writes are privileged operations.
+    // Keep these operations scoped to administrators outside troubleshooting views.
+    if (remoteSession) {
+      throw new Error(`Exit troubleshooting mode before attempting to ${actionLabel}.`)
+    }
+    if (viewerRole !== 'administrator') {
+      throw new Error(`Only administrators can ${actionLabel}.`)
+    }
+  }
+
   async function saveAccessMatrixPersonRoles(personId: string, roleKeys: AdminPortalPersonRole[]) {
+    ensureAdminPermissionWrite('change role assignments')
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
     try {
@@ -2187,6 +2353,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveAccessMatrixEnrollmentNavigators(enrollmentId: string, navigatorPersonIds: string[]) {
+    ensureAdminPermissionWrite('update enrollment coverage assignments')
     if (!viewerCanAccessAdminRegistryCards) {
       throw new Error('Coverage updates are disabled by policy for this account.')
     }
@@ -2230,16 +2397,32 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     await saveAccessMatrixSupervisorAssignments(navigatorPersonId, nextSupervisorIds)
   }
 
-  async function assignNavigatorEnrollmentToSelf(enrollmentId: string, mode: 'assign' | 'unassign' = 'assign') {
+  async function assignNavigatorEnrollmentToSelf(
+    enrollmentId: string,
+    mode: NavigatorEnrollmentAssignmentAction = 'assign'
+  ) {
     if (!viewerCanUseAssignmentActions) {
       setNavigatorEnrollmentAssignmentsError('Assignment actions are disabled by admin policy for this account.')
       return
     }
+    const pickupRecordId = getPickupRecordIdFromEnrollmentId(enrollmentId)
     setAssigningNavigatorEnrollmentId(enrollmentId)
     setNavigatorEnrollmentAssignmentsError(null)
     try {
-      if (mode === 'unassign') {
+      if (mode === 'accept') {
+        if (!pickupRecordId) {
+          throw new Error('This referral is missing a queue identifier. Refresh the page or contact support if the problem continues.')
+        }
+        await updatePickupQueueStatus(pickupRecordId, 'accepted')
+      } else if (mode === 'archive') {
+        if (!pickupRecordId) {
+          throw new Error('This referral is missing a queue identifier. Refresh the page or contact support if the problem continues.')
+        }
+        await updatePickupQueueStatus(pickupRecordId, 'archived')
+      } else if (mode === 'unassign') {
         await persistUnassignNavigatorEnrollmentFromSelf(enrollmentId)
+      } else if (pickupRecordId) {
+        await claimPickupQueueRecord(pickupRecordId)
       } else {
         await persistAssignNavigatorEnrollmentToSelf(enrollmentId)
       }
@@ -2254,7 +2437,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         setNavigatorEnrollmentAssignmentsError(
           mode === 'unassign'
             ? 'Navigator self-unassignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
-            : 'Navigator self-assignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
+            : mode === 'assign'
+              ? 'Navigator self-assignment RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
+              : 'Referral queue workflow RPC is not deployed yet. Apply the latest Supabase migrations and retry.'
         )
         return
       }
@@ -2273,7 +2458,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           ? error.message
           : mode === 'unassign'
             ? 'Unable to unassign enrollee from navigator.'
-            : 'Unable to assign enrollee to navigator.'
+            : mode === 'archive'
+              ? 'Unable to archive referral.'
+              : mode === 'accept'
+                ? 'Unable to accept referral.'
+                : 'Unable to assign enrollee to navigator.'
       )
     } finally {
       setAssigningNavigatorEnrollmentId(null)
@@ -2281,6 +2470,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveAccessMatrixPartnerPrimaryContacts(partnerId: string, primaryContactPersonIds: string[]) {
+    ensureAdminPermissionWrite('update partner ownership assignments')
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
     try {
@@ -2306,23 +2496,42 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
-  async function claimPickupQueueRecord(recordId: string) {
+  async function updatePickupQueueStatus(
+    recordId: string,
+    status: 'available' | 'accepted' | 'claimed' | 'archived'
+  ) {
     ensureWriteAllowed()
-    const claimedRecord = mergedNavigatorProgramState.pickupQueue.find((record) => record.id === recordId) || null
+    const trimmedId = recordId.trim()
+    if (!trimmedId) {
+      throw new Error('Missing referral queue record id.')
+    }
+    const matched = mergedNavigatorProgramState.pickupQueue.some((record) => record.id === trimmedId)
+    if (!matched) {
+      throw new Error(
+        `No referral queue row with id "${trimmedId}" is loaded. Refresh the assignment board and try again.`
+      )
+    }
+    const nowIso = new Date().toISOString()
     const nextState = {
       ...mergedNavigatorProgramState,
       pickupQueue: mergedNavigatorProgramState.pickupQueue.map((record) =>
-        record.id === recordId
+        record.id === trimmedId
           ? {
               ...record,
-              status: 'claimed' as const,
-              claimedByNavigatorName: currentNavigatorName,
-              claimedAtIso: new Date().toISOString()
+              status,
+              claimedByNavigatorName: status === 'claimed' ? currentNavigatorName : record.claimedByNavigatorName,
+              claimedAtIso: status === 'claimed' ? nowIso : record.claimedAtIso
             }
           : record
       )
     }
-    const savedState = await saveNavigatorProgramState(nextState)
+    return saveNavigatorProgramState(nextState)
+  }
+
+  async function claimPickupQueueRecord(recordId: string) {
+    ensureWriteAllowed()
+    const claimedRecord = mergedNavigatorProgramState.pickupQueue.find((record) => record.id === recordId) || null
+    const savedState = await updatePickupQueueStatus(recordId, 'claimed')
     if (claimedRecord) {
       try {
         const materialized = await materializeClaimedReferralIntoEnrollment(claimedRecord)
@@ -2467,8 +2676,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isLoading,
     enrollees: scopedEnrollees,
     selectedEnrollee,
-    selectedLoad,
-    selectedLoadBreakdown,
+    selectedLoad: effectiveSelectedLoad,
+    selectedLoadBreakdown: effectiveSelectedLoadBreakdown,
     selectedLogs,
     selectedRoleConfig,
     timelineConfig: selectedTimelineConfig,

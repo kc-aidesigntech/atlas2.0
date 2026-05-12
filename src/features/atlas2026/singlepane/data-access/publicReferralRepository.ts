@@ -33,7 +33,7 @@ function parseRemotePayload(payload: unknown): UnassignedEnrolleePickupRecord | 
   const candidate = payload as Partial<UnassignedEnrolleePickupRecord>
   if (typeof candidate.id !== 'string' || typeof candidate.fullName !== 'string') return null
   if (!Array.isArray(candidate.zCodeTags)) return null
-  if (!['available', 'claimed', 'archived'].includes(String(candidate.status))) return null
+  if (!['available', 'accepted', 'claimed', 'archived'].includes(String(candidate.status))) return null
   return {
     id: candidate.id,
     fullName: candidate.fullName,

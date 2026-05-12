@@ -632,7 +632,12 @@ export default function SinglePaneApp() {
                 : null
             }
             onSavePartnerTroubleshootingGrant={
-              role === 'partner' && partnerStationProfile?.partnerId ? savePartnerTroubleshootingGrant : undefined
+              role === 'partner' &&
+              partnerStationProfile?.partnerId &&
+              accountSettings.enabledRoles.includes('administrator') &&
+              !remoteSession?.isActive
+                ? savePartnerTroubleshootingGrant
+                : undefined
             }
             security={
               showLiveAuthSecurity
@@ -876,7 +881,7 @@ export default function SinglePaneApp() {
                         burdenSurveyLabel={viewerRole === 'supervisor' ? 'review burden survey' : 'open burden survey'}
                       />
                     </div>
-                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-0 md:-mr-1 lg:-mr-3 xl:-mr-6 2xl:-mr-10">
+                    <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
                       <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
                     </div>
                   </div>

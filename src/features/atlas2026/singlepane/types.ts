@@ -75,6 +75,12 @@ export interface DomainLoad {
 export type DomainLoadBucket = 'habitat' | 'work' | 'socialNetworks'
 export type DomainLoadSourceKind = 'partnerSurvey' | 'enrolleeRecords' | 'enrolleeSurvey'
 
+export interface DomainLoadPartnerScoreTraceRow {
+  partnerId: string | null
+  partnerLabel: string
+  score: number
+}
+
 export interface DomainLoadBreakdownRow {
   id: string
   zCodeGroup: string
@@ -84,6 +90,8 @@ export interface DomainLoadBreakdownRow {
   responseCount?: number
   specializeCount?: number
   interfereCount?: number
+  partnerScoreTrace?: DomainLoadPartnerScoreTraceRow[]
+  averagePartnerStrength?: number
 }
 
 export interface DomainLoadBreakdown {
@@ -158,6 +166,8 @@ export interface NavigatorEnrollmentAssignmentRecord {
   isAssignedToViewer: boolean
   isActionable?: boolean
   statusNote?: string
+  pickupStatus?: NavigatorPickupQueueStatus
+  pickupRecordId?: string
 }
 
 export interface RouteCandidateRecord {
@@ -247,6 +257,8 @@ export type AdminPortalOrganizationStatus = 'active' | 'draft' | 'inactive'
 export type AdminPortalCustomEnrolleeStatus = 'active' | 'draft' | 'archived'
 
 export interface AdminPortalFeaturePolicy {
+  // These maps store admin-curated exception overrides against role defaults.
+  // Missing keys inherit role capability policy and keep role behavior uniform.
   screenToggles: Record<string, boolean>
   cardToggles: Record<string, boolean>
   actionToggles: Record<string, boolean>
@@ -458,7 +470,7 @@ export interface SupervisorNavigatorCompetencySummary {
   lastAssessmentAtIso: string | null
 }
 
-export type NavigatorPickupQueueStatus = 'available' | 'claimed' | 'archived'
+export type NavigatorPickupQueueStatus = 'available' | 'accepted' | 'claimed' | 'archived'
 
 export interface UnassignedEnrolleePickupRecord {
   id: string

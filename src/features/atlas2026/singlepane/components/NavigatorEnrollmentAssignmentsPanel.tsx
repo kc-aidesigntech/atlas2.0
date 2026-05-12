@@ -12,7 +12,10 @@ interface NavigatorEnrollmentAssignmentsPanelProps {
   assigningEnrollmentId: string | null
   canViewNavigatorAssignmentNames: boolean
   canToggleAssignments: boolean
-  onToggleAssignment: (enrollmentId: string, mode: 'assign' | 'unassign') => Promise<void> | void
+  onToggleAssignment: (
+    enrollmentId: string,
+    mode: 'accept' | 'archive' | 'assign' | 'unassign'
+  ) => Promise<void> | void
 }
 
 export default function NavigatorEnrollmentAssignmentsPanel({
@@ -113,27 +116,71 @@ export default function NavigatorEnrollmentAssignmentsPanel({
                   ) : null}
                 </div>
               </div>
-              <AtlasTextButton
-                onClick={() => {
-                  if (row.isActionable === false) return
-                  void onToggleAssignment(row.enrollmentId, row.isAssignedToViewer ? 'unassign' : 'assign')
-                }}
-                disabled={!canToggleAssignments || row.isActionable === false || assigningEnrollmentId === row.enrollmentId}
-                className="px-[19px] py-[10px] text-[15px] font-medium text-white"
-                style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
-              >
-                {row.isActionable === false
-                  ? 'claim in pickup queue'
-                  : !canToggleAssignments
-                  ? 'action disabled by policy'
-                  : assigningEnrollmentId === row.enrollmentId
-                  ? row.isAssignedToViewer
-                    ? 'unassigning...'
-                    : 'assigning...'
-                  : row.isAssignedToViewer
-                    ? 'unassign me'
-                    : 'assign to me'}
-              </AtlasTextButton>
+              {row.pickupStatus === 'available' ? (
+                <div className="flex items-center gap-2">
+                  <AtlasTextButton
+                    onClick={() => void onToggleAssignment(row.enrollmentId, 'archive')}
+                    disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
+                    className="px-[14px] py-[8px] text-[14px] font-medium text-white"
+                    style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+                  >
+                    {assigningEnrollmentId === row.enrollmentId ? 'archiving...' : 'archive'}
+                  </AtlasTextButton>
+                  <AtlasTextButton
+                    onClick={() => void onToggleAssignment(row.enrollmentId, 'accept')}
+                    disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
+                    className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+                    style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+                  >
+                    {assigningEnrollmentId === row.enrollmentId ? 'accepting...' : 'accept'}
+                  </AtlasTextButton>
+                </div>
+              ) : row.pickupStatus === 'accepted' ? (
+                <AtlasTextButton
+                  onClick={() => void onToggleAssignment(row.enrollmentId, 'assign')}
+                  disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
+                  className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+                >
+                  {assigningEnrollmentId === row.enrollmentId ? 'claiming...' : 'assign to me'}
+                </AtlasTextButton>
+              ) : row.pickupStatus === 'claimed' ? (
+                <AtlasTextButton
+                  disabled
+                  className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ffffff20', opacity: 0.45 } as React.CSSProperties}
+                >
+                  claimed
+                </AtlasTextButton>
+              ) : row.pickupStatus === 'archived' ? (
+                <AtlasTextButton
+                  disabled
+                  className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ffffff20', opacity: 0.45 } as React.CSSProperties}
+                >
+                  archived
+                </AtlasTextButton>
+              ) : (
+                <AtlasTextButton
+                  onClick={() => {
+                    if (row.isActionable === false) return
+                    void onToggleAssignment(row.enrollmentId, row.isAssignedToViewer ? 'unassign' : 'assign')
+                  }}
+                  disabled={!canToggleAssignments || row.isActionable === false || assigningEnrollmentId === row.enrollmentId}
+                  className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+                  style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+                >
+                  {!canToggleAssignments
+                    ? 'action disabled by policy'
+                    : assigningEnrollmentId === row.enrollmentId
+                    ? row.isAssignedToViewer
+                      ? 'unassigning...'
+                      : 'assigning...'
+                    : row.isAssignedToViewer
+                      ? 'unassign me'
+                      : 'assign to me'}
+                </AtlasTextButton>
+              )}
             </div>
           ))}
         </div>

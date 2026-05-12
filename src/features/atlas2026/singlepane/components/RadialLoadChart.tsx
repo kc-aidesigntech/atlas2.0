@@ -128,24 +128,27 @@ export default function RadialLoadChart({ load, onClick, size = 'default' }: Rad
   const isLarge = size === 'large'
   /** Tight wrapper: chart block is fixed height; no percentage split (avoids empty band above helper). */
   const wrapperClassName = isLarge
-    ? 'w-fit max-w-[min(100vw-2rem,780px)] pl-2 pr-0 sm:pl-3'
-    : 'w-fit max-w-[min(100vw-2rem,400px)] pl-1.5 pr-0 sm:pl-2'
-  const chartShellClassName = 'h-full min-h-0 w-full max-w-full'
-  const chartBlockHeightClass = isLarge ? 'h-[320px] sm:h-[346px] lg:h-[366px]' : 'h-[210px] sm:h-[230px]'
-  const chartBlockWidthClass = isLarge ? 'w-[min(100%,728px)] min-w-[364px] sm:w-[min(100%,780px)]' : 'w-[min(100%,320px)] min-w-[236px] sm:w-[min(100%,340px)]'
-  /** Less right than left: reserve label space on dominant sides; tighter outer edge. */
+    ? 'w-fit max-w-[min(100vw-2rem,780px)] pl-2 pr-1 sm:pl-3 sm:pr-2'
+    : 'w-fit max-w-[min(100vw-2rem,460px)] pl-1.5 pr-2 sm:pl-2 sm:pr-3'
+  const chartShellClassName = 'h-full min-h-0 w-full max-w-full overflow-visible'
+  const chartBlockHeightClass = isLarge ? 'h-[320px] sm:h-[346px] lg:h-[366px]' : 'h-[242px] sm:h-[265px]'
+  const chartBlockWidthClass = isLarge
+    ? 'w-[min(100%,728px)] min-w-[364px] sm:w-[min(100%,780px)]'
+    : 'w-[min(100%,368px)] min-w-[272px] sm:w-[min(100%,392px)]'
+  /** Extra left margin so angle labels (e.g. «social networks») are not clipped by the SVG box. */
   const chartMargin = isLarge
-    ? { top: 0, right: 56, bottom: 6, left: 94 }
-    : { top: 8, right: 22, bottom: 20, left: 50 }
+    ? { top: 0, right: 64, bottom: 6, left: 108 }
+    : { top: 8, right: 28, bottom: 20, left: 88 }
   const outerRadius = isLarge ? '92%' : '86%'
+  const chartCx = isLarge ? '50%' : '51%'
   const chartCy = isLarge ? '46%' : '50%'
-  const axisFontSize = isLarge ? '17' : '13'
-  const axisDx = isLarge ? 18 : 12
+  const axisFontSize = isLarge ? '17' : '14'
+  const axisDx = isLarge ? 18 : 14
   const axisUpperDy = isLarge ? -10 : -8
   const axisLowerDy = isLarge ? 12 : 10
   const helperClassName = isLarge
     ? 'mt-0 block w-full max-w-[min(100%,420px)] text-center text-[12px] uppercase leading-tight tracking-[0.08em] text-[#9f9f9f]'
-    : 'mt-0.5 block w-full max-w-[min(100%,360px)] text-center text-[10px] uppercase leading-tight tracking-[0.08em] text-[#9f9f9f]'
+    : 'mt-0.5 block w-full max-w-[min(100%,392px)] text-center text-[10px] uppercase leading-tight tracking-[0.08em] text-[#9f9f9f]'
   const radarStrokeWidth = isLarge ? 1.5 : 2
   const radarDot = isLarge
     ? { r: 5.5, fill: SP_COLORS.white, stroke: 'var(--atlas-signal-lucid-teal)', strokeWidth: 2 }
@@ -172,7 +175,7 @@ export default function RadialLoadChart({ load, onClick, size = 'default' }: Rad
       <div className={`flex shrink-0 justify-center overflow-visible ${chartBlockHeightClass} ${chartBlockWidthClass}`}>
         <div className={chartShellClassName}>
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart data={data} cx="50%" cy={chartCy} outerRadius={outerRadius} startAngle={90} endAngle={-270} margin={chartMargin}>
+            <RadarChart data={data} cx={chartCx} cy={chartCy} outerRadius={outerRadius} startAngle={90} endAngle={-270} margin={chartMargin}>
               <PolarGrid
                 gridType="polygon"
                 radialLines

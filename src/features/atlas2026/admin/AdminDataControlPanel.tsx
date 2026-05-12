@@ -20,6 +20,7 @@ import type {
   AdminPortalPersonRole,
   AdminPortalRegistry,
   AdminDataQualityMetric,
+  AtlasRole,
   EnrolleeIntakeRecord,
   EnrolleeProfile,
   EnrollmentRequestRecord,
@@ -29,10 +30,17 @@ import type {
   SupervisorNavigatorCompetencySummary,
   ZCodeSurveyPrompt
 } from '@/features/atlas2026/singlepane/types'
+import {
+  ADMIN_POLICY_ACTION_KEYS,
+  ADMIN_POLICY_CARD_KEYS,
+  ADMIN_POLICY_SCREEN_KEYS,
+  isCapabilityAllowedForAnyRole,
+  toggleCapabilityOverride
+} from '@/features/atlas2026/singlepane/roleCapabilityPolicy'
 
 // Admin control panel composes multiple registry contracts (people, organizations,
 // enrollee drafts, interval rules) into one operator console with explicit save paths.
-type AdminPortalSection = 'overview' | 'enrollees' | 'directory' | 'organizations' | 'relationships' | 'assessments'
+type AdminPortalSection = 'overview' | 'enrollees' | 'directory' | 'organizations' | 'relationships' | 'assessments' | 'permissions'
 type CombinedEnrolleeRow =
   | { kind: 'existing'; id: string; profile: EnrolleeProfile; intake: EnrolleeIntakeRecord }
   | { kind: 'custom'; id: string; record: AdminPortalCustomEnrolleeRecord }
@@ -63,7 +71,8 @@ const ADMIN_SECTIONS: Array<{ id: AdminPortalSection; label: string; description
   { id: 'directory', label: 'People & roles', description: 'Manage administrators, supervisors, navigators, and partner users.' },
   { id: 'organizations', label: 'Organizations', description: 'Partner and internal organization registry with contact ownership.' },
   { id: 'relationships', label: 'Assignments', description: 'Quickly manage one-to-many reporting and coverage relationships.' },
-  { id: 'assessments', label: 'Assessments', description: 'Control interval rules, due generation, and navigator program monitoring.' }
+  { id: 'assessments', label: 'Assessments', description: 'Control interval rules, due generation, and navigator program monitoring.' },
+  { id: 'permissions', label: 'Permission exceptions', description: 'Audit and clear person-level overrides against role defaults.' }
 ]
 
 const ROLE_OPTIONS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
@@ -72,38 +81,24 @@ const ADMIN_ACTIVE_SECTION_KEY = 'atlas2026.admin.session.active-section'
 const ADMIN_SELECTED_ENROLLEE_KEY = 'atlas2026.admin.session.selected-enrollee'
 const ADMIN_SELECTED_PERSON_KEY = 'atlas2026.admin.session.selected-person'
 const ADMIN_SELECTED_ORGANIZATION_KEY = 'atlas2026.admin.session.selected-organization'
-const ADMIN_POLICY_SCREEN_KEYS = [
-  'overview',
-  'enrollees',
-  'directory',
-  'organizations',
-  'relationships',
-  'assessments',
-  'assignmentBoard'
-] as const
-const ADMIN_POLICY_CARD_KEYS = ['navigatorCoverageCard', 'liveAccessMatrix', 'navigatorProfilePickupQueue'] as const
-const ADMIN_POLICY_ACTION_KEYS = ['assignmentBoard.viewNavigatorNames', 'assignmentBoard.assignSelf', 'admin.saveRegistry'] as const
-
 function createDefaultFeaturePolicy(): AdminPortalPersonRecord['featurePolicy'] {
   return {
-    // Empty maps mean "allowed"; admins can explicitly set keys to false to tighten access.
+    // Empty maps inherit role-level defaults; admins only store explicit exceptions.
     screenToggles: {},
     cardToggles: {},
     actionToggles: {}
   }
 }
 
-function isPolicyKeyAllowed(policyMap: Record<string, boolean>, key: string) {
-  return policyMap[key] !== false
+function toAtlasRoles(roles: AdminPortalPersonRole[]): AtlasRole[] {
+  return roles.filter(
+    (role): role is AtlasRole =>
+      role === 'administrator' || role === 'supervisor' || role === 'navigator' || role === 'partner'
+  )
 }
 
-function togglePolicyKey(policyMap: Record<string, boolean>, key: string) {
-  if (isPolicyKeyAllowed(policyMap, key)) {
-    return { ...policyMap, [key]: false }
-  }
-  const next = { ...policyMap }
-  delete next[key]
-  return next
+function hasCapabilityOverride(overrides: Record<string, boolean>, key: string) {
+  return Object.prototype.hasOwnProperty.call(overrides, key)
 }
 
 const ADMIN_Z_CODE_OPTIONS = Array.from(
@@ -580,6 +575,67 @@ export default function AdminDataControlPanel({
     () => combinedOrganizations.find((org) => org.id === selectedOrganizationId) || null,
     [combinedOrganizations, selectedOrganizationId]
   )
+  const permissionExceptionRows = useMemo(() => {
+    return combinedPeople
+      .map((person) => {
+        const roles = toAtlasRoles(person.roles)
+        const baselineNavigatorNameVisibility = isCapabilityAllowedForAnyRole(
+          roles,
+          'actionToggles',
+          'assignmentBoard.viewNavigatorNames',
+          undefined
+        )
+        const entries: Array<{ id: string; label: string; kind: 'allow' | 'block' }> = []
+
+        for (const key of ADMIN_POLICY_SCREEN_KEYS) {
+          if (!hasCapabilityOverride(person.featurePolicy.screenToggles, key)) continue
+          const nextValue = Boolean(person.featurePolicy.screenToggles[key])
+          entries.push({
+            id: `screen:${key}`,
+            label: `screen ${key} -> ${nextValue ? 'allow' : 'block'}`,
+            kind: nextValue ? 'allow' : 'block'
+          })
+        }
+        for (const key of ADMIN_POLICY_CARD_KEYS) {
+          if (!hasCapabilityOverride(person.featurePolicy.cardToggles, key)) continue
+          const nextValue = Boolean(person.featurePolicy.cardToggles[key])
+          entries.push({
+            id: `card:${key}`,
+            label: `card ${key} -> ${nextValue ? 'allow' : 'block'}`,
+            kind: nextValue ? 'allow' : 'block'
+          })
+        }
+        for (const key of ADMIN_POLICY_ACTION_KEYS) {
+          if (!hasCapabilityOverride(person.featurePolicy.actionToggles, key)) continue
+          const nextValue = Boolean(person.featurePolicy.actionToggles[key])
+          entries.push({
+            id: `action:${key}`,
+            label: `action ${key} -> ${nextValue ? 'allow' : 'block'}`,
+            kind: nextValue ? 'allow' : 'block'
+          })
+        }
+        if (person.canViewNavigatorAssignmentNames !== baselineNavigatorNameVisibility) {
+          entries.push({
+            id: 'legacy:assignmentBoard.viewNavigatorNames',
+            label: `legacy navigator-name visibility -> ${person.canViewNavigatorAssignmentNames ? 'allow' : 'block'}`,
+            kind: person.canViewNavigatorAssignmentNames ? 'allow' : 'block'
+          })
+        }
+
+        if (!entries.length) return null
+        return {
+          person,
+          roles,
+          entries
+        }
+      })
+      .filter((row): row is { person: AdminPortalPersonRecord; roles: AtlasRole[]; entries: Array<{ id: string; label: string; kind: 'allow' | 'block' }> } => Boolean(row))
+      .sort((left, right) => right.entries.length - left.entries.length)
+  }, [combinedPeople])
+  const totalPermissionExceptionCount = useMemo(
+    () => permissionExceptionRows.reduce((sum, row) => sum + row.entries.length, 0),
+    [permissionExceptionRows]
+  )
 
   useEffect(() => {
     if (!enrolleeDraft && selectedEnrolleeRow) {
@@ -757,6 +813,27 @@ export default function AdminDataControlPanel({
       'Directory record removed from the active portal view.'
     )
     setPersonDraft(null)
+  }
+
+  async function handleClearPersonPermissionExceptions(person: AdminPortalPersonRecord) {
+    const roleDefaultsForNavigatorNameVisibility = isCapabilityAllowedForAnyRole(
+      toAtlasRoles(person.roles),
+      'actionToggles',
+      'assignmentBoard.viewNavigatorNames',
+      undefined
+    )
+    const resetPerson: AdminPortalPersonRecord = {
+      ...person,
+      canViewNavigatorAssignmentNames: roleDefaultsForNavigatorNameVisibility,
+      featurePolicy: createDefaultFeaturePolicy()
+    }
+    await commitRegistry(
+      withRegistryPerson(resetPerson),
+      `Cleared permission exceptions for ${person.fullName || person.email || 'person'}.`
+    )
+    if (selectedPersonId === resetPerson.id) {
+      setPersonDraft(resetPerson)
+    }
   }
 
   async function handleSaveOrganizationDraft() {
@@ -1460,9 +1537,24 @@ export default function AdminDataControlPanel({
                                     canViewNavigatorAssignmentNames: !current.canViewNavigatorAssignmentNames,
                                     featurePolicy: {
                                       ...current.featurePolicy,
-                                      actionToggles: !current.canViewNavigatorAssignmentNames
-                                        ? { ...current.featurePolicy.actionToggles, 'assignmentBoard.viewNavigatorNames': true }
-                                        : { ...current.featurePolicy.actionToggles, 'assignmentBoard.viewNavigatorNames': false }
+                                      actionToggles: (() => {
+                                        const nextCanView = !current.canViewNavigatorAssignmentNames
+                                        const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
+                                          toAtlasRoles(current.roles),
+                                          'actionToggles',
+                                          'assignmentBoard.viewNavigatorNames',
+                                          undefined
+                                        )
+                                        if (nextCanView === roleDefaultsToAllowed) {
+                                          const next = { ...current.featurePolicy.actionToggles }
+                                          delete next['assignmentBoard.viewNavigatorNames']
+                                          return next
+                                        }
+                                        return {
+                                          ...current.featurePolicy.actionToggles,
+                                          'assignmentBoard.viewNavigatorNames': nextCanView
+                                        }
+                                      })()
                                     }
                                   }
                                 : current
@@ -1511,7 +1603,7 @@ export default function AdminDataControlPanel({
                           {personDraft.approvalState === 'approved' ? 'approved \u2713' : 'pending approval'}
                         </AtlasTextButton>
                         <small className="text-[12px] text-[var(--foreground-secondary)]">
-                          Pending users keep broad access by default until policy toggles are tightened.
+                          Pending users inherit role defaults; use these toggles only for explicit admin exceptions.
                         </small>
                       </div>
                     </Field>
@@ -1521,7 +1613,18 @@ export default function AdminDataControlPanel({
                           <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">screens</small>
                           <div className="flex flex-wrap gap-2">
                             {ADMIN_POLICY_SCREEN_KEYS.map((key) => {
-                              const isAllowed = isPolicyKeyAllowed(personDraft.featurePolicy.screenToggles, key)
+                              const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
+                                toAtlasRoles(personDraft.roles),
+                                'screenToggles',
+                                key,
+                                undefined
+                              )
+                              const isAllowed = isCapabilityAllowedForAnyRole(
+                                toAtlasRoles(personDraft.roles),
+                                'screenToggles',
+                                key,
+                                personDraft.featurePolicy.screenToggles
+                              )
                               return (
                                 <AtlasTextButton
                                   key={key}
@@ -1532,7 +1635,11 @@ export default function AdminDataControlPanel({
                                             ...current,
                                             featurePolicy: {
                                               ...current.featurePolicy,
-                                              screenToggles: togglePolicyKey(current.featurePolicy.screenToggles, key)
+                                              screenToggles: toggleCapabilityOverride(
+                                                current.featurePolicy.screenToggles,
+                                                roleDefaultsToAllowed,
+                                                key
+                                              )
                                             }
                                           }
                                         : current
@@ -1557,7 +1664,18 @@ export default function AdminDataControlPanel({
                           <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">cards</small>
                           <div className="flex flex-wrap gap-2">
                             {ADMIN_POLICY_CARD_KEYS.map((key) => {
-                              const isAllowed = isPolicyKeyAllowed(personDraft.featurePolicy.cardToggles, key)
+                              const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
+                                toAtlasRoles(personDraft.roles),
+                                'cardToggles',
+                                key,
+                                undefined
+                              )
+                              const isAllowed = isCapabilityAllowedForAnyRole(
+                                toAtlasRoles(personDraft.roles),
+                                'cardToggles',
+                                key,
+                                personDraft.featurePolicy.cardToggles
+                              )
                               return (
                                 <AtlasTextButton
                                   key={key}
@@ -1568,7 +1686,11 @@ export default function AdminDataControlPanel({
                                             ...current,
                                             featurePolicy: {
                                               ...current.featurePolicy,
-                                              cardToggles: togglePolicyKey(current.featurePolicy.cardToggles, key)
+                                              cardToggles: toggleCapabilityOverride(
+                                                current.featurePolicy.cardToggles,
+                                                roleDefaultsToAllowed,
+                                                key
+                                              )
                                             }
                                           }
                                         : current
@@ -1593,7 +1715,18 @@ export default function AdminDataControlPanel({
                           <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">actions</small>
                           <div className="flex flex-wrap gap-2">
                             {ADMIN_POLICY_ACTION_KEYS.map((key) => {
-                              const isAllowed = isPolicyKeyAllowed(personDraft.featurePolicy.actionToggles, key)
+                              const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
+                                toAtlasRoles(personDraft.roles),
+                                'actionToggles',
+                                key,
+                                undefined
+                              )
+                              const isAllowed = isCapabilityAllowedForAnyRole(
+                                toAtlasRoles(personDraft.roles),
+                                'actionToggles',
+                                key,
+                                personDraft.featurePolicy.actionToggles
+                              )
                               return (
                                 <AtlasTextButton
                                   key={key}
@@ -1604,7 +1737,11 @@ export default function AdminDataControlPanel({
                                             ...current,
                                             featurePolicy: {
                                               ...current.featurePolicy,
-                                              actionToggles: togglePolicyKey(current.featurePolicy.actionToggles, key)
+                                              actionToggles: toggleCapabilityOverride(
+                                                current.featurePolicy.actionToggles,
+                                                roleDefaultsToAllowed,
+                                                key
+                                              )
                                             }
                                           }
                                         : current
@@ -2177,6 +2314,84 @@ export default function AdminDataControlPanel({
                       </div>
                     </AtlasInsetCard>
                   </div>
+                </div>
+              </AtlasInsetCard>
+            </div>
+          ) : null}
+          {activeSection === 'permissions' ? (
+            <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+              <AtlasInsetCard className="rounded-[22px] px-5 py-5">
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+                      exception posture
+                    </small>
+                    <div className="mt-1 text-[22px] font-medium text-white">Person-level permission overrides</div>
+                    <small className="mt-1 block text-[13px] text-[var(--foreground-secondary)]">
+                      Role defaults stay uniform; this panel tracks only explicit exceptions set by administrators.
+                    </small>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <AtlasMetricPill
+                    label="users with exceptions"
+                    value={permissionExceptionRows.length}
+                    accentColor={SP_COLORS.yellow}
+                    className="rounded-[18px]"
+                  />
+                  <AtlasMetricPill
+                    label="total exception entries"
+                    value={totalPermissionExceptionCount}
+                    accentColor={SP_COLORS.red}
+                    className="rounded-[18px]"
+                  />
+                </div>
+                <small className="mt-4 block text-[12px] text-[var(--foreground-secondary)]">
+                  Use clear actions to return users to role baseline access when temporary exceptions are no longer needed.
+                </small>
+              </AtlasInsetCard>
+              <AtlasInsetCard className="rounded-[22px] px-5 py-5">
+                <div className="mb-4 text-[22px] font-medium text-white">Exception ledger</div>
+                <div className="space-y-3">
+                  {permissionExceptionRows.map((row) => (
+                    <div key={row.person.id} className="rounded-[18px] border border-white/10 bg-white/5 px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[15px] font-medium text-white">{row.person.fullName || row.person.email || row.person.id}</div>
+                          <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                            {row.person.email || 'no email'} · {row.roles.join(', ') || 'no atlas roles'} · {row.entries.length} exception
+                            {row.entries.length === 1 ? '' : 's'}
+                          </small>
+                        </div>
+                        <AtlasTextButton
+                          onClick={() => void handleClearPersonPermissionExceptions(row.person)}
+                          className="px-3 py-2 text-[12px] font-medium"
+                          style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                        >
+                          clear exceptions
+                        </AtlasTextButton>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {row.entries.map((entry) => (
+                          <span
+                            key={entry.id}
+                            className="rounded-full border px-2 py-1 text-[11px] leading-none"
+                            style={{
+                              borderColor: entry.kind === 'allow' ? 'rgba(69,191,85,0.45)' : 'rgba(255,92,92,0.45)',
+                              color: entry.kind === 'allow' ? SP_COLORS.deepGreen : SP_COLORS.red
+                            }}
+                          >
+                            {entry.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {!permissionExceptionRows.length ? (
+                    <small className="text-[13px] text-[var(--foreground-secondary)]">
+                      No person-level exceptions are set. All users currently inherit role defaults.
+                    </small>
+                  ) : null}
                 </div>
               </AtlasInsetCard>
             </div>

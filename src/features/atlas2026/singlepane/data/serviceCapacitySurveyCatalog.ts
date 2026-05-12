@@ -14,6 +14,8 @@ import type {
  */
 
 export const SERVICE_CAPACITY_FORM_VERSION = '2026-z-burden-v2'
+export const ZCODE_DOMAIN_SURVEY_FORM_VERSION = '2026-z-domain-spectrum-v1'
+export const ZCODE_DOMAIN_SCORE_RANGE = { min: 1, max: 99, step: 1 } as const
 
 export const DEFAULT_SERVICE_CAPACITY_SCALE: PartnerServiceCapacityScaleOption[] = [
   { value: 1, label: 'major burden', description: 'We do not handle this and it creates major burden.' },
@@ -25,6 +27,29 @@ export const DEFAULT_SERVICE_CAPACITY_SCALE: PartnerServiceCapacityScaleOption[]
   { value: 7, label: 'handles well', description: 'We handle this well.' },
   { value: 8, label: 'reliable fit', description: 'We handle this reliably.' },
   { value: 9, label: 'specialty area', description: 'This is a strong area of specialty for us.' }
+]
+
+export const ZCODE_DOMAIN_SCALE_GUIDE: PartnerServiceCapacityScaleOption[] = [
+  {
+    value: 1,
+    label: 'habitat anchor',
+    description: 'Near 1 sits almost entirely in habitat.'
+  },
+  {
+    value: 33,
+    label: 'social networks anchor',
+    description: '33 is the social networks vertex.'
+  },
+  {
+    value: 66,
+    label: 'work anchor',
+    description: '66 is the work vertex.'
+  },
+  {
+    value: 99,
+    label: 'habitat return',
+    description: 'Near 99 returns almost entirely to habitat.'
+  }
 ]
 
 export const DEFAULT_SERVICE_CAPACITY_SECTIONS: ZCodeSurveySection[] = [
@@ -210,4 +235,41 @@ export function buildDefaultPartnerServiceCapacityAnswers(prompts: ZCodeSurveyPr
 
 export function getScaleOption(scale: PartnerServiceCapacityScaleOption[], value: number) {
   return scale.find((option) => option.value === value) || scale[4] || { value: 5, label: 'mixed fit', description: '' }
+}
+
+export function describeZCodeDomainSpectrumScore(score: number) {
+  const clampedScore = Math.max(ZCODE_DOMAIN_SCORE_RANGE.min, Math.min(ZCODE_DOMAIN_SCORE_RANGE.max, Math.round(score)))
+  if (clampedScore === 33) {
+    return {
+      value: clampedScore,
+      label: 'social networks anchor',
+      description: 'This score lands directly on the social networks vertex.'
+    }
+  }
+  if (clampedScore === 66) {
+    return {
+      value: clampedScore,
+      label: 'work anchor',
+      description: 'This score lands directly on the work vertex.'
+    }
+  }
+  if (clampedScore <= 33) {
+    return {
+      value: clampedScore,
+      label: 'habitat-social spectrum',
+      description: 'This score moves between habitat (near 1) and social networks (near 33).'
+    }
+  }
+  if (clampedScore <= 66) {
+    return {
+      value: clampedScore,
+      label: 'social-work spectrum',
+      description: 'This score moves between social networks (near 33) and work (near 66).'
+    }
+  }
+  return {
+    value: clampedScore,
+    label: 'work-habitat spectrum',
+    description: 'This score moves between work (near 66) and habitat (near 99).'
+  }
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { usesLightTextOnZCodeColor } from '@atlas/shared'
+import CircularSlider from '@fseehawer/react-circular-slider'
 import { getScaleOption } from '../../data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '../../theme'
 import type { PartnerServiceCapacityScaleOption, ZCodeSurveyPrompt } from '../../types'
@@ -31,7 +32,12 @@ export function BurdenCard({
   onNextNavigate,
   onResumeNavigate,
   onChange,
-  onNotEncounteredChange
+  onNotEncounteredChange,
+  scoreRange,
+  describeScore,
+  assignmentLabel,
+  unansweredHint,
+  inputControl = 'slider'
 }: {
   promptItem: ZCodeSurveyPrompt
   scale: PartnerServiceCapacityScaleOption[]
@@ -50,24 +56,48 @@ export function BurdenCard({
   onResumeNavigate: () => void
   onChange: (score: number | null) => void
   onNotEncounteredChange: (value: boolean) => void
+  scoreRange?: { min: number; max: number; step?: number }
+  describeScore?: (score: number) => { value: number; label: string; description: string } | null
+  assignmentLabel?: string
+  unansweredHint?: string
+  inputControl?: 'slider' | 'knob'
 }) {
   const numericInputRef = useRef<HTMLInputElement | null>(null)
   const previousScoreRef = useRef<number | null>(score)
   const shouldRefocusInputRef = useRef(false)
   const [isPulsing, setIsPulsing] = useState(false)
-  const hasAnsweredScore = typeof score === 'number' && score >= 1 && score <= 9
+  const effectiveRangeMin = scoreRange?.min ?? scale[0]?.value ?? 1
+  const effectiveRangeMax = scoreRange?.max ?? scale[scale.length - 1]?.value ?? 9
+  const effectiveRangeStep = scoreRange?.step ?? 1
+  const midpoint = Math.round((effectiveRangeMin + effectiveRangeMax) / 2)
+  const hasAnsweredScore =
+    typeof score === 'number' &&
+    score >= effectiveRangeMin &&
+    score <= effectiveRangeMax
   /** Range inputs require a numeric value, so unanswered prompts rest on a visible midpoint cue until the respondent chooses a score. */
-  const rangeInputValue = hasAnsweredScore ? score : 5
-  const scaleState = hasAnsweredScore ? getScaleOption(scale, score) : null
-  const thumbPercent = hasAnsweredScore ? ((score - 1) / 8) * 100 : 50
+  const rangeInputValue = hasAnsweredScore ? score : midpoint
+  const scaleState = hasAnsweredScore
+    ? (describeScore?.(score) || getScaleOption(scale, score))
+    : null
+  const rangeSpan = Math.max(1, effectiveRangeMax - effectiveRangeMin)
+  const thumbPercent = hasAnsweredScore
+    ? ((score - effectiveRangeMin) / rangeSpan) * 100
+    : 50
   const showScoreThumb = !notEncountered
   const badgeTextColor =
     accentColor === SP_COLORS.yellow || accentColor === SP_COLORS.green ? SP_COLORS.bg : SP_COLORS.white
-  const sliderScaleColors = useMemo(() => scale.map((option) => {
-    if (option.value <= 3) return SP_COLORS.red
-    if (option.value <= 6) return SP_COLORS.yellow
-    return SP_COLORS.deepGreen
-  }), [scale])
+  const sliderScaleColors = useMemo(() => {
+    const min = effectiveRangeMin
+    const max = effectiveRangeMax
+    const span = Math.max(1, max - min)
+    return scale.map((option) => {
+      const ratio = (option.value - min) / span
+      if (ratio <= 0.33) return SP_COLORS.red
+      if (ratio <= 0.66) return SP_COLORS.yellow
+      return SP_COLORS.deepGreen
+    })
+  }, [effectiveRangeMax, effectiveRangeMin, scale])
+  const isKnobInput = inputControl === 'knob'
 
   useEffect(() => {
     const previousScore = previousScoreRef.current
@@ -144,7 +174,7 @@ export function BurdenCard({
     }
     const parsed = Number(nextValue)
     if (!Number.isFinite(parsed)) return
-    handleSelectScore(Math.max(1, Math.min(9, Math.round(parsed))))
+    handleSelectScore(Math.max(effectiveRangeMin, Math.min(effectiveRangeMax, Math.round(parsed))))
   }
 
   return (
@@ -167,7 +197,7 @@ export function BurdenCard({
         </div>
         <div
           className={`flex items-center justify-center rounded-full px-3 font-bold leading-none ${
-            compact ? 'h-11 min-w-[52px] text-[17px] md:h-12 md:min-w-[58px] md:text-[20px]' : 'h-12 min-w-[56px] text-[18px] md:h-14 md:min-w-[64px] md:text-[22px]'
+            compact ? 'h-11 w-11 text-[17px] md:h-12 md:w-12 md:text-[20px]' : 'h-12 w-12 text-[18px] md:h-14 md:w-14 md:text-[22px]'
           } ${
             isPulsing ? 'animate-pulse' : ''
           }`}
@@ -182,10 +212,14 @@ export function BurdenCard({
         </div>
       </div>
 
-      <div className={`atlas-surface-panel ${compact ? 'mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[14px] px-3 py-3 pr-2.5 md:px-3.5 md:py-3.5 md:pr-3' : 'mt-4 rounded-[16px] px-3 py-3 md:px-4 md:py-4'}`}>
+      <div className={`atlas-surface-panel ${
+        compact && !isKnobInput
+          ? 'mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[14px] px-3 py-3 pr-2.5 md:px-3.5 md:py-3.5 md:pr-3'
+          : 'mt-4 rounded-[16px] px-3 py-3 md:px-4 md:py-4'
+      }`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <small className="atlas-overline md:text-[13px]" style={{ color: SP_COLORS.muted }}>
-            assign a burden score
+            {assignmentLabel || 'assign a burden score'}
           </small>
           <AtlasTextButton
             onClick={() => {
@@ -210,26 +244,41 @@ export function BurdenCard({
         </div>
 
         <div className={`${compact ? 'mt-3.5' : 'mt-4'} ${notEncountered ? 'opacity-45' : ''}`}>
-          <div className={`relative ${compact ? 'h-5' : 'h-6'}`}>
-            <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-[5px] -translate-y-1/2 rounded-full bg-white/20" />
-            <div
-              className={`pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.18)] transition-[left,opacity] duration-150 ease-out ${
-                compact ? 'h-[13px] w-[13px]' : 'h-[15px] w-[15px]'
-              }`}
-              style={{ left: `${thumbPercent}%`, opacity: showScoreThumb ? 1 : 0 }}
-            />
-            <input
-              type="range"
-              min={1}
-              max={9}
-              step={1}
-              disabled={notEncountered}
-              value={rangeInputValue}
-              onChange={(event) => handleSelectScore(Number(event.target.value))}
-              className={`absolute inset-0 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed ${compact ? 'h-5' : 'h-6'}`}
-            />
-          </div>
-          <div className={`${compact ? 'mt-2.5' : 'mt-3'} relative z-10 grid grid-cols-9`}>
+          {inputControl === 'knob' ? (
+            <div className="mb-3 mt-1 flex justify-center">
+              <DomainSpectrumKnob
+                value={rangeInputValue}
+                min={effectiveRangeMin}
+                max={effectiveRangeMax}
+                disabled={notEncountered}
+                onChange={(value) => handleSelectScore(value)}
+              />
+            </div>
+          ) : (
+            <div className={`relative ${compact ? 'h-5' : 'h-6'}`}>
+              <div className="pointer-events-none absolute left-0 right-0 top-1/2 h-[5px] -translate-y-1/2 rounded-full bg-white/20" />
+              <div
+                className={`pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.18)] transition-[left,opacity] duration-150 ease-out ${
+                  compact ? 'h-[13px] w-[13px]' : 'h-[15px] w-[15px]'
+                }`}
+                style={{ left: `${thumbPercent}%`, opacity: showScoreThumb ? 1 : 0 }}
+              />
+              <input
+                type="range"
+                min={effectiveRangeMin}
+                max={effectiveRangeMax}
+                step={effectiveRangeStep}
+                disabled={notEncountered}
+                value={rangeInputValue}
+                onChange={(event) => handleSelectScore(Number(event.target.value))}
+                className={`absolute inset-0 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed ${compact ? 'h-5' : 'h-6'}`}
+              />
+            </div>
+          )}
+          <div
+            className={`${compact ? 'mt-2.5' : 'mt-3'} relative z-10 grid`}
+            style={{ gridTemplateColumns: `repeat(${Math.max(1, scale.length)}, minmax(0, 1fr))` }}
+          >
             {scale.map((option, index) => {
               const isSelected = !notEncountered && option.value === score
               const selectedColor = sliderScaleColors[index]
@@ -263,9 +312,9 @@ export function BurdenCard({
             <input
               ref={numericInputRef}
               type="number"
-              min={1}
-              max={9}
-              step={1}
+              min={effectiveRangeMin}
+              max={effectiveRangeMax}
+              step={effectiveRangeStep}
               disabled={notEncountered}
               value={score ?? ''}
               onChange={(event) => handleNumberInputChange(event.target.value)}
@@ -283,7 +332,7 @@ export function BurdenCard({
               ? 'Recorded as not encountered in your work. This answer is saved and you can continue to the next question.'
               : scaleState
                 ? `${scaleState.value} - ${scaleState.label}: ${scaleState.description}`
-                : 'Select a value from 1 to 9 by dragging, clicking, or typing.'}
+                : unansweredHint || `Select a value from ${effectiveRangeMin} to ${effectiveRangeMax} by dragging, clicking, or typing.`}
           </div>
         </div>
       </div>
@@ -342,6 +391,161 @@ export function BurdenCard({
             final question
           </small>
         )}
+      </div>
+    </div>
+  )
+}
+
+function DomainSpectrumKnob({
+  value,
+  min,
+  max,
+  disabled,
+  onChange
+}: {
+  value: number
+  min: number
+  max: number
+  disabled: boolean
+  onChange: (value: number) => void
+}) {
+  const span = Math.max(1, max - min)
+  const toPercent = (value: number) => ((value - min) / span) * 100
+  const habitatColor = '#ff9a3c'
+  const socialNetworksColor = '#4ea5ff'
+  const workColor = '#f6cb3f'
+  const habitatAtMin = toPercent(1)
+  const socialAt = toPercent(33)
+  const workAt = toPercent(66)
+  const habitatAtMax = toPercent(99)
+  const domainSpectrumBackground = `conic-gradient(from -103deg, ${habitatColor} ${habitatAtMin.toFixed(3)}%, ${socialNetworksColor} ${socialAt.toFixed(3)}%, ${workColor} ${workAt.toFixed(3)}%, ${habitatColor} ${habitatAtMax.toFixed(3)}%)`
+  const majorLabels = ['habitat', 'social networks', 'work']
+  const majorTicks = majorLabels.map((label, index) => ({
+    angle: 0 + index * 120,
+    label
+  }))
+  const minorTicks = majorTicks.flatMap((current, index) => {
+    const nextAngle = 0 + ((index + 1) % majorTicks.length) * 120
+    const segmentEnd = nextAngle <= current.angle ? nextAngle + 360 : nextAngle
+    // Six in-between graduations split each 120-degree segment into seven equal parts.
+    return [1, 2, 3, 4, 5, 6].map((step) => ({
+      angle: current.angle + ((segmentEnd - current.angle) * step) / 7
+    }))
+  })
+
+  return (
+    <div
+      className={`relative h-[280px] w-[280px] ${disabled ? 'opacity-60' : ''}`}
+      style={{ filter: disabled ? 'grayscale(0.35)' : 'none' }}
+    >
+      {majorTicks.map((tick) => (
+        <TickMark key={`major-${tick.angle}`} angle={tick.angle} radius={132} length={14} thickness={2} color="#ffffffb5" />
+      ))}
+      {minorTicks.map((tick) => (
+        <TickMark key={`minor-${tick.angle}`} angle={tick.angle} radius={132} length={8} thickness={1.5} color="#ffffff60" />
+      ))}
+      {majorTicks.map((tick, index) => (
+        <DomainLabel key={`label-${tick.angle}`} angle={tick.angle} radius={156} label={tick.label} emphasized />
+      ))}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div
+          className="h-[210px] w-[210px] rounded-full"
+          style={{
+            background: domainSpectrumBackground,
+            WebkitMask: 'radial-gradient(circle, transparent 0 90px, #000 91px)',
+            mask: 'radial-gradient(circle, transparent 0 90px, #000 91px)'
+          }}
+        />
+      </div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <CircularSlider
+          width={210}
+          min={min}
+          max={max}
+          data={Array.from({ length: max - min + 1 }, (_, idx) => min + idx)}
+          dataIndex={Math.max(0, Math.min(max - min, value - min))}
+          knobPosition="top"
+          knobSize={34}
+          knobColor="#111111"
+          progressSize={14}
+          trackSize={14}
+          label=""
+          hideLabelValue
+          progressLineCap="round"
+          progressColorFrom="rgba(0,0,0,0)"
+          progressColorTo="rgba(0,0,0,0)"
+          trackColor="rgba(0,0,0,0)"
+          onChange={(nextValue) => {
+            if (disabled) return
+            const parsed = typeof nextValue === 'number' ? nextValue : Number(nextValue)
+            if (!Number.isFinite(parsed)) return
+            onChange(Math.max(min, Math.min(max, Math.round(parsed))))
+          }}
+        />
+      </div>
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="h-[92px] w-[92px] rounded-full border border-white/15 bg-[#070707]/95 shadow-[inset_0_2px_10px_rgba(255,255,255,0.06),0_8px_20px_rgba(0,0,0,0.45)]" />
+      </div>
+    </div>
+  )
+}
+
+function TickMark({
+  angle,
+  radius,
+  length,
+  thickness,
+  color
+}: {
+  angle: number
+  radius: number
+  length: number
+  thickness: number
+  color: string
+}) {
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 top-1/2 origin-center"
+      style={{ transform: `translate(-50%, -50%) rotate(${angle}deg)` }}
+      aria-hidden="true"
+    >
+      <div
+        style={{
+          transform: `translateY(-${radius}px)`,
+          width: `${thickness}px`,
+          height: `${length}px`,
+          borderRadius: '999px',
+          backgroundColor: color
+        }}
+      />
+    </div>
+  )
+}
+
+function DomainLabel({
+  angle,
+  radius,
+  label,
+  emphasized
+}: {
+  angle: number
+  radius: number
+  label: string
+  emphasized: boolean
+}) {
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 top-1/2 origin-center"
+      style={{ transform: `translate(-50%, -50%) rotate(${angle}deg)` }}
+      aria-hidden="true"
+    >
+      <div
+        style={{ transform: `translateY(-${radius}px) rotate(${-angle}deg)` }}
+        className={`rounded-full border px-2 py-[2px] text-center text-[10px] uppercase tracking-[0.08em] ${
+          emphasized ? 'border-white/45 text-white' : 'border-white/20 text-[#c6c6c6]'
+        }`}
+      >
+        {label}
       </div>
     </div>
   )

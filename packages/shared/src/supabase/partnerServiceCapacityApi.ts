@@ -21,6 +21,7 @@ import type {
 
 let supportsDraftSubmissionSchema: boolean | null = null;
 let supportsNotEncounteredAnswerSchema: boolean | null = null;
+const ZCODE_DOMAIN_SURVEY_FORM_VERSION = "2026-z-domain-spectrum-v1";
 
 // Feature probes are memoized at module scope so autosave loops do not repeat
 // failing writes against legacy database schemas on every request.
@@ -70,6 +71,10 @@ function shouldFallbackToLegacyNotEncounteredAnswerSchema(error: unknown) {
 
 function getNotEncounteredMigrationRequiredMessage() {
   return "This database is missing the survey answer schema needed for 'not encountered'. Apply `supabase/migrations/20260414_zcode_master_alignment.sql` before using that option.";
+}
+
+function getDomainSpectrumRangeMigrationRequiredMessage() {
+  return "This database is still enforcing the legacy 1-9 burden score range. Apply `supabase/migrations/20260510013000_partner_service_capacity_domain_spectrum_range.sql` before using the 1-99 domain spectrum survey.";
 }
 
 function mapSubmissionRow(
@@ -560,6 +565,9 @@ export async function savePartnerServiceCapacitySubmission(
   }
 
   if (!answers) {
+    if (input.answers.some((answer) => typeof answer.score === "number" && answer.score > 9)) {
+      throw new Error(getDomainSpectrumRangeMigrationRequiredMessage());
+    }
     if (input.answers.some((answer) => answer.notEncountered || typeof answer.score !== "number")) {
       throw new Error(getNotEncounteredMigrationRequiredMessage());
     }
@@ -594,6 +602,12 @@ export async function syncPartnerServiceCapacityDerivedTables(
   client: SupabaseClient<AtlasDatabase>,
   record: PartnerServiceCapacitySubmissionRecord,
 ) {
+  if (record.formVersion === ZCODE_DOMAIN_SURVEY_FORM_VERSION) {
+    // Domain-spectrum submissions drive radial chart positioning directly in the application
+    // layer and should not overwrite burden/capability tables that power route ranking.
+    return record;
+  }
+
   // Only finalized submissions should influence network capability signals.
   if (record.status !== "completed" || !record.partnerId) {
     return record;

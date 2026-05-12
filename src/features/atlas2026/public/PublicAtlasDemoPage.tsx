@@ -13,6 +13,8 @@ import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 const DEMO_PASSCODE_SESSION_KEY = 'atlas2026.public.demo-passcode-verified.v1'
 const DEMO_STEP_COLORS = [SP_COLORS.red, SP_COLORS.yellow, SP_COLORS.deepGreen] as const
 const SINGLE_PANE_ROLE_SESSION_KEY = 'atlas2026.singlepane.session.role'
+const SINGLE_PANE_ACTIVE_MENU_SESSION_KEY = 'atlas2026.singlepane.session.active-menu'
+const SINGLE_PANE_REMOTE_SESSION_KEY = 'atlas2026.singlepane.session.remote-session'
 const EMPTY_PROGRAM_STATE: NavigatorProgramState = {
   pickupQueue: [],
   selfAssessments: [],
@@ -108,9 +110,22 @@ export default function PublicAtlasDemoPage() {
     window.sessionStorage.setItem(SINGLE_PANE_ROLE_SESSION_KEY, role)
   }
 
+  function setSinglePaneWorkspace(role: 'navigator' | 'partner', activeMenu: string) {
+    if (typeof window === 'undefined') return
+    // Keep demo modal launch deterministic so step workspaces always mirror the real app role/menu.
+    window.sessionStorage.setItem(SINGLE_PANE_ROLE_SESSION_KEY, role)
+    window.sessionStorage.setItem(SINGLE_PANE_ACTIVE_MENU_SESSION_KEY, activeMenu)
+    window.sessionStorage.removeItem(SINGLE_PANE_REMOTE_SESSION_KEY)
+  }
+
   function openWorkspace(workspace: DemoWorkspace) {
-    if (workspace === 'profile') setSinglePaneRole('navigator')
-    if (workspace === 'station') setSinglePaneRole('partner')
+    if (workspace === 'profile') {
+      setSinglePaneWorkspace('navigator', 'enrollees')
+    } else if (workspace === 'station') {
+      setSinglePaneWorkspace('partner', 'my station')
+    } else {
+      setSinglePaneRole('navigator')
+    }
     setActiveWorkspace(workspace)
   }
 
@@ -319,7 +334,7 @@ export default function PublicAtlasDemoPage() {
         >
           <iframe
             title="atlas navigator workspace"
-            src="/app"
+            src="/app#enrollees"
             className="h-full w-full rounded-[20px] border border-white/10"
           />
         </LiveWorkspaceModal>
@@ -332,7 +347,7 @@ export default function PublicAtlasDemoPage() {
         >
           <iframe
             title="atlas partner workspace"
-            src="/app"
+            src="/app#my-station"
             className="h-full w-full rounded-[20px] border border-white/10"
           />
         </LiveWorkspaceModal>

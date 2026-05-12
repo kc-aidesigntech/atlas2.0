@@ -4,6 +4,10 @@ import { AtlasPlusButton, AtlasTextButton } from '../../components/AtlasPrimitiv
 import AtlasArrowIcon from '../../components/AtlasArrowIcon'
 import {
   SERVICE_CAPACITY_FORM_VERSION,
+  ZCODE_DOMAIN_SCALE_GUIDE,
+  ZCODE_DOMAIN_SCORE_RANGE,
+  ZCODE_DOMAIN_SURVEY_FORM_VERSION,
+  describeZCodeDomainSpectrumScore,
   flattenSurveyPrompts
 } from '../data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '../theme'
@@ -57,6 +61,20 @@ interface ServiceCapacitySurveyPanelProps {
   }) => Promise<PartnerIdentifierRecord>
   onSubmit: (payload: PartnerServiceCapacitySubmissionInput) => Promise<PartnerServiceCapacitySubmissionRecord | void> | PartnerServiceCapacitySubmissionRecord | void
   onDeleteDraft: (submissionId: string) => Promise<{ id: string; draftKey: string } | void> | { id: string; draftKey: string } | void
+  surveyVariant?: 'burden' | 'domainSpectrum'
+}
+
+interface SurveyCardConfig {
+  formVersion: string
+  scale: PartnerServiceCapacityScaleOption[] | null
+  scoreRange: { min: number; max: number; step?: number } | null
+  panelTitle: string
+  panelSubtitle: string
+  promptQuestion: string
+  assignmentLabel: string
+  unansweredHint: string
+  inputControl: 'slider' | 'knob'
+  describeScore?: (score: number) => { value: number; label: string; description: string }
 }
 
 interface ServiceCapacitySurveyFormProps {
@@ -67,8 +85,10 @@ interface ServiceCapacitySurveyFormProps {
   isSaving: boolean
   saveError: string | null
   scale: PartnerServiceCapacityScaleOption[]
+  scoreRange: { min: number; max: number; step?: number } | null
   sections: ZCodeSurveySection[]
   isLoadingCatalog: boolean
+  surveyConfig: SurveyCardConfig
   onSearchPartnerIdentifiers: (firstName: string, lastName: string) => Promise<PartnerIdentifierRecord[]>
   onEnsurePartnerIdentifier: (header: {
     firstName: string
@@ -90,6 +110,29 @@ const ROLE_OPTIONS: Array<{ value: PartnerSurveyRespondentRole; label: string }>
 type PanelView = 'history' | 'survey'
 const SUPPORT_EMAIL = 'support@transitionalcare.net'
 const SERVICE_CAPACITY_SAVE_ERROR = 'Unable to save service capacity survey.'
+const BURDEN_SURVEY_CONFIG: SurveyCardConfig = {
+  formVersion: SERVICE_CAPACITY_FORM_VERSION,
+  scale: null,
+  scoreRange: null,
+  panelTitle: 'Z-code burden survey',
+  panelSubtitle: 'Capture how well your organization can handle each Z-code pressure area on a 1-9 burden scale.',
+  promptQuestion: 'Is this handled as a core specialty or is it a burden to have to handle it?',
+  assignmentLabel: 'assign a burden score',
+  unansweredHint: 'Select a value from 1 to 9 by dragging, clicking, or typing.',
+  inputControl: 'slider'
+}
+const DOMAIN_SPECTRUM_SURVEY_CONFIG: SurveyCardConfig = {
+  formVersion: ZCODE_DOMAIN_SURVEY_FORM_VERSION,
+  scale: ZCODE_DOMAIN_SCALE_GUIDE,
+  scoreRange: ZCODE_DOMAIN_SCORE_RANGE,
+  panelTitle: 'Z-code to domain spectrum survey',
+  panelSubtitle: 'Rate each Z-code on a 1-99 domain spectrum to drive habitat, social networks, and work radial positioning.',
+  promptQuestion: 'Where should this Z-code sit on the 1-99 habitat-social-work-habitat spectrum?',
+  assignmentLabel: 'assign a domain spectrum value',
+  unansweredHint: 'Select a value from 1 to 99 by dragging, clicking, or typing.',
+  inputControl: 'knob',
+  describeScore: describeZCodeDomainSpectrumScore
+}
 
 interface VisiblePromptEntry {
   section: ZCodeSurveySection
@@ -155,9 +198,13 @@ export default function ServiceCapacitySurveyPanel({
   onSearchPartnerIdentifiers,
   onEnsurePartnerIdentifier,
   onSubmit,
-  onDeleteDraft
+  onDeleteDraft,
+  surveyVariant = 'burden'
 }: ServiceCapacitySurveyPanelProps) {
   const { scale, sections, isLoading: isLoadingCatalog } = useServiceCapacitySurveyCatalog()
+  const surveyConfig = surveyVariant === 'domainSpectrum' ? DOMAIN_SPECTRUM_SURVEY_CONFIG : BURDEN_SURVEY_CONFIG
+  const effectiveScale = surveyConfig.scale || scale
+  const scoreRange = surveyConfig.scoreRange
   const totalSurveyCardCount = useMemo(() => sections.reduce((count, section) => count + section.prompts.length, 0), [sections])
   const sortedSubmissionHistory = useMemo(
     () => submissionHistory.slice().sort((left, right) => getRecordSortTime(right) - getRecordSortTime(left)),
@@ -289,9 +336,11 @@ export default function ServiceCapacitySurveyPanel({
       defaultHeader={defaultHeader}
       isSaving={isSaving}
       saveError={saveError}
-      scale={scale}
+      scale={effectiveScale}
+      scoreRange={scoreRange}
       sections={sections}
       isLoadingCatalog={isLoadingCatalog}
+      surveyConfig={surveyConfig}
       onSearchPartnerIdentifiers={onSearchPartnerIdentifiers}
       onEnsurePartnerIdentifier={onEnsurePartnerIdentifier}
       onSubmit={handleSubmit}
@@ -310,8 +359,10 @@ function ServiceCapacitySurveyForm({
   isSaving,
   saveError,
   scale,
+  scoreRange,
   sections,
   isLoadingCatalog,
+  surveyConfig,
   onSearchPartnerIdentifiers,
   onEnsurePartnerIdentifier,
   onSubmit,
@@ -559,7 +610,18 @@ function ServiceCapacitySurveyForm({
     })
   }, [isSurveyComplete])
 
-  const useImmersiveSurveyLayout = isSurveyImmersed && !isMobileViewport
+  // Knob-based domain spectrum input needs more vertical room than the compact
+  // sticky survey shell; keep full-height card mode so the full control is visible.
+  const useImmersiveSurveyLayout = isSurveyImmersed && !isMobileViewport && surveyConfig.inputControl !== 'knob'
+  const scoreMin = scoreRange?.min ?? scale[0]?.value ?? 1
+  const scoreMax = scoreRange?.max ?? scale[scale.length - 1]?.value ?? 9
+
+  function getScaleGuideColor(value: number) {
+    const ratio = scoreMax === scoreMin ? 0.5 : (value - scoreMin) / (scoreMax - scoreMin)
+    if (ratio <= 0.33) return SP_COLORS.red
+    if (ratio <= 0.66) return SP_COLORS.yellow
+    return SP_COLORS.deepGreen
+  }
 
   function updateHeader<K extends keyof PartnerServiceCapacityHeader>(key: K, value: PartnerServiceCapacityHeader[K]) {
     hasPendingAutosaveRef.current = true
@@ -643,7 +705,7 @@ function ServiceCapacitySurveyForm({
       completedAtIso: null,
       header: draft.header,
       answers: answeredAnswers,
-      formVersion: SERVICE_CAPACITY_FORM_VERSION
+      formVersion: surveyConfig.formVersion
     }
     const snapshot = JSON.stringify(payload)
     if (snapshot === lastAutosavedSnapshotRef.current) return
@@ -712,7 +774,7 @@ function ServiceCapacitySurveyForm({
           otherRoleText: draft.header.otherRoleText.trim()
         },
         answers: completedAnswers,
-        formVersion: SERVICE_CAPACITY_FORM_VERSION
+        formVersion: surveyConfig.formVersion
       })
     } catch (error) {
       setAutosaveState('error')
@@ -787,9 +849,9 @@ function ServiceCapacitySurveyForm({
           <small className="atlas-overline block md:text-[14px]" style={{ color: SP_COLORS.muted }}>
             partner service capacity
           </small>
-          <h3 className="atlas-h3 mt-1 text-[28px] font-medium text-white md:text-[34px]">Z-code burden survey</h3>
+          <h3 className="atlas-h3 mt-1 text-[28px] font-medium text-white md:text-[34px]">{surveyConfig.panelTitle}</h3>
           <small className="atlas-panel-copy block text-[#bdbdbd] md:text-[17px]">
-            Capture how well your organization can handle each Z-code pressure area on a 1-9 burden scale.
+            {surveyConfig.panelSubtitle}
           </small>
         </div>
         <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
@@ -960,7 +1022,7 @@ function ServiceCapacitySurveyForm({
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {scale.map((option) => (
               <div key={option.value} className="rounded-[12px] border px-3 py-2" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
-                <div className="text-[13px] font-medium md:text-[15px]" style={{ color: option.value >= 7 ? SP_COLORS.deepGreen : option.value <= 3 ? SP_COLORS.red : SP_COLORS.yellow }}>
+                <div className="text-[13px] font-medium md:text-[15px]" style={{ color: getScaleGuideColor(option.value) }}>
                   {option.value} - {option.label}
                 </div>
                 <small className="block text-[12px] text-[#bdbdbd] md:text-[13px]">{option.description}</small>
@@ -1023,10 +1085,10 @@ function ServiceCapacitySurveyForm({
                   style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}
                 >
                   <small className="block text-[11px] uppercase tracking-[0.12em] md:text-[12px]" style={{ color: SP_COLORS.muted }}>
-                    z-code burden questions
+                    z-code survey questions
                   </small>
                   <div className={`mt-1 font-medium leading-snug text-white ${useImmersiveSurveyLayout ? 'text-[16px] md:text-[19px]' : 'text-[18px] md:text-[22px]'}`}>
-                    Is this handled as a core specialty or is it a burden to have to handle it?
+                    {surveyConfig.promptQuestion}
                   </div>
                 </div>
               </div>
@@ -1050,6 +1112,11 @@ function ServiceCapacitySurveyForm({
                     onResumeNavigate={goToLastAnsweredPrompt}
                     onChange={(score) => updateAnswer(currentPromptEntry.prompt.id, { score, notEncountered: false })}
                     onNotEncounteredChange={(value) => updateAnswer(currentPromptEntry.prompt.id, { notEncountered: value, score: null })}
+                    scoreRange={scoreRange}
+                    describeScore={surveyConfig.describeScore}
+                    assignmentLabel={surveyConfig.assignmentLabel}
+                    unansweredHint={surveyConfig.unansweredHint}
+                    inputControl={surveyConfig.inputControl}
                   />
                 </div>
               </div>

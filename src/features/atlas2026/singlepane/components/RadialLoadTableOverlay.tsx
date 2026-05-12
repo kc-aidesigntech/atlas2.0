@@ -16,6 +16,8 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
   // Snapshot rows immediately so rendering remains stable even if upstream data refreshes while overlay is open.
   const rows = breakdown?.rows || []
   const isPartnerSurvey = breakdown?.sourceKind === 'partnerSurvey'
+  const isPartnerDomainSpectrum = isPartnerSurvey && (breakdown?.sourceLabel || '').toLowerCase().includes('domain spectrum')
+  const isRouteBoardCapacityInversion = (breakdown?.sourceLabel || '').toLowerCase().includes('route-board capacity inversion')
   const isWeightedSurvey = breakdown?.sourceKind === 'partnerSurvey' || breakdown?.sourceKind === 'enrolleeSurvey'
 
   return (
@@ -53,8 +55,12 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
             <div>
               <small className="block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd]">derived source rows</small>
               <small className="text-[12px] text-[#8f8f8f]">
-                {isPartnerSurvey
-                  ? 'Partner chart values are inverted burden averages from the last three completed service-capacity surveys.'
+                {isRouteBoardCapacityInversion
+                  ? 'Navigator chart values invert average partner strength (1-9) across route-board candidates for each enrollee Z-code.'
+                  : isPartnerSurvey
+                  ? isPartnerDomainSpectrum
+                    ? 'Partner chart values are weighted domain-spectrum averages from the last three completed Z-code domain surveys.'
+                    : 'Partner chart values are inverted burden averages from the last three completed service-capacity surveys.'
                   : isWeightedSurvey
                     ? 'Enrollee chart values are weighted domain averages from the latest burden survey.'
                     : 'Enrollee chart values are derived from active Z-Code records mapped into habitat, work, and social domains.'}
@@ -70,7 +76,18 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
                   <tr className="text-[11px] uppercase tracking-[0.08em] text-[#9f9f9f]">
                     <th className="border-b border-white/10 px-3 py-2 font-medium">z-code</th>
                     <th className="border-b border-white/10 px-3 py-2 font-medium">mapped domain</th>
-                    <th className="border-b border-white/10 px-3 py-2 font-medium text-right">{isPartnerSurvey ? 'avg burden' : 'chart input'}</th>
+                    <th className="border-b border-white/10 px-3 py-2 font-medium text-right">
+                      {isRouteBoardCapacityInversion
+                        ? 'inverted burden'
+                        : isPartnerSurvey
+                          ? isPartnerDomainSpectrum
+                            ? 'avg domain signal'
+                            : 'avg burden'
+                          : 'chart input'}
+                    </th>
+                    {isRouteBoardCapacityInversion ? (
+                      <th className="border-b border-white/10 px-3 py-2 font-medium">partner score trace</th>
+                    ) : null}
                     {isPartnerSurvey ? <th className="border-b border-white/10 px-3 py-2 font-medium text-right">surveys</th> : null}
                   </tr>
                 </thead>
@@ -80,6 +97,11 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
                       <td className="border-b border-white/5 px-3 py-3">{row.zCodeGroup.toUpperCase()}</td>
                       <td className="border-b border-white/5 px-3 py-3">{formatBucketLabel(row.mappedDomain)}</td>
                       <td className="border-b border-white/5 px-3 py-3 text-right">{formatMetricValue(row.rawCount)}</td>
+                      {isRouteBoardCapacityInversion ? (
+                        <td className="border-b border-white/5 px-3 py-3">
+                          <RouteBoardScoreTraceCell row={row} />
+                        </td>
+                      ) : null}
                       {isPartnerSurvey ? (
                         <td className="border-b border-white/5 px-3 py-3 text-right">{row.responseCount || 0}</td>
                       ) : null}
@@ -128,4 +150,25 @@ function formatBucketLabel(bucket: DomainLoadBreakdown['rows'][number]['mappedDo
 
 function formatMetricValue(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
+function RouteBoardScoreTraceCell({ row }: { row: DomainLoadBreakdown['rows'][number] }) {
+  const traceRows = row.partnerScoreTrace || []
+  if (!traceRows.length) {
+    return <span className="text-[#a5a5a5]">No candidate score rows</span>
+  }
+  const avgStrength = row.averagePartnerStrength ?? 0
+  return (
+    <div className="space-y-1">
+      <div className="text-[11px] text-[#a7a7a7]">
+        avg strength {formatMetricValue(avgStrength)} {'->'} burden {formatMetricValue(row.rawCount)}
+      </div>
+      {traceRows.map((traceRow, index) => (
+        <div key={`${row.id}:trace:${traceRow.partnerId || index}`} className="flex items-center justify-between gap-4 text-[12px]">
+          <span className="truncate text-[#dfdfdf]">{traceRow.partnerLabel}</span>
+          <span className="shrink-0 text-[#b9f6ea]">{formatMetricValue(traceRow.score)}</span>
+        </div>
+      ))}
+    </div>
+  )
 }

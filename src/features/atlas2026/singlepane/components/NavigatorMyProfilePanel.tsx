@@ -44,7 +44,10 @@ interface NavigatorMyProfilePanelProps {
   avatarUploadError?: string | null
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenEnrolleeSurvey?: (enrolleeId: string) => void
-  onToggleEnrollmentAssignment: (enrollmentId: string, mode: 'assign' | 'unassign') => Promise<void> | void
+  onToggleEnrollmentAssignment: (
+    enrollmentId: string,
+    mode: 'accept' | 'archive' | 'assign' | 'unassign'
+  ) => Promise<void> | void
   onSaveSelfAssessment: (record: NavigatorSelfAssessmentRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
 }
@@ -148,7 +151,7 @@ export default function NavigatorMyProfilePanel({
             </div>
           </div>
         </div>
-        <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-0 md:-mr-1 lg:-mr-3 xl:-mr-6 2xl:-mr-10">
+        <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
           <RadialLoadChart load={aggregateLoad} onClick={onOpenLoadTable} />
         </div>
       </div>

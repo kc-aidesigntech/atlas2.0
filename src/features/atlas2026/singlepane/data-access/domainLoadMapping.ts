@@ -6,6 +6,10 @@ import type {
   PartnerServiceCapacitySubmissionRecord,
   PartnerStationSpecialtyGroup
 } from '@/features/atlas2026/singlepane/types'
+import {
+  ZCODE_DOMAIN_SCORE_RANGE,
+  ZCODE_DOMAIN_SURVEY_FORM_VERSION
+} from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 
 interface BurdenAnswerLike {
   parentCode: string
@@ -52,6 +56,40 @@ function normalizeParentCode(value: string) {
 
 function normalizeZCode(value: string) {
   return value.trim().toUpperCase()
+}
+
+function isDomainSpectrumSurveyForm(formVersion: string | null | undefined) {
+  return (formVersion || '').trim() === ZCODE_DOMAIN_SURVEY_FORM_VERSION
+}
+
+function clampDomainSpectrumScore(score: number) {
+  return Math.max(ZCODE_DOMAIN_SCORE_RANGE.min, Math.min(ZCODE_DOMAIN_SCORE_RANGE.max, score))
+}
+
+function projectDomainSpectrumScore(score: number) {
+  const clampedScore = clampDomainSpectrumScore(score)
+  if (clampedScore <= 33) {
+    const t = (clampedScore - 1) / 32
+    return {
+      habitat: 1 - t,
+      socialNetworks: t,
+      work: 0
+    }
+  }
+  if (clampedScore <= 66) {
+    const t = (clampedScore - 33) / 33
+    return {
+      habitat: 0,
+      socialNetworks: 1 - t,
+      work: t
+    }
+  }
+  const t = (clampedScore - 66) / 33
+  return {
+    habitat: t,
+    socialNetworks: 0,
+    work: 1 - t
+  }
 }
 
 function toDomainTotals(rows: DomainLoadBreakdownRow[]) {
@@ -103,6 +141,11 @@ export function derivePartnerStationSpecialtyGroups(
   submission: PartnerServiceCapacitySubmissionRecord | null
 ): PartnerStationSpecialtyGroup[] {
   if (!submission) return []
+  if (isDomainSpectrumSurveyForm(submission.formVersion)) {
+    // Domain-spectrum submissions model chart placement instead of specialty burden thresholds.
+    // Existing specialty chips remain tied to classic burden-form submissions only.
+    return []
+  }
 
   const grouped = new Map<string, PartnerStationSpecialtyGroup['zCodes']>()
   const totalByParent = new Map<string, Set<string>>()
@@ -175,6 +218,17 @@ export function buildPartnerBurdenBreakdownFromHistory(
       count: number
     }
   >()
+  const domainSpectrumByZCode = new Map<
+    string,
+    {
+      zCodeGroup: string
+      parentCode: string
+      habitatTotal: number
+      socialNetworksTotal: number
+      workTotal: number
+      count: number
+    }
+  >()
 
   selectedSubmissions.forEach((submission) => {
     submission.answers.forEach((answer) => {
@@ -182,6 +236,25 @@ export function buildPartnerBurdenBreakdownFromHistory(
       const normalizedZCode = normalizeZCode(answer.normalizedZCode || answer.zCode)
       const parentCode = normalizeParentCode(answer.parentCode)
       if (!normalizedZCode || !parentCode) return
+      if (isDomainSpectrumSurveyForm(submission.formVersion)) {
+        // Domain-spectrum submissions encode a cyclic position across habitat, social networks,
+        // and work, so each answer contributes weighted signal to all three radial axes.
+        const projected = projectDomainSpectrumScore(answer.score)
+        const current = domainSpectrumByZCode.get(normalizedZCode) || {
+          zCodeGroup: answer.zCode,
+          parentCode,
+          habitatTotal: 0,
+          socialNetworksTotal: 0,
+          workTotal: 0,
+          count: 0
+        }
+        current.habitatTotal += projected.habitat * 9
+        current.socialNetworksTotal += projected.socialNetworks * 9
+        current.workTotal += projected.work * 9
+        current.count += 1
+        domainSpectrumByZCode.set(normalizedZCode, current)
+        return
+      }
       const burdenScore = Math.max(0, 9 - answer.score)
       const current = burdenByZCode.get(normalizedZCode) || {
         zCodeGroup: answer.zCode,
@@ -196,19 +269,49 @@ export function buildPartnerBurdenBreakdownFromHistory(
     })
   })
 
-  const rows = Array.from(burdenByZCode.entries())
-    .map<DomainLoadBreakdownRow>(([normalizedZCode, entry]) => ({
-      id: normalizedZCode,
-      zCodeGroup: entry.zCodeGroup,
-      parentCode: entry.parentCode,
-      mappedDomain: entry.mappedDomain,
-      rawCount: entry.count ? entry.total / entry.count : 0,
-      responseCount: entry.count
-    }))
-    .sort((left, right) => {
-      const parentOrder = sortCodes(left.parentCode || '', right.parentCode || '')
-      return parentOrder || sortCodes(left.zCodeGroup, right.zCodeGroup)
-    })
+  const domainSpectrumRows = Array.from(domainSpectrumByZCode.entries()).flatMap(([normalizedZCode, entry]) => {
+    if (!entry.count) return []
+    return [
+      {
+        id: `${normalizedZCode}-habitat`,
+        zCodeGroup: entry.zCodeGroup,
+        parentCode: entry.parentCode,
+        mappedDomain: 'habitat' as const,
+        rawCount: entry.habitatTotal / entry.count,
+        responseCount: entry.count
+      },
+      {
+        id: `${normalizedZCode}-social`,
+        zCodeGroup: entry.zCodeGroup,
+        parentCode: entry.parentCode,
+        mappedDomain: 'socialNetworks' as const,
+        rawCount: entry.socialNetworksTotal / entry.count,
+        responseCount: entry.count
+      },
+      {
+        id: `${normalizedZCode}-work`,
+        zCodeGroup: entry.zCodeGroup,
+        parentCode: entry.parentCode,
+        mappedDomain: 'work' as const,
+        rawCount: entry.workTotal / entry.count,
+        responseCount: entry.count
+      }
+    ] satisfies DomainLoadBreakdownRow[]
+  })
+
+  const burdenRows = Array.from(burdenByZCode.entries()).map<DomainLoadBreakdownRow>(([normalizedZCode, entry]) => ({
+    id: normalizedZCode,
+    zCodeGroup: entry.zCodeGroup,
+    parentCode: entry.parentCode,
+    mappedDomain: entry.mappedDomain,
+    rawCount: entry.count ? entry.total / entry.count : 0,
+    responseCount: entry.count
+  }))
+
+  const rows = (domainSpectrumRows.length ? domainSpectrumRows : burdenRows).sort((left, right) => {
+    const parentOrder = sortCodes(left.parentCode || '', right.parentCode || '')
+    return parentOrder || sortCodes(left.zCodeGroup, right.zCodeGroup)
+  })
 
   if (!rows.length) return null
 
@@ -217,7 +320,9 @@ export function buildPartnerBurdenBreakdownFromHistory(
     subjectId: options.subjectId,
     subjectLabel: options.subjectLabel,
     sourceKind: 'partnerSurvey',
-    sourceLabel: `partner burden survey average · last ${selectedSubmissions.length} completed`,
+    sourceLabel: domainSpectrumRows.length
+      ? `partner domain spectrum average · last ${selectedSubmissions.length} completed`
+      : `partner burden survey average · last ${selectedSubmissions.length} completed`,
     rows,
     ...totals
   }

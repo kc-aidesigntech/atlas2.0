@@ -17,6 +17,7 @@ import {
   persistLocalStorageState,
   upsertConfigPayload
 } from '@/features/atlas2026/singlepane/data-access/configDocumentPersistence'
+import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 const SETTINGS_CONFIG_KEY = 'account_settings'
 const ENROLLEE_INTAKE_CONFIG_KEY_PREFIX = 'enrollee_intake:'
@@ -44,29 +45,90 @@ function getDefaultAccountSettings(): AccountSettings {
   }
 }
 
-function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | null | undefined) {
+function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | null | undefined, fallback: AccountSettings = getDefaultAccountSettings()) {
   const enabledRoles = Array.isArray(payload?.enabledRoles)
     ? payload!.enabledRoles.filter((role): role is AtlasRole => ['navigator', 'partner', 'supervisor', 'administrator'].includes(String(role)))
-    : getDefaultAccountSettings().enabledRoles
+    : fallback.enabledRoles
   return {
-    fullName: payload?.fullName || getDefaultAccountSettings().fullName,
-    email: payload?.email || getDefaultAccountSettings().email,
-    organization: payload?.organization || getDefaultAccountSettings().organization,
+    fullName: payload?.fullName || fallback.fullName,
+    email: payload?.email || fallback.email,
+    organization: payload?.organization || fallback.organization,
     avatarUrl: typeof payload?.avatarUrl === 'string' ? payload.avatarUrl : null,
-    enabledRoles: enabledRoles.length ? enabledRoles : getDefaultAccountSettings().enabledRoles
+    enabledRoles: enabledRoles.length ? enabledRoles : fallback.enabledRoles
   } satisfies AccountSettings
 }
 
-function loadLocalAccountSettingsState(): AccountSettings {
+function loadLocalAccountSettingsState(storageKey = LOCAL_ACCOUNT_SETTINGS_KEY, fallback: AccountSettings = getDefaultAccountSettings()): AccountSettings {
   return loadLocalStorageState(
-    LOCAL_ACCOUNT_SETTINGS_KEY,
-    getDefaultAccountSettings(),
-    (parsed) => normalizeAccountSettingsPayload(parsed as Partial<AccountSettings>)
+    storageKey,
+    fallback,
+    (parsed) => normalizeAccountSettingsPayload(parsed as Partial<AccountSettings>, fallback)
   )
 }
 
-function persistLocalAccountSettingsState(settings: AccountSettings) {
-  persistLocalStorageState(LOCAL_ACCOUNT_SETTINGS_KEY, settings)
+function persistLocalAccountSettingsState(settings: AccountSettings, storageKey = LOCAL_ACCOUNT_SETTINGS_KEY) {
+  persistLocalStorageState(storageKey, settings)
+}
+
+interface AccountSettingsIdentityContext {
+  configKey: string
+  localStorageKey: string
+  fallback: AccountSettings
+  normalizedSessionEmail: string
+}
+
+function normalizeEmailValue(value: string | null | undefined) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function buildAccountSettingsFallbackFromSession(session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session']): AccountSettings {
+  const metadata = (session?.user?.user_metadata || {}) as Record<string, unknown>
+  const email = session?.user?.email?.trim() || getDefaultAccountSettings().email
+  const fullName =
+    String(metadata.full_name || '').trim() ||
+    `${String(metadata.first_name || '').trim()} ${String(metadata.last_name || '').trim()}`.trim() ||
+    email
+  const organization =
+    String(metadata.organization_name || '').trim() ||
+    String(metadata.organization || '').trim() ||
+    getDefaultAccountSettings().organization
+  return {
+    fullName,
+    email,
+    organization,
+    avatarUrl: null,
+    enabledRoles: ['partner']
+  }
+}
+
+async function resolveAccountSettingsIdentityContext(): Promise<AccountSettingsIdentityContext> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      configKey: SETTINGS_CONFIG_KEY,
+      localStorageKey: LOCAL_ACCOUNT_SETTINGS_KEY,
+      fallback: getDefaultAccountSettings(),
+      normalizedSessionEmail: ''
+    }
+  }
+
+  const { data, error } = await supabase.auth.getSession()
+  if (error || !data.session?.user) {
+    return {
+      configKey: SETTINGS_CONFIG_KEY,
+      localStorageKey: LOCAL_ACCOUNT_SETTINGS_KEY,
+      fallback: getDefaultAccountSettings(),
+      normalizedSessionEmail: ''
+    }
+  }
+
+  const userId = data.session.user.id?.trim()
+  const fallback = buildAccountSettingsFallbackFromSession(data.session)
+  return {
+    configKey: userId ? `${SETTINGS_CONFIG_KEY}:${userId}` : SETTINGS_CONFIG_KEY,
+    localStorageKey: userId ? `${LOCAL_ACCOUNT_SETTINGS_KEY}:${userId}` : LOCAL_ACCOUNT_SETTINGS_KEY,
+    fallback,
+    normalizedSessionEmail: normalizeEmailValue(data.session.user.email)
+  }
 }
 
 function loadLocalEnrolleeIntakeState(): Record<string, EnrolleeIntakeRecord> {
@@ -265,20 +327,34 @@ export function applyIntakeOverrides(enrollees: EnrolleeProfile[], intakeOverrid
 }
 
 export async function loadAccountSettings(): Promise<AccountSettings> {
-  const { payload, error } = await loadLatestConfigPayload<Partial<AccountSettings>>(SETTINGS_CONFIG_KEY)
+  const identityContext = await resolveAccountSettingsIdentityContext()
+  const { payload, error } = await loadLatestConfigPayload<Partial<AccountSettings>>(identityContext.configKey)
   if (error) {
-    if (isOptionalSupabaseDataError(error)) return loadLocalAccountSettingsState()
+    if (isOptionalSupabaseDataError(error)) return loadLocalAccountSettingsState(identityContext.localStorageKey, identityContext.fallback)
     throw error
   }
-  const normalized = normalizeAccountSettingsPayload(payload)
-  persistLocalAccountSettingsState(normalized)
+  if (!payload && identityContext.configKey !== SETTINGS_CONFIG_KEY) {
+    const legacy = await loadLatestConfigPayload<Partial<AccountSettings>>(SETTINGS_CONFIG_KEY)
+    if (!legacy.error && legacy.payload) {
+      const legacyNormalized = normalizeAccountSettingsPayload(legacy.payload, identityContext.fallback)
+      const legacyEmail = normalizeEmailValue(legacyNormalized.email)
+      if (!identityContext.normalizedSessionEmail || !legacyEmail || legacyEmail === identityContext.normalizedSessionEmail) {
+        persistLocalAccountSettingsState(legacyNormalized, identityContext.localStorageKey)
+        await upsertConfigPayload(identityContext.configKey, legacyNormalized)
+        return legacyNormalized
+      }
+    }
+  }
+  const normalized = normalizeAccountSettingsPayload(payload, identityContext.fallback)
+  persistLocalAccountSettingsState(normalized, identityContext.localStorageKey)
   return normalized
 }
 
 export async function saveAccountSettings(settings: AccountSettings): Promise<AccountSettings> {
-  const normalized = normalizeAccountSettingsPayload(settings)
-  persistLocalAccountSettingsState(normalized)
-  const error = await upsertConfigPayload(SETTINGS_CONFIG_KEY, normalized)
+  const identityContext = await resolveAccountSettingsIdentityContext()
+  const normalized = normalizeAccountSettingsPayload(settings, identityContext.fallback)
+  persistLocalAccountSettingsState(normalized, identityContext.localStorageKey)
+  const error = await upsertConfigPayload(identityContext.configKey, normalized)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return normalized
     throw error
