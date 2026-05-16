@@ -30,6 +30,10 @@ export interface PartnerServiceCapacityAnswer {
   description: string;
   score: number | null;
   notEncountered: boolean;
+  isNullified?: boolean;
+  nullifiedAtIso?: string | null;
+  nullifiedByEmail?: string | null;
+  nullifiedReason?: string | null;
 }
 
 export interface PartnerServiceCapacitySubmissionInput {
@@ -99,6 +103,35 @@ export interface PartnerIdentifierRecord {
   lastName: string;
   organizationName: string;
   email: string;
+}
+
+export interface ZCodeDomainSurveyAnswerLogRecord {
+  answerId: string;
+  submissionId: string;
+  normalizedZCode: string;
+  zCode: string;
+  title: string;
+  score: number;
+  respondentFirstName: string;
+  respondentLastName: string;
+  respondentEmail: string;
+  submittedAtIso: string;
+  completedAtIso: string | null;
+  isNullified: boolean;
+  nullifiedAtIso: string | null;
+  nullifiedByEmail: string | null;
+  nullifiedReason: string | null;
+}
+
+export interface ZCodeDomainSurveyHistorySummary {
+  normalizedZCode: string;
+  zCode: string;
+  title: string;
+  totalResponses: number;
+  activeResponses: number;
+  nullifiedResponses: number;
+  averageScore: number | null;
+  scoreHistory: ZCodeDomainSurveyAnswerLogRecord[];
 }
 
 export interface AtlasDatabase {
@@ -224,6 +257,10 @@ export interface AtlasDatabase {
           description: string | null;
           burden_score: number | null;
           not_encountered: boolean;
+          is_nullified: boolean;
+          nullified_at: string | null;
+          nullified_by_email: string | null;
+          nullified_reason: string | null;
           created_at: string;
         };
         Insert: {
@@ -236,6 +273,10 @@ export interface AtlasDatabase {
           description?: string | null;
           burden_score?: number | null;
           not_encountered?: boolean;
+          is_nullified?: boolean;
+          nullified_at?: string | null;
+          nullified_by_email?: string | null;
+          nullified_reason?: string | null;
         };
         Update: Partial<{
           prompt_id: string;
@@ -246,6 +287,10 @@ export interface AtlasDatabase {
           description: string | null;
           burden_score: number | null;
           not_encountered: boolean;
+          is_nullified: boolean;
+          nullified_at: string | null;
+          nullified_by_email: string | null;
+          nullified_reason: string | null;
         }>;
       };
       enrollee_burden_survey_submissions: {

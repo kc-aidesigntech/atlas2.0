@@ -28,6 +28,7 @@ import type {
   IntervalAssessmentRule,
   NavigatorProgramState,
   SupervisorNavigatorCompetencySummary,
+  ZCodeDomainSurveyHistorySummary,
   ZCodeSurveyPrompt
 } from '@/features/atlas2026/singlepane/types'
 import {
@@ -47,6 +48,10 @@ type CombinedEnrolleeRow =
 
 interface AdminDataControlPanelProps {
   metrics: AdminDataQualityMetric[]
+  zCodeDomainSurveyHistorySummary: ZCodeDomainSurveyHistorySummary[]
+  isLoadingZCodeDomainSurveyHistorySummary: boolean
+  isSavingZCodeDomainSurveyNullification: boolean
+  zCodeDomainSurveyHistoryError: string | null
   enrollees: EnrolleeProfile[]
   intakeFormsByEnrolleeId: Record<string, EnrolleeIntakeRecord>
   selectedEnrollee: EnrolleeProfile | null
@@ -60,6 +65,11 @@ interface AdminDataControlPanelProps {
   isSavingRegistry: boolean
   registryError: string | null
   onSaveRegistry: (registry: AdminPortalRegistry) => Promise<AdminPortalRegistry>
+  onSetZCodeDomainSurveyAnswerNullification: (input: {
+    answerId: string
+    isNullified: boolean
+    nullifiedReason?: string | null
+  }) => Promise<unknown> | unknown
   onSaveEnrollmentNavigators: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<unknown> | unknown
   onSaveIntervalAssessmentRule: (rule: IntervalAssessmentRule) => Promise<unknown> | unknown
   onSaveIntake: (intake: EnrolleeIntakeRecord) => Promise<unknown> | unknown
@@ -312,6 +322,10 @@ function RecordTable({
 
 export default function AdminDataControlPanel({
   metrics,
+  zCodeDomainSurveyHistorySummary,
+  isLoadingZCodeDomainSurveyHistorySummary,
+  isSavingZCodeDomainSurveyNullification,
+  zCodeDomainSurveyHistoryError,
   enrollees,
   intakeFormsByEnrolleeId,
   selectedEnrollee,
@@ -325,6 +339,7 @@ export default function AdminDataControlPanel({
   isSavingRegistry,
   registryError,
   onSaveRegistry,
+  onSetZCodeDomainSurveyAnswerNullification,
   onSaveEnrollmentNavigators,
   onSaveIntervalAssessmentRule,
   onSaveIntake
@@ -349,6 +364,8 @@ export default function AdminDataControlPanel({
   const [isSubmittingEnrollee, setIsSubmittingEnrollee] = useState(false)
   const [isZCodePickerOpen, setIsZCodePickerOpen] = useState(false)
   const [activeZCodeParentFilters, setActiveZCodeParentFilters] = useState<string[]>([])
+  const [selectedDomainSurveyZCode, setSelectedDomainSurveyZCode] = useState<string>('')
+  const [nullificationReasonByAnswerId, setNullificationReasonByAnswerId] = useState<Record<string, string>>({})
   const zCodeOverlayPanelRef = useRef<HTMLDivElement | null>(null)
   const zCodeOverlayListRef = useRef<HTMLDivElement | null>(null)
   const previousZCodeOverlayHeightRef = useRef<number | null>(null)
@@ -931,6 +948,34 @@ export default function AdminDataControlPanel({
     [combinedOrganizations.length, combinedPeople.length, enrollmentRequests, navigatorProgramState.intervalAssessmentRules.length, navigatorProgramState.pickupQueue, visibleEnrollees.length]
   )
 
+  useEffect(() => {
+    if (!zCodeDomainSurveyHistorySummary.length) {
+      setSelectedDomainSurveyZCode('')
+      return
+    }
+    if (selectedDomainSurveyZCode && zCodeDomainSurveyHistorySummary.some((entry) => entry.normalizedZCode === selectedDomainSurveyZCode)) {
+      return
+    }
+    setSelectedDomainSurveyZCode(zCodeDomainSurveyHistorySummary[0].normalizedZCode)
+  }, [selectedDomainSurveyZCode, zCodeDomainSurveyHistorySummary])
+
+  const selectedDomainSurveySummary = useMemo(
+    () => zCodeDomainSurveyHistorySummary.find((entry) => entry.normalizedZCode === selectedDomainSurveyZCode) || null,
+    [selectedDomainSurveyZCode, zCodeDomainSurveyHistorySummary]
+  )
+
+  async function handleSetDomainSurveyNullification(answerId: string, isNullified: boolean) {
+    const reason = nullificationReasonByAnswerId[answerId]?.trim() || null
+    await Promise.resolve(
+      onSetZCodeDomainSurveyAnswerNullification({
+        answerId,
+        isNullified,
+        nullifiedReason: reason
+      })
+    )
+    setPortalMessage(isNullified ? 'Answer has been nullified from the aggregate average.' : 'Answer has been restored to the aggregate average.')
+  }
+
   return (
     <AtlasPanel
       kicker="administrator portal"
@@ -975,6 +1020,8 @@ export default function AdminDataControlPanel({
           <div className="space-y-2">
             {ADMIN_SECTIONS.map((section) => {
               const isActive = section.id === activeSection
+              // Keep section pills on the canonical dark surface and reserve lucid teal for the
+              // currently selected route so state changes stay obvious without yellow/white drift.
               return (
                 <AtlasTextButton
                   key={section.id}
@@ -982,9 +1029,9 @@ export default function AdminDataControlPanel({
                   className="w-full px-4 py-3 text-left"
                   style={
                     {
-                      ['--button-border-color' as const]: isActive ? SP_COLORS.yellow : '#ffffff25',
-                      color: isActive ? SP_COLORS.yellow : SP_COLORS.white,
-                      backgroundColor: isActive ? 'rgba(252,192,26,0.08)' : 'rgba(255,255,255,0.02)'
+                      ['--button-border-color' as const]: isActive ? 'var(--atlas-signal-lucid-teal)' : '#ffffff25',
+                      color: SP_COLORS.white,
+                      backgroundColor: isActive ? 'var(--atlas-signal-lucid-teal)' : 'var(--surface-button)'
                     } as React.CSSProperties
                   }
                 >
@@ -1121,6 +1168,133 @@ export default function AdminDataControlPanel({
                     <small className="text-[13px] text-[var(--foreground-secondary)]">Supervisor assessment records will appear here once the team starts logging them.</small>
                   ) : null}
                 </div>
+              </AtlasInsetCard>
+
+              <AtlasInsetCard className="rounded-[22px] px-5 py-5 lg:col-span-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+                      z code domain survey
+                    </small>
+                    <div className="mt-1 text-[22px] font-medium text-white">Response history and anomaly controls</div>
+                    <small className="mt-1 block text-[13px] text-[var(--foreground-secondary)]">
+                      Review every response per Z-code, inspect the rolling average, and nullify anomalous entries without deleting source logs.
+                    </small>
+                  </div>
+                  <AtlasStatusPill color={isSavingZCodeDomainSurveyNullification ? SP_COLORS.yellow : SP_COLORS.deepGreen}>
+                    {isSavingZCodeDomainSurveyNullification ? 'updating nullification' : 'ready'}
+                  </AtlasStatusPill>
+                </div>
+                {isLoadingZCodeDomainSurveyHistorySummary ? (
+                  <small className="mt-4 block text-[13px] text-[var(--foreground-secondary)]">Loading z-code domain survey history...</small>
+                ) : null}
+                {zCodeDomainSurveyHistoryError ? (
+                  <small className="mt-4 block text-[13px]" style={{ color: SP_COLORS.red }}>
+                    {zCodeDomainSurveyHistoryError}
+                  </small>
+                ) : null}
+                {!isLoadingZCodeDomainSurveyHistorySummary && !zCodeDomainSurveyHistorySummary.length ? (
+                  <small className="mt-4 block text-[13px] text-[var(--foreground-secondary)]">
+                    No completed public domain survey responses are available yet.
+                  </small>
+                ) : null}
+                {zCodeDomainSurveyHistorySummary.length ? (
+                  <div className="mt-4 grid gap-4 xl:grid-cols-[0.35fr_0.65fr]">
+                    <div className="space-y-2">
+                      {zCodeDomainSurveyHistorySummary.map((summary) => {
+                        const isSelected = selectedDomainSurveySummary?.normalizedZCode === summary.normalizedZCode
+                        return (
+                          <button
+                            key={summary.normalizedZCode}
+                            type="button"
+                            className="w-full rounded-[14px] border px-3 py-2 text-left transition hover:bg-white/10"
+                            style={{
+                              borderColor: isSelected ? SP_COLORS.yellow : '#ffffff18',
+                              backgroundColor: isSelected ? 'rgba(252,192,26,0.08)' : 'rgba(255,255,255,0.02)'
+                            }}
+                            onClick={() => setSelectedDomainSurveyZCode(summary.normalizedZCode)}
+                          >
+                            <div className="text-[13px] font-medium text-white">{summary.zCode}</div>
+                            <small className="block truncate text-[11px] text-[var(--foreground-secondary)]">{summary.title}</small>
+                            <small className="mt-1 block text-[11px] text-[var(--foreground-secondary)]">
+                              avg {summary.averageScore ? summary.averageScore.toFixed(2) : 'n/a'} · active {summary.activeResponses} / total {summary.totalResponses}
+                            </small>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div>
+                      {selectedDomainSurveySummary ? (
+                        <div className="space-y-3">
+                          <div className="rounded-[14px] border border-white/10 bg-white/5 px-4 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <div className="text-[16px] font-medium text-white">
+                                  {selectedDomainSurveySummary.zCode} - {selectedDomainSurveySummary.title}
+                                </div>
+                                <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                                  Average score {selectedDomainSurveySummary.averageScore ? selectedDomainSurveySummary.averageScore.toFixed(2) : 'n/a'} from {selectedDomainSurveySummary.activeResponses} active responses.
+                                </small>
+                              </div>
+                              <small className="text-[12px] text-[var(--foreground-secondary)]">
+                                nullified {selectedDomainSurveySummary.nullifiedResponses}
+                              </small>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            {selectedDomainSurveySummary.scoreHistory.map((entry) => (
+                              <div key={entry.answerId} className="rounded-[14px] border border-white/10 bg-white/5 px-4 py-3">
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div>
+                                    <div className="text-[13px] font-medium text-white">
+                                      {entry.respondentFirstName || 'Unknown'} {entry.respondentLastName || ''} · {entry.respondentEmail || 'email not provided'}
+                                    </div>
+                                    <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                                      score {entry.score} · submitted {formatDateLabel(entry.completedAtIso || entry.submittedAtIso)}
+                                    </small>
+                                    {entry.isNullified && entry.nullifiedReason ? (
+                                      <small className="mt-1 block text-[12px] text-[var(--foreground-secondary)]">
+                                        nullified reason: {entry.nullifiedReason}
+                                      </small>
+                                    ) : null}
+                                  </div>
+                                  <AtlasStatusPill color={entry.isNullified ? SP_COLORS.red : SP_COLORS.deepGreen}>
+                                    {entry.isNullified ? 'nullified' : 'active'}
+                                  </AtlasStatusPill>
+                                </div>
+                                <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
+                                  <input
+                                    value={nullificationReasonByAnswerId[entry.answerId] || ''}
+                                    onChange={(event) =>
+                                      setNullificationReasonByAnswerId((current) => ({
+                                        ...current,
+                                        [entry.answerId]: event.target.value
+                                      }))
+                                    }
+                                    placeholder="reason for nullification (optional)"
+                                    className="atlas-admin-input"
+                                  />
+                                  <AtlasTextButton
+                                    onClick={() => void handleSetDomainSurveyNullification(entry.answerId, !entry.isNullified)}
+                                    disabled={isSavingZCodeDomainSurveyNullification}
+                                    className="px-3 py-2 text-[12px] font-medium"
+                                    style={{
+                                      ['--button-border-color' as const]: entry.isNullified ? SP_COLORS.deepGreen : SP_COLORS.red,
+                                      color: entry.isNullified ? SP_COLORS.deepGreen : SP_COLORS.red,
+                                      opacity: isSavingZCodeDomainSurveyNullification ? 0.65 : 1
+                                    } as React.CSSProperties}
+                                  >
+                                    {entry.isNullified ? 'restore answer' : 'nullify answer'}
+                                  </AtlasTextButton>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </AtlasInsetCard>
             </div>
           ) : null}

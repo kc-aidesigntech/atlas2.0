@@ -65,9 +65,11 @@ import {
 import {
   deletePartnerServiceCapacityDraftRecord,
   ensurePartnerIdentifierRecordForSurvey,
+  loadZCodeDomainSurveyHistorySummary,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
   savePartnerServiceCapacitySurvey,
+  setZCodeDomainSurveyAnswerNullified,
   searchPartnerIdentifierRecordMatches
 } from '@/features/atlas2026/singlepane/data-access/partnerServiceCapacityRepository'
 import {
@@ -994,5 +996,7 @@ export {
   saveAccessMatrixPartnerPrimaryContacts,
   deleteEnrolleeBurdenSurveyDraftRecord,
   ensurePartnerIdentifierRecordForSurvey,
-  searchPartnerIdentifierRecordMatches
+  searchPartnerIdentifierRecordMatches,
+  loadZCodeDomainSurveyHistorySummary,
+  setZCodeDomainSurveyAnswerNullified
 }

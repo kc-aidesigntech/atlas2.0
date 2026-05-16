@@ -6,13 +6,16 @@ import {
   searchPartnerIdentifierRecords,
   getPartnerServiceCapacitySubmissionByDraftKey,
   getLatestPartnerServiceCapacitySubmission,
+  listZCodeDomainSurveyHistory,
   listPartnerServiceCapacitySubmissions,
-  savePartnerServiceCapacitySubmission
+  savePartnerServiceCapacitySubmission,
+  setZCodeDomainSurveyAnswerNullification
 } from '@atlas/shared'
 import type {
   PartnerIdentifierRecord,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
+  ZCodeDomainSurveyHistorySummary
 } from '@/features/atlas2026/singlepane/types'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
@@ -114,4 +117,25 @@ export async function deletePartnerServiceCapacityDraftRecord(
   }
 
   return deletePartnerServiceCapacityDraft(supabase, submissionId)
+}
+
+export async function loadZCodeDomainSurveyHistorySummary(): Promise<ZCodeDomainSurveyHistorySummary[]> {
+  if (!hasSupabaseConfig || !supabase) {
+    return []
+  }
+
+  return listZCodeDomainSurveyHistory(supabase)
+}
+
+export async function setZCodeDomainSurveyAnswerNullified(input: {
+  answerId: string
+  isNullified: boolean
+  nullifiedByEmail?: string | null
+  nullifiedReason?: string | null
+}) {
+  if (!hasSupabaseConfig || !supabase) {
+    throw new Error('Supabase is required to nullify z-code domain survey answers.')
+  }
+
+  return setZCodeDomainSurveyAnswerNullification(supabase, input)
 }

@@ -17,6 +17,8 @@ import type {
   PartnerServiceCapacitySubmissionRecord,
   PartnerServiceCapacitySubmissionStatus,
   PartnerSurveyRespondentRole,
+  ZCodeDomainSurveyAnswerLogRecord,
+  ZCodeDomainSurveyHistorySummary,
 } from "./contracts";
 
 let supportsDraftSubmissionSchema: boolean | null = null;
@@ -110,6 +112,10 @@ function mapSubmissionRow(
       description: answer.description || "",
       score: answer.burden_score,
       notEncountered: Boolean(answer.not_encountered),
+      isNullified: Boolean(answer.is_nullified),
+      nullifiedAtIso: answer.nullified_at || null,
+      nullifiedByEmail: answer.nullified_by_email || null,
+      nullifiedReason: answer.nullified_reason || null,
     })),
   };
 }
@@ -277,6 +283,141 @@ export async function listPartnerServiceCapacitySubmissions(
   });
 
   return submissions.map((submission) => mapSubmissionRow(submission, answersBySubmissionId.get(submission.id) || []));
+}
+
+export async function listZCodeDomainSurveyHistory(
+  client: SupabaseClient<AtlasDatabase>,
+): Promise<ZCodeDomainSurveyHistorySummary[]> {
+  const { data, error } = await client
+    .schema("atlas")
+    .from("partner_service_capacity_answers")
+    .select(
+      `
+      id,
+      submission_id,
+      normalized_z_code,
+      z_code,
+      title,
+      burden_score,
+      is_nullified,
+      nullified_at,
+      nullified_by_email,
+      nullified_reason,
+      partner_service_capacity_submissions!inner(
+        id,
+        status,
+        form_version,
+        respondent_first_name,
+        respondent_last_name,
+        respondent_email,
+        submitted_at,
+        completed_at
+      )
+    `,
+    )
+    .eq("partner_service_capacity_submissions.status", "completed")
+    .eq("partner_service_capacity_submissions.form_version", ZCODE_DOMAIN_SURVEY_FORM_VERSION)
+    .not("burden_score", "is", null)
+    .order("normalized_z_code", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+
+  type RawAnswerRow = AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Row"] & {
+    partner_service_capacity_submissions:
+      | AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_submissions"]["Row"]
+      | AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_submissions"]["Row"][];
+  };
+  const rawRows = (data || []) as RawAnswerRow[];
+  const rows: ZCodeDomainSurveyAnswerLogRecord[] = rawRows
+    .map((row) => {
+      const submission = Array.isArray(row.partner_service_capacity_submissions)
+        ? row.partner_service_capacity_submissions[0]
+        : row.partner_service_capacity_submissions;
+      const numericScore = typeof row.burden_score === "number" ? row.burden_score : null;
+      if (!submission || numericScore === null) return null;
+      return {
+        answerId: row.id,
+        submissionId: row.submission_id,
+        normalizedZCode: row.normalized_z_code,
+        zCode: row.z_code,
+        title: row.title,
+        score: numericScore,
+        respondentFirstName: submission.respondent_first_name || "",
+        respondentLastName: submission.respondent_last_name || "",
+        respondentEmail: submission.respondent_email || "",
+        submittedAtIso: submission.submitted_at,
+        completedAtIso: submission.completed_at || null,
+        isNullified: Boolean(row.is_nullified),
+        nullifiedAtIso: row.nullified_at || null,
+        nullifiedByEmail: row.nullified_by_email || null,
+        nullifiedReason: row.nullified_reason || null,
+      };
+    })
+    .filter(Boolean) as ZCodeDomainSurveyAnswerLogRecord[];
+
+  const historyByZCode = new Map<string, ZCodeDomainSurveyAnswerLogRecord[]>();
+  for (const row of rows) {
+    const existing = historyByZCode.get(row.normalizedZCode);
+    if (existing) {
+      existing.push(row);
+    } else {
+      historyByZCode.set(row.normalizedZCode, [row]);
+    }
+  }
+
+  // Aggregate by normalized z-code so admin review can compare raw response logs
+  // against the active (non-nullified) average used for domain positioning.
+  return Array.from(historyByZCode.entries())
+    .map(([normalizedZCode, scoreHistory]) => {
+      const activeScores = scoreHistory.filter((row) => !row.isNullified).map((row) => row.score);
+      const totalScore = activeScores.reduce((sum, score) => sum + score, 0);
+      const first = scoreHistory[0];
+      return {
+        normalizedZCode,
+        zCode: first?.zCode || normalizedZCode,
+        title: first?.title || normalizedZCode,
+        totalResponses: scoreHistory.length,
+        activeResponses: activeScores.length,
+        nullifiedResponses: scoreHistory.length - activeScores.length,
+        averageScore: activeScores.length ? totalScore / activeScores.length : null,
+        scoreHistory,
+      };
+    })
+    .sort((left, right) => left.normalizedZCode.localeCompare(right.normalizedZCode, undefined, { numeric: true }));
+}
+
+export async function setZCodeDomainSurveyAnswerNullification(
+  client: SupabaseClient<AtlasDatabase>,
+  input: {
+    answerId: string;
+    isNullified: boolean;
+    nullifiedByEmail?: string | null;
+    nullifiedReason?: string | null;
+  },
+) {
+  const trimmedAnswerId = input.answerId.trim();
+  if (!trimmedAnswerId) {
+    throw new Error("An answer id is required.");
+  }
+
+  const updatePayload: AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Update"] = {
+    is_nullified: input.isNullified,
+    nullified_at: input.isNullified ? new Date().toISOString() : null,
+    nullified_by_email: input.isNullified ? input.nullifiedByEmail?.trim() || null : null,
+    nullified_reason: input.isNullified ? input.nullifiedReason?.trim() || null : null,
+  };
+
+  const { data, error } = await client
+    .schema("atlas")
+    .from("partner_service_capacity_answers")
+    .update(updatePayload)
+    .eq("id", trimmedAnswerId)
+    .select("id,is_nullified,nullified_at,nullified_by_email,nullified_reason")
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function deletePartnerServiceCapacityDraft(

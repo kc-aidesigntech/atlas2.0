@@ -63,6 +63,10 @@ export default function SinglePaneApp() {
     routeCandidates,
     countyHeatmap,
     adminMetrics,
+    zCodeDomainSurveyHistorySummary,
+    isLoadingZCodeDomainSurveyHistorySummary,
+    isSavingZCodeDomainSurveyNullification,
+    zCodeDomainSurveyHistoryError,
     adminPortalRegistry,
     adminPortalRegistryError,
     accessMatrixDataset,
@@ -144,6 +148,7 @@ export default function SinglePaneApp() {
     setEnrolleeZCodeResolution,
     saveRouteAssignment,
     saveEnrolleeBurdenSurvey,
+    setZCodeDomainSurveyAnswerNullification,
     saveNavigatorCompetencyAssessment,
     saveNavigatorRegulationTest,
     deleteNavigatorRegulationTestDraft,
@@ -187,8 +192,8 @@ export default function SinglePaneApp() {
     [activeEnrolleeSurveyTarget, enrolleeBurdenSurveyHistoryByEnrollmentId]
   )
   const standaloneSurveyUrl = React.useMemo(() => {
-    if (typeof window === 'undefined') return '/service-capacity-survey'
-    return new URL('service-capacity-survey', window.location.href.split('#')[0]).toString()
+    if (typeof window === 'undefined') return '/z-code-surveys'
+    return new URL('z-code-surveys', window.location.href.split('#')[0]).toString()
   }, [])
 
   React.useEffect(() => {
@@ -931,6 +936,10 @@ export default function SinglePaneApp() {
                         />
                         <AdminDataControlPanel
                           metrics={adminMetrics}
+                          zCodeDomainSurveyHistorySummary={zCodeDomainSurveyHistorySummary}
+                          isLoadingZCodeDomainSurveyHistorySummary={isLoadingZCodeDomainSurveyHistorySummary}
+                          isSavingZCodeDomainSurveyNullification={isSavingZCodeDomainSurveyNullification}
+                          zCodeDomainSurveyHistoryError={zCodeDomainSurveyHistoryError}
                           enrollees={enrollees}
                           intakeFormsByEnrolleeId={intakeFormsByEnrolleeId}
                           selectedEnrollee={selectedEnrollee}
@@ -944,6 +953,7 @@ export default function SinglePaneApp() {
                           isSavingRegistry={isSavingAdminPortalRegistry}
                           registryError={adminPortalRegistryError}
                           onSaveRegistry={saveAdminPortalRegistry}
+                          onSetZCodeDomainSurveyAnswerNullification={setZCodeDomainSurveyAnswerNullification}
                           onSaveEnrollmentNavigators={saveAccessMatrixEnrollmentNavigators}
                           onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
                           onSaveIntake={saveEnrolleeIntake}

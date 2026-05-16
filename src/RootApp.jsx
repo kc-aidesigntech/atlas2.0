@@ -8,8 +8,7 @@ import { SupabaseAuthProvider, useSupabaseAuth } from '@/auth/SupabaseAuthProvid
 import PublicAtlasLandingPage from '@/features/atlas2026/public/PublicAtlasLandingPage'
 import PublicAtlasDemoPage from '@/features/atlas2026/public/PublicAtlasDemoPage'
 import SinglePaneApp from '@/features/atlas2026/singlepane/SinglePaneApp'
-import StandaloneServiceCapacitySurveyPage from '@/features/atlas2026/singlepane/StandaloneServiceCapacitySurveyPage'
-import StandaloneZCodeDomainSurveyPage from '@/features/atlas2026/singlepane/StandaloneZCodeDomainSurveyPage'
+import StandaloneZCodeSurveysPage from '@/features/atlas2026/singlepane/StandaloneZCodeSurveysPage'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 
 function normalizePathname(pathname) {
@@ -20,18 +19,24 @@ function normalizePathname(pathname) {
   return normalized || '/'
 }
 
-function isStandaloneServiceCapacityPath(pathname) {
+function isStandaloneZCodeSurveysPath(pathname) {
   const normalizedPath = normalizePathname(pathname)
-  return (
-    normalizedPath === '/service-capacity-survey' ||
-    normalizedPath === '/partner/service-capacity-survey' ||
-    normalizedPath.endsWith('/service-capacity-survey')
-  )
+  return normalizedPath === '/z-code-surveys' || normalizedPath.endsWith('/z-code-surveys')
 }
 
-function isStandaloneZCodeDomainPath(pathname) {
+function isLegacyServiceCapacityPath(pathname) {
   const normalizedPath = normalizePathname(pathname)
-  return normalizedPath === '/zcode-domain' || normalizedPath.endsWith('/zcode-domain')
+  return normalizedPath === '/service-capacity-survey' || normalizedPath.endsWith('/service-capacity-survey')
+}
+
+function isLegacyDomainSpectrumPath(pathname) {
+  const normalizedPath = normalizePathname(pathname)
+  return (
+    normalizedPath === '/zcode-domain' ||
+    normalizedPath.endsWith('/zcode-domain') ||
+    normalizedPath === '/z-code-domain-survey' ||
+    normalizedPath.endsWith('/z-code-domain-survey')
+  )
 }
 
 function isWorkspacePath(pathname) {
@@ -47,21 +52,43 @@ function isDemoPath(pathname) {
 function RootAppInner() {
   const { session, isLoading } = useSupabaseAuth()
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/'
+  const isLegacyServiceRoute = typeof window !== 'undefined' && isLegacyServiceCapacityPath(pathname)
+  const isLegacyDomainRoute = typeof window !== 'undefined' && isLegacyDomainSpectrumPath(pathname)
   const isWorkspaceRoute = isWorkspacePath(pathname)
+  const isStandaloneZCodeSurveysRoute = typeof window !== 'undefined' && isStandaloneZCodeSurveysPath(pathname)
   const needsSupabaseSession =
     typeof window !== 'undefined' &&
     hasSupabaseConfig &&
     Boolean(supabase) &&
     isSinglePaneSupabaseBootstrapEnabled &&
-    isWorkspaceRoute
+    (isWorkspaceRoute || isStandaloneZCodeSurveysRoute)
 
-  // Standalone survey routes intentionally bypass sign-in gating so partner
-  // completions remain accessible even when the main app requires auth.
-  if (typeof window !== 'undefined' && isStandaloneServiceCapacityPath(pathname)) {
-    return <StandaloneServiceCapacitySurveyPage />
+  if (typeof window !== 'undefined' && (isLegacyServiceRoute || isLegacyDomainRoute)) {
+    // Legacy survey URLs now converge on one page with explicit hash tabs so
+    // shared links always land in the intended survey mode.
+    const nextHash = isLegacyDomainRoute ? 'domain-spectrum' : 'service-capacity'
+    const nextUrl = new URL('/z-code-surveys', window.location.origin)
+    nextUrl.hash = nextHash
+    window.location.replace(nextUrl.toString())
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black text-[14px] text-[#c7c7c7]">
+        Redirecting to z-code surveys…
+      </div>
+    )
   }
-  if (typeof window !== 'undefined' && isStandaloneZCodeDomainPath(pathname)) {
-    return <StandaloneZCodeDomainSurveyPage />
+
+  if (isStandaloneZCodeSurveysRoute && needsSupabaseSession && isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-black text-[14px] text-[#c7c7c7]">
+        Checking sign-in…
+      </div>
+    )
+  }
+  if (isStandaloneZCodeSurveysRoute && needsSupabaseSession && !session) {
+    return <AtlasAuthScreen />
+  }
+  if (typeof window !== 'undefined' && isStandaloneZCodeSurveysPath(pathname)) {
+    return <StandaloneZCodeSurveysPage />
   }
 
   if (typeof window !== 'undefined' && isDemoPath(pathname)) {

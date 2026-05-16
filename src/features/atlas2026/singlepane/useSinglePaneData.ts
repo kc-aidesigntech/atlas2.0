@@ -47,6 +47,7 @@ import type {
   TroubleshootingSessionState,
   TimelineConfig,
   UnassignedEnrolleePickupRecord,
+  ZCodeDomainSurveyHistorySummary,
   ZDomain
 } from '@/features/atlas2026/singlepane/types'
 import {
@@ -66,8 +67,10 @@ import {
   loadNavigatorEnrollmentAssignments,
   loadPartnerTroubleshootingGrants,
   loadDemoTaggedEnrollmentIds,
+  loadZCodeDomainSurveyHistorySummary,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
+  setZCodeDomainSurveyAnswerNullified,
   uploadEnrolleeProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
   saveAccountSettings as persistAccountSettings,
@@ -779,6 +782,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [assigningNavigatorEnrollmentId, setAssigningNavigatorEnrollmentId] = useState<string | null>(null)
   const [demoTaggedEnrollmentIds, setDemoTaggedEnrollmentIds] = useState<string[]>([])
   const [publicQueueRecords, setPublicQueueRecords] = useState<UnassignedEnrolleePickupRecord[]>([])
+  const [zCodeDomainSurveyHistorySummary, setZCodeDomainSurveyHistorySummary] = useState<ZCodeDomainSurveyHistorySummary[]>([])
+  const [isLoadingZCodeDomainSurveyHistorySummary, setIsLoadingZCodeDomainSurveyHistorySummary] = useState(false)
+  const [isSavingZCodeDomainSurveyNullification, setIsSavingZCodeDomainSurveyNullification] = useState(false)
+  const [zCodeDomainSurveyHistoryError, setZCodeDomainSurveyHistoryError] = useState<string | null>(null)
   useEffect(() => {
     let isMounted = true
     void loadPublicReferralQueueRecords().then((records) => {
@@ -892,6 +899,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   )
   const effectivePartnerStationProfile = remoteSession?.targetRole === 'partner' ? remotePartnerStationProfile : partnerStationProfile
   const scopedEnrollmentIds = useMemo(() => {
+    // Keep navigator read-path simple for normal sessions: bootstrap already scopes enrollees
+    // to claimed/assigned enrollments, so do not re-scope through access-matrix overlays.
+    if (viewerRole === 'navigator' && role !== 'administrator' && !remoteSession?.isActive) {
+      return null
+    }
     if (!accessMatrixDataset) return null
     const scopedRole = remoteSession?.targetRole || role
     if (scopedRole === 'navigator') {
@@ -1347,6 +1359,15 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setPartnerServiceCapacitySurveyHistory,
     setPartnerServiceCapacitySurveyError
   } = usePartnerServiceCapacityHistory(viewerRole, effectivePartnerOrganizationName)
+
+  useEffect(() => {
+    if (viewerRole !== 'administrator') {
+      setZCodeDomainSurveyHistorySummary([])
+      setZCodeDomainSurveyHistoryError(null)
+      return
+    }
+    void reloadZCodeDomainSurveyHistory()
+  }, [viewerRole])
 
   const backgroundPrefetchEnrollments = useMemo(
     () =>
@@ -2184,6 +2205,22 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function reloadZCodeDomainSurveyHistory() {
+    if (viewerRole !== 'administrator') return
+    setIsLoadingZCodeDomainSurveyHistorySummary(true)
+    setZCodeDomainSurveyHistoryError(null)
+    try {
+      const rows = await loadZCodeDomainSurveyHistorySummary()
+      setZCodeDomainSurveyHistorySummary(rows)
+    } catch (error) {
+      setZCodeDomainSurveyHistoryError(
+        error instanceof Error ? error.message : 'Unable to load z-code domain survey history.'
+      )
+    } finally {
+      setIsLoadingZCodeDomainSurveyHistorySummary(false)
+    }
+  }
+
   async function deletePartnerServiceCapacityDraft(submissionId: string) {
     ensureWriteAllowed()
     setIsSavingPartnerServiceCapacitySurvey(true)
@@ -2199,6 +2236,31 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       throw error
     } finally {
       setIsSavingPartnerServiceCapacitySurvey(false)
+    }
+  }
+
+  async function setZCodeDomainSurveyAnswerNullification(input: {
+    answerId: string
+    isNullified: boolean
+    nullifiedReason?: string | null
+  }) {
+    ensureAdminPermissionWrite('nullify z-code domain survey answers')
+    setIsSavingZCodeDomainSurveyNullification(true)
+    setZCodeDomainSurveyHistoryError(null)
+    try {
+      await setZCodeDomainSurveyAnswerNullified({
+        answerId: input.answerId,
+        isNullified: input.isNullified,
+        nullifiedByEmail: effectiveAccountSettings.email || null,
+        nullifiedReason: input.nullifiedReason || null
+      })
+      await reloadZCodeDomainSurveyHistory()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to update z-code survey answer nullification.'
+      setZCodeDomainSurveyHistoryError(message)
+      throw error
+    } finally {
+      setIsSavingZCodeDomainSurveyNullification(false)
     }
   }
 
@@ -2267,8 +2329,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   async function refreshAssignmentParityViews() {
     await Promise.all([
-      // Keep Access Matrix state aligned so scoped navigator enrollee lists update immediately after assignment changes.
-      refreshAccessMatrixDataset(),
+      // Assignment board and bootstrap are the canonical read paths for navigator claim state.
       loadNavigatorEnrollmentAssignments().then((rows) => {
         setNavigatorEnrollmentAssignments(rows)
         setNavigatorEnrollmentAssignmentsError(null)
@@ -2684,6 +2745,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     routeCandidates,
     countyHeatmap,
     adminMetrics,
+    zCodeDomainSurveyHistorySummary,
+    isLoadingZCodeDomainSurveyHistorySummary,
+    isSavingZCodeDomainSurveyNullification,
+    zCodeDomainSurveyHistoryError,
     partnerStationSpecialties,
     adminPortalRegistry,
     adminPortalRegistryError,
@@ -2779,6 +2844,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setEnrolleeZCodeResolution,
     saveRouteAssignment,
     savePartnerServiceCapacitySurvey,
+    setZCodeDomainSurveyAnswerNullification,
     saveEnrolleeBurdenSurvey,
     deletePartnerServiceCapacityDraft,
     deleteEnrolleeBurdenSurveyDraft,

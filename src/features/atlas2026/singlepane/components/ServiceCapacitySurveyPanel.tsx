@@ -68,12 +68,20 @@ interface SurveyCardConfig {
   formVersion: string
   scale: PartnerServiceCapacityScaleOption[] | null
   scoreRange: { min: number; max: number; step?: number } | null
+  historyKicker: string
+  historyTitle: string
+  historyDescription: string
+  historyStartButtonLabel: string
   panelTitle: string
   panelSubtitle: string
   promptQuestion: string
   assignmentLabel: string
   unansweredHint: string
   inputControl: 'slider' | 'knob'
+  requireEmail: boolean
+  requireOrganizationName: boolean
+  requireRespondentRoles: boolean
+  enablePartnerIdentifierLookup: boolean
   describeScore?: (score: number) => { value: number; label: string; description: string }
 }
 
@@ -114,23 +122,41 @@ const BURDEN_SURVEY_CONFIG: SurveyCardConfig = {
   formVersion: SERVICE_CAPACITY_FORM_VERSION,
   scale: null,
   scoreRange: null,
+  historyKicker: 'partner service capacity',
+  historyTitle: 'Service capacity survey history',
+  historyDescription:
+    'Past service capacity submissions and drafts stay here. Open a draft to keep editing; completed runs stay read-only. Start a new survey only when you need a fresh assessment.',
+  historyStartButtonLabel: 'Start a new service capacity survey',
   panelTitle: 'Z-code burden survey',
   panelSubtitle: 'Capture how well your organization can handle each Z-code pressure area on a 1-9 burden scale.',
   promptQuestion: 'Is this handled as a core specialty or is it a burden to have to handle it?',
   assignmentLabel: 'assign a burden score',
   unansweredHint: 'Select a value from 1 to 9 by dragging, clicking, or typing.',
-  inputControl: 'slider'
+  inputControl: 'slider',
+  requireEmail: false,
+  requireOrganizationName: true,
+  requireRespondentRoles: true,
+  enablePartnerIdentifierLookup: true
 }
 const DOMAIN_SPECTRUM_SURVEY_CONFIG: SurveyCardConfig = {
   formVersion: ZCODE_DOMAIN_SURVEY_FORM_VERSION,
   scale: ZCODE_DOMAIN_SCALE_GUIDE,
   scoreRange: ZCODE_DOMAIN_SCORE_RANGE,
+  historyKicker: 'z code domain survey',
+  historyTitle: 'Domain spectrum survey history',
+  historyDescription:
+    'Past domain spectrum submissions and drafts stay here. Open a draft to keep editing; completed runs stay read-only. Start a new survey only when you need a fresh assessment.',
+  historyStartButtonLabel: 'Start a new domain spectrum survey',
   panelTitle: 'Z-code to domain spectrum survey',
   panelSubtitle: 'Rate each Z-code on a 1-99 domain spectrum to drive habitat, social networks, and work radial positioning.',
   promptQuestion: 'Where should this Z-code sit on the 1-99 habitat-social-work-habitat spectrum?',
   assignmentLabel: 'assign a domain spectrum value',
   unansweredHint: 'Select a value from 1 to 99 by dragging, clicking, or typing.',
   inputControl: 'knob',
+  requireEmail: true,
+  requireOrganizationName: false,
+  requireRespondentRoles: false,
+  enablePartnerIdentifierLookup: false,
   describeScore: describeZCodeDomainSpectrumScore
 }
 
@@ -145,12 +171,22 @@ function isSubmissionRecord(
   return Boolean(value && typeof value === 'object' && 'id' in value)
 }
 
-function getRespondentValidationMessage(header: PartnerServiceCapacityHeader) {
+function getRespondentValidationMessage(header: PartnerServiceCapacityHeader, surveyConfig: SurveyCardConfig) {
   const trimmedFirstName = header.firstName.trim()
   const trimmedLastName = header.lastName.trim()
   const trimmedOrganization = header.organizationName.trim()
+  const trimmedEmail = header.email.trim()
   const selectedRoles = header.respondentRoles
-  if (!trimmedFirstName || !trimmedLastName || !trimmedOrganization || !selectedRoles.length) {
+  if (!trimmedFirstName || !trimmedLastName) {
+    return 'Complete the required respondent details before submitting the survey.'
+  }
+  if (surveyConfig.requireEmail && !trimmedEmail) {
+    return 'Add your email address before submitting the survey.'
+  }
+  if (surveyConfig.requireOrganizationName && !trimmedOrganization) {
+    return 'Complete the required respondent details before submitting the survey.'
+  }
+  if (surveyConfig.requireRespondentRoles && !selectedRoles.length) {
     return 'Complete the required respondent details before submitting the survey.'
   }
   if (selectedRoles.includes('other') && !header.otherRoleText.trim()) {
@@ -206,9 +242,15 @@ export default function ServiceCapacitySurveyPanel({
   const effectiveScale = surveyConfig.scale || scale
   const scoreRange = surveyConfig.scoreRange
   const totalSurveyCardCount = useMemo(() => sections.reduce((count, section) => count + section.prompts.length, 0), [sections])
+  // Keep each survey mode's history isolated so users do not confuse burden and
+  // domain-spectrum records that share the same backend submission tables.
+  const filteredSubmissionHistory = useMemo(
+    () => submissionHistory.filter((record) => record.formVersion === surveyConfig.formVersion),
+    [submissionHistory, surveyConfig.formVersion]
+  )
   const sortedSubmissionHistory = useMemo(
-    () => submissionHistory.slice().sort((left, right) => getRecordSortTime(right) - getRecordSortTime(left)),
-    [submissionHistory]
+    () => filteredSubmissionHistory.slice().sort((left, right) => getRecordSortTime(right) - getRecordSortTime(left)),
+    [filteredSubmissionHistory]
   )
   const [activeView, setActiveView] = useState<PanelView>('history')
   const [surveySessionKey, setSurveySessionKey] = useState(0)
@@ -314,6 +356,10 @@ export default function ServiceCapacitySurveyPanel({
 
   return activeView === 'history' ? (
     <RecordManagementView
+      surveyKicker={surveyConfig.historyKicker}
+      historyTitle={surveyConfig.historyTitle}
+      historyDescription={surveyConfig.historyDescription}
+      startButtonLabel={surveyConfig.historyStartButtonLabel}
       records={sortedSubmissionHistory}
       totalSurveyCardCount={totalSurveyCardCount}
       resumeDraftRecord={resumeDraftRecord}
@@ -428,7 +474,7 @@ function ServiceCapacitySurveyForm({
   useEffect(() => {
     const trimmedFirstName = draft.header.firstName.trim()
     const trimmedLastName = draft.header.lastName.trim()
-    if (!trimmedFirstName || !trimmedLastName || selectedPartnerIdentifierId) {
+    if (!surveyConfig.enablePartnerIdentifierLookup || !trimmedFirstName || !trimmedLastName || selectedPartnerIdentifierId) {
       setPartnerIdentifierMatches([])
       setPartnerIdentifierError(null)
       setIsSearchingPartnerIdentifiers(false)
@@ -449,22 +495,22 @@ function ServiceCapacitySurveyForm({
           }
 
           const trimmedOrganizationName = draft.header.organizationName.trim()
-          if (!trimmedOrganizationName) {
-            setPartnerIdentifierMatches([])
+          if (trimmedOrganizationName) {
+            setIsEnsuringPartnerIdentifier(true)
+            const createdIdentifier = await onEnsurePartnerIdentifier({
+              firstName: trimmedFirstName,
+              lastName: trimmedLastName,
+              organizationName: trimmedOrganizationName,
+              email: draft.header.email.trim() || null
+            })
+            if (!isActive) return
+            setPartnerIdentifierMatches([createdIdentifier])
+            setSelectedPartnerIdentifierId(createdIdentifier.partnerId)
             setPartnerIdentifierError(null)
             return
           }
 
-          setIsEnsuringPartnerIdentifier(true)
-          const createdIdentifier = await onEnsurePartnerIdentifier({
-            firstName: trimmedFirstName,
-            lastName: trimmedLastName,
-            organizationName: trimmedOrganizationName,
-            email: draft.header.email.trim() || null
-          })
-          if (!isActive) return
-          setPartnerIdentifierMatches([createdIdentifier])
-          setSelectedPartnerIdentifierId(createdIdentifier.partnerId)
+          setPartnerIdentifierMatches([])
           setPartnerIdentifierError(null)
         })
         .catch((error) => {
@@ -490,6 +536,7 @@ function ServiceCapacitySurveyForm({
     draft.header.organizationName,
     onEnsurePartnerIdentifier,
     onSearchPartnerIdentifiers,
+    surveyConfig.enablePartnerIdentifierLookup,
     selectedPartnerIdentifierId
   ])
 
@@ -516,7 +563,7 @@ function ServiceCapacitySurveyForm({
     [answersByPromptId, visiblePromptEntries]
   )
   const isSurveyComplete = visiblePromptEntries.length > 0 && completedCount === visiblePromptEntries.length
-  const respondentValidationMessage = getRespondentValidationMessage(draft.header)
+  const respondentValidationMessage = getRespondentValidationMessage(draft.header, surveyConfig)
   const currentPromptEntry = visiblePromptEntries[currentPromptIndex] || null
   const currentPromptAnswer = currentPromptEntry ? answersByPromptId.get(currentPromptEntry.prompt.id) : null
   const currentAccentColor = currentPromptEntry ? getZCodeParentColor(currentPromptEntry.section.parentCode) || SP_COLORS.white : SP_COLORS.white
@@ -912,7 +959,7 @@ function ServiceCapacitySurveyForm({
                     onChange={(value) => updateHeader('lastName', value)}
                   />
                 </div>
-                {draft.header.firstName.trim() && draft.header.lastName.trim() ? (
+                {surveyConfig.enablePartnerIdentifierLookup && draft.header.firstName.trim() && draft.header.lastName.trim() ? (
                   <div className="mt-3 rounded-[12px] border px-3 py-3" style={{ borderColor: '#ffffff18', backgroundColor: 'var(--surface-panel-raised)' }}>
                     <div className="flex items-center justify-between gap-3">
                       <small className="text-[11px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
@@ -966,21 +1013,27 @@ function ServiceCapacitySurveyForm({
                 ) : null}
                 </Field>
               </div>
-              <Field label="The Name of Your Organization*" requiredHint="This field is required.">
+              <Field
+                label={surveyConfig.requireOrganizationName ? 'The Name of Your Organization*' : 'The Name of Your Organization'}
+                requiredHint={surveyConfig.requireOrganizationName ? 'This field is required.' : undefined}
+              >
                 <Input
                   value={draft.header.organizationName}
                   placeholder="organization name"
                   onChange={(value) => updateHeader('organizationName', value)}
                 />
               </Field>
-              <Field label="Your Email Address">
+              <Field label={surveyConfig.requireEmail ? 'Your Email Address*' : 'Your Email Address'} requiredHint={surveyConfig.requireEmail ? 'This field is required.' : undefined}>
                 <Input value={draft.header.email} placeholder="email address" onChange={(value) => updateHeader('email', value)} />
               </Field>
               <Field label="Your Job Title">
                 <Input value={draft.header.jobTitle} placeholder="job title" onChange={(value) => updateHeader('jobTitle', value)} />
               </Field>
               <div className="lg:col-span-2">
-                <Field label="Please select the option/s that apply to you*" requiredHint="This field is required.">
+                <Field
+                  label={surveyConfig.requireRespondentRoles ? 'Please select the option/s that apply to you*' : 'Please select the option/s that apply to you'}
+                  requiredHint={surveyConfig.requireRespondentRoles ? 'This field is required.' : undefined}
+                >
                 <div className="flex flex-wrap gap-2">
                   {ROLE_OPTIONS.map((option) => {
                     const isSelected = draft.header.respondentRoles.includes(option.value)

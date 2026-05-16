@@ -9,7 +9,9 @@ import type {
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
-  PartnerSurveyRespondentRole
+  PartnerSurveyRespondentRole,
+  ZCodeDomainSurveyAnswerLogRecord,
+  ZCodeDomainSurveyHistorySummary
 } from '@atlas/shared'
 
 /**
@@ -200,7 +202,9 @@ export type {
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
-  PartnerSurveyRespondentRole
+  PartnerSurveyRespondentRole,
+  ZCodeDomainSurveyAnswerLogRecord,
+  ZCodeDomainSurveyHistorySummary
 }
 
 export interface PartnerServiceCapacityScaleOption {

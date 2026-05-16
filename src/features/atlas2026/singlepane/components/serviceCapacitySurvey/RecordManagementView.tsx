@@ -7,6 +7,10 @@ import type { PartnerServiceCapacitySubmissionRecord } from '../../types'
 import { formatDateTimeLabel } from './draft'
 
 export function RecordManagementView({
+  surveyKicker,
+  historyTitle,
+  historyDescription,
+  startButtonLabel,
   records,
   totalSurveyCardCount,
   resumeDraftRecord,
@@ -20,6 +24,10 @@ export function RecordManagementView({
   onEditDraftRecord,
   onDeleteDraftRecord
 }: {
+  surveyKicker: string
+  historyTitle: string
+  historyDescription: string
+  startButtonLabel: string
   records: PartnerServiceCapacitySubmissionRecord[]
   totalSurveyCardCount: number
   resumeDraftRecord: PartnerServiceCapacitySubmissionRecord | null
@@ -39,9 +47,9 @@ export function RecordManagementView({
 
   return (
     <AtlasPanel
-      kicker="partner service capacity"
-      title="Survey history"
-      description="Past submissions and drafts stay here. Open a draft to keep editing; completed runs stay read-only. Start a new survey only when you need a fresh assessment."
+      kicker={surveyKicker}
+      title={historyTitle}
+      description={historyDescription}
       className="rounded-[21px] bg-[var(--surface-panel-soft)]"
       actions={
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -80,7 +88,7 @@ export function RecordManagementView({
           ) : null}
           <AtlasPlusButton
             onClick={onCheckoutNewRecord}
-            label="Start a new survey"
+            label={startButtonLabel}
           />
         </div>
       }

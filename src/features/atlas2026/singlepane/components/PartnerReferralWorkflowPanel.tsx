@@ -28,7 +28,7 @@ interface ReferralSourceOption {
 }
 
 const MAX_RECENT_ROWS = 5
-const PARTICIPANT_PHONE_DIGIT_LIMIT = 9
+const PARTICIPANT_PHONE_DIGIT_LIMIT = 10
 const DEFAULT_PHONE_COUNTRY_CODE = '+1'
 const PHONE_COUNTRY_CODE_OPTIONS = ['+1', '+44', '+52']
 
@@ -434,7 +434,7 @@ export default function PartnerReferralWorkflowPanel({
                   }))
                 }
                 className="atlas-admin-input"
-                placeholder="123456789"
+                placeholder="1234567890"
                 inputMode="numeric"
                 maxLength={PARTICIPANT_PHONE_DIGIT_LIMIT}
               />

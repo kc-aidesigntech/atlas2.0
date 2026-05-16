@@ -33,7 +33,7 @@ export default function StandaloneZCodeDomainSurveyPage() {
 
   React.useEffect(() => {
     const previousTitle = document.title
-    document.title = 'ATLAS Z Code to Domain Survey'
+    document.title = 'ATLAS Z Code Domain Survey'
     return () => {
       document.title = previousTitle
     }
@@ -43,7 +43,7 @@ export default function StandaloneZCodeDomainSurveyPage() {
     if (typeof window === 'undefined') return
     window.sessionStorage.setItem(SESSION_ROLE_KEY, 'partner')
     window.sessionStorage.setItem(SESSION_ACTIVE_MENU_KEY, 'my station')
-    window.location.assign(new URL('/app#my-station', window.location.origin).toString())
+    window.location.assign(new URL('/', window.location.origin).toString())
   }
 
   return (

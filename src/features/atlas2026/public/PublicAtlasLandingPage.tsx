@@ -104,6 +104,26 @@ export default function PublicAtlasLandingPage() {
             accentColor="var(--atlas-signal-lucid-green)"
           />
         </section>
+
+        <section className="atlas-surface-panel bg-[#0d0d0d] px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="atlas-h4 text-[22px] font-semibold">Z Code Domain Survey</div>
+              <p className="atlas-panel-copy mt-2 max-w-[860px] text-[14px] text-[#c9c9c9]">
+                Sign in with your Atlas account to submit domain-spectrum scores for each Z-code. Responses are logged and reviewed in the administrator portal.
+              </p>
+            </div>
+            <AtlasTextButton
+              className="px-[16px] py-[8px] text-[14px]"
+              onClick={() => {
+                window.location.assign('/z-code-surveys')
+              }}
+              style={{ ['--button-border-color' as const]: 'var(--atlas-signal-lucid-green)', color: '#111111' } as React.CSSProperties}
+            >
+              open survey
+            </AtlasTextButton>
+          </div>
+        </section>
       </main>
     </div>
   )
