@@ -2267,6 +2267,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   async function refreshAssignmentParityViews() {
     await Promise.all([
+      // Keep Access Matrix state aligned so scoped navigator enrollee lists update immediately after assignment changes.
+      refreshAccessMatrixDataset(),
       loadNavigatorEnrollmentAssignments().then((rows) => {
         setNavigatorEnrollmentAssignments(rows)
         setNavigatorEnrollmentAssignmentsError(null)
@@ -2408,6 +2410,15 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     const pickupRecordId = getPickupRecordIdFromEnrollmentId(enrollmentId)
     setAssigningNavigatorEnrollmentId(enrollmentId)
     setNavigatorEnrollmentAssignmentsError(null)
+    const actionLabel =
+      mode === 'unassign'
+        ? 'Unassign failed'
+        : mode === 'archive'
+          ? 'Archive failed'
+          : mode === 'accept'
+            ? 'Accept failed'
+            : 'Claim failed'
+    const actionErrorPrefix = `${actionLabel} for enrollment ${enrollmentId}.`
     try {
       if (mode === 'accept') {
         if (!pickupRecordId) {
@@ -2426,10 +2437,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       } else {
         await persistAssignNavigatorEnrollmentToSelf(enrollmentId)
       }
-      await Promise.all([
-        loadNavigatorEnrollmentAssignments().then((rows) => setNavigatorEnrollmentAssignments(rows)),
-        reloadBootstrapState()
-      ])
+      await refreshAssignmentParityViews()
     } catch (error) {
       const typedDatabaseError = error as { code?: string; message?: string; details?: string; hint?: string } | null
       const databaseErrorCode = typedDatabaseError?.code
@@ -2450,19 +2458,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           typedDatabaseError.hint ? `hint: ${typedDatabaseError.hint}` : '',
           databaseErrorCode ? `code: ${databaseErrorCode}` : ''
         ].filter(Boolean)
-        setNavigatorEnrollmentAssignmentsError(detailParts.join(' | '))
+        setNavigatorEnrollmentAssignmentsError(`${actionErrorPrefix} ${detailParts.join(' | ')}`)
         return
       }
       setNavigatorEnrollmentAssignmentsError(
-        error instanceof Error
-          ? error.message
+        error instanceof Error && error.message.trim()
+          ? `${actionErrorPrefix} ${error.message}`
           : mode === 'unassign'
-            ? 'Unable to unassign enrollee from navigator.'
+            ? `${actionErrorPrefix} Unable to unassign enrollee from navigator.`
             : mode === 'archive'
-              ? 'Unable to archive referral.'
+              ? `${actionErrorPrefix} Unable to archive referral.`
               : mode === 'accept'
-                ? 'Unable to accept referral.'
-                : 'Unable to assign enrollee to navigator.'
+                ? `${actionErrorPrefix} Unable to accept referral.`
+                : `${actionErrorPrefix} Unable to assign enrollee to navigator.`
       )
     } finally {
       setAssigningNavigatorEnrollmentId(null)
@@ -2531,37 +2539,28 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   async function claimPickupQueueRecord(recordId: string) {
     ensureWriteAllowed()
     const claimedRecord = mergedNavigatorProgramState.pickupQueue.find((record) => record.id === recordId) || null
-    const savedState = await updatePickupQueueStatus(recordId, 'claimed')
-    if (claimedRecord) {
-      try {
-        const materialized = await materializeClaimedReferralIntoEnrollment(claimedRecord)
-        if (materialized?.enrollmentId) {
-          await persistAssignNavigatorEnrollmentToSelf(materialized.enrollmentId)
-          try {
-            const inferred = await inferZCodesForReferral({
-              fullName: claimedRecord.fullName,
-              situationCategories: claimedRecord.zCodeTags,
-              backgroundNotes: claimedRecord.backgroundNotes,
-              referrerMessage: claimedRecord.referrerMessage
-            })
-            await upsertEnrollmentInferredZCodes(materialized.enrollmentId, inferred.zCodes)
-          } catch (inferenceError) {
-            console.warn('Unable to enrich claimed referral with inferred z-codes.', inferenceError)
-          }
-        }
-      } catch (error) {
-        setNavigatorProgramError(
-          error instanceof Error
-            ? error.message
-            : 'Claim saved, but we could not associate this enrollee to your navigator profile.'
-        )
-        console.warn('Unable to materialize claimed referral into enrollee enrollment.', error)
-      }
-      await Promise.all([
-        loadNavigatorEnrollmentAssignments().then((rows) => setNavigatorEnrollmentAssignments(rows)),
-        reloadBootstrapState()
-      ])
+    if (!claimedRecord) {
+      throw new Error('Unable to claim this referral because it is no longer available in your queue view.')
     }
+    const materialized = await materializeClaimedReferralIntoEnrollment(claimedRecord)
+    if (!materialized?.enrollmentId) {
+      throw new Error('Unable to claim this referral because no enrollment record was materialized.')
+    }
+    // Re-apply explicit self-assignment after materialization so claim and assignment remain tightly coupled.
+    await persistAssignNavigatorEnrollmentToSelf(materialized.enrollmentId)
+    try {
+      const inferred = await inferZCodesForReferral({
+        fullName: claimedRecord.fullName,
+        situationCategories: claimedRecord.zCodeTags,
+        backgroundNotes: claimedRecord.backgroundNotes,
+        referrerMessage: claimedRecord.referrerMessage
+      })
+      await upsertEnrollmentInferredZCodes(materialized.enrollmentId, inferred.zCodes)
+    } catch (inferenceError) {
+      console.warn('Unable to enrich claimed referral with inferred z-codes.', inferenceError)
+    }
+    const savedState = await updatePickupQueueStatus(recordId, 'claimed')
+    await refreshAssignmentParityViews()
     return savedState
   }
 

@@ -41,7 +41,20 @@ export default function NavigatorEnrollmentAssignmentsPanel({
       <small className="atlas-panel-copy mb-4 block max-w-[780px] text-[#cfcfcf]">
         Review current navigator ownership occupancy. You can still assign to yourself while multi-assignment is enabled.
       </small>
-      {error ? <small className="atlas-caption mb-4 block text-[#ff7d7d]">{error}</small> : null}
+      {error ? (
+        <div
+          className="mb-4 rounded-[16px] border px-4 py-3"
+          style={{ borderColor: '#ff7d7d', backgroundColor: 'rgba(255, 75, 75, 0.12)' }}
+          role="alert"
+          aria-live="assertive"
+        >
+          <small className="atlas-overline block text-[#ffd4d4]">claim action error</small>
+          <div className="mt-1 text-[14px] font-medium leading-relaxed text-[#ffe8e8]">{error}</div>
+          <small className="mt-2 block text-[12px] text-[#ffd4d4]">
+            The claim did not complete. No assignment changes were committed for this action.
+          </small>
+        </div>
+      ) : null}
       {isLoading ? (
         <small className="atlas-caption block text-[#cfcfcf]">Loading navigator assignment board...</small>
       ) : rows.length ? (

@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
-import { AtlasCloseButton, AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasInsetCard, AtlasPlusButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import atlasLogoSrc from '../../../../../assets/ATLAS_LOGO_final_white_bkg.png'
@@ -28,6 +28,9 @@ interface ReferralSourceOption {
 }
 
 const MAX_RECENT_ROWS = 5
+const PARTICIPANT_PHONE_DIGIT_LIMIT = 9
+const DEFAULT_PHONE_COUNTRY_CODE = '+1'
+const PHONE_COUNTRY_CODE_OPTIONS = ['+1', '+44', '+52']
 
 /**
  * Start every submission from caller-provided defaults so downstream consumers
@@ -40,7 +43,7 @@ function buildInitialDraft(defaultReferrerName: string, defaultPartnerOrganizati
     participantPhone: '',
     situationCategories: [],
     backgroundNotes: '',
-    selfReferring: false,
+    selfReferring: true,
     referrerName: defaultReferrerName,
     existingPartner: Boolean(defaultPartnerOrganizationName.trim()),
     partnerOrganizationName: defaultPartnerOrganizationName,
@@ -63,6 +66,7 @@ export default function PartnerReferralWorkflowPanel({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [participantPhoneCountryCode, setParticipantPhoneCountryCode] = useState(DEFAULT_PHONE_COUNTRY_CODE)
   const [isReferralSourceDropdownOpen, setIsReferralSourceDropdownOpen] = useState(false)
   const [isAddReferralSourceOverlayOpen, setIsAddReferralSourceOverlayOpen] = useState(false)
   const [customReferralSources, setCustomReferralSources] = useState<ReferralSourceOption[]>([])
@@ -119,6 +123,20 @@ export default function PartnerReferralWorkflowPanel({
     )
     return match?.label || draft.partnerOrganizationName || draft.partnerContactName || ''
   }, [draft.partnerContactEmail, draft.partnerContactName, draft.partnerContactPhone, draft.partnerOrganizationName, referralSourceOptions])
+  const existingPartnerOrganizationOptions = useMemo(() => {
+    // Build a clean organization list from known referral sources so existing-partner submissions
+    // stay constrained to previously observed partner organizations.
+    const options = new Set<string>()
+    for (const option of referralSourceOptions) {
+      const organizationName = option.partnerOrganizationName.trim()
+      if (organizationName) options.add(organizationName)
+    }
+    const currentDraftOrganization = draft.partnerOrganizationName.trim()
+    if (currentDraftOrganization) options.add(currentDraftOrganization)
+    const defaultOrganization = defaultPartnerOrganizationName.trim()
+    if (defaultOrganization) options.add(defaultOrganization)
+    return Array.from(options).sort((left, right) => left.localeCompare(right))
+  }, [defaultPartnerOrganizationName, draft.partnerOrganizationName, referralSourceOptions])
   const accentTextColor = isLucidGreenAccent(accentColor) ? '#111111' : accentColor
   const accentSelectedBackground = isLucidGreenAccent(accentColor)
     ? 'color-mix(in srgb, var(--atlas-signal-lucid-green) 24%, #101010)'
@@ -142,7 +160,8 @@ export default function PartnerReferralWorkflowPanel({
     const normalizedSituationCategories: string[] = []
     const normalizedBackgroundNotes = draft.backgroundNotes.trim()
     const normalizedEmail = draft.participantEmail.trim()
-    const normalizedPhone = draft.participantPhone.trim()
+    const normalizedPhoneDigits = draft.participantPhone.trim()
+    const normalizedPhone = buildPhoneToE164(participantPhoneCountryCode, normalizedPhoneDigits)
     const normalizedReferrer = draft.referrerName.trim()
     const normalizedPartnerOrg = draft.partnerOrganizationName.trim()
     const normalizedPartnerContact = draft.partnerContactName.trim()
@@ -165,6 +184,10 @@ export default function PartnerReferralWorkflowPanel({
     }
     if (!normalizedEmail && !normalizedPhone) {
       setError('add at least one way to contact the participant.')
+      return
+    }
+    if (normalizedPhoneDigits && normalizedPhoneDigits.length !== PARTICIPANT_PHONE_DIGIT_LIMIT) {
+      setError(`participant phone must be exactly ${PARTICIPANT_PHONE_DIGIT_LIMIT} digits.`)
       return
     }
     if (draft.selfReferring && !normalizedPartnerOrg) {
@@ -197,6 +220,7 @@ export default function PartnerReferralWorkflowPanel({
       )
       setFeedback('referral submitted to navigator queue.')
       setIsReferralSourceDropdownOpen(false)
+      setParticipantPhoneCountryCode(DEFAULT_PHONE_COUNTRY_CODE)
       // Preserve the resolved partner org on reset to support rapid repeat
       // referrals for the same organization without retyping.
       setDraft(buildInitialDraft(defaultReferrerName, normalizedPartnerOrg || defaultPartnerOrganizationName))
@@ -242,7 +266,7 @@ export default function PartnerReferralWorkflowPanel({
           </small>
           <small className="atlas-meta block text-white">Partner org: {draft.partnerOrganizationName || 'not provided'}</small>
           <small className="atlas-meta block text-white">
-            Source: {draft.selfReferring ? "Self - I'm Referring the Participant" : 'Someone/something else is the source of referral'}
+            Source: {draft.selfReferring ? "self - i'm referring the participant" : 'on behalf of someone else'}
           </small>
         </div>
       </div>
@@ -259,7 +283,7 @@ export default function PartnerReferralWorkflowPanel({
 
         <div className="space-y-2">
           <span className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
-            Are you referring the participant? Or Did Someone Else?*
+            are you referring the enrollee, or are you submitting on behalf of someone else?*
           </span>
           <AtlasTextButton
             type="button"
@@ -272,7 +296,7 @@ export default function PartnerReferralWorkflowPanel({
               } as React.CSSProperties
             }
           >
-            Self - I&apos;m Referring the Participant
+            self - i&apos;m referring the participant
           </AtlasTextButton>
           <AtlasTextButton
             type="button"
@@ -285,7 +309,7 @@ export default function PartnerReferralWorkflowPanel({
               } as React.CSSProperties
             }
           >
-            Someone/something else is the source of referral
+            on behalf of someone else
           </AtlasTextButton>
         </div>
 
@@ -305,14 +329,13 @@ export default function PartnerReferralWorkflowPanel({
                     {isReferralSourceDropdownOpen ? 'close' : 'choose'}
                   </span>
                 </button>
-                <AtlasTextButton
-                  type="button"
+                {/* Keep icon-only controls on shared square primitives so referral workspace actions
+                    match the rest of the shell and avoid one-off button variants. */}
+                <AtlasPlusButton
                   onClick={() => setIsAddReferralSourceOverlayOpen(true)}
-                  className="px-3 py-2 text-[16px] font-medium"
-                  style={{ ['--button-border-color' as const]: accentColor, color: accentTextColor } as React.CSSProperties}
-                >
-                  +
-                </AtlasTextButton>
+                  label="add referral source"
+                  title="add referral source"
+                />
               </div>
               {isReferralSourceDropdownOpen ? (
                 <div className="atlas-surface-raised rounded-[18px] bg-[#0b0b0b] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)]">
@@ -389,12 +412,36 @@ export default function PartnerReferralWorkflowPanel({
             />
           </Field>
           <Field label="participant phone">
-            <input
-              value={draft.participantPhone}
-              onChange={(event) => setDraft((current) => ({ ...current, participantPhone: event.target.value }))}
-              className="atlas-admin-input"
-              placeholder="(555) 555-5555"
-            />
+            <div className="flex items-center gap-2">
+              <select
+                value={participantPhoneCountryCode}
+                onChange={(event) => setParticipantPhoneCountryCode(event.target.value)}
+                className="atlas-admin-input w-[96px] min-w-[96px]"
+                aria-label="participant phone country code"
+              >
+                {PHONE_COUNTRY_CODE_OPTIONS.map((countryCode) => (
+                  <option key={countryCode} value={countryCode}>
+                    {countryCode}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={draft.participantPhone}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    participantPhone: sanitizePhoneDigits(event.target.value, PARTICIPANT_PHONE_DIGIT_LIMIT)
+                  }))
+                }
+                className="atlas-admin-input"
+                placeholder="123456789"
+                inputMode="numeric"
+                maxLength={PARTICIPANT_PHONE_DIGIT_LIMIT}
+              />
+            </div>
+            <small className="mt-1 block text-[11px] text-[var(--foreground-secondary)]">
+              Enter {PARTICIPANT_PHONE_DIGIT_LIMIT} digits. Saved as E.164 (International Telecommunication Union (ITU-T) E.164).
+            </small>
           </Field>
         </div>
 
@@ -431,12 +478,32 @@ export default function PartnerReferralWorkflowPanel({
               these fields to keep the workflow short for known organizations. */}
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <Field label="partner organization">
-              <input
-                value={draft.partnerOrganizationName}
-                onChange={(event) => setDraft((current) => ({ ...current, partnerOrganizationName: event.target.value }))}
-                className="atlas-admin-input"
-                placeholder="organization name"
-              />
+              {draft.existingPartner ? (
+                <select
+                  value={draft.partnerOrganizationName}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      partnerOrganizationName: event.target.value
+                    }))
+                  }
+                  className="atlas-admin-input"
+                >
+                  <option value="">select partner organization</option>
+                  {existingPartnerOrganizationOptions.map((organizationName) => (
+                    <option key={organizationName} value={organizationName}>
+                      {organizationName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={draft.partnerOrganizationName}
+                  onChange={(event) => setDraft((current) => ({ ...current, partnerOrganizationName: event.target.value }))}
+                  className="atlas-admin-input"
+                  placeholder="organization name"
+                />
+              )}
             </Field>
             {!draft.existingPartner ? (
               <Field label="partner contact name">
@@ -504,7 +571,6 @@ export default function PartnerReferralWorkflowPanel({
               <AtlasCloseButton
                 type="button"
                 onClick={() => setIsAddReferralSourceOverlayOpen(false)}
-                style={{ ['--button-border-color' as const]: '#ffffff30', color: '#f1f1f1' } as React.CSSProperties}
               />
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -610,6 +676,17 @@ export default function PartnerReferralWorkflowPanel({
       </div>
     </AtlasInsetCard>
   )
+}
+
+function sanitizePhoneDigits(value: string, maxDigits: number) {
+  return value.replace(/\D/g, '').slice(0, maxDigits)
+}
+
+function buildPhoneToE164(countryCode: string, localDigits: string) {
+  const normalizedCode = countryCode.replace(/[^\d+]/g, '')
+  const normalizedDigits = localDigits.replace(/\D/g, '')
+  if (!normalizedCode.startsWith('+') || !normalizedDigits) return ''
+  return `${normalizedCode}${normalizedDigits}`
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

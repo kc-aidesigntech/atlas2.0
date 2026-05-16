@@ -1,5 +1,5 @@
 import React from 'react'
-import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import ZCodeCircle from '@/features/atlas2026/components/ZCodeCircle'
 import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
@@ -372,14 +372,13 @@ function LiveWorkspaceModal({
       <div className="flex h-[94vh] w-full max-w-[1320px] flex-col rounded-[28px] border border-white/20 bg-[#0d0d0d] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <small className="text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd]">{title}</small>
-          <AtlasTextButton
+          {/* Keep modal dismiss controls on the shared icon primitive so this demo workspace
+              stays visually aligned with other square icon actions. */}
+          <AtlasCloseButton
             type="button"
-            className="px-[14px] py-[6px] text-[14px]"
             onClick={onClose}
-            style={{ ['--button-border-color' as const]: '#ffffff45', color: '#ffffffd0' } as React.CSSProperties}
-          >
-            X
-          </AtlasTextButton>
+            style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
+          />
         </div>
         <div className={`min-h-0 flex-1 ${scrollContent ? 'overflow-y-auto pr-1' : ''}`}>{children}</div>
       </div>
