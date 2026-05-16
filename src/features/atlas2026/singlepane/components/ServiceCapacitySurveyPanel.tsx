@@ -589,6 +589,21 @@ function ServiceCapacitySurveyForm({
   const canResumePrompt = lastAnsweredPromptIndex >= 0 && lastAnsweredPromptIndex !== currentPromptIndex
 
   useEffect(() => {
+    // Survey sessions can start from deep within history lists; reset viewport
+    // and focus so users always begin at respondent details.
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    }
+    requestAnimationFrame(() => {
+      const firstInput = firstNameInputRef.current
+      if (!firstInput) return
+      hasAutoFocusedFirstName.current = true
+      firstInput.focus()
+      firstInput.select()
+    })
+  }, [])
+
+  useEffect(() => {
     if (!respondentValidationMessage || hasAutoFocusedFirstName.current) return
     const firstInput = firstNameInputRef.current
     if (!firstInput) return
@@ -894,7 +909,7 @@ function ServiceCapacitySurveyForm({
       <div className="atlas-divider flex flex-wrap items-start justify-between gap-4 border-b pb-4">
         <div className="max-w-[720px]">
           <small className="atlas-overline block md:text-[14px]" style={{ color: SP_COLORS.muted }}>
-            partner service capacity
+            z-code-survey
           </small>
           <h3 className="atlas-h3 mt-1 text-[28px] font-medium text-white md:text-[34px]">{surveyConfig.panelTitle}</h3>
           <small className="atlas-panel-copy block text-[#bdbdbd] md:text-[17px]">

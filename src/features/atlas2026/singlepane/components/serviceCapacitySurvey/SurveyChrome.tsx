@@ -422,7 +422,8 @@ function DomainSpectrumKnob({
   const majorLabels = ['habitat', 'social networks', 'work']
   const majorTicks = majorLabels.map((label, index) => ({
     angle: 0 + index * 120,
-    label
+    label,
+    value: index === 0 ? 0 : index === 1 ? 33 : 66
   }))
   const minorTicks = majorTicks.flatMap((current, index) => {
     const nextAngle = 0 + ((index + 1) % majorTicks.length) * 120
@@ -444,8 +445,16 @@ function DomainSpectrumKnob({
       {minorTicks.map((tick) => (
         <TickMark key={`minor-${tick.angle}`} angle={tick.angle} radius={132} length={8} thickness={1.5} color="#ffffff60" />
       ))}
-      {majorTicks.map((tick, index) => (
-        <DomainLabel key={`label-${tick.angle}`} angle={tick.angle} radius={156} label={tick.label} emphasized />
+      {majorTicks.map((tick) => (
+        <DomainLabelButton
+          key={`label-${tick.angle}`}
+          angle={tick.angle}
+          radius={164}
+          label={tick.label}
+          emphasized
+          disabled={disabled}
+          onClick={() => onChange(Math.max(min, Math.min(max, tick.value)))}
+        />
       ))}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div
@@ -522,31 +531,37 @@ function TickMark({
   )
 }
 
-function DomainLabel({
+function DomainLabelButton({
   angle,
   radius,
   label,
-  emphasized
+  emphasized,
+  disabled,
+  onClick
 }: {
   angle: number
   radius: number
   label: string
   emphasized: boolean
+  disabled: boolean
+  onClick: () => void
 }) {
   return (
     <div
-      className="pointer-events-none absolute left-1/2 top-1/2 origin-center"
+      className="absolute left-1/2 top-1/2 origin-center"
       style={{ transform: `translate(-50%, -50%) rotate(${angle}deg)` }}
-      aria-hidden="true"
     >
-      <div
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onClick}
         style={{ transform: `translateY(-${radius}px) rotate(${-angle}deg)` }}
-        className={`rounded-full border px-2 py-[2px] text-center text-[10px] uppercase tracking-[0.08em] ${
-          emphasized ? 'border-white/45 text-white' : 'border-white/20 text-[#c6c6c6]'
+        className={`rounded-full border px-2 py-[2px] text-center text-[10px] uppercase tracking-[0.08em] transition-colors duration-150 ${
+          emphasized ? 'border-white/45 text-white hover:border-white/70 hover:bg-white/10' : 'border-white/20 text-[#c6c6c6]'
         }`}
       >
         {label}
-      </div>
+      </button>
     </div>
   )
 }
