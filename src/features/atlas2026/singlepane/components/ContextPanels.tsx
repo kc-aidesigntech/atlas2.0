@@ -1,5 +1,4 @@
 import React from 'react'
-import CountyCommonsHeatmap from '@/features/atlas2026/singlepane/components/CountyCommonsHeatmap'
 import SupervisorCompetencyPanel from '@/features/atlas2026/singlepane/components/SupervisorCompetencyPanel'
 import type { AtlasRole, CountyHeatPoint, EnrollmentRequestRecord, SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
@@ -51,7 +50,8 @@ export default function ContextPanels({
   }
 
   if (activeMenu === 'county commons') {
-    return <CountyCommonsHeatmap points={countyHeatmap} />
+    // County commons stays intentionally hidden while the experience is being rebuilt.
+    return null
   }
 
   if (role === 'supervisor' && (activeMenu === 'navigator assessments' || activeMenu === 'assigned navigators')) {

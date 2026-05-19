@@ -117,7 +117,7 @@ function normalizeNavigatorTopMenus(menus: string[]) {
       if (lower === 'referral portal') return 'refer'
       return menu
     })
-    .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+    .filter((menu) => menu.trim().toLowerCase() !== 'route planning' && menu.trim().toLowerCase() !== 'county commons')
 
   if (!normalized.some((menu) => menu.trim().toLowerCase() === 'enrollees')) {
     normalized.unshift('enrollees')
@@ -125,14 +125,21 @@ function normalizeNavigatorTopMenus(menus: string[]) {
   return normalized
 }
 
+function hideDeferredCountyCommonsMenu(menus: string[]) {
+  // Keep county commons hidden while its experience is under active development.
+  return menus.filter((menu) => menu.trim().toLowerCase() !== 'county commons')
+}
+
 function normalizeRoleTopMenus(roleKey: string, menus: string[]) {
   if (roleKey === 'navigator') return normalizeNavigatorTopMenus(menus)
-  if (roleKey === 'partner') return ['referral portal', 'my station', 'service capacity', 'county commons']
+  if (roleKey === 'partner') return ['referral portal', 'my station', 'service capacity']
   if (roleKey === 'supervisor') {
-    const normalized = menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+    const normalized = hideDeferredCountyCommonsMenu(
+      menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+    )
     return normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]
   }
-  return menus
+  return hideDeferredCountyCommonsMenu(menus)
 }
 
 function buildAdminSupersetMenus(roleConfigs: Array<{ role: AtlasRole; topMenus: string[]; actionMenus: string[] }>) {

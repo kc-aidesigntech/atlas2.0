@@ -311,7 +311,7 @@ export default function AccountSettingsPanel({
               onToggle={() => toggleSection('troubleshootingGrant')}
             >
               <div className="space-y-2">
-                {['referral portal', 'my station', 'service capacity', 'county commons'].map((menu) => (
+                {['referral portal', 'my station', 'service capacity'].map((menu) => (
                   <label key={menu} className="atlas-surface-raised flex items-center justify-between px-4 py-3">
                     <span className="atlas-meta text-[15px] text-white">{menu}</span>
                     <input
