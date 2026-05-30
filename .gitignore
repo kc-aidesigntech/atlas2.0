@@ -42,3 +42,8 @@ firestore-debug.log
 ui-debug.log
 
 .vercel
+
+# Playwright-managed browser binaries (downloaded locally for pilot screenshots)
+.playwright-browsers/
+# Scratch capture output from the pilot screenshot pipeline
+pilot-decks/capture/_smoke_out/
