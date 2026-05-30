@@ -25,6 +25,7 @@ import {
   loadEnrollmentRequests,
   loadLatestEnrolleeBurdenSurveySubmissions,
   loadNavigatorCompetencyAssessments,
+  loadNavigatorStationContext,
   loadPartnerServiceCapacitySurveyHistory,
   loadPartnerRadialLoadBreakdown,
   loadPartnerStationProfile,
@@ -156,7 +157,13 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
       weightedEnrolleeBreakdowns
     )
 
-    const partnerSurveyHistory = await loadPartnerServiceCapacitySurveyHistory(nextAccountSettings.organization)
+    // Navigator station data must resolve from explicit navigator->partner linkage, while
+    // partner users continue to resolve from their account organization.
+    const navigatorStationContext = role === 'navigator' ? await loadNavigatorStationContext() : null
+    const stationOrganizationName =
+      (role === 'navigator' ? navigatorStationContext?.organizationName : nextAccountSettings.organization)?.trim() ||
+      nextAccountSettings.organization
+    const partnerSurveyHistory = await loadPartnerServiceCapacitySurveyHistory(stationOrganizationName)
     const completedPartnerSurveyHistory = [...partnerSurveyHistory]
       .filter((record) => record.status === 'completed')
       .sort((left, right) => {
@@ -172,7 +179,7 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
         subjectLabel: latestCompletedPartnerSurvey?.header.organizationName || nextAccountSettings.organization
       }) || legacyPartnerViewLoadBreakdown
     const partnerViewLoad = toNormalizedRadialDomainLoad(partnerViewLoadBreakdown)
-    const stationProfile = await loadPartnerStationProfile(nextAccountSettings.organization, {
+    const stationProfile = await loadPartnerStationProfile(stationOrganizationName, {
       fullName: nextAccountSettings.fullName,
       email: nextAccountSettings.email
     })

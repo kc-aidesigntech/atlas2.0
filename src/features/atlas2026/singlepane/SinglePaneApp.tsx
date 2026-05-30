@@ -371,6 +371,9 @@ export default function SinglePaneApp() {
 
   const activeAction = actionMenus[0] || ''
   const isPartnerRole = uiRole === 'partner'
+  const isNavigatorMyStation = uiRole === 'navigator' && activeMenu.trim().toLowerCase() === 'my station'
+  // Navigator "my station" reuses partner station surfaces to keep one canonical station experience.
+  const isPartnerStationView = isPartnerRole || isNavigatorMyStation
   const isAdminSection = uiRole === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
   const isServiceCapacitySection = uiRole === 'partner' && activeMenu === 'service capacity'
   const isReferralPortalMenu = activeMenu === 'referral portal' || activeMenu === 'refer'
@@ -383,7 +386,7 @@ export default function SinglePaneApp() {
     : 'Assignment board is hidden by administrator policy.'
   const isSupervisorNavigatorManagementView =
     uiRole === 'supervisor' && (activeMenu === 'assigned navigators' || activeMenu === 'navigator assessments')
-  const isReady = isPartnerRole ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu ? true : Boolean(selectedEnrollee && timelineConfig)
+  const isReady = isPartnerStationView ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu ? true : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const visibleLogs = React.useMemo(
     () => (uiRole === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
@@ -769,7 +772,7 @@ export default function SinglePaneApp() {
               <LoadingShell />
             ) : (
               <>
-                {isPartnerRole ? (
+                {isPartnerStationView ? (
                   <div
                     className="grid min-h-[282px] grid-cols-1 items-start gap-x-4 gap-y-5 border-b pb-[12px] lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-x-10 lg:gap-y-4 xl:gap-x-14 2xl:gap-x-20"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
@@ -977,7 +980,7 @@ export default function SinglePaneApp() {
                       </small>
                     </div>
                   ) : null
-                ) : isPartnerRole && isReferralPortalMenu ? (
+                ) : isPartnerStationView && isReferralPortalMenu ? (
                   <div className="rounded-[24px] border px-4 py-4" style={{ borderColor: '#ffffff30' }}>
                     <PartnerReferralWorkflowPanel
                       defaultReferrerName={accountSettings.fullName}
@@ -989,7 +992,7 @@ export default function SinglePaneApp() {
                       accentColor="var(--atlas-signal-lucid-green)"
                     />
                   </div>
-                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerRole ? (
+                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerStationView ? (
                   <>
                     {timelineConfig ? (
                       <>

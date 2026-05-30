@@ -108,6 +108,14 @@ export interface ReferralClaimMaterializationResult {
   createdAtIso: string
 }
 
+export interface NavigatorStationContext {
+  partnerId: string
+  organizationName: string
+  stationId: string | null
+  stationName: string | null
+  countyName: string | null
+}
+
 function normalizeNavigatorTopMenus(menus: string[]) {
   const normalized = menus
     .map((menu) => {
@@ -967,6 +975,25 @@ export async function loadPartnerStationProfile(
     primaryContactEmail: partner.primary_contact_email || null,
     capacityTotal: typeof partner.capacity_total === 'number' ? partner.capacity_total : null,
     capacityAvailable: typeof partner.capacity_available === 'number' ? partner.capacity_available : null
+  }
+}
+
+export async function loadNavigatorStationContext(): Promise<NavigatorStationContext | null> {
+  if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return null
+  const { data, error } = await (supabase as any).schema('atlas').rpc('fn_get_my_navigator_station_context')
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || typeof row !== 'object') return null
+  const typed = row as Record<string, unknown>
+  const partnerId = String(typed.partner_id || typed.partnerId || '').trim()
+  const organizationName = String(typed.organization_name || typed.organizationName || '').trim()
+  if (!partnerId || !organizationName) return null
+  return {
+    partnerId,
+    organizationName,
+    stationId: String(typed.station_id || typed.stationId || '').trim() || null,
+    stationName: String(typed.station_name || typed.stationName || '').trim() || null,
+    countyName: String(typed.county_name || typed.countyName || '').trim() || null
   }
 }
 

@@ -881,10 +881,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     remoteSession?.targetRole === 'partner' && accessMatrixDataset
       ? accessMatrixDataset.partnerAssignments.find((partner) => partner.primaryContactPersonIds.includes(remoteSession.targetPersonId)) || null
       : null
+  const isNavigatorMyStationView = viewerRole === 'navigator' && activeMenu.trim().toLowerCase() === 'my station'
+  const isPartnerStationView = viewerRole === 'partner' || isNavigatorMyStationView
   const effectivePartnerOrganizationName =
     remoteSession?.targetRole === 'partner'
       ? remotePartnerAssignment?.organizationName || remoteSession.targetOrganizationName || ''
-      : accountSettings.organization
+      : partnerStationProfile?.organizationName?.trim() || accountSettings.organization
   const effectiveAccountSettings = useMemo<AccountSettings>(
     () =>
       remoteSession
@@ -960,22 +962,22 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   const selectedLoad = useMemo(
     () => {
-      if (viewerRole === 'partner' && partnerLoad) return partnerLoad
+      if (isPartnerStationView && partnerLoad) return partnerLoad
       return scopedLoads.find((item) => item.enrolleeId === selectedEnrollee?.id) || scopedLoads[0] || null
     },
-    [partnerLoad, scopedLoads, selectedEnrollee, viewerRole]
+    [isPartnerStationView, partnerLoad, scopedLoads, selectedEnrollee]
   )
 
   const selectedLoadBreakdown = useMemo(
     () => {
-      if (viewerRole === 'partner' && partnerLoadBreakdown) return partnerLoadBreakdown
+      if (isPartnerStationView && partnerLoadBreakdown) return partnerLoadBreakdown
       return (
         scopedLoadBreakdownsByEnrolleeId[selectedEnrollee?.id || ''] ||
         Object.values(scopedLoadBreakdownsByEnrolleeId)[0] ||
         null
       )
     },
-    [partnerLoadBreakdown, scopedLoadBreakdownsByEnrolleeId, selectedEnrollee, viewerRole]
+    [isPartnerStationView, partnerLoadBreakdown, scopedLoadBreakdownsByEnrolleeId, selectedEnrollee]
   )
   const navigatorRouteBoardLoadBreakdown = useMemo(
     () => (viewerRole === 'navigator' ? buildNavigatorRouteBoardLoadBreakdown(selectedEnrollee, routeCandidates) : null),
@@ -1138,7 +1140,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [currentNavigatorName, enrollmentRequests, navigatorProgramState, publicQueueRecords]
   )
   const partnerStripJourneyModel = useMemo(() => {
-    if (viewerRole !== 'partner') {
+    if (!isPartnerStationView) {
       return {
         referredDots: [] as PartnerStripAggregateDot[],
         activeDots: [] as PartnerStripAggregateDot[],
@@ -1263,7 +1265,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     routeAssignmentsByEnrolleeId,
     scopedEnrolleeIdSet,
     scopedEnrollees,
-    viewerRole
+    isPartnerStationView
   ])
   const navigatorSelfAssessments = useMemo(
     () =>
@@ -1317,7 +1319,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const pickupQueue = useMemo(
     () => {
       const visibleQueue = mergedNavigatorProgramState.pickupQueue.filter((item) => item.status !== 'archived')
-      if (viewerRole !== 'partner') {
+      if (!isPartnerStationView) {
         return visibleQueue
           .slice()
           .sort((left, right) => new Date(right.referredAtIso).getTime() - new Date(left.referredAtIso).getTime())
@@ -1333,11 +1335,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         .slice()
         .sort((left, right) => new Date(right.referredAtIso).getTime() - new Date(left.referredAtIso).getTime())
     },
-    [effectivePartnerOrganizationName, mergedNavigatorProgramState.pickupQueue, viewerRole]
+    [effectivePartnerOrganizationName, isPartnerStationView, mergedNavigatorProgramState.pickupQueue]
   )
   const pickupQueueForAssignmentBoard = useMemo(() => {
     const normalizedOrg = normalizeOrganizationKey(effectivePartnerOrganizationName)
-    if (viewerRole === 'partner') {
+    if (isPartnerStationView) {
       return normalizedOrg
         ? mergedNavigatorProgramState.pickupQueue.filter(
             (item) => normalizeOrganizationKey(item.referrerOrganization) === normalizedOrg
@@ -1345,7 +1347,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         : mergedNavigatorProgramState.pickupQueue
     }
     return mergedNavigatorProgramState.pickupQueue
-  }, [effectivePartnerOrganizationName, mergedNavigatorProgramState.pickupQueue, viewerRole])
+  }, [effectivePartnerOrganizationName, isPartnerStationView, mergedNavigatorProgramState.pickupQueue])
   const navigatorAssignmentBoardRows = useMemo(() => {
     const pendingReferralRows = buildPendingReferralAssignmentRows(pickupQueueForAssignmentBoard, navigatorEnrollmentAssignments)
     return [...pendingReferralRows, ...navigatorEnrollmentAssignments].sort((left, right) =>
@@ -1872,7 +1874,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     const finalSettings = { ...nextSettings, enabledRoles }
     try {
       const saved = await persistAccountSettings(finalSettings)
-      const stationProfile = await loadPartnerStationProfile(saved.organization, {
+      // Keep navigator station context anchored to linked partner assignment rather than
+      // transient account organization edits.
+      const stationOrganizationName = viewerRole === 'navigator'
+        ? partnerStationProfile?.organizationName?.trim() || saved.organization
+        : saved.organization
+      const stationProfile = await loadPartnerStationProfile(stationOrganizationName, {
         fullName: saved.fullName,
         email: saved.email
       })
@@ -1915,7 +1922,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         ...accountSettings,
         avatarUrl
       })
-      const stationProfile = await loadPartnerStationProfile(saved.organization, {
+      // Avatar updates should not silently re-point navigator station context away from
+      // the linked organization assignment.
+      const stationOrganizationName = viewerRole === 'navigator'
+        ? partnerStationProfile?.organizationName?.trim() || saved.organization
+        : saved.organization
+      const stationProfile = await loadPartnerStationProfile(stationOrganizationName, {
         fullName: saved.fullName,
         email: saved.email
       })

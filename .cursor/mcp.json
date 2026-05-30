@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "supabase-atlas": {
+      "command": "bash",
+      "args": [
+        "-lc",
+        "export SUPABASE_ACCESS_TOKEN=\"$(grep -E '^SUPABASE_ACCESS_TOKEN=' /Users/kc_ai-designtech/atlas/.env | cut -d= -f2-)\"; exec npx -y @supabase/mcp-server-supabase@0.8.1 --project-ref=qjsaedamqaqxobslboni"
+      ]
+    }
+  }
+}
