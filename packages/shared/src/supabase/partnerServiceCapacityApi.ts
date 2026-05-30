@@ -4,10 +4,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  aggregatePartnerSurveyAnswersByNormalizedZCode,
   createPartnerServiceCapacityDraftKey,
-  derivePartnerCapabilityRelation,
-  derivePartnerCapabilityStrength,
   normalizeOrganizationName,
 } from "../atlas2026/partnerServiceCapacity";
 import type {
@@ -21,63 +18,7 @@ import type {
   ZCodeDomainSurveyHistorySummary,
 } from "./contracts";
 
-let supportsDraftSubmissionSchema: boolean | null = null;
-let supportsNotEncounteredAnswerSchema: boolean | null = null;
 const ZCODE_DOMAIN_SURVEY_FORM_VERSION = "2026-z-domain-spectrum-v1";
-
-// Feature probes are memoized at module scope so autosave loops do not repeat
-// failing writes against legacy database schemas on every request.
-function toPostgrestErrorText(error: unknown) {
-  const message =
-    typeof error === "object" && error && "message" in error ? String((error as { message?: string }).message || "").toLowerCase() : "";
-  const details =
-    typeof error === "object" && error && "details" in error ? String((error as { details?: string }).details || "").toLowerCase() : "";
-  const hint =
-    typeof error === "object" && error && "hint" in error ? String((error as { hint?: string }).hint || "").toLowerCase() : "";
-  return { message, details, hint, combined: `${message} ${details} ${hint}` };
-}
-
-function hasLegacyRequiredHeaderFields(input: PartnerServiceCapacitySubmissionInput) {
-  return Boolean(
-    input.header.firstName.trim() &&
-      input.header.lastName.trim() &&
-      input.header.organizationName.trim() &&
-      input.header.respondentRoles.length,
-  );
-}
-
-function isUuidLike(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-}
-
-function shouldFallbackToLegacyDraftSchema(error: unknown) {
-  const { message, details, hint } = toPostgrestErrorText(error);
-
-  return ["draft_key", "completed_at", "status", "on_conflict", "on conflict", "no unique", "column"]
-    .some((token) => message.includes(token) || details.includes(token) || hint.includes(token));
-}
-
-function shouldFallbackToLegacyNotEncounteredAnswerSchema(error: unknown) {
-  const { combined } = toPostgrestErrorText(error);
-
-  return [
-    "not_encountered",
-    "burden_score",
-    "null value",
-    "violates not-null",
-    "violates check constraint",
-    "partner_service_capacity_answers_burden_score_check",
-    "column",
-  ].some((token) => combined.includes(token));
-}
-
-function getNotEncounteredMigrationRequiredMessage() {
-  return "This database is missing the survey answer schema needed for 'not encountered'. Apply `supabase/migrations/20260414_zcode_master_alignment.sql` before using that option.";
-}
-
-function getDomainSpectrumRangeMigrationRequiredMessage() {
-  return "This database is still enforcing the legacy 1-9 burden score range. Apply `supabase/migrations/20260510013000_partner_service_capacity_domain_spectrum_range.sql` before using the 1-99 domain spectrum survey.";
-}
 
 function mapSubmissionRow(
   submission: AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_submissions"]["Row"],
@@ -130,61 +71,6 @@ function mapPartnerIdentifierRow(
     organizationName: row.organization_name,
     email: row.email || "",
   };
-}
-
-function mapPartnerRowToIdentifier(
-  row: Pick<
-    AtlasDatabase["atlas"]["Tables"]["partners"]["Row"],
-    | "id"
-    | "organization_name"
-    | "primary_contact_first_name"
-    | "primary_contact_last_name"
-    | "primary_contact_email"
-  >,
-): PartnerIdentifierRecord {
-  return {
-    partnerId: row.id,
-    firstName: row.primary_contact_first_name || "",
-    lastName: row.primary_contact_last_name || "",
-    organizationName: row.organization_name,
-    email: row.primary_contact_email || "",
-  };
-}
-
-async function ensurePartnerRecord(
-  client: SupabaseClient<AtlasDatabase>,
-  header: PartnerServiceCapacitySubmissionInput["header"],
-) {
-  const organizationName = header.organizationName.trim();
-  const organizationNameNormalized = normalizeOrganizationName(organizationName);
-  const { data: existingPartner, error: existingPartnerError } = await client
-    .schema("atlas")
-    .from("partners")
-    .select("id")
-    .eq("organization_name_normalized", organizationNameNormalized)
-    .limit(1);
-
-  if (existingPartnerError) throw existingPartnerError;
-  if (existingPartner?.[0]) return existingPartner[0];
-
-  const { data, error } = await client
-    .schema("atlas")
-    .from("partners")
-    .insert(
-      {
-        organization_name: organizationName,
-        organization_name_normalized: organizationNameNormalized,
-        primary_contact_first_name: header.firstName.trim() || null,
-        primary_contact_last_name: header.lastName.trim() || null,
-        primary_contact_email: header.email.trim() || null,
-        updated_at: new Date().toISOString(),
-      },
-    )
-    .select("id")
-    .single();
-
-  if (error) throw error;
-  return data;
 }
 
 export async function getPartnerServiceCapacitySubmissionByDraftKey(
@@ -401,20 +287,14 @@ export async function setZCodeDomainSurveyAnswerNullification(
     throw new Error("An answer id is required.");
   }
 
-  const updatePayload: AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Update"] = {
-    is_nullified: input.isNullified,
-    nullified_at: input.isNullified ? new Date().toISOString() : null,
-    nullified_by_email: input.isNullified ? input.nullifiedByEmail?.trim() || null : null,
-    nullified_reason: input.isNullified ? input.nullifiedReason?.trim() || null : null,
-  };
-
-  const { data, error } = await client
-    .schema("atlas")
-    .from("partner_service_capacity_answers")
-    .update(updatePayload)
-    .eq("id", trimmedAnswerId)
-    .select("id,is_nullified,nullified_at,nullified_by_email,nullified_reason")
-    .single();
+  // Answer nullification is an administrator review action enforced server-side
+  // by the SECURITY DEFINER command RPC; direct UPDATE is revoked.
+  const { data, error } = await client.schema("atlas").rpc("fn_set_partner_survey_answer_nullification", {
+    p_answer_id: trimmedAnswerId,
+    p_is_nullified: input.isNullified,
+    p_nullified_by_email: input.isNullified ? input.nullifiedByEmail?.trim() || null : null,
+    p_nullified_reason: input.isNullified ? input.nullifiedReason?.trim() || null : null,
+  });
 
   if (error) throw error;
   return data;
@@ -429,31 +309,17 @@ export async function deletePartnerServiceCapacityDraft(
     throw new Error("A draft submission id is required.");
   }
 
-  const { data: submission, error: fetchError } = await client
+  // Deletion is funneled through the scoped command RPC (validates draft status
+  // server-side and cascades answers); direct DELETE is revoked.
+  const { data, error } = await client
     .schema("atlas")
-    .from("partner_service_capacity_submissions")
-    .select("id, draft_key, status")
-    .eq("id", trimmedSubmissionId)
-    .single();
+    .rpc("fn_delete_partner_service_capacity_draft", { target_submission_id: trimmedSubmissionId });
 
-  if (fetchError) throw fetchError;
-  if (!submission) {
-    throw new Error("Draft record not found.");
-  }
-  if (submission.status !== "draft") {
-    throw new Error("Only draft service-capacity records can be deleted.");
-  }
-
-  const { error: deleteError } = await client
-    .schema("atlas")
-    .from("partner_service_capacity_submissions")
-    .delete()
-    .eq("id", trimmedSubmissionId);
-
-  if (deleteError) throw deleteError;
+  if (error) throw error;
+  const result = (data || {}) as { id?: string; draftKey?: string };
   return {
-    id: submission.id,
-    draftKey: submission.draft_key || submission.id,
+    id: result.id || trimmedSubmissionId,
+    draftKey: result.draftKey || trimmedSubmissionId,
   };
 }
 
@@ -492,358 +358,92 @@ export async function ensurePartnerIdentifierRecord(
   const lastName = input.lastName.trim();
   const organizationName = input.organizationName.trim();
   const email = input.email?.trim() || null;
-  const organizationNameNormalized = normalizeOrganizationName(organizationName);
 
   if (!firstName || !lastName || !organizationName) {
     throw new Error("first name, last name, and organization name are required.");
   }
 
-  const { data: existingPartnerRows, error: existingPartnerError } = await client
-    .schema("atlas")
-    .from("partners")
-    .select("id, organization_name, primary_contact_first_name, primary_contact_last_name, primary_contact_email")
-    .eq("organization_name_normalized", organizationNameNormalized)
-    .limit(1);
+  // Partner identity upsert (dedup on normalized org name) is enforced server-side
+  // by the SECURITY DEFINER command RPC; direct partner writes are revoked.
+  const { data, error } = await client.schema("atlas").rpc("fn_ensure_partner_identifier", {
+    p_first_name: firstName,
+    p_last_name: lastName,
+    p_organization_name: organizationName,
+    p_email: email,
+  });
 
-  if (existingPartnerError) throw existingPartnerError;
-
-  const existingPartner = existingPartnerRows?.[0];
-  if (existingPartner) {
-    const { data: updatedPartner, error: updateError } = await client
-      .schema("atlas")
-      .from("partners")
-      .update({
-        primary_contact_first_name: firstName,
-        primary_contact_last_name: lastName,
-        primary_contact_email: email,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existingPartner.id)
-      .select("id, organization_name, primary_contact_first_name, primary_contact_last_name, primary_contact_email")
-      .single();
-
-    if (updateError) throw updateError;
-    return mapPartnerRowToIdentifier(updatedPartner || existingPartner);
-  }
-
-  const { data: insertedPartner, error: insertError } = await client
-    .schema("atlas")
-    .from("partners")
-    .insert({
-      organization_name: organizationName,
-      organization_name_normalized: organizationNameNormalized,
-      primary_contact_first_name: firstName,
-      primary_contact_last_name: lastName,
-      primary_contact_email: email,
-      updated_at: new Date().toISOString(),
-    })
-    .select("id, organization_name, primary_contact_first_name, primary_contact_last_name, primary_contact_email")
-    .single();
-
-  if (insertError) throw insertError;
-  return mapPartnerRowToIdentifier(insertedPartner);
+  if (error) throw error;
+  const result = (data || {}) as Partial<PartnerIdentifierRecord>;
+  return {
+    partnerId: result.partnerId || "",
+    firstName: result.firstName || firstName,
+    lastName: result.lastName || lastName,
+    organizationName: result.organizationName || organizationName,
+    email: result.email || email || "",
+  };
 }
 
 export async function savePartnerServiceCapacitySubmission(
   client: SupabaseClient<AtlasDatabase>,
   input: PartnerServiceCapacitySubmissionInput,
 ) {
-  // Persist and reuse a stable draft key so client-side autosave can reconnect to the same
-  // submission row even before modern draft schema support is guaranteed.
+  // The whole submission (header + answers) is transmitted as one JSON packet to
+  // the validated SECURITY DEFINER command RPC, which upserts the partner +
+  // submission, fully replaces answers, and (for completed non domain-spectrum
+  // forms) syncs the derived burden/capability tables atomically. Direct table
+  // writes are revoked, so the record shape is rebuilt from the RPC result plus
+  // the validated input rather than read back -- survey-only users cannot read
+  // these rows under the scoped policies.
   const draftKey = input.draftKey?.trim() || createPartnerServiceCapacityDraftKey();
   const status: PartnerServiceCapacitySubmissionStatus = input.status || "draft";
+  const completedAtIso = status === "completed" ? input.completedAtIso || new Date().toISOString() : null;
   const organizationName = input.header.organizationName.trim();
-  const normalized = organizationName ? normalizeOrganizationName(organizationName) : null;
-  const partner = organizationName ? await ensurePartnerRecord(client, input.header) : null;
-  let submission:
-    | AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_submissions"]["Row"]
-    | null = null;
 
-  try {
-    if (supportsDraftSubmissionSchema !== false) {
-      const { data, error: submissionError } = await client
-        .schema("atlas")
-        .from("partner_service_capacity_submissions")
-        .upsert({
-          draft_key: draftKey,
-          status,
-          completed_at: status === "completed" ? input.completedAtIso || new Date().toISOString() : null,
-          partner_id: partner?.id || null,
-          organization_name: organizationName || null,
-          organization_name_normalized: normalized,
-          respondent_first_name: input.header.firstName.trim() || null,
-          respondent_last_name: input.header.lastName.trim() || null,
-          respondent_email: input.header.email.trim() || null,
-          job_title: input.header.jobTitle.trim() || null,
-          respondent_roles: input.header.respondentRoles,
-          other_role_text: input.header.otherRoleText.trim() || null,
-          form_version: input.formVersion,
-          raw_payload: input,
-        }, { onConflict: "draft_key" })
-        .select("*")
-        .single();
-
-      if (submissionError) throw submissionError;
-      supportsDraftSubmissionSchema = true;
-      submission = data;
-    }
-  } catch (error) {
-    // Probe once per runtime: when migrations are partial we downgrade to legacy writes and
-    // avoid retrying unsupported draft fields on every autosave.
-    if (shouldFallbackToLegacyDraftSchema(error)) {
-      supportsDraftSubmissionSchema = false;
-    } else {
-      throw error;
-    }
-  }
-
-  if (!submission) {
-    if (!hasLegacyRequiredHeaderFields(input)) {
-      throw new Error("Draft autosave requires completed respondent details before this database can store legacy survey records.");
-    }
-
-    const legacyPayload = {
-      partner_id: partner?.id || null,
-      organization_name: organizationName,
-      organization_name_normalized: normalized,
-      respondent_first_name: input.header.firstName.trim(),
-      respondent_last_name: input.header.lastName.trim(),
-      respondent_email: input.header.email.trim() || null,
-      job_title: input.header.jobTitle.trim() || null,
-      respondent_roles: input.header.respondentRoles,
-      other_role_text: input.header.otherRoleText.trim() || null,
-      form_version: input.formVersion,
-      raw_payload: input,
-    };
-
-    const existingLegacyId = draftKey && isUuidLike(draftKey) ? draftKey : null;
-
-    if (existingLegacyId) {
-      const { data, error: updateError } = await client
-        .schema("atlas")
-        .from("partner_service_capacity_submissions")
-        .update(legacyPayload)
-        .eq("id", existingLegacyId)
-        .select("*")
-        .single();
-      if (updateError) throw updateError;
-      submission = data;
-    } else {
-      const { data, error: insertError } = await client
-        .schema("atlas")
-        .from("partner_service_capacity_submissions")
-        .insert(legacyPayload)
-        .select("*")
-        .single();
-      if (insertError) throw insertError;
-      submission = data;
-    }
-  }
-
-  if (!submission) {
-    throw new Error("Unable to persist partner service capacity submission.");
-  }
-
-  const { error: deleteAnswersError } = await client
-    .schema("atlas")
-    .from("partner_service_capacity_answers")
-    .delete()
-    .eq("submission_id", submission.id);
-
-  if (deleteAnswersError) throw deleteAnswersError;
-
-  // Answers are replaced atomically by "delete then insert" so removed prompts are not left
-  // behind when survey versions change or users clear prior responses.
-  const answerRows = input.answers.map((answer) => ({
-    submission_id: submission.id,
-    prompt_id: answer.promptId,
-    parent_code: answer.parentCode,
-    z_code: answer.zCode,
-    normalized_z_code: answer.normalizedZCode,
-    title: answer.title,
-    description: answer.description,
-    burden_score: answer.notEncountered ? null : answer.score,
-    not_encountered: answer.notEncountered,
-  }));
-
-  if (!answerRows.length) {
-    return {
-      ...mapSubmissionRow(submission, []),
-      draftKey: submission.draft_key || submission.id,
-      status,
-      completedAtIso: status === "completed" ? input.completedAtIso || new Date().toISOString() : null,
-    };
-  }
-
-  const insertAnswerRows = async (
-    rows: AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Insert"][],
-  ) =>
-    client
-      .schema("atlas")
-      .from("partner_service_capacity_answers")
-      .insert(rows)
-      .select("*");
-
-  let answers:
-    | AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Row"][]
-    | null = null;
-
-  try {
-    if (supportsNotEncounteredAnswerSchema !== false) {
-      const { data, error } = await insertAnswerRows(answerRows);
-      if (error) throw error;
-      supportsNotEncounteredAnswerSchema = true;
-      answers = data;
-    }
-  } catch (error) {
-    // As above, cache schema capability after first signal and route old databases through
-    // the compatibility path without repeated failing writes.
-    if (shouldFallbackToLegacyNotEncounteredAnswerSchema(error)) {
-      supportsNotEncounteredAnswerSchema = false;
-    } else {
-      throw error;
-    }
-  }
-
-  if (!answers) {
-    if (input.answers.some((answer) => typeof answer.score === "number" && answer.score > 9)) {
-      throw new Error(getDomainSpectrumRangeMigrationRequiredMessage());
-    }
-    if (input.answers.some((answer) => answer.notEncountered || typeof answer.score !== "number")) {
-      throw new Error(getNotEncounteredMigrationRequiredMessage());
-    }
-
-    const legacyAnswerRows: AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_answers"]["Insert"][] = input.answers.map(
-      (answer) => ({
-        submission_id: submission!.id,
-        prompt_id: answer.promptId,
-        parent_code: answer.parentCode,
-        z_code: answer.zCode,
-        normalized_z_code: answer.normalizedZCode,
-        title: answer.title,
-        description: answer.description,
-        burden_score: answer.score,
-      }),
-    );
-
-    const { data, error } = await insertAnswerRows(legacyAnswerRows);
-    if (error) throw error;
-    answers = data;
-  }
-
-  return {
-    ...mapSubmissionRow(submission, answers || []),
-    draftKey: submission.draft_key || submission.id,
+  const payload = {
+    ...input,
+    draftKey,
     status,
-    completedAtIso: status === "completed" ? input.completedAtIso || new Date().toISOString() : null,
+    completedAtIso,
   };
-}
 
-export async function syncPartnerServiceCapacityDerivedTables(
-  client: SupabaseClient<AtlasDatabase>,
-  record: PartnerServiceCapacitySubmissionRecord,
-) {
-  if (record.formVersion === ZCODE_DOMAIN_SURVEY_FORM_VERSION) {
-    // Domain-spectrum submissions drive radial chart positioning directly in the application
-    // layer and should not overwrite burden/capability tables that power route ranking.
-    return record;
-  }
-
-  // Only finalized submissions should influence network capability signals.
-  if (record.status !== "completed" || !record.partnerId) {
-    return record;
-  }
-
-  const normalizedAnswers = aggregatePartnerSurveyAnswersByNormalizedZCode(record);
-  const normalizedZCodes = normalizedAnswers.map((answer) => answer.normalizedZCode);
-
-  if (!normalizedZCodes.length) {
-    return record;
-  }
-
-  const { data: zCodeRows, error: zCodeLookupError } = await client
+  const { data, error } = await client
     .schema("atlas")
-    .from("z_codes")
-    .select("id, z_code")
-    .in("z_code", normalizedZCodes);
+    .rpc("fn_save_partner_service_capacity", { payload });
 
-  if (zCodeLookupError) throw zCodeLookupError;
+  if (error) throw error;
+  const result = (data || {}) as {
+    submissionId?: string;
+    partnerId?: string | null;
+    draftKey?: string;
+    status?: PartnerServiceCapacitySubmissionStatus;
+    organizationNameNormalized?: string | null;
+    completedAtIso?: string | null;
+    submittedAtIso?: string;
+    updatedAtIso?: string;
+  };
+  if (!result.submissionId) throw new Error("Partner service capacity save returned no id");
 
-  const zCodeIdByCode = new Map((zCodeRows || []).map((row) => [row.z_code, row.id]));
-  const submittedAtIso = record.completedAtIso || record.updatedAtIso || record.submittedAtIso;
-
-  const burdenRows: AtlasDatabase["atlas"]["Tables"]["partner_z_code_burden_scores"]["Insert"][] = normalizedAnswers
-    .map((answer) => {
-      if (typeof answer.score !== "number") return null;
-      const zCodeId = zCodeIdByCode.get(answer.normalizedZCode);
-      if (!zCodeId) return null;
-      return {
-        partner_id: record.partnerId!,
-        submission_id: record.id,
-        z_code_id: zCodeId,
-        z_code: answer.normalizedZCode,
-        burden_score: answer.score,
-        derived_relation_type: derivePartnerCapabilityRelation(answer.score),
-        strength: derivePartnerCapabilityStrength(answer.score),
-        updated_at: submittedAtIso,
-      };
-    })
-    .filter(Boolean) as AtlasDatabase["atlas"]["Tables"]["partner_z_code_burden_scores"]["Insert"][];
-
-  if (burdenRows.length) {
-    const { error: burdenError } = await client
-      .schema("atlas")
-      .from("partner_z_code_burden_scores")
-      .upsert(burdenRows, { onConflict: "partner_id,z_code_id" });
-
-    if (burdenError) throw burdenError;
-  }
-
-  // Keep both relation rows per z-code and activate one side at a time. This preserves a
-  // consistent query shape while still encoding directional capability.
-  const capabilityRows: AtlasDatabase["atlas"]["Tables"]["partner_z_code_capabilities"]["Insert"][] = normalizedAnswers.flatMap((answer) => {
-    if (typeof answer.score !== "number") return [];
-    const zCodeId = zCodeIdByCode.get(answer.normalizedZCode);
-    if (!zCodeId) return [];
-    const strength = derivePartnerCapabilityStrength(answer.score);
-    return [
-      {
-        partner_id: record.partnerId!,
-        z_code_id: zCodeId,
-        relation_type: "specialize",
-        strength: answer.score >= 7 ? strength : 0,
-        source: "service_capacity_survey",
-        source_submitted_at: submittedAtIso,
-        is_active: answer.score >= 7,
-      },
-      {
-        partner_id: record.partnerId!,
-        z_code_id: zCodeId,
-        relation_type: "interfere",
-        strength: answer.score <= 3 ? strength : 0,
-        source: "service_capacity_survey",
-        source_submitted_at: submittedAtIso,
-        is_active: answer.score <= 3,
-      },
-    ];
-  });
-
-  if (capabilityRows.length) {
-    const { error: capabilityError } = await client
-      .schema("atlas")
-      .from("partner_z_code_capabilities")
-      .upsert(capabilityRows, { onConflict: "partner_id,z_code_id,relation_type,source" });
-
-    if (capabilityError) throw capabilityError;
-  }
-
-  return record;
+  const nowIso = new Date().toISOString();
+  return {
+    ...input,
+    id: result.submissionId,
+    draftKey: result.draftKey || draftKey,
+    status: result.status || status,
+    completedAtIso: result.completedAtIso ?? completedAtIso,
+    partnerId: result.partnerId || null,
+    organizationNameNormalized:
+      result.organizationNameNormalized ??
+      (organizationName ? normalizeOrganizationName(organizationName) : null),
+    submittedAtIso: result.submittedAtIso || nowIso,
+    updatedAtIso: result.updatedAtIso || nowIso,
+  } satisfies PartnerServiceCapacitySubmissionRecord;
 }
 
 export async function savePartnerServiceCapacityRecord(
   client: SupabaseClient<AtlasDatabase>,
   input: PartnerServiceCapacitySubmissionInput,
 ) {
-  const record = await savePartnerServiceCapacitySubmission(client, input);
-  return syncPartnerServiceCapacityDerivedTables(client, record);
+  // Derived burden/capability synchronization now happens server-side inside the
+  // command RPC, so the record returned by the save is already canonical.
+  return savePartnerServiceCapacitySubmission(client, input);
 }

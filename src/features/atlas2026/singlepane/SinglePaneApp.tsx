@@ -52,6 +52,7 @@ export default function SinglePaneApp() {
     activeMenu,
     setActiveMenu,
     isLoading,
+    bootstrapError,
     enrollees,
     selectedEnrollee,
     selectedLoad,
@@ -571,6 +572,20 @@ export default function SinglePaneApp() {
       />
 
       <main className="atlas-shell-edge-buffer relative py-[10px]">
+        {bootstrapError ? (
+          // Fail-loud banner: a bootstrap failure (most importantly a grant/RLS
+          // denial) is surfaced here instead of being hidden behind an empty
+          // roster, so identity<->data contract breaks are obvious to the operator.
+          <div
+            className="mx-auto mb-3 w-full rounded-[16px] border px-4 py-3"
+            style={{ borderColor: '#ff7d7d', backgroundColor: 'rgba(255, 75, 75, 0.12)' }}
+            role="alert"
+            aria-live="assertive"
+          >
+            <small className="atlas-overline block text-[#ffd4d4]">workspace data unavailable</small>
+            <div className="mt-1 text-[14px] font-medium leading-relaxed text-[#ffe8e8]">{bootstrapError}</div>
+          </div>
+        ) : null}
         {isReferralPortalOpen && canUseReferralPortal && !isPartnerRole ? (
           <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-[2px]">
             <div className="relative max-h-[92vh] w-full max-w-[1040px] overflow-y-auto">

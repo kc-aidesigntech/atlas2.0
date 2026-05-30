@@ -91,10 +91,20 @@ async function persistRemoteQueueRecord(record: UnassignedEnrolleePickupRecord) 
     payload: record,
     submitted_by_email: session?.user?.email || null
   }
-  await (supabase as any)
+  // Public submitters act as the anon role, which is granted INSERT only (no SELECT/UPDATE).
+  // A Supabase upsert emits INSERT ... ON CONFLICT, and Postgres requires SELECT (and UPDATE for
+  // DO UPDATE) to evaluate the conflict — privileges anon/authenticated intentionally lack — so an
+  // upsert is silently rejected and referrals never reach staff. A plain insert matches the granted
+  // privilege. The external_record_id UNIQUE constraint keeps retries idempotent: a duplicate key
+  // (23505) means the referral already persisted and is safe to ignore; any other error is surfaced
+  // so a failed public referral fails loudly instead of being dropped.
+  const { error } = await (supabase as any)
     .schema('atlas')
     .from('public_referral_intake_events')
-    .upsert(payload, { onConflict: 'external_record_id' })
+    .insert(payload)
+  if (error && (error as { code?: string }).code !== '23505') {
+    throw new Error(`Referral could not be saved to the database: ${error.message || 'unknown error'}`)
+  }
 }
 
 /**

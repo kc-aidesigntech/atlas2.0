@@ -799,6 +799,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const {
     state: {
       isLoading,
+      error: bootstrapError,
       enrollees,
       loads,
       loadBreakdownsByEnrolleeId,
@@ -2746,6 +2747,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     activeMenu,
     setActiveMenu,
     isLoading,
+    bootstrapError,
     enrollees: scopedEnrollees,
     selectedEnrollee,
     selectedLoad: effectiveSelectedLoad,
