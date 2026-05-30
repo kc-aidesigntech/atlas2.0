@@ -1,0 +1,209 @@
+{
+  "title": "ATLAS",
+  "url": "http://localhost:5173/",
+  "inputs": [
+    {
+      "tag": "input",
+      "type": "file",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "name of person entering",
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "participant full name",
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "textarea",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "Describe this person's situation, risks, history, needs, and any other context that would help someone understand what is going on.",
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "name@example.com",
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "select",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": "participant phone country code",
+      "text": "+1\n+44\n+52",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "1234567890",
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "organization name",
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "contact name",
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "partner@email.com",
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": null,
+      "name": null,
+      "id": null,
+      "placeholder": "(555) 555-5555",
+      "aria": null,
+      "text": "",
+      "testid": null
+    }
+  ],
+  "buttons": [
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "demo",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "log in",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "replace image",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "self - i'm referring the participant",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "on behalf of someone else",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "existing partner",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "new partner",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "submit",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "submit referral",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "open survey",
+      "testid": null
+    }
+  ],
+  "headings": []
+}

@@ -1,0 +1,81 @@
+{
+  "title": "ATLAS",
+  "url": "http://localhost:5173/app",
+  "inputs": [
+    {
+      "tag": "input",
+      "type": "email",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "",
+      "testid": null
+    },
+    {
+      "tag": "input",
+      "type": "password",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "",
+      "testid": null
+    }
+  ],
+  "buttons": [
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "sign in",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "create account",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "submit",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "sign in with email",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "google",
+      "testid": null
+    },
+    {
+      "tag": "button",
+      "type": "button",
+      "name": null,
+      "id": null,
+      "placeholder": null,
+      "aria": null,
+      "text": "apple",
+      "testid": null
+    }
+  ],
+  "headings": [
+    "sign in"
+  ]
+}
