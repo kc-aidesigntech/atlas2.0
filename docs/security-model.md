@@ -39,10 +39,14 @@ governs them.
 - `atlas.fn_current_person_id()` — resolves the caller's `people.id` from
   `auth.uid()`.
 - `atlas.fn_can_access_enrollment_as_staff(enrollment_id)` — true for an
-  administrator, the assigned navigator, or a supervisor over that navigator.
+  administrator, the assigned navigator, or a supervisor over that navigator. The
+  body uses a `CASE` administrator fast-path (see Phase 7) so admin callers skip
+  the per-row assignment/supervisor lookups.
 
 These are `SECURITY DEFINER` so they can read assignment tables without being
-re-subjected to the RLS policies that call them (prevents recursion).
+re-subjected to the RLS policies that call them (prevents recursion). They are
+declared `STABLE` so the planner can cache argument-free calls
+(`fn_current_person_id()`) per statement.
 
 ## Layered phases (applied)
 
@@ -75,6 +79,26 @@ re-subjected to the RLS policies that call them (prevents recursion).
   (`assessment_submissions/answers/participants` scoped to enrollment access;
   `people_role_assignments` directory-read; `counties`/`z_codes` reference read;
   `legacy_decommission_registry` service-role-only; `demo_record_tags` read-only).
+
+- **Phase 7** — bootstrap performance + contract integrity (surfaced once a real
+  browser sign-in exercised the fail-loud path):
+  - **Admin RLS fast-path** (`20260530130000`): the Phase 6 `people_directory_select`
+    policy calls `fn_can_access_enrollment_as_staff` per candidate person row, so
+    RLS-heavy bootstrap views (`v_active_enrollment_roster`,
+    `v_enrollment_assignment_board`) invoked it O(people × enrollments) times and
+    exceeded the `authenticated` role's 8s `statement_timeout` (PostgREST returned
+    HTTP 500, Postgres `57014`). The helper now short-circuits administrators via a
+    `CASE` branch — semantics-preserving, since admins already have full staff
+    access. Measured admin roster runtime fell from ~2223ms to ~33ms; all four
+    pilot roles complete within 8s with correct scope (admin 4 / navigator 2 /
+    supervisor 4 / partner 0).
+  - **Station-context contract** (`20260530131000`): the single-pane bootstrap
+    calls `fn_get_my_navigator_station_context()`, which (with its backing
+    `navigator_partner_assignments` table) had never reached this project — the RPC
+    404'd (`PGRST202`) and blocked the workspace. Recreated the table (RLS: admin or
+    self read; writes via the access-matrix definer RPC only) and the read-only
+    `SECURITY DEFINER` resolver. The pre-existing hardened `fn_can_access_partner_scope`
+    was intentionally left untouched.
 
 ## Verified behavior
 

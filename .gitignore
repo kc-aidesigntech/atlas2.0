@@ -47,3 +47,5 @@ ui-debug.log
 .playwright-browsers/
 # Scratch capture output from the pilot screenshot pipeline
 pilot-decks/capture/_smoke_out/
+# Office temp/lock files (e.g. an open .pptx)
+~$*
