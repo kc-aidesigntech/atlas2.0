@@ -45,7 +45,10 @@ ui-debug.log
 
 # Playwright-managed browser binaries (downloaded locally for pilot screenshots)
 .playwright-browsers/
-# Scratch capture output from the pilot screenshot pipeline
-pilot-decks/capture/_smoke_out/
+# Scratch capture diagnostics + output from the pilot screenshot pipeline
+# (underscore-prefixed; the kept pipeline is capture_lib.py / capture_screens.py)
+pilot-decks/capture/_*
 # Office temp/lock files (e.g. an open .pptx)
 ~$*
+# Empty/local DB dump scratch
+verification/atlas_data_dump.sql
