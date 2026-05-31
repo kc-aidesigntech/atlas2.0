@@ -270,6 +270,8 @@ export default function SinglePaneApp() {
       setSelectedEnrolleeId(enrolleeId)
       setEnrolleeSurveyTargetId(enrolleeId)
       if (target.enrollmentId) {
+        // Best-effort history prefetch: a failed reload must not block opening the survey,
+        // which can still capture a fresh submission without prior history.
         try {
           await reloadEnrolleeBurdenSurveyHistoryForEnrollment(target.enrollmentId)
         } catch {}
@@ -572,6 +574,7 @@ export default function SinglePaneApp() {
       />
 
       <main className="atlas-shell-edge-buffer relative py-[10px]">
+        {(isLoading || !isReady) && !bootstrapError ? <LoadingSpinnerOverlay /> : null}
         {bootstrapError ? (
           // Fail-loud banner: a bootstrap failure (most importantly a grant/RLS
           // denial) is surfaced here instead of being hidden behind an empty
@@ -1159,6 +1162,29 @@ function sleep(durationMs: number) {
   })
 }
 
+// Centered spinning-wheel overlay shown while the workspace bootstraps. It sits above the
+// skeleton (LoadingShell) and scrims it so the wait state reads clearly. Anchored to the
+// relative <main> container and kept below modal layers (z-[92]+). Uses the canonical signal
+// yellow token for the active arc rather than a one-off color.
+function LoadingSpinnerOverlay() {
+  return (
+    <div
+      className="absolute inset-0 z-[40] flex items-center justify-center bg-black/35 backdrop-blur-[1px]"
+      role="status"
+      aria-live="polite"
+      aria-label="Loading workspace"
+    >
+      <div className="flex flex-col items-center gap-4 rounded-[24px] border border-white/10 bg-black/55 px-9 py-8">
+        <div
+          className="h-12 w-12 animate-spin rounded-full border-[3px]"
+          style={{ borderColor: 'rgba(255,255,255,0.16)', borderTopColor: SP_COLORS.yellow }}
+        />
+        <small className="atlas-overline text-[#cfcfcf]">loading your workspace…</small>
+      </div>
+    </div>
+  )
+}
+
 function LoadingShell() {
   return (
     <>
@@ -1206,11 +1232,6 @@ function formatDateLabel(dateValue: string) {
 function toCompetencyScore(rawCount: number, specializeCount: number) {
   const baseline = Math.min(10, Math.max(1, 4 + specializeCount + Math.round(rawCount / 2)))
   return baseline
-}
-
-function deriveJourneyPhase(logs: { phase: StabilizationPhase }[], fallback: StabilizationPhase): StabilizationPhase {
-  if (!logs.length) return fallback
-  return logs[logs.length - 1]?.phase || fallback
 }
 
 function deriveEnrolleeParentCodes(

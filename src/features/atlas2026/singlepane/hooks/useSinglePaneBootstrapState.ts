@@ -36,6 +36,7 @@ import {
   buildPartnerBurdenBreakdownFromHistory,
   derivePartnerStationSpecialtyGroups,
   buildSurveyDomainLoadBreakdown,
+  selectCompletedPartnerSurveysNewestFirst,
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { isSupabasePermissionError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
@@ -136,10 +137,12 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
   const request = (async () => {
     // Bootstrap aggregates role-scoped domain data, then this hook enriches it
     // with ancillary records used by secondary panels and workflows.
-    const data = await loadSinglePaneBootstrap(role)
-    // Fetch companion datasets in parallel so first paint includes all side panels
-    // without triggering sequential spinner churn.
+    // Issue the primary bootstrap payload, every companion dataset, and (for navigators)
+    // the partner-station linkage in a single concurrent batch. None of these depend on
+    // one another, so collapsing them from sequential awaits into one Promise.all removes
+    // several serial round-trips and is the dominant lever on first-login latency.
     const [
+      data,
       requests,
       heatmap,
       quality,
@@ -148,8 +151,10 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
       savedRouteAssignments,
       savedNavigatorAssessments,
       legacyPartnerViewLoadBreakdown,
-      latestEnrolleeSurveySubmissions
+      latestEnrolleeSurveySubmissions,
+      navigatorStationContext
     ] = await Promise.all([
+      loadSinglePaneBootstrap(role),
       loadEnrollmentRequests(role),
       loadCountyHeatmap(),
       loadAdminDataQuality(),
@@ -158,7 +163,10 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
       loadRouteAssignments(),
       loadNavigatorCompetencyAssessments(),
       loadPartnerRadialLoadBreakdown(),
-      loadLatestEnrolleeBurdenSurveySubmissions()
+      loadLatestEnrolleeBurdenSurveySubmissions(),
+      // Navigator station resolves from explicit navigator->partner linkage; other roles
+      // resolve their station from the account organization below, so skip the call entirely.
+      role === 'navigator' ? loadNavigatorStationContext() : Promise.resolve(null)
     ])
 
     const weightedEnrolleeBreakdowns = latestEnrolleeSurveySubmissions.map((record) =>
@@ -176,20 +184,21 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
       weightedEnrolleeBreakdowns
     )
 
-    // Navigator station data must resolve from explicit navigator->partner linkage, while
-    // partner users continue to resolve from their account organization.
-    const navigatorStationContext = role === 'navigator' ? await loadNavigatorStationContext() : null
+    // Navigator station data resolves from explicit navigator->partner linkage (fetched above),
+    // while partner users resolve from their account organization.
     const stationOrganizationName =
       (role === 'navigator' ? navigatorStationContext?.organizationName : nextAccountSettings.organization)?.trim() ||
       nextAccountSettings.organization
-    const partnerSurveyHistory = await loadPartnerServiceCapacitySurveyHistory(stationOrganizationName)
-    const completedPartnerSurveyHistory = [...partnerSurveyHistory]
-      .filter((record) => record.status === 'completed')
-      .sort((left, right) => {
-        const leftTime = new Date(left.completedAtIso || left.updatedAtIso || left.submittedAtIso).getTime()
-        const rightTime = new Date(right.completedAtIso || right.updatedAtIso || right.submittedAtIso).getTime()
-        return rightTime - leftTime
+    // Survey history and station profile depend only on the resolved organization (not on each
+    // other), so resolve them together rather than back-to-back.
+    const [partnerSurveyHistory, stationProfile] = await Promise.all([
+      loadPartnerServiceCapacitySurveyHistory(stationOrganizationName),
+      loadPartnerStationProfile(stationOrganizationName, {
+        fullName: nextAccountSettings.fullName,
+        email: nextAccountSettings.email
       })
+    ])
+    const completedPartnerSurveyHistory = selectCompletedPartnerSurveysNewestFirst(partnerSurveyHistory)
     const latestCompletedPartnerSurvey = completedPartnerSurveyHistory[0] || null
     const partnerStationSpecialties = derivePartnerStationSpecialtyGroups(latestCompletedPartnerSurvey)
     const partnerViewLoadBreakdown =
@@ -198,10 +207,6 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
         subjectLabel: latestCompletedPartnerSurvey?.header.organizationName || nextAccountSettings.organization
       }) || legacyPartnerViewLoadBreakdown
     const partnerViewLoad = toNormalizedRadialDomainLoad(partnerViewLoadBreakdown)
-    const stationProfile = await loadPartnerStationProfile(stationOrganizationName, {
-      fullName: nextAccountSettings.fullName,
-      email: nextAccountSettings.email
-    })
 
     const payload: SinglePaneBootstrapPayload = {
       enrollees: data.enrollees || [],

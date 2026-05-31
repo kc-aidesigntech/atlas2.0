@@ -193,18 +193,32 @@ export function derivePartnerStationSpecialtyGroups(
     })
 }
 
-export function buildPartnerBurdenBreakdownFromHistory(
-  submissions: PartnerServiceCapacitySubmissionRecord[],
-  options: { subjectId: string; subjectLabel: string }
-): DomainLoadBreakdown | null {
-  const selectedSubmissions = [...submissions]
+/**
+ * Orders completed partner service-capacity submissions newest-first.
+ *
+ * "Latest completed" drives the partner radial load, specialty groups, and station summary, so
+ * recency must be computed identically across the bootstrap, save, and breakdown paths. Completion
+ * time falls back completedAt -> updatedAt -> submittedAt because older records may lack a dedicated
+ * completedAt stamp.
+ */
+export function selectCompletedPartnerSurveysNewestFirst(
+  submissions: PartnerServiceCapacitySubmissionRecord[]
+): PartnerServiceCapacitySubmissionRecord[] {
+  return [...submissions]
     .filter((record) => record.status === 'completed')
     .sort((left, right) => {
       const leftTime = new Date(left.completedAtIso || left.updatedAtIso || left.submittedAtIso).getTime()
       const rightTime = new Date(right.completedAtIso || right.updatedAtIso || right.submittedAtIso).getTime()
       return rightTime - leftTime
     })
-    .slice(0, 3)
+}
+
+export function buildPartnerBurdenBreakdownFromHistory(
+  submissions: PartnerServiceCapacitySubmissionRecord[],
+  options: { subjectId: string; subjectLabel: string }
+): DomainLoadBreakdown | null {
+  // Only the three most recent completed submissions feed the burden breakdown.
+  const selectedSubmissions = selectCompletedPartnerSurveysNewestFirst(submissions).slice(0, 3)
 
   if (!selectedSubmissions.length) return null
 

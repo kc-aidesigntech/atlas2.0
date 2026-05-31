@@ -109,6 +109,7 @@ import {
   derivePartnerStationSpecialtyGroups,
   buildSurveyDomainLoadBreakdown,
   mapZCodeToDomainBucket,
+  selectCompletedPartnerSurveysNewestFirst,
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { isCapabilityAllowedForRole } from '@/features/atlas2026/singlepane/roleCapabilityPolicy'
@@ -147,6 +148,9 @@ const SESSION_ACTIVE_MENU_KEY = 'atlas2026.singlepane.session.active-menu'
 const SESSION_SELECTED_ENROLLEE_KEY = 'atlas2026.singlepane.session.selected-enrollee'
 const SESSION_REMOTE_SESSION_KEY = 'atlas2026.singlepane.session.remote-session'
 
+// sessionStorage access can throw (e.g. Safari private mode, storage disabled by policy).
+// These helpers swallow those failures so session persistence degrades to in-memory-only
+// rather than crashing the workspace; a lost role/menu hint is acceptable, a crash is not.
 function readSessionStorageValue(key: string) {
   if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') return null
   try {
@@ -256,6 +260,22 @@ function haveSameRoles(left: AtlasRole[], right: AtlasRole[]) {
   const a = [...left].sort()
   const b = [...right].sort()
   return a.every((value, index) => value === b[index])
+}
+
+// The authenticated JWT's app_metadata is the database-signed source of truth for identity, so we
+// derive the account's real role(s) from it. `atlas_role` is the primary claim; `atlas_roles` is an
+// optional array supporting legitimately multi-role accounts. The result is primary-first and
+// de-duplicated so callers can clamp the UI to roles the account was actually granted.
+function extractAuthoritativeRolesFromSession(
+  session: { user?: { app_metadata?: Record<string, unknown> | null } | null } | null | undefined
+): AtlasRole[] {
+  const appMetadata = (session?.user?.app_metadata || {}) as { atlas_role?: unknown; atlas_roles?: unknown }
+  const primary = typeof appMetadata.atlas_role === 'string' ? appMetadata.atlas_role : ''
+  const additional = Array.isArray(appMetadata.atlas_roles)
+    ? appMetadata.atlas_roles.filter((value): value is string => typeof value === 'string')
+    : []
+  const ordered = normalizeAtlasRoleKeys([primary, ...additional])
+  return ordered.filter((value, index) => ordered.indexOf(value) === index)
 }
 
 function dedupeMenus(menus: string[]) {
@@ -773,6 +793,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [isUploadingAccountProfileImage, setIsUploadingAccountProfileImage] = useState(false)
   const [accountProfileImageUploadError, setAccountProfileImageUploadError] = useState<string | null>(null)
   const [sessionEmail, setSessionEmail] = useState('')
+  const [authoritativeAccountRoles, setAuthoritativeAccountRoles] = useState<AtlasRole[]>([])
   const [regulationTestHistory, setRegulationTestHistory] = useState<RegulationTestSubmissionRecord[]>([])
   const [isSavingRegulationTest, setIsSavingRegulationTest] = useState(false)
   const [regulationTestError, setRegulationTestError] = useState<string | null>(null)
@@ -1403,17 +1424,50 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   useEffect(() => {
     if (!hasSupabaseConfig || !supabase) {
       setSessionEmail('')
+      setAuthoritativeAccountRoles([])
       return
     }
     let isMounted = true
+    // Reconcile cached UI identity against the live JWT on mount AND on every auth transition
+    // (login, logout, token refresh). Without the subscription, signing in as a different account
+    // in the same browser tab would silently inherit the previous account's cached email/role.
+    const applySession = (
+      session: { user?: { email?: string | null; app_metadata?: Record<string, unknown> | null } | null } | null
+    ) => {
+      if (!isMounted) return
+      setSessionEmail(session?.user?.email?.trim() || '')
+      setAuthoritativeAccountRoles(extractAuthoritativeRolesFromSession(session))
+    }
     supabase.auth.getSession().then(({ data, error }) => {
-      if (!isMounted || error) return
-      setSessionEmail(data.session?.user?.email?.trim() || '')
+      if (error) return
+      applySession(data.session)
+    })
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      applySession(session)
     })
     return () => {
       isMounted = false
+      authListener?.subscription?.unsubscribe()
     }
   }, [])
+
+  // Identity guardrail: the authenticated JWT is authoritative. Role impersonation (the "view as"
+  // troubleshooting session) and the role switcher are administrator-only — startTroubleshootingSession
+  // enforces this server-side — so a non-administrator account must never present a role view other
+  // than the role the database granted it. This also scrubs stale session-scoped impersonation/role
+  // state left behind when a different account (e.g. an administrator) used the same browser tab;
+  // that leakage previously let a partner land on the navigator assignment board and trigger a
+  // 42501 "navigator role required" on claim. Administrators are intentionally exempt.
+  useEffect(() => {
+    if (!authoritativeAccountRoles.length) return
+    if (authoritativeAccountRoles.includes('administrator')) return
+    if (remoteSession) {
+      setRemoteSession(null)
+    }
+    if (!authoritativeAccountRoles.includes(role)) {
+      setRole(authoritativeAccountRoles[0])
+    }
+  }, [authoritativeAccountRoles, remoteSession, role])
 
   useEffect(() => {
     let isMounted = true
@@ -1683,8 +1737,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         setDemoTaggedEnrollmentIds(ids)
       })
       .catch((error) => {
+        // Partner scope falls back to an empty demo-tag set when this read fails, so a
+        // missing tag list never blocks the partner workspace from rendering.
         if (!isMounted) return
-        const typedError = error as { code?: string; message?: string } | null
         console.warn('Unable to load demo-tagged enrollment ids for partner scope.', error)
       })
     return () => {
@@ -2094,13 +2149,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setPartnerServiceCapacitySurveyHistory((current) => {
         const nextHistory = upsertServiceCapacitySubmissionHistory(current, saved)
         if (saved.status === 'completed') {
-          const completedHistory = nextHistory
-            .filter((record) => record.status === 'completed')
-            .sort((left, right) => {
-              const leftTime = new Date(left.completedAtIso || left.updatedAtIso || left.submittedAtIso).getTime()
-              const rightTime = new Date(right.completedAtIso || right.updatedAtIso || right.submittedAtIso).getTime()
-              return rightTime - leftTime
-            })
+          const completedHistory = selectCompletedPartnerSurveysNewestFirst(nextHistory)
           const latestCompleted = completedHistory[0] || null
           const nextBreakdown = buildPartnerBurdenBreakdownFromHistory(completedHistory, {
             subjectId: latestCompleted?.partnerId || input.header.organizationName,
