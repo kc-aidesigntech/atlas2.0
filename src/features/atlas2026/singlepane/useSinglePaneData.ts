@@ -278,6 +278,25 @@ function extractAuthoritativeRolesFromSession(
   return ordered.filter((value, index) => ordered.indexOf(value) === index)
 }
 
+// Builds a minimal, display-only enrollee profile from an assignment-board row so a freshly
+// self-assigned enrollee can appear in the navigator's dropdown immediately (optimistic UI),
+// before the database-synced roster reload returns. Only fields the dropdown renders are
+// populated; the authoritative record (with z-codes, dob, etc.) replaces it on sync via id match.
+function buildOptimisticEnrolleeFromAssignmentRow(row: NavigatorEnrollmentAssignmentRecord): EnrolleeProfile {
+  return {
+    id: row.enrolleeId,
+    enrollmentId: row.enrollmentId,
+    fullName: row.enrolleeName,
+    dob: '',
+    caseId: row.caseId,
+    email: '',
+    assignedNavigator: '',
+    zCodeTags: [],
+    activeZCodeDetails: [],
+    completedParentCodes: []
+  }
+}
+
 function dedupeMenus(menus: string[]) {
   return Array.from(new Set(menus.map((menu) => menu.trim()).filter(Boolean)))
 }
@@ -801,6 +820,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [navigatorEnrollmentAssignmentsError, setNavigatorEnrollmentAssignmentsError] = useState<string | null>(null)
   const [isLoadingNavigatorEnrollmentAssignments, setIsLoadingNavigatorEnrollmentAssignments] = useState(false)
   const [assigningNavigatorEnrollmentId, setAssigningNavigatorEnrollmentId] = useState<string | null>(null)
+  // Optimistic placeholders for enrollees a navigator just self-assigned. They render in the
+  // dropdown with a syncing spinner until the database-synced roster reload surfaces the real
+  // record (matched by id), giving immediate "your click did something" feedback without
+  // mutating the authoritative `enrollees` list used for counts and charts.
+  const [pendingAssignmentEnrollees, setPendingAssignmentEnrollees] = useState<EnrolleeProfile[]>([])
   const [demoTaggedEnrollmentIds, setDemoTaggedEnrollmentIds] = useState<string[]>([])
   const [publicQueueRecords, setPublicQueueRecords] = useState<UnassignedEnrolleePickupRecord[]>([])
   const [zCodeDomainSurveyHistorySummary, setZCodeDomainSurveyHistorySummary] = useState<ZCodeDomainSurveyHistorySummary[]>([])
@@ -843,6 +867,18 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setState: setBootstrapState,
     reload: reloadBootstrapState
   } = useSinglePaneBootstrapState(role)
+
+  // Retire optimistic self-assignment placeholders once the authoritative roster reload surfaces
+  // the real enrollee (matched by id). This is what makes the dropdown spinner disappear exactly
+  // when the database is in sync, with no flicker: the placeholder is removed only after its real
+  // counterpart is present.
+  useEffect(() => {
+    setPendingAssignmentEnrollees((current) => {
+      if (!current.length) return current
+      const synced = current.filter((pending) => !enrollees.some((enrollee) => enrollee.id === pending.id))
+      return synced.length === current.length ? current : synced
+    })
+  }, [enrollees])
 
   const viewerRole = remoteSession?.targetRole || role
   const targetViewerEmail = (remoteSession?.isActive ? remoteSession.targetEmail : sessionEmail || accountSettings.email || '')
@@ -2533,6 +2569,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     const pickupRecordId = getPickupRecordIdFromEnrollmentId(enrollmentId)
     setAssigningNavigatorEnrollmentId(enrollmentId)
     setNavigatorEnrollmentAssignmentsError(null)
+    // Optimistic dropdown feedback: when claiming an enrollee for myself, show them in the
+    // navigator dropdown immediately (with a syncing spinner) using the board row's identity.
+    // Skipped when the enrollee record does not exist yet (e.g. an unmaterialized referral) or is
+    // already in my roster. Rolled back in the catch below if the claim fails.
+    let optimisticEnrolleeId: string | null = null
+    if (mode === 'assign') {
+      const assignmentRow = navigatorEnrollmentAssignments.find((row) => row.enrollmentId === enrollmentId)
+      if (assignmentRow?.enrolleeId && !enrollees.some((enrollee) => enrollee.id === assignmentRow.enrolleeId)) {
+        optimisticEnrolleeId = assignmentRow.enrolleeId
+        const optimisticEnrollee = buildOptimisticEnrolleeFromAssignmentRow(assignmentRow)
+        setPendingAssignmentEnrollees((current) =>
+          current.some((pending) => pending.id === optimisticEnrollee.id) ? current : [...current, optimisticEnrollee]
+        )
+      }
+    }
     const actionLabel =
       mode === 'unassign'
         ? 'Unassign failed'
@@ -2561,7 +2612,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         await persistAssignNavigatorEnrollmentToSelf(enrollmentId)
       }
       await refreshAssignmentParityViews()
+      // Safety net: if the synced roster never surfaces the enrollee (e.g. replication lag), drop
+      // the optimistic placeholder after a grace period so the spinner cannot hang indefinitely.
+      // In the normal case the enrollees-sync effect clears it first, making this a no-op.
+      if (optimisticEnrolleeId) {
+        const enrolleeIdToSettle = optimisticEnrolleeId
+        window.setTimeout(() => {
+          setPendingAssignmentEnrollees((current) => current.filter((pending) => pending.id !== enrolleeIdToSettle))
+        }, 12000)
+      }
     } catch (error) {
+      // Roll back the optimistic dropdown entry so a failed claim never leaves a phantom enrollee.
+      if (optimisticEnrolleeId) {
+        const enrolleeIdToRollback = optimisticEnrolleeId
+        setPendingAssignmentEnrollees((current) => current.filter((pending) => pending.id !== enrolleeIdToRollback))
+      }
       const typedDatabaseError = error as { code?: string; message?: string; details?: string; hint?: string } | null
       const databaseErrorCode = typedDatabaseError?.code
       if (databaseErrorCode === 'PGRST202') {
@@ -2859,6 +2924,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
     assigningNavigatorEnrollmentId,
+    pendingAssignmentEnrollees,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,

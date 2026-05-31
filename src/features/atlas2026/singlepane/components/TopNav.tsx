@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, Menu } from 'lucide-react'
+import { ChevronDown, Loader2, Menu } from 'lucide-react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AtlasRole, EnrolleeProfile, RoleMenuConfig } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
@@ -10,6 +10,9 @@ interface TopNavProps {
   activeMenu: string
   onMenuSelect: (menu: string) => void
   enrollees: EnrolleeProfile[]
+  // Enrollee ids whose self-assignment is still syncing to the database. These render with a
+  // spinner/label in the dropdown until the authoritative roster reload confirms them.
+  syncingEnrolleeIds?: string[]
   selectedEnrolleeId: string
   onSelectEnrollee: (enrolleeId: string) => void
   navigatorEnrolleeView?: 'my' | 'add'
@@ -54,6 +57,7 @@ export default function TopNav({
   activeMenu,
   onMenuSelect,
   enrollees,
+  syncingEnrolleeIds = [],
   selectedEnrolleeId,
   onSelectEnrollee,
   navigatorEnrolleeView = 'my',
@@ -61,6 +65,7 @@ export default function TopNav({
   onOpenAccountSettings
 }: TopNavProps) {
   const firstMenu = roleConfig.topMenus[0] || ''
+  const hasSyncingEnrollees = syncingEnrolleeIds.length > 0
   const showEnrolleeSelector = firstMenu === 'enrollees' && (enrollees.length > 0 || role === 'navigator')
   const rolePillLabel = `atlas ${role}`
   const enrolleeSelectorValue =
@@ -159,12 +164,27 @@ export default function TopNav({
                         add enrollees
                       </option>
                     ) : null}
-                    {enrollees.map((enrollee) => (
-                      <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">
-                        {enrollee.fullName}
-                      </option>
-                    ))}
+                    {enrollees.map((enrollee) => {
+                      // Native <option> cannot host an animated spinner, so a syncing enrollee is
+                      // marked textually here; the animated wheel lives in the control below.
+                      const isSyncing = syncingEnrolleeIds.includes(enrollee.id)
+                      return (
+                        <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">
+                          {isSyncing ? `${enrollee.fullName} • syncing…` : enrollee.fullName}
+                        </option>
+                      )
+                    })}
                   </select>
+                  {hasSyncingEnrollees ? (
+                    // Spinning wheel inside the dropdown control: immediate confirmation that an
+                    // "assign to me" click registered, shown until the database-synced roster lands.
+                    <Loader2
+                      size={14}
+                      className="pointer-events-none absolute right-8 animate-spin"
+                      style={{ color: SP_COLORS.yellow }}
+                      aria-hidden
+                    />
+                  ) : null}
                   <ChevronDown size={15} className="pointer-events-none absolute right-3 text-white" />
                 </div>
               </div>

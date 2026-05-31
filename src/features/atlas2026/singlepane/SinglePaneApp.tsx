@@ -89,6 +89,7 @@ export default function SinglePaneApp() {
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
     assigningNavigatorEnrollmentId,
+    pendingAssignmentEnrollees,
     pickupQueue,
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
@@ -157,6 +158,18 @@ export default function SinglePaneApp() {
     partnerStationSpecialties,
     reloadEnrolleeBurdenSurveyHistoryForEnrollment
   } = useSinglePaneData()
+  // Dropdown-only enrollee list: merge in optimistic self-assignment placeholders so a freshly
+  // claimed enrollee shows in the navigator dropdown immediately. Kept separate from the
+  // authoritative `enrollees` (used for counts/charts) so optimistic UI never skews real metrics.
+  const navigatorDropdownEnrollees = React.useMemo(() => {
+    if (!pendingAssignmentEnrollees.length) return enrollees
+    const existingIds = new Set(enrollees.map((enrollee) => enrollee.id))
+    return [...enrollees, ...pendingAssignmentEnrollees.filter((pending) => !existingIds.has(pending.id))]
+  }, [enrollees, pendingAssignmentEnrollees])
+  const syncingEnrolleeIds = React.useMemo(
+    () => pendingAssignmentEnrollees.map((pending) => pending.id),
+    [pendingAssignmentEnrollees]
+  )
   const { session, signOut, refreshIdentities, linkOAuthProvider } = useSupabaseAuth()
   const showLiveAuthSecurity = hasSupabaseConfig && isSinglePaneSupabaseBootstrapEnabled && Boolean(session)
   const [linkedAuthProviders, setLinkedAuthProviders] = React.useState<string[] | null>(null)
@@ -565,7 +578,8 @@ export default function SinglePaneApp() {
         roleConfig={selectedRoleConfig}
         activeMenu={activeMenu}
         onMenuSelect={handleMenuSelect}
-        enrollees={enrollees}
+        enrollees={navigatorDropdownEnrollees}
+        syncingEnrolleeIds={syncingEnrolleeIds}
         selectedEnrolleeId={selectedEnrolleeId}
         onSelectEnrollee={setSelectedEnrolleeId}
         navigatorEnrolleeView={navigatorEnrolleeView}
