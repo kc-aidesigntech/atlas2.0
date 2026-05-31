@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- Inline data-URI favicon: self-contained (no /public asset needed) and
+         excluded from Vite's HTML asset pipeline, so it can't trigger the
+         EISDIR/ENOENT class of build failures that a root-relative href does. -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%230a0a0a'/%3E%3Ccircle%20cx='16'%20cy='16'%20r='6.5'%20fill='none'%20stroke='%23f5d90a'%20stroke-width='2.5'/%3E%3Ccircle%20cx='16'%20cy='16'%20r='2.2'%20fill='%237CFFB2'/%3E%3C/svg%3E"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>atlas - civic navigation</title>
     <meta name="description" content="atlas - civic navigation is an ontology-backed civic navigation system for stabilization under pressure. It combines social risk situational awareness, precision routing, and collective memory to help partners coordinate timely, ethical interventions." />
@@ -14,7 +21,10 @@
     <meta name="author" content="atlas civic navigation" />
     <meta name="application-name" content="atlas - civic navigation" />
     <meta name="apple-mobile-web-app-title" content="atlas - civic navigation" />
-    <link rel="canonical" href="/" />
+    <!-- No <link rel="canonical" href="/"> here: Vite processes every <link href>
+         at build time, and a root-relative "/" resolves to the project directory,
+         which fails the build (EISDIR). Set canonical to the absolute production
+         URL via the host/CDN, or inject it at runtime, once a domain is fixed. -->
 
     <meta property="og:type" content="website" />
     <meta property="og:title" content="atlas - civic navigation" />
