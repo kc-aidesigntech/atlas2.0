@@ -42,3 +42,13 @@ firestore-debug.log
 ui-debug.log
 
 .vercel
+
+# Playwright-managed browser binaries (downloaded locally for pilot screenshots)
+.playwright-browsers/
+# Scratch capture diagnostics + output from the pilot screenshot pipeline
+# (underscore-prefixed; the kept pipeline is capture_lib.py / capture_screens.py)
+pilot-decks/capture/_*
+# Office temp/lock files (e.g. an open .pptx)
+~$*
+# Empty/local DB dump scratch
+verification/atlas_data_dump.sql

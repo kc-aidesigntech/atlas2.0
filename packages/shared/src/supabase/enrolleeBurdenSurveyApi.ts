@@ -141,89 +141,38 @@ export async function saveEnrolleeBurdenSubmission(
   client: SupabaseClient<AtlasDatabase>,
   input: EnrolleeBurdenSurveySubmissionInput,
 ) {
+  // Writes are funneled through the validated SECURITY DEFINER command RPC
+  // (fn_save_enrollee_burden_submission): the whole submission is transmitted
+  // as one JSON packet and the database scopes/validates it atomically. Direct
+  // INSERT/UPDATE on these tables is revoked from the authenticated role.
   const draftKey = input.draftKey?.trim() || crypto.randomUUID();
   const status: EnrolleeBurdenSurveySubmissionStatus = input.status || "draft";
   const completedAtIso = status === "completed" ? input.completedAtIso || new Date().toISOString() : null;
 
-  const submissionPayload: AtlasDatabase["atlas"]["Tables"]["enrollee_burden_survey_submissions"]["Insert"] = {
-    draft_key: draftKey,
+  const payload = {
+    ...input,
+    draftKey,
     status,
-    completed_at: completedAtIso,
-    enrollee_id: input.header.enrolleeId,
-    enrollment_id: input.header.enrollmentId,
-    enrollee_name: input.header.enrolleeName,
-    enrollee_case_id: input.header.enrolleeCaseId || null,
-    respondent_person_id: input.header.respondentPersonId || null,
-    respondent_name: input.header.respondentName.trim(),
-    respondent_role: input.header.respondentRole,
-    organization_name: input.header.organizationName.trim() || null,
-    form_version: input.formVersion,
-    raw_payload: {
-      ...input,
-      draftKey,
-      status,
-      completedAtIso,
-    },
+    completedAtIso,
   };
 
-  const { data: existing, error: existingError } = await client
+  const { data: submissionId, error } = await client
+    .schema("atlas")
+    .rpc("fn_save_enrollee_burden_submission", { payload });
+  if (error) throw error;
+  if (!submissionId) throw new Error("Burden submission save returned no id");
+
+  // Re-read the canonical row + answers so the caller keeps the existing record
+  // shape (the RPC intentionally returns only the submission id).
+  const { data: rows, error: readError } = await client
     .schema("atlas")
     .from("enrollee_burden_survey_submissions")
-    .select("id")
-    .eq("draft_key", draftKey)
+    .select("*")
+    .eq("id", submissionId as string)
     .limit(1);
-
-  if (existingError) throw existingError;
-
-  const upsert = existing?.[0]
-    ? client
-        .schema("atlas")
-        .from("enrollee_burden_survey_submissions")
-        .update({
-          ...submissionPayload,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existing[0].id)
-        .select("*")
-        .single()
-    : client
-        .schema("atlas")
-        .from("enrollee_burden_survey_submissions")
-        .insert(submissionPayload)
-        .select("*")
-        .single();
-
-  const { data: submission, error: submissionError } = await upsert;
-  if (submissionError) throw submissionError;
-
-  const { error: deleteAnswersError } = await client
-    .schema("atlas")
-    .from("enrollee_burden_survey_answers")
-    .delete()
-    .eq("submission_id", submission.id);
-
-  if (deleteAnswersError) throw deleteAnswersError;
-
-  const answerRows = input.answers.map((answer) => ({
-    submission_id: submission.id,
-    prompt_id: answer.promptId,
-    parent_code: answer.parentCode,
-    z_code: answer.zCode,
-    normalized_z_code: answer.normalizedZCode,
-    title: answer.title,
-    description: answer.description || null,
-    burden_score: answer.notEncountered ? null : answer.score,
-    not_encountered: answer.notEncountered,
-  }));
-
-  if (answerRows.length) {
-    const { error: insertAnswersError } = await client
-      .schema("atlas")
-      .from("enrollee_burden_survey_answers")
-      .insert(answerRows);
-
-    if (insertAnswersError) throw insertAnswersError;
-  }
+  if (readError) throw readError;
+  const submission = rows?.[0];
+  if (!submission) throw new Error("Burden submission not found after save");
 
   const answers = await listAnswersForSubmissionIds(client, [submission.id]);
   return mapSubmissionRow(submission, answers);
@@ -233,6 +182,7 @@ export async function deleteEnrolleeBurdenDraft(
   client: SupabaseClient<AtlasDatabase>,
   submissionId: string,
 ) {
+  // Capture the record for the return contract before the row is removed.
   const { data, error } = await client
     .schema("atlas")
     .from("enrollee_burden_survey_submissions")
@@ -247,19 +197,12 @@ export async function deleteEnrolleeBurdenDraft(
   const answers = await listAnswersForSubmissionIds(client, [submission.id]);
   const record = mapSubmissionRow(submission, answers);
 
-  const { error: deleteAnswersError } = await client
+  // Deletion (with answer cascade) goes through the scoped command RPC.
+  const { data: deletedId, error: deleteError } = await client
     .schema("atlas")
-    .from("enrollee_burden_survey_answers")
-    .delete()
-    .eq("submission_id", submission.id);
-  if (deleteAnswersError) throw deleteAnswersError;
-
-  const { error: deleteSubmissionError } = await client
-    .schema("atlas")
-    .from("enrollee_burden_survey_submissions")
-    .delete()
-    .eq("id", submission.id);
-  if (deleteSubmissionError) throw deleteSubmissionError;
+    .rpc("fn_delete_enrollee_burden_draft", { target_submission_id: submission.id });
+  if (deleteError) throw deleteError;
+  if (!deletedId) return null;
 
   return record;
 }

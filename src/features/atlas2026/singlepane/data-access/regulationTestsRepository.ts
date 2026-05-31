@@ -174,29 +174,31 @@ export async function saveRegulationTestSubmission(input: RegulationTestSubmissi
   }
 
   const now = new Date().toISOString()
-  const { data: submission, error } = await (supabase as any)
+  // Writes go through the validated SECURITY DEFINER command RPC: the whole
+  // submission (header + answers) is sent as one JSON packet and the database
+  // scopes/validates it atomically. Direct table writes are revoked.
+  const payload = {
+    draftKey,
+    enrolleeId: input.enrolleeId,
+    enrollmentId: input.enrollmentId || null,
+    testType: input.testType,
+    status: input.status,
+    enrolleeName: input.enrolleeName,
+    enrolleeCaseId: input.enrolleeCaseId,
+    enrolleeEmail: input.enrolleeEmail,
+    totalScore: score,
+    passThreshold: threshold,
+    passed,
+    answers: input.answers.map((answer) => ({
+      promptId: answer.promptId,
+      promptLabel: answer.promptLabel,
+      responseValue: answer.responseValue
+    }))
+  }
+
+  const { data: submissionId, error } = await (supabase as any)
     .schema('atlas')
-    .from('navigator_regulation_test_submissions')
-    .upsert(
-      {
-        draft_key: draftKey,
-        enrollee_id: input.enrolleeId,
-        enrollment_id: input.enrollmentId || null,
-        test_type: input.testType,
-        status: input.status,
-        enrollee_name: input.enrolleeName,
-        enrollee_case_id: input.enrolleeCaseId,
-        enrollee_email: input.enrolleeEmail,
-        total_score: score,
-        pass_threshold: threshold,
-        passed,
-        submitted_at: now,
-        updated_at: now
-      },
-      { onConflict: 'enrollee_id,test_type,draft_key' }
-    )
-    .select('*')
-    .single()
+    .rpc('fn_save_regulation_test_submission', { payload })
 
   if (error) {
     // Non-renewal submissions should surface hard failures; renewal can continue
@@ -224,29 +226,25 @@ export async function saveRegulationTestSubmission(input: RegulationTestSubmissi
     return fallback
   }
 
-  const { error: deleteAnswersError } = await (supabase as any)
-    .schema('atlas')
-    .from('navigator_regulation_test_answers')
-    .delete()
-    .eq('submission_id', submission.id)
-  if (deleteAnswersError && !isOptionalSupabaseDataError(deleteAnswersError)) throw deleteAnswersError
-
-  if (input.answers.length) {
-    const { error: answersInsertError } = await (supabase as any)
-      .schema('atlas')
-      .from('navigator_regulation_test_answers')
-      .insert(
-        input.answers.map((answer) => ({
-          submission_id: submission.id,
-          prompt_id: answer.promptId,
-          prompt_label: answer.promptLabel,
-          response_value: answer.responseValue
-        }))
-      )
-    if (answersInsertError && !isOptionalSupabaseDataError(answersInsertError)) throw answersInsertError
+  // The RPC returns only the submission id; rebuild the record shape from the
+  // validated input plus client-computed score summary (parity with local mode).
+  const saved: RegulationTestSubmissionRecord = {
+    id: (submissionId as string) || draftKey,
+    draftKey,
+    enrolleeId: input.enrolleeId,
+    enrollmentId: input.enrollmentId || null,
+    testType: input.testType,
+    status: input.status,
+    submittedAtIso: now,
+    updatedAtIso: now,
+    enrolleeName: input.enrolleeName,
+    enrolleeCaseId: input.enrolleeCaseId,
+    enrolleeEmail: input.enrolleeEmail,
+    score,
+    passThreshold: threshold,
+    passed,
+    answers: input.answers
   }
-
-  const saved = mapSubmissionRow(submission, input.answers)
   const local = loadLocalState().filter((item) => item.id !== saved.id && item.draftKey !== saved.draftKey)
   persistLocalState([saved, ...local])
   return saved
@@ -292,9 +290,7 @@ export async function deleteRegulationTestDraft(
 
   const { error: deleteError } = await (supabase as any)
     .schema('atlas')
-    .from('navigator_regulation_test_submissions')
-    .delete()
-    .eq('id', trimmedSubmissionId)
+    .rpc('fn_delete_regulation_test_draft', { target_submission_id: trimmedSubmissionId })
   if (deleteError) {
     if (!isOptionalSupabaseDataError(deleteError)) throw deleteError
   }

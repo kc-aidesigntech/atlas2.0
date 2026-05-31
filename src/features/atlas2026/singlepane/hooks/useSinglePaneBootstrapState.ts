@@ -38,6 +38,21 @@ import {
   buildSurveyDomainLoadBreakdown,
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
+import { isSupabasePermissionError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+
+/**
+ * Builds a loud, role-aware message for a failed bootstrap. Permission/Row-Level
+ * Security (RLS) denials get a distinct message because they mean the data exists
+ * but the signed-in identity's grants/policies hid it -- a configuration break we
+ * must never disguise as an empty workspace.
+ */
+function toBootstrapErrorMessage(role: AtlasRole, error: unknown): string {
+  if (isSupabasePermissionError(error)) {
+    return `Access denied while loading ${role} data. Your account is authenticated but the database blocked these records (grant or Row-Level Security policy). This is a configuration problem, not an empty workspace -- contact an administrator rather than re-trying.`
+  }
+  const detail = error instanceof Error && error.message ? ` (${error.message})` : ''
+  return `Unable to load ${role} workspace data from the database${detail}. Nothing is shown because the records could not be read.`
+}
 
 /**
  * Bootstraps role-scoped single-pane state.
@@ -49,6 +64,10 @@ import {
 
 export interface SinglePaneBootstrapState {
   isLoading: boolean
+  // Loud surface for a failed bootstrap. Non-null whenever the role-scoped domain
+  // load could not complete (most importantly a grant/Row-Level Security denial),
+  // so the UI can stop pretending an empty roster is a healthy one.
+  error: string | null
   enrollees: EnrolleeProfile[]
   loads: DomainLoad[]
   loadBreakdownsByEnrolleeId: Record<string, DomainLoadBreakdown>
@@ -70,7 +89,7 @@ export interface SinglePaneBootstrapState {
   selectedEnrolleeId: string
 }
 
-type SinglePaneBootstrapPayload = Omit<SinglePaneBootstrapState, 'isLoading'>
+type SinglePaneBootstrapPayload = Omit<SinglePaneBootstrapState, 'isLoading' | 'error'>
 
 const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   fullName: 'atlas operator',
@@ -219,6 +238,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
   const [reloadNonce, setReloadNonce] = useState(0)
   const [state, setState] = useState<SinglePaneBootstrapState>({
     isLoading: true,
+    error: null,
     enrollees: [],
     loads: [],
     loadBreakdownsByEnrolleeId: {},
@@ -253,7 +273,8 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
             setState((current) => ({
               ...current,
               ...cachedPayload,
-              isLoading: false
+              isLoading: false,
+              error: null
             }))
           }
           const refreshedPayload = await loadBootstrapPayload(role, true)
@@ -261,28 +282,39 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
           setState((current) => ({
             ...current,
             ...refreshedPayload,
-            isLoading: false
+            isLoading: false,
+            error: null
           }))
           return
         }
 
         if (isMounted) {
-          setState((current) => ({ ...current, isLoading: true }))
+          setState((current) => ({ ...current, isLoading: true, error: null }))
         }
         const payload = await loadBootstrapPayload(role)
         if (!isMounted) return
         setState((current) => ({
           ...current,
           ...payload,
-          isLoading: false
+          isLoading: false,
+          error: null
         }))
       } catch (error) {
-        console.warn('Failed to bootstrap single pane state.', error)
+        // Fail loudly: a bootstrap failure (especially a grant/RLS denial) must not
+        // masquerade as a healthy-but-empty workspace. Clear role-scoped domain
+        // collections so stale or empty data cannot be mistaken for the truth, and
+        // surface an explicit error for the UI banner.
+        console.error('Failed to bootstrap single pane state.', error)
         if (!isMounted) return
-        // Preserve existing state on failure so previously hydrated data remains usable.
         setState((current) => ({
           ...current,
-          isLoading: false
+          isLoading: false,
+          error: toBootstrapErrorMessage(role, error),
+          enrollees: [],
+          loads: [],
+          loadBreakdownsByEnrolleeId: {},
+          enrollmentRequests: [],
+          selectedEnrolleeId: ''
         }))
       }
     }

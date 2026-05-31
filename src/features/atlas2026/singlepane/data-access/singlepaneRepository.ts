@@ -578,41 +578,20 @@ export async function upsertEnrollmentInferredZCodes(
   )
   if (!normalizedCodes.length) return []
 
-  const { data: zRows, error: zRowsError } = await (supabase as any)
+  // Intake is funneled through a validated SECURITY DEFINER command RPC that
+  // scopes the caller to the enrollment, resolves z-code ids, de-duplicates
+  // against active rows, and inserts atomically. Direct INSERT on
+  // enrollee_z_codes is revoked; resolution updates use the existing
+  // fn_set_enrollee_z_code_resolution* RPCs.
+  const { data: applied, error: intakeError } = await (supabase as any)
     .schema('atlas')
-    .from('z_codes')
-    .select('id,z_code')
-    .in('z_code', normalizedCodes)
-  if (zRowsError) throw zRowsError
-  const activeRows = (zRows || []) as Array<{ id: string; z_code: string }>
-  if (!activeRows.length) return []
-
-  const payload = activeRows.map((row) => ({
-    enrollment_id: enrollmentId,
-    z_code_id: row.id,
-    is_resolved: false,
-    resolution_at: null,
-    source: sourceLabel,
-    ended_at: null
-  }))
-
-  const { data: existingRows, error: existingError } = await (supabase as any)
-    .schema('atlas')
-    .from('enrollee_z_codes')
-    .select('z_code_id')
-    .eq('enrollment_id', enrollmentId)
-    .is('ended_at', null)
-  if (existingError) throw existingError
-  const existingZCodeIds = new Set((existingRows || []).map((row: { z_code_id: string }) => row.z_code_id))
-  const nextRows = payload.filter((row) => !existingZCodeIds.has(row.z_code_id))
-  if (!nextRows.length) return activeRows.map((row) => row.z_code)
-
-  const { error: insertError } = await (supabase as any)
-    .schema('atlas')
-    .from('enrollee_z_codes')
-    .insert(nextRows)
-  if (insertError) throw insertError
-  return activeRows.map((row) => row.z_code)
+    .rpc('fn_intake_enrollment_inferred_z_codes', {
+      p_enrollment_id: enrollmentId,
+      p_z_codes: normalizedCodes,
+      p_source: sourceLabel
+    })
+  if (intakeError) throw intakeError
+  return (applied || []) as string[]
 }
 
 export async function loadDemoTaggedEnrollmentIds(tag = 'atlas_demo') {
