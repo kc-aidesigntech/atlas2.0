@@ -1191,7 +1191,8 @@ function LoadingSpinnerOverlay() {
       <div className="flex flex-col items-center gap-4 rounded-[24px] border border-white/10 bg-black/55 px-9 py-8">
         <div
           className="h-12 w-12 animate-spin rounded-full border-[3px]"
-          style={{ borderColor: 'rgba(255,255,255,0.16)', borderTopColor: SP_COLORS.yellow }}
+          // Override Tailwind's default 1s spin to a snappier 0.7s/rotation per product request.
+          style={{ borderColor: 'rgba(255,255,255,0.16)', borderTopColor: SP_COLORS.yellow, animationDuration: '0.7s' }}
         />
         <small className="atlas-overline text-[#cfcfcf]">loading your workspace…</small>
       </div>
