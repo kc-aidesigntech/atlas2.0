@@ -34,6 +34,7 @@ import {
 } from './serviceCapacitySurvey/SurveyChrome'
 import { usePartnerServiceCapacityDraftResolver } from '../hooks/usePartnerServiceCapacityDraftResolver'
 import { useServiceCapacitySurveyCatalog } from '../hooks/useServiceCapacitySurveyCatalog'
+import { toSupabaseErrorMessage } from '../data-access/supabaseOptionalData'
 import type {
   PartnerIdentifierRecord,
   PartnerServiceCapacityAnswer,
@@ -200,7 +201,10 @@ function isAnswerComplete(answer: DraftAnswer | PartnerServiceCapacityAnswer | u
 }
 
 function getErrorMessage(error: unknown, fallbackMessage: string) {
-  return error instanceof Error && error.message.trim() ? error.message : fallbackMessage
+  // Supabase/PostgREST rejections are plain objects, not Error instances, so a
+  // plain `instanceof Error` check masks the real database message behind the
+  // generic fallback. Use the shared extractor so save failures fail loudly.
+  return toSupabaseErrorMessage(error, fallbackMessage)
 }
 
 function describeBlockingSaveIssue(message: string) {

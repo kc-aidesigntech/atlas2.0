@@ -94,6 +94,7 @@ import {
   upsertEnrollmentInferredZCodes,
   loadAccessMatrixDataset
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
+import { toSupabaseErrorMessage } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/useJourneyStationMarkers'
 import { usePartnerServiceCapacityHistory } from '@/features/atlas2026/singlepane/hooks/usePartnerServiceCapacityHistory'
 import { useRouteCandidates } from '@/features/atlas2026/singlepane/hooks/useRouteCandidates'
@@ -2215,7 +2216,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       persistAccountSettings(nextAccountSettings)
       return saved
     } catch (error) {
-      setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to save service capacity survey.')
+      // Surface the real database/PostgREST message (these are plain objects,
+      // not Error instances) so save failures fail loudly per the data contract.
+      setPartnerServiceCapacitySurveyError(toSupabaseErrorMessage(error, 'Unable to save service capacity survey.'))
       throw error
     } finally {
       setIsSavingPartnerServiceCapacitySurvey(false)
@@ -2298,7 +2301,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setPartnerServiceCapacitySurveyHistory(rows)
     } catch (error) {
       setPartnerServiceCapacitySurveyError(
-        error instanceof Error ? error.message : 'Unable to load service capacity survey.'
+        toSupabaseErrorMessage(error, 'Unable to load service capacity survey.')
       )
     }
   }
@@ -2330,7 +2333,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       )
       return deleted
     } catch (error) {
-      setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to delete service capacity draft.')
+      setPartnerServiceCapacitySurveyError(toSupabaseErrorMessage(error, 'Unable to delete service capacity draft.'))
       throw error
     } finally {
       setIsSavingPartnerServiceCapacitySurvey(false)

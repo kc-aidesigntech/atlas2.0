@@ -55,6 +55,30 @@ export function isSupabasePermissionError(error: unknown) {
   )
 }
 
+/**
+ * Extracts a human-readable message from any thrown value.
+ *
+ * Supabase/PostgREST rejections are plain objects ({ message, details, hint,
+ * code }), NOT `Error` instances, so the common `error instanceof Error`
+ * extraction silently drops their message and shows only a generic fallback.
+ * That masking is exactly what hid a real database failure (42601) behind
+ * "Unable to save service capacity survey". This pulls the most specific text
+ * available (and appends the SQLSTATE code when present) so failures are loud.
+ */
+export function toSupabaseErrorMessage(error: unknown, fallbackMessage: string): string {
+  if (typeof error === 'string' && error.trim()) return error
+  if (error && typeof error === 'object') {
+    const candidate = error as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+    const message = typeof candidate.message === 'string' ? candidate.message.trim() : ''
+    const details = typeof candidate.details === 'string' ? candidate.details.trim() : ''
+    const hint = typeof candidate.hint === 'string' ? candidate.hint.trim() : ''
+    const code = typeof candidate.code === 'string' ? candidate.code.trim() : ''
+    const primary = message || details || hint
+    if (primary) return code ? `${primary} (${code})` : primary
+  }
+  return fallbackMessage
+}
+
 export async function withOptionalSupabaseFallback<T>(key: string, loader: () => Promise<T>, fallback: T): Promise<T> {
   if (optionalSupabaseFallbackCache.has(key)) {
     return optionalSupabaseFallbackCache.get(key) as T

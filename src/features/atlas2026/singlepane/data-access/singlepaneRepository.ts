@@ -116,16 +116,23 @@ export interface NavigatorStationContext {
   countyName: string | null
 }
 
+// Single reversible switch for the deferred county-commons experience. Flip to
+// true to restore the menu (and its heat-map screen) everywhere once the feature
+// is ready; until then it is hidden across every role's navigation.
+const SHOW_COUNTY_COMMONS = false
+
 function normalizeNavigatorTopMenus(menus: string[]) {
-  const normalized = menus
-    .map((menu) => {
-      const lower = menu.trim().toLowerCase()
-      if (lower === 'assigned enrollees') return 'enrollees'
-      if (lower === 'requests to enroll') return 'my profile'
-      if (lower === 'referral portal') return 'refer'
-      return menu
-    })
-    .filter((menu) => menu.trim().toLowerCase() !== 'route planning' && menu.trim().toLowerCase() !== 'county commons')
+  const normalized = hideDeferredCountyCommonsMenu(
+    menus
+      .map((menu) => {
+        const lower = menu.trim().toLowerCase()
+        if (lower === 'assigned enrollees') return 'enrollees'
+        if (lower === 'requests to enroll') return 'my profile'
+        if (lower === 'referral portal') return 'refer'
+        return menu
+      })
+      .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+  )
 
   if (!normalized.some((menu) => menu.trim().toLowerCase() === 'enrollees')) {
     normalized.unshift('enrollees')
@@ -135,6 +142,7 @@ function normalizeNavigatorTopMenus(menus: string[]) {
 
 function hideDeferredCountyCommonsMenu(menus: string[]) {
   // Keep county commons hidden while its experience is under active development.
+  if (SHOW_COUNTY_COMMONS) return menus
   return menus.filter((menu) => menu.trim().toLowerCase() !== 'county commons')
 }
 
