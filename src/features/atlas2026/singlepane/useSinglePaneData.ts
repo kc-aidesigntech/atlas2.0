@@ -16,6 +16,7 @@ import type {
   EnrolleeIntakeRecord,
   EnrollmentRequestRecord,
   EnrolleeProfile,
+  EnrolleeZCodeOverrideInput,
   EnrolleeZCodeResolutionInput,
   IntervalAssessmentDueItem,
   IntervalAssessmentRule,
@@ -35,6 +36,8 @@ import type {
   NavigatorCompetencyAssessmentRecord,
   SupervisorNavigatorCompetencySummary,
   RoleMenuConfig,
+  RegulationReviewDueItem,
+  RegulationReviewSettings,
   RegulationTestSubmissionInput,
   RegulationTestSubmissionRecord,
   RegulationTestStripMarker,
@@ -81,6 +84,7 @@ import {
   saveEnrolleeBurdenSurvey as persistEnrolleeBurdenSurvey,
   saveNavigatorProgramState as persistNavigatorProgramState,
   savePartnerTroubleshootingGrant as persistPartnerTroubleshootingGrant,
+  overrideEnrolleeZCodes as persistEnrolleeZCodeOverride,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
@@ -122,9 +126,16 @@ import {
 } from '@/features/atlas2026/singlepane/useSinglePaneDataTransforms'
 import {
   deleteRegulationTestDraft,
+  loadLatestCompletedRegulationReviewTimes,
   loadRegulationTestHistory,
   saveRegulationTestSubmission
 } from '@/features/atlas2026/singlepane/data-access/regulationTestsRepository'
+import {
+  getDefaultRegulationReviewSettings,
+  loadRegulationReviewSettings,
+  saveRegulationReviewSettings as persistRegulationReviewSettings
+} from '@/features/atlas2026/singlepane/data-access/localStateRepository'
+import { isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import { loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
@@ -635,6 +646,49 @@ function buildIntervalDueItems(
     })
 }
 
+const REGULATION_REVIEW_DAY_IN_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Forced regulation review due computation.
+ *
+ * One item per owned enrollee whose review is active. "Due now" means there is no
+ * completed regulation-stage test submission inside the current cadence window; a
+ * completed submission satisfies the cycle until the window elapses again.
+ */
+function buildRegulationReviewDueItems(
+  settings: RegulationReviewSettings,
+  ownedEnrollees: EnrolleeProfile[],
+  latestCompletedByEnrolleeId: Record<string, string>
+): RegulationReviewDueItem[] {
+  const nowMs = Date.now()
+  return ownedEnrollees
+    .map((enrollee) => {
+      const override = settings.enrolleeSettings[enrollee.id] || null
+      // Default-active contract: enrollees without an explicit per-enrollee entry inherit
+      // the admin default so newly added enrollees are enforced without extra setup.
+      const isActive = override ? override.isActive : settings.isActiveForNewEnrollees
+      if (!isActive) return null
+      const cadence = override?.cadence || settings.defaultCadence
+      const windowMs = cadenceDays(cadence) * REGULATION_REVIEW_DAY_IN_MS
+      const lastCompletedAtIso = latestCompletedByEnrolleeId[enrollee.id] || null
+      const lastCompletedMs = lastCompletedAtIso ? new Date(lastCompletedAtIso).getTime() : null
+      const isSatisfied = lastCompletedMs !== null && nowMs - lastCompletedMs < windowMs
+      return {
+        id: `regulation-review-${enrollee.id}`,
+        enrolleeId: enrollee.id,
+        enrolleeName: enrollee.fullName,
+        navigatorName: enrollee.assignedNavigator || null,
+        cadence,
+        // Never-reviewed enrollees are due immediately; otherwise the next cycle boundary.
+        dueAtIso:
+          lastCompletedMs !== null ? new Date(lastCompletedMs + windowMs).toISOString() : new Date(nowMs).toISOString(),
+        lastCompletedAtIso,
+        status: isSatisfied ? 'completed' : 'open'
+      } satisfies RegulationReviewDueItem
+    })
+    .filter((item): item is RegulationReviewDueItem => Boolean(item))
+}
+
 function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
   if (!loads.length) return null
   const totals = loads.reduce(
@@ -810,6 +864,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   >({})
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
+  // Forced regulation review: admin cadence policy (null until the config document loads)
+  // plus the latest completed regulation-stage submission time per enrollee.
+  const [regulationReviewSettings, setRegulationReviewSettings] = useState<RegulationReviewSettings | null>(null)
+  const [regulationReviewError, setRegulationReviewError] = useState<string | null>(null)
+  const [latestRegulationReviewCompletionByEnrolleeId, setLatestRegulationReviewCompletionByEnrolleeId] = useState<
+    Record<string, string>
+  >({})
   const [isUploadingAccountProfileImage, setIsUploadingAccountProfileImage] = useState(false)
   const [accountProfileImageUploadError, setAccountProfileImageUploadError] = useState<string | null>(null)
   const [sessionEmail, setSessionEmail] = useState('')
@@ -1363,6 +1424,51 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       ),
     [currentNavigatorName, navigatorCompetencyAssessments, navigatorIntervalRules, navigatorSelfAssessments, navigatorSupervisionSessions]
   )
+  // Forced regulation review wiring. Fall back to the weekly-active defaults until the
+  // persisted config document loads so due items never silently disappear at startup.
+  const effectiveRegulationReviewSettings = useMemo(
+    () => regulationReviewSettings ?? getDefaultRegulationReviewSettings(),
+    [regulationReviewSettings]
+  )
+  // Stable string key prevents the completion-times fetch from re-running on every render
+  // even though scopedEnrollees is recomputed as a new array reference.
+  const regulationReviewEnrolleeIdsKey = useMemo(
+    () =>
+      scopedEnrollees
+        .map((enrollee) => enrollee.id)
+        .sort()
+        .join('|'),
+    [scopedEnrollees]
+  )
+  useEffect(() => {
+    let isMounted = true
+    const enrolleeIds = regulationReviewEnrolleeIdsKey ? regulationReviewEnrolleeIdsKey.split('|') : []
+    if (!enrolleeIds.length) {
+      setLatestRegulationReviewCompletionByEnrolleeId({})
+      return
+    }
+    loadLatestCompletedRegulationReviewTimes(enrolleeIds)
+      .then((times) => {
+        if (!isMounted) return
+        setLatestRegulationReviewCompletionByEnrolleeId(times)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setRegulationReviewError(toSupabaseErrorMessage(error, 'Unable to load regulation review completion history.'))
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [regulationReviewEnrolleeIdsKey])
+  const regulationReviewDueItems = useMemo(
+    () =>
+      buildRegulationReviewDueItems(
+        effectiveRegulationReviewSettings,
+        scopedEnrollees,
+        latestRegulationReviewCompletionByEnrolleeId
+      ),
+    [effectiveRegulationReviewSettings, latestRegulationReviewCompletionByEnrolleeId, scopedEnrollees]
+  )
   const navigatorAssignedCompetencySummary = useMemo(
     () =>
       supervisorNavigatorCompetency.find((summary) => summary.navigatorName === currentNavigatorName) ||
@@ -1534,6 +1640,25 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       .catch((error) => {
         if (!isMounted) return
         setNavigatorProgramError(error instanceof Error ? error.message : 'Unable to load navigator program state.')
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    // Load the forced regulation review policy once at startup; it persists in the same
+    // app_config_documents store as the navigator program state above.
+    let isMounted = true
+    loadRegulationReviewSettings()
+      .then((settings) => {
+        if (!isMounted) return
+        setRegulationReviewSettings(settings)
+        setRegulationReviewError(null)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setRegulationReviewError(toSupabaseErrorMessage(error, 'Unable to load regulation review settings.'))
       })
     return () => {
       isMounted = false
@@ -2092,6 +2217,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
     ensureWriteAllowed()
     persistEnrolleeIntake(nextIntake).then((saved) => {
+      // Forced regulation review: intake-added enrollees get the review enabled by default
+      // (no-op for enrollees that already carry an explicit setting).
+      void ensureRegulationReviewSettingForEnrollee(saved.enrolleeId, saved.fullName)
       setBootstrapState((current) => ({
         ...current,
         intakeFormsByEnrolleeId: {
@@ -2163,7 +2291,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
                 resolutionAt: saved.resolutionAt,
                 resolutionPartnerId: saved.resolutionPartnerId ?? (saved.isResolved ? input.partnerId ?? null : null),
                 resolutionPartnerName: saved.resolutionPartnerName ?? (saved.isResolved ? input.partnerName ?? null : null),
-                resolutionNote: saved.resolutionNote ?? (saved.isResolved ? input.resolutionNote?.trim() || null : null)
+                resolutionNote: saved.resolutionNote ?? (saved.isResolved ? input.resolutionNote?.trim() || null : null),
+                // Readiness criteria echo whatever the Remote Procedure Call
+                // (RPC) persisted so pills stay in sync without a refetch.
+                codeReviewStatus: saved.codeReviewStatus,
+                confidenceLevel: saved.confidenceLevel
               }
             : detail
         )
@@ -2171,6 +2303,30 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           ...enrollee,
           activeZCodeDetails,
           completedParentCodes: buildCompletedParentCodes(activeZCodeDetails)
+        }
+      })
+    }))
+    return saved
+  }
+
+  async function overrideEnrolleeZCodes(enrollmentId: string, input: EnrolleeZCodeOverrideInput) {
+    ensureWriteAllowed()
+    const trimmedEnrollmentId = enrollmentId.trim()
+    if (!trimmedEnrollmentId) return null
+    // The command RPC reconciles the active set atomically and returns the
+    // refreshed active z-code payload, so state is replaced (not patched)
+    // for the affected enrollment - keeping partner matching inputs exact.
+    const saved = await persistEnrolleeZCodeOverride(trimmedEnrollmentId, input)
+    if (!saved) return null
+    setBootstrapState((current) => ({
+      ...current,
+      enrollees: current.enrollees.map((enrollee) => {
+        if (enrollee.enrollmentId !== trimmedEnrollmentId) return enrollee
+        return {
+          ...enrollee,
+          zCodeTags: saved.zCodeTags,
+          activeZCodeDetails: saved.activeZCodeDetails,
+          completedParentCodes: buildCompletedParentCodes(saved.activeZCodeDetails)
         }
       })
     }))
@@ -2739,6 +2895,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
     // Re-apply explicit self-assignment after materialization so claim and assignment remain tightly coupled.
     await persistAssignNavigatorEnrollmentToSelf(materialized.enrollmentId)
+    // Forced regulation review: newly claimed enrollees get the review enabled by default.
+    await ensureRegulationReviewSettingForEnrollee(materialized.enrolleeId, materialized.enrolleeName)
     try {
       const inferred = await inferZCodesForReferral({
         fullName: claimedRecord.fullName,
@@ -2791,6 +2949,49 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return saveNavigatorProgramState(nextState)
   }
 
+  async function saveRegulationReviewSettings(settings: RegulationReviewSettings) {
+    ensureWriteAllowed()
+    try {
+      const saved = await persistRegulationReviewSettings(settings)
+      setRegulationReviewSettings(saved)
+      setRegulationReviewError(null)
+      return saved
+    } catch (error) {
+      setRegulationReviewError(toSupabaseErrorMessage(error, 'Unable to save regulation review settings.'))
+      throw error
+    }
+  }
+
+  async function ensureRegulationReviewSettingForEnrollee(enrolleeId: string, enrolleeName: string) {
+    // Enrollee-add contract: auto-provision an explicit active entry so administrators can
+    // see and toggle the review for the new enrollee immediately.
+    const trimmedId = enrolleeId.trim()
+    if (!trimmedId) return
+    const current = regulationReviewSettings ?? getDefaultRegulationReviewSettings()
+    if (current.enrolleeSettings[trimmedId]) return
+    const next: RegulationReviewSettings = {
+      ...current,
+      enrolleeSettings: {
+        ...current.enrolleeSettings,
+        [trimmedId]: {
+          enrolleeId: trimmedId,
+          enrolleeName: enrolleeName.trim(),
+          isActive: current.isActiveForNewEnrollees,
+          cadence: null,
+          updatedAtIso: new Date().toISOString()
+        }
+      }
+    }
+    try {
+      const saved = await persistRegulationReviewSettings(next)
+      setRegulationReviewSettings(saved)
+    } catch (error) {
+      // Surface the failure but never abort enrollee creation: the default-active policy
+      // still enforces the review for enrollees without an explicit entry.
+      setRegulationReviewError(toSupabaseErrorMessage(error, 'Unable to auto-provision the regulation review setting.'))
+    }
+  }
+
   async function submitPartnerReferral(input: PartnerReferralSubmissionInput) {
     ensureWriteAllowed()
     const { nextRecord, nextState } = buildReferralQueueUpdate(input, mergedNavigatorProgramState, {
@@ -2811,6 +3012,15 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     try {
       const saved = await saveRegulationTestSubmission(input)
       setRegulationTestHistory((current) => upsertRegulationTestHistory(current, saved))
+      if (saved.status === 'completed' && !isRenewalAssessmentType(saved.testType)) {
+        // A completed regulation-stage submission satisfies the forced regulation review
+        // cycle immediately, without waiting for the next remote fetch.
+        setLatestRegulationReviewCompletionByEnrolleeId((current) => {
+          const existing = current[saved.enrolleeId]
+          if (existing && new Date(existing).getTime() >= new Date(saved.submittedAtIso).getTime()) return current
+          return { ...current, [saved.enrolleeId]: saved.submittedAtIso }
+        })
+      }
       return saved
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save regulation test.'
@@ -2933,6 +3143,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     supervisorNavigatorDirectory,
     navigatorIntervalRules,
     navigatorIntervalDueItems,
+    regulationReviewSettings: effectiveRegulationReviewSettings,
+    regulationReviewDueItems,
+    regulationReviewError,
+    saveRegulationReviewSettings,
     searchPartnerIdentifierMatches,
     ensurePartnerIdentifier,
     supervisorNavigatorCompetency,
@@ -2974,6 +3188,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
+    overrideEnrolleeZCodes,
     saveRouteAssignment,
     savePartnerServiceCapacitySurvey,
     setZCodeDomainSurveyAnswerNullification,

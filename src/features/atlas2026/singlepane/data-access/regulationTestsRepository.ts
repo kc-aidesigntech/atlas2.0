@@ -81,6 +81,68 @@ function persistLocalState(records: RegulationTestSubmissionRecord[]) {
   window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(records))
 }
 
+// Regulation-stage instruments only (renewal-stage types are excluded); derived from the
+// catalog so a stage reclassification cannot silently desynchronize the due computation.
+const REGULATION_STAGE_TEST_TYPES = (['mh_sca', 'svs', 'ipf', 'b_ipf'] as RegulationTestType[]).filter(
+  (testType) => !isRenewalAssessmentType(testType)
+)
+
+/**
+ * Latest completed regulation-stage submission time per enrollee.
+ *
+ * Feeds the forced regulation review due computation: an enrollee with no completed
+ * regulation test inside the cadence window is "due now".
+ */
+export async function loadLatestCompletedRegulationReviewTimes(
+  enrolleeIds: string[]
+): Promise<Record<string, string>> {
+  const normalizedIds = Array.from(new Set(enrolleeIds.map((id) => id.trim()).filter(Boolean)))
+  if (!normalizedIds.length) return {}
+
+  const reduceToLatest = (
+    rows: Array<{ enrolleeId: string; submittedAtIso: string }>
+  ): Record<string, string> =>
+    rows.reduce<Record<string, string>>((latest, row) => {
+      const existing = latest[row.enrolleeId]
+      if (!existing || new Date(row.submittedAtIso).getTime() > new Date(existing).getTime()) {
+        latest[row.enrolleeId] = row.submittedAtIso
+      }
+      return latest
+    }, {})
+
+  const reduceLocal = () =>
+    reduceToLatest(
+      loadLocalState()
+        .filter(
+          (record) =>
+            record.status === 'completed' &&
+            REGULATION_STAGE_TEST_TYPES.includes(record.testType) &&
+            normalizedIds.includes(record.enrolleeId)
+        )
+        .map((record) => ({ enrolleeId: record.enrolleeId, submittedAtIso: record.submittedAtIso }))
+    )
+
+  if (!hasSupabaseConfig || !supabase) return reduceLocal()
+
+  const { data, error } = await (supabase as any)
+    .schema('atlas')
+    .from('navigator_regulation_test_submissions')
+    .select('enrollee_id,submitted_at')
+    .in('enrollee_id', normalizedIds)
+    .in('test_type', REGULATION_STAGE_TEST_TYPES)
+    .eq('status', 'completed')
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return reduceLocal()
+    throw error
+  }
+  return reduceToLatest(
+    ((data || []) as Array<{ enrollee_id: string; submitted_at: string }>).map((row) => ({
+      enrolleeId: row.enrollee_id,
+      submittedAtIso: row.submitted_at
+    }))
+  )
+}
+
 export async function loadRegulationTestHistory(enrolleeId: string, testType: RegulationTestType): Promise<RegulationTestSubmissionRecord[]> {
   if (!enrolleeId.trim()) return []
   if (!hasSupabaseConfig || !supabase) {

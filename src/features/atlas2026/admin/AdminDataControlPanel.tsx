@@ -26,7 +26,10 @@ import type {
   EnrollmentRequestRecord,
   IntervalAssessmentDueItem,
   IntervalAssessmentRule,
+  IntervalCadence,
   NavigatorProgramState,
+  RegulationReviewDueItem,
+  RegulationReviewSettings,
   SupervisorNavigatorCompetencySummary,
   ZCodeDomainSurveyHistorySummary,
   ZCodeSurveyPrompt
@@ -60,6 +63,12 @@ interface AdminDataControlPanelProps {
   supervisorNavigatorCompetency: SupervisorNavigatorCompetencySummary[]
   navigatorProgramState: NavigatorProgramState
   navigatorIntervalDueItems: IntervalAssessmentDueItem[]
+  // Forced regulation review: admin-editable cadence policy, computed due items, and the
+  // persistence error surface for the underlying config document.
+  regulationReviewSettings: RegulationReviewSettings
+  regulationReviewDueItems: RegulationReviewDueItem[]
+  regulationReviewError: string | null
+  onSaveRegulationReviewSettings: (settings: RegulationReviewSettings) => Promise<unknown> | unknown
   accessMatrixDataset: AccessMatrixDataset | null
   registry: AdminPortalRegistry | null
   isSavingRegistry: boolean
@@ -334,6 +343,10 @@ export default function AdminDataControlPanel({
   supervisorNavigatorCompetency,
   navigatorProgramState,
   navigatorIntervalDueItems,
+  regulationReviewSettings,
+  regulationReviewDueItems,
+  regulationReviewError,
+  onSaveRegulationReviewSettings,
   accessMatrixDataset,
   registry,
   isSavingRegistry,
@@ -360,6 +373,9 @@ export default function AdminDataControlPanel({
   const [personDraft, setPersonDraft] = useState<AdminPortalPersonRecord | null>(null)
   const [organizationDraft, setOrganizationDraft] = useState<AdminPortalOrganizationRecord | null>(null)
   const [intervalRuleDraft, setIntervalRuleDraft] = useState<IntervalAssessmentRule | null>(null)
+  // Forced regulation review draft: null means "no unsaved edits, mirror persisted settings".
+  const [regulationReviewDraft, setRegulationReviewDraft] = useState<RegulationReviewSettings | null>(null)
+  const [isSavingRegulationReview, setIsSavingRegulationReview] = useState(false)
   const [portalMessage, setPortalMessage] = useState<string | null>(null)
   const [isSubmittingEnrollee, setIsSubmittingEnrollee] = useState(false)
   const [isZCodePickerOpen, setIsZCodePickerOpen] = useState(false)
@@ -934,6 +950,61 @@ export default function AdminDataControlPanel({
     if (!intervalRuleDraft) return
     await Promise.resolve(onSaveIntervalAssessmentRule(intervalRuleDraft))
     setPortalMessage(`Saved interval rule for ${intervalRuleDraft.title || 'assessment rule'}.`)
+  }
+
+  // Unsaved edits take precedence over the persisted policy; null draft mirrors persistence.
+  const effectiveRegulationReview = regulationReviewDraft ?? regulationReviewSettings
+
+  // Admin roster for per-enrollee review toggles: every visible enrollee plus any persisted
+  // entry whose enrollee is no longer visible (archived/renamed) so it stays manageable.
+  const regulationReviewRoster = useMemo(() => {
+    const rows = visibleEnrollees.map((row) => ({
+      enrolleeId: row.kind === 'existing' ? row.profile.id : row.record.enrolleeId,
+      enrolleeName: row.kind === 'existing' ? row.profile.fullName : row.record.fullName
+    }))
+    const knownIds = new Set(rows.map((row) => row.enrolleeId))
+    Object.values(effectiveRegulationReview.enrolleeSettings).forEach((entry) => {
+      if (knownIds.has(entry.enrolleeId)) return
+      rows.push({ enrolleeId: entry.enrolleeId, enrolleeName: entry.enrolleeName || entry.enrolleeId })
+    })
+    return rows.sort((left, right) => left.enrolleeName.localeCompare(right.enrolleeName))
+  }, [effectiveRegulationReview.enrolleeSettings, visibleEnrollees])
+
+  function updateRegulationReviewEnrolleeSetting(
+    enrolleeId: string,
+    enrolleeName: string,
+    patch: Partial<Pick<RegulationReviewSettings['enrolleeSettings'][string], 'isActive' | 'cadence'>>
+  ) {
+    const base = effectiveRegulationReview
+    const existing = base.enrolleeSettings[enrolleeId]
+    setRegulationReviewDraft({
+      ...base,
+      enrolleeSettings: {
+        ...base.enrolleeSettings,
+        [enrolleeId]: {
+          enrolleeId,
+          enrolleeName,
+          // Enrollees without an explicit entry inherit the default-active policy, so a
+          // first toggle starts from that inherited state.
+          isActive: existing ? existing.isActive : base.isActiveForNewEnrollees,
+          cadence: existing ? existing.cadence : null,
+          ...patch,
+          updatedAtIso: new Date().toISOString()
+        }
+      }
+    })
+  }
+
+  async function handleSaveRegulationReviewSettings() {
+    if (!regulationReviewDraft) return
+    setIsSavingRegulationReview(true)
+    try {
+      await Promise.resolve(onSaveRegulationReviewSettings(regulationReviewDraft))
+      setRegulationReviewDraft(null)
+      setPortalMessage('Saved forced regulation review settings.')
+    } finally {
+      setIsSavingRegulationReview(false)
+    }
   }
 
   const overviewCards = useMemo(
@@ -2426,6 +2497,117 @@ export default function AdminDataControlPanel({
                 ) : (
                   <small className="text-[13px] text-[var(--foreground-secondary)]">Select a rule or create a new one to edit interval cadence.</small>
                 )}
+              </AtlasInsetCard>
+
+              <AtlasInsetCard className="rounded-[22px] px-5 py-5 xl:col-span-2">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[22px] font-medium text-white">Forced regulation review</div>
+                    <small className="block text-[13px] text-[var(--foreground-secondary)]">
+                      Active by default for new enrollees. Edit the review frequency or disable the review per enrollee; the owning
+                      navigator sees an action item in their profile each cycle until a regulation test is completed.
+                    </small>
+                  </div>
+                  <AtlasTextButton
+                    onClick={() => void handleSaveRegulationReviewSettings()}
+                    disabled={!regulationReviewDraft || isSavingRegulationReview}
+                    className="px-4 py-2 text-[13px] font-medium"
+                    style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                  >
+                    {isSavingRegulationReview ? 'saving...' : regulationReviewDraft ? 'save review settings' : 'saved'}
+                  </AtlasTextButton>
+                </div>
+                {regulationReviewError ? (
+                  <AtlasInsetCard className="mb-4 rounded-[18px] border-[rgba(255,92,92,0.4)] bg-[rgba(255,92,92,0.08)] px-4 py-3">
+                    <small className="text-[12px] font-semibold uppercase tracking-[0.12em]" style={{ color: SP_COLORS.red }}>
+                      persistence warning
+                    </small>
+                    <div className="mt-1 text-[13px] text-white">{regulationReviewError}</div>
+                  </AtlasInsetCard>
+                ) : null}
+                <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">
+                  <Field label="default frequency">
+                    <select
+                      value={effectiveRegulationReview.defaultCadence}
+                      onChange={(event) =>
+                        setRegulationReviewDraft({
+                          ...effectiveRegulationReview,
+                          defaultCadence: event.target.value as IntervalCadence
+                        })
+                      }
+                      className="atlas-admin-input"
+                    >
+                      <option value="weekly">weekly</option>
+                      <option value="monthly">monthly</option>
+                      <option value="quarterly">quarterly</option>
+                    </select>
+                  </Field>
+                  <AtlasMetricPill
+                    label="open regulation reviews"
+                    value={regulationReviewDueItems.filter((item) => item.status === 'open').length}
+                    accentColor={SP_COLORS.red}
+                    className="rounded-[18px]"
+                  />
+                  <AtlasMetricPill
+                    label="reviews satisfied this cycle"
+                    value={regulationReviewDueItems.filter((item) => item.status === 'completed').length}
+                    accentColor={SP_COLORS.deepGreen}
+                    className="rounded-[18px]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  {regulationReviewRoster.map((row) => {
+                    const entry = effectiveRegulationReview.enrolleeSettings[row.enrolleeId] || null
+                    // Mirror the runtime due computation: no entry means the default-active
+                    // policy applies with the default cadence.
+                    const isActive = entry ? entry.isActive : effectiveRegulationReview.isActiveForNewEnrollees
+                    return (
+                      <div key={row.enrolleeId} className="rounded-[18px] border border-white/10 bg-white/5 px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[15px] font-medium text-white">{row.enrolleeName}</div>
+                            <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                              {entry ? 'explicit setting' : 'inherits default (active for new enrollees)'}
+                            </small>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <select
+                              value={entry?.cadence || ''}
+                              onChange={(event) =>
+                                updateRegulationReviewEnrolleeSetting(row.enrolleeId, row.enrolleeName, {
+                                  cadence: event.target.value ? (event.target.value as IntervalCadence) : null
+                                })
+                              }
+                              className="atlas-admin-input"
+                            >
+                              <option value="">default frequency</option>
+                              <option value="weekly">weekly</option>
+                              <option value="monthly">monthly</option>
+                              <option value="quarterly">quarterly</option>
+                            </select>
+                            <label className="flex items-center gap-2 text-[13px] text-white">
+                              <input
+                                type="checkbox"
+                                checked={isActive}
+                                onChange={(event) =>
+                                  updateRegulationReviewEnrolleeSetting(row.enrolleeId, row.enrolleeName, {
+                                    isActive: event.target.checked
+                                  })
+                                }
+                              />
+                              review active
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {!regulationReviewRoster.length ? (
+                    <small className="text-[13px] text-[var(--foreground-secondary)]">
+                      No enrollees yet. New enrollees are added with the review active automatically.
+                    </small>
+                  ) : null}
+                </div>
               </AtlasInsetCard>
 
               <AtlasInsetCard className="rounded-[22px] px-5 py-5 xl:col-span-2">

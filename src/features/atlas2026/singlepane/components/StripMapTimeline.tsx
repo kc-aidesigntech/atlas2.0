@@ -486,6 +486,9 @@ export default function StripMapTimeline({
     isPartnerAggregateView,
     normalizedTimelineConfig.planStartIso,
     onRegulationTestsClick,
+    // onRenewalTestsClick must invalidate this memo: its presence is what flips the
+    // renewal slot from passive green lettering to the actionable button.
+    onRenewalTestsClick,
     onRoutePlanningClick,
     phaseSegments,
     showRoutePlanningQuickAction,
@@ -746,7 +749,11 @@ export default function StripMapTimeline({
         <Group>
           <LinePath data={baselinePoints} x={(point) => point.x} y={(point) => point.y} stroke={SP_COLORS.white} strokeWidth={5} />
 
-          {/* phase corridor segments driven by dynamic gates */}
+          {/* phase corridor segments driven by dynamic gates. Segment labels fall back
+              to passive lettering whenever the segment has no actionable button.
+              Renewal intentionally mirrors readiness' first-entry presentation: until
+              readiness completes (parent withholds onRenewalTestsClick), "renewal"
+              renders as plain green lettering, then transitions to the button state. */}
           {phaseSegments.map((segment) => {
             const startDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.startOffset || 0)
             const endDate = addMonths(new Date(normalizedTimelineConfig.planStartIso), segment.endOffset || 0)
@@ -768,7 +775,7 @@ export default function StripMapTimeline({
                   ? null
                   : segment.phase === 'readiness' && ((onRoutePlanningClick && showRoutePlanningQuickAction) || isPartnerAggregateView)
                     ? null
-                    : segment.phase === 'renewal'
+                    : segment.phase === 'renewal' && (onRenewalTestsClick || isPartnerAggregateView)
                       ? null
                       : (
                   <text

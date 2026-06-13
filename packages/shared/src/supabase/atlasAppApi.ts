@@ -69,6 +69,11 @@ export interface SinglePaneEnrolleeProfileRecord {
   currentPhase: "regulation" | "readiness" | "renewal";
 }
 
+// Per-Z-code readiness criteria captured in the readiness workflow.
+// 'resolved' is the single value that drives the legacy isResolved semantics.
+export type SinglePaneZCodeReviewStatus = "not_resolved" | "partially_resolved" | "resolved";
+export type SinglePaneZCodeConfidenceLevel = "low" | "medium" | "high";
+
 export interface SinglePaneEnrolleeActiveZCodeRecord {
   enrolleeZCodeId: string;
   parentCode: string;
@@ -80,6 +85,8 @@ export interface SinglePaneEnrolleeActiveZCodeRecord {
   resolutionPartnerId: string | null;
   resolutionPartnerName: string | null;
   resolutionNote: string | null;
+  codeReviewStatus: SinglePaneZCodeReviewStatus;
+  confidenceLevel: SinglePaneZCodeConfidenceLevel | null;
 }
 
 export interface SinglePaneDomainLoadRecord {
@@ -409,9 +416,25 @@ function asEnrolleeActiveZCodeArray(value: unknown): SinglePaneEnrolleeActiveZCo
             : typeof record.resolution_note === "string"
               ? record.resolution_note
               : null,
+        codeReviewStatus: asZCodeReviewStatus(
+          record.codeReviewStatus ?? record.code_review_status,
+          Boolean(record.isResolved ?? record.is_resolved),
+        ),
+        confidenceLevel: asZCodeConfidenceLevel(record.confidenceLevel ?? record.confidence_level),
       } satisfies SinglePaneEnrolleeActiveZCodeRecord;
     })
     .filter((item): item is SinglePaneEnrolleeActiveZCodeRecord => Boolean(item));
+}
+
+function asZCodeReviewStatus(value: unknown, isResolved: boolean): SinglePaneZCodeReviewStatus {
+  if (value === "not_resolved" || value === "partially_resolved" || value === "resolved") return value;
+  // Rows that predate the readiness-criteria columns fall back to the legacy
+  // boolean so existing resolved semantics stay coherent in the UI.
+  return isResolved ? "resolved" : "not_resolved";
+}
+
+function asZCodeConfidenceLevel(value: unknown): SinglePaneZCodeConfidenceLevel | null {
+  return value === "low" || value === "medium" || value === "high" ? value : null;
 }
 
 function asRecord(value: unknown) {
@@ -678,12 +701,19 @@ export async function setEnrolleeZCodeResolution(
   partnerId?: string | null,
   partnerName?: string | null,
   resolutionNote?: string | null,
+  codeReviewStatus?: SinglePaneZCodeReviewStatus | null,
+  confidenceLevel?: SinglePaneZCodeConfidenceLevel | null,
 ) {
+  // When a review status is supplied it becomes the server-side source of
+  // truth (isResolved is derived from 'resolved'); the boolean stays for
+  // legacy callers that only know about the binary toggle.
   const { data, error } = await (client as SupabaseClient<any>).rpc("fn_set_enrollee_z_code_resolution_context", {
     p_enrollee_z_code_id: enrolleeZCodeId,
     p_is_resolved: isResolved,
     p_partner_id: partnerId ?? null,
     p_resolution_note: resolutionNote?.trim() || null,
+    p_code_review_status: codeReviewStatus ?? null,
+    p_confidence_level: confidenceLevel ?? null,
   });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;
@@ -720,6 +750,52 @@ export async function setEnrolleeZCodeResolution(
         : typeof record.resolutionNote === "string"
           ? record.resolutionNote
           : resolutionNote?.trim() || null,
+    codeReviewStatus: asZCodeReviewStatus(
+      record.code_review_status ?? record.codeReviewStatus,
+      Boolean(record.is_resolved ?? record.isResolved ?? isResolved),
+    ),
+    confidenceLevel: asZCodeConfidenceLevel(record.confidence_level ?? record.confidenceLevel),
+  };
+}
+
+export interface SinglePaneZCodeOverrideResult {
+  enrollmentId: string;
+  zCodeTags: string[];
+  activeZCodeDetails: SinglePaneEnrolleeActiveZCodeRecord[];
+}
+
+/**
+ * Binary Z-code override: the checked set becomes the enrollee's exact active
+ * Z-code set. Unchecked codes require a reason which the command Remote
+ * Procedure Call (RPC) records in atlas.enrollee_z_code_uncheck_log.
+ */
+export async function overrideEnrolleeZCodes(
+  client: AnySupabaseClient,
+  enrollmentId: string,
+  payload: {
+    checkedZCodes: string[];
+    uncheckReasons: Array<{ zCode: string; reasonCode: string; reasonText?: string | null }>;
+  },
+): Promise<SinglePaneZCodeOverrideResult> {
+  const { data, error } = await (client as SupabaseClient<any>)
+    .schema("atlas")
+    .rpc("fn_override_enrollee_z_codes", {
+      p_enrollment_id: enrollmentId,
+      p_payload: {
+        checkedZCodes: payload.checkedZCodes,
+        uncheckReasons: payload.uncheckReasons.map((reason) => ({
+          zCode: reason.zCode,
+          reasonCode: reason.reasonCode,
+          reasonText: reason.reasonText ?? null,
+        })),
+      },
+    });
+  if (error) throw error;
+  const record = asRecord(data);
+  return {
+    enrollmentId: typeof record.enrollmentId === "string" ? record.enrollmentId : enrollmentId,
+    zCodeTags: asStringArray(record.zCodeTags),
+    activeZCodeDetails: asEnrolleeActiveZCodeArray(record.activeZCodeDetails),
   };
 }
 

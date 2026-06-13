@@ -24,6 +24,15 @@ import type {
 
 export type AtlasRole = 'navigator' | 'partner' | 'supervisor' | 'administrator'
 
+// Per-Z-code readiness criteria captured in the readiness workflow.
+// 'resolved' is the single value that drives the legacy isResolved semantics.
+export type ZCodeReviewStatus = 'not_resolved' | 'partially_resolved' | 'resolved'
+export type ZCodeConfidenceLevel = 'low' | 'medium' | 'high'
+
+// Audit reasons recorded when a navigator unchecks an active Z-code in the
+// streamlined override panel ("unchecked z-code coin log").
+export type ZCodeUncheckReasonCode = 'restarting_readiness' | 'entry_error' | 'other'
+
 export interface EnrolleeActiveZCode {
   enrolleeZCodeId: string
   parentCode: string
@@ -35,12 +44,37 @@ export interface EnrolleeActiveZCode {
   resolutionPartnerId?: string | null
   resolutionPartnerName?: string | null
   resolutionNote?: string | null
+  codeReviewStatus?: ZCodeReviewStatus
+  confidenceLevel?: ZCodeConfidenceLevel | null
 }
 
 export interface EnrolleeZCodeResolutionInput {
   partnerId?: string | null
   partnerName?: string | null
   resolutionNote?: string | null
+  // When provided, the review status is the source of truth for resolution
+  // state (isResolved is derived server-side from 'resolved').
+  codeReviewStatus?: ZCodeReviewStatus | null
+  confidenceLevel?: ZCodeConfidenceLevel | null
+}
+
+export interface EnrolleeZCodeUncheckReason {
+  zCode: string
+  reasonCode: ZCodeUncheckReasonCode
+  reasonText?: string | null
+}
+
+// Payload for the binary Z-code override command Remote Procedure Call (RPC):
+// the checked set becomes the enrollee's exact active Z-code set.
+export interface EnrolleeZCodeOverrideInput {
+  checkedZCodes: string[]
+  uncheckReasons: EnrolleeZCodeUncheckReason[]
+}
+
+export interface EnrolleeZCodeOverrideResult {
+  enrollmentId: string
+  zCodeTags: string[]
+  activeZCodeDetails: EnrolleeActiveZCode[]
 }
 
 export interface ResolvedZCodeStripMarker {
@@ -576,6 +610,42 @@ export interface IntervalAssessmentDueItem {
   navigatorName: string | null
   dueAtIso: string
   cadence: IntervalCadence
+  status: 'open' | 'completed'
+}
+
+// Forced regulation review scheduling.
+// Administrator-level cadence policy with per-enrollee enable/disable overrides, persisted
+// as a single JSON config document in atlas.app_config_documents (no dedicated table).
+export interface RegulationReviewEnrolleeSetting {
+  enrolleeId: string
+  enrolleeName: string
+  isActive: boolean
+  // null inherits the admin default cadence; a concrete value pins a custom cadence
+  // for this enrollee only.
+  cadence: IntervalCadence | null
+  updatedAtIso: string
+}
+
+export interface RegulationReviewSettings {
+  // Cadence applied to every enrollee without an explicit per-enrollee cadence override.
+  defaultCadence: IntervalCadence
+  // When true (client-mandated default), enrollees without an explicit entry are treated
+  // as having the review active, so newly added enrollees are covered immediately.
+  isActiveForNewEnrollees: boolean
+  enrolleeSettings: Record<string, RegulationReviewEnrolleeSetting>
+  updatedAtIso: string
+}
+
+// Computed (not persisted) due item: one per owned enrollee whose regulation review is
+// active and governed by the cadence window since the last completed regulation test.
+export interface RegulationReviewDueItem {
+  id: string
+  enrolleeId: string
+  enrolleeName: string
+  navigatorName: string | null
+  cadence: IntervalCadence
+  dueAtIso: string
+  lastCompletedAtIso: string | null
   status: 'open' | 'completed'
 }
 

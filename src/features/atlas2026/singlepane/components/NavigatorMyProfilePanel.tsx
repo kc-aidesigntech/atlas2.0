@@ -13,6 +13,7 @@ import type {
   NavigatorEnrollmentAssignmentRecord,
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
+  RegulationReviewDueItem,
   SupervisionSessionRecord,
   SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/singlepane/types'
@@ -38,6 +39,9 @@ interface NavigatorMyProfilePanelProps {
   selfAssessments: NavigatorSelfAssessmentRecord[]
   supervisionSessions: SupervisionSessionRecord[]
   dueItems: IntervalAssessmentDueItem[]
+  // Forced regulation review action items for enrollees this navigator owns, recurring
+  // per the admin cadence and cleared by completed regulation test submissions.
+  regulationReviewDueItems?: RegulationReviewDueItem[]
   programError?: string | null
   onOpenLoadTable?: () => void
   isUploadingAvatar?: boolean
@@ -80,6 +84,7 @@ export default function NavigatorMyProfilePanel({
   selfAssessments,
   supervisionSessions,
   dueItems,
+  regulationReviewDueItems = [],
   programError = null,
   onOpenLoadTable,
   isUploadingAvatar = false,
@@ -180,7 +185,8 @@ export default function NavigatorMyProfilePanel({
                 <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
                   enrollees
                 </small>
-                <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">enrollee burden surveys</div>
+                {/* Entry point now opens the streamlined Z-code override (burden survey preserved for later). */}
+                <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">enrollee z-code updates</div>
               </div>
               <span className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
                 {assignedEnrollees.length} assigned
@@ -200,13 +206,13 @@ export default function NavigatorMyProfilePanel({
                       disabled={!onOpenEnrolleeSurvey}
                       style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#ffffff' } as React.CSSProperties}
                     >
-                      open survey
+                      update z-codes
                     </AtlasTextButton>
                   </div>
                 ))
               ) : (
                 <div className="atlas-empty-state">
-                  No assigned enrollees are available for survey capture yet.
+                  No assigned enrollees are available for z-code updates yet.
                 </div>
               )}
             </div>
@@ -235,6 +241,22 @@ export default function NavigatorMyProfilePanel({
                   <div>
                     <div className="text-white">{item.title}</div>
                     <small style={{ color: '#9eacb9' }}>{formatDateLabel(item.dueAtIso)} · {item.cadence}</small>
+                  </div>
+                  <span style={{ color: item.status === 'completed' ? SP_COLORS.deepGreen : SP_COLORS.yellow }}>
+                    {item.status}
+                  </span>
+                </div>
+              ))}
+              {/* Forced regulation review items reuse the same due-card motif so the list
+                  reads as one schedule; each row is scoped to a single owned enrollee. */}
+              {regulationReviewDueItems.map((item) => (
+                <div key={item.id} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
+                  <div>
+                    <div className="text-white">regulation review · {item.enrolleeName}</div>
+                    <small style={{ color: '#9eacb9' }}>
+                      due {formatDateLabel(item.dueAtIso)} · {item.cadence}
+                      {item.lastCompletedAtIso ? ` · last completed ${formatDateLabel(item.lastCompletedAtIso)}` : ' · never completed'}
+                    </small>
                   </div>
                   <span style={{ color: item.status === 'completed' ? SP_COLORS.deepGreen : SP_COLORS.yellow }}>
                     {item.status}

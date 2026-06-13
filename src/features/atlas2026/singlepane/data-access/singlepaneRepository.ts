@@ -4,6 +4,8 @@ import type {
   CountyHeatPoint,
   DomainLoad,
   DomainLoadBreakdown,
+  EnrolleeZCodeOverrideInput,
+  EnrolleeZCodeOverrideResult,
   EnrolleeZCodeResolutionInput,
   EnrollmentRequestRecord,
   JourneyStationMarker,
@@ -17,6 +19,7 @@ import {
   fetchEnrollmentAssignmentBoard,
   fetchNavigatorAssignedEnrollees,
   fetchPartnerLoadBreakdown,
+  overrideEnrolleeZCodes as persistEnrolleeZCodeOverride,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   fetchSinglePaneAdminMetrics,
   fetchSinglePaneCountyHeatmap,
@@ -817,7 +820,11 @@ export async function setEnrolleeZCodeResolution(
       resolutionAt: isResolved ? new Date().toISOString() : null,
       resolutionPartnerId: isResolved ? input.partnerId ?? null : null,
       resolutionPartnerName: isResolved ? input.partnerName ?? null : null,
-      resolutionNote: isResolved ? input.resolutionNote?.trim() || null : null
+      resolutionNote: isResolved ? input.resolutionNote?.trim() || null : null,
+      // Local fallback mirrors the server derivation so offline demo state
+      // keeps the readiness criteria coherent with the binary toggle.
+      codeReviewStatus: input.codeReviewStatus ?? (isResolved ? ('resolved' as const) : ('not_resolved' as const)),
+      confidenceLevel: input.confidenceLevel ?? null
     }
   }
   return persistEnrolleeZCodeResolution(
@@ -826,8 +833,33 @@ export async function setEnrolleeZCodeResolution(
     isResolved,
     isResolved ? input.partnerId ?? null : null,
     isResolved ? input.partnerName?.trim() || null : null,
-    isResolved ? input.resolutionNote?.trim() || null : null
+    isResolved ? input.resolutionNote?.trim() || null : null,
+    input.codeReviewStatus ?? null,
+    input.confidenceLevel ?? null
   )
+}
+
+export async function overrideEnrolleeZCodes(
+  enrollmentId: string,
+  input: EnrolleeZCodeOverrideInput
+): Promise<EnrolleeZCodeOverrideResult | null> {
+  // The override is meaningless without a live backend (there is no local
+  // demo persistence for the active z-code set), so signal "not persisted"
+  // instead of fabricating a result the caller might trust.
+  if (!enrollmentId || !hasSupabaseConfig || !supabase) return null
+  const result = await persistEnrolleeZCodeOverride(supabase, enrollmentId, {
+    checkedZCodes: input.checkedZCodes,
+    uncheckReasons: input.uncheckReasons.map((reason) => ({
+      zCode: reason.zCode,
+      reasonCode: reason.reasonCode,
+      reasonText: reason.reasonText ?? null
+    }))
+  })
+  return {
+    enrollmentId: result.enrollmentId,
+    zCodeTags: result.zCodeTags,
+    activeZCodeDetails: result.activeZCodeDetails
+  }
 }
 
 export async function loadPartnerRadialLoad(): Promise<DomainLoad | null> {
