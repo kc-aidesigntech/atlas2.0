@@ -665,6 +665,17 @@ export async function prefetchRouteCandidatesForEnrollments(enrollmentIds: strin
   await Promise.all(uniqueEnrollmentIds.map((enrollmentId) => loadRouteCandidates(enrollmentId).catch(() => [])))
 }
 
+export function invalidateRouteCandidatesCache(enrollmentId?: string | null) {
+  const normalizedEnrollmentId = (enrollmentId || '').trim()
+  if (!normalizedEnrollmentId) {
+    routeCandidatesCache.clear()
+    routeCandidatesInFlight.clear()
+    return
+  }
+  routeCandidatesCache.delete(normalizedEnrollmentId)
+  routeCandidatesInFlight.delete(normalizedEnrollmentId)
+}
+
 export async function loadCountyHeatmap(): Promise<CountyHeatPoint[]> {
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
   const rows = await withOptionalSupabaseFallback('singlepane.countyHeatmap', () => fetchSinglePaneCountyHeatmap(supabase), [])
@@ -726,6 +737,17 @@ export async function prefetchJourneyStationMarkersForEnrollments(
       loadJourneyStationMarkers(entry.enrollmentId, entry.enrolleeId).catch(() => [])
     )
   )
+}
+
+export function invalidateJourneyStationMarkersCache(enrollmentId?: string | null) {
+  const normalizedEnrollmentId = (enrollmentId || '').trim()
+  if (!normalizedEnrollmentId) {
+    journeyStationMarkersCache.clear()
+    journeyStationMarkersInFlight.clear()
+    return
+  }
+  journeyStationMarkersCache.delete(normalizedEnrollmentId)
+  journeyStationMarkersInFlight.delete(normalizedEnrollmentId)
 }
 
 function sanitizeFilename(value: string) {

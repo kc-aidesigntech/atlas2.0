@@ -100,6 +100,19 @@ declared `STABLE` so the planner can cache argument-free calls
     `SECURITY DEFINER` resolver. The pre-existing hardened `fn_can_access_partner_scope`
     was intentionally left untouched.
 
+- **Phase 8** — continuity hardening for cross-screen write/read parity:
+  - **Config-document write scope tightening**: `app_config_documents` no longer uses
+    a blanket authenticated all-write policy. Authenticated writes are constrained to
+    explicit single-pane keys/prefixes, while administrators retain full write
+    coverage for governed operations.
+  - **Canonical referral status updates**: authenticated staff (administrator,
+    navigator, supervisor) can update `public_referral_intake_events` status payloads
+    for `public_landing` referral and partner-inquiry events, so queue state changes
+    are persisted in the durable intake source rather than only local/session state.
+  - **Regulation command validation**: `fn_save_regulation_test_submission` now
+    rejects inconsistent score/threshold/pass payloads and requires score+pass on
+    completed submissions, preventing contradictory test records from being stored.
+
 ## Verified behavior
 
 - Navigator `kchristiansoncallisons@gmail.com` sees their assigned enrollee

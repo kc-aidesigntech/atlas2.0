@@ -23,6 +23,7 @@ import type {
   AtlasRole,
   EnrolleeIntakeRecord,
   EnrolleeProfile,
+  EnrolleeZCodeOverrideResult,
   EnrollmentRequestRecord,
   IntervalAssessmentDueItem,
   IntervalAssessmentRule,
@@ -82,6 +83,10 @@ interface AdminDataControlPanelProps {
   onSaveEnrollmentNavigators: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<unknown> | unknown
   onSaveIntervalAssessmentRule: (rule: IntervalAssessmentRule) => Promise<unknown> | unknown
   onSaveIntake: (intake: EnrolleeIntakeRecord) => Promise<unknown> | unknown
+  onOverrideEnrolleeZCodes: (
+    enrollmentId: string,
+    input: { checkedZCodes: string[]; uncheckReasons: Array<{ zCode: string; reasonCode: string; reasonText?: string | null }> }
+  ) => Promise<EnrolleeZCodeOverrideResult | null>
 }
 
 const ADMIN_SECTIONS: Array<{ id: AdminPortalSection; label: string; description: string }> = [
@@ -96,6 +101,7 @@ const ADMIN_SECTIONS: Array<{ id: AdminPortalSection; label: string; description
 
 const ROLE_OPTIONS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
 const ORG_TYPE_OPTIONS: AdminPortalOrganizationType[] = ['partner', 'internal', 'public_agency', 'community']
+const CUSTOM_ENROLLEE_STATUS_OPTIONS: AdminPortalCustomEnrolleeRecord['status'][] = ['draft', 'active']
 const ADMIN_ACTIVE_SECTION_KEY = 'atlas2026.admin.session.active-section'
 const ADMIN_SELECTED_ENROLLEE_KEY = 'atlas2026.admin.session.selected-enrollee'
 const ADMIN_SELECTED_PERSON_KEY = 'atlas2026.admin.session.selected-person'
@@ -205,19 +211,32 @@ function getEmptyRegistry(): AdminPortalRegistry {
 }
 
 function buildExistingEnrolleeIntake(profile: EnrolleeProfile, intake: EnrolleeIntakeRecord | undefined): EnrolleeIntakeRecord {
+  const canonicalActiveZCodes = profile.activeZCodeDetails
+    .map((detail) => detail.zCode.trim().toUpperCase())
+    .filter(Boolean)
+  const canonicalZCodeTags = canonicalActiveZCodes.length
+    ? Array.from(new Set(canonicalActiveZCodes))
+    : profile.zCodeTags.map((value) => value.trim().toUpperCase()).filter(Boolean)
   // Intake overrides are sparse. Fall back to profile fields so edits always start
   // from a complete object and save handlers can rely on required keys.
   return (
-    intake || {
-      enrolleeId: profile.id,
-      fullName: profile.fullName,
-      dob: profile.dob,
-      caseId: profile.caseId,
-      email: profile.email,
-      assignedNavigator: profile.assignedNavigator,
-      enrollmentStartIso: new Date().toISOString(),
-      zCodeTags: profile.zCodeTags
-    }
+    intake
+      ? {
+          ...intake,
+          // Seed the record editor from canonical active rows so adding one code
+          // does not implicitly stage removals from stale intake mirrors.
+          zCodeTags: canonicalZCodeTags.length ? canonicalZCodeTags : intake.zCodeTags
+        }
+      : {
+          enrolleeId: profile.id,
+          fullName: profile.fullName,
+          dob: profile.dob,
+          caseId: profile.caseId,
+          email: profile.email,
+          assignedNavigator: profile.assignedNavigator,
+          enrollmentStartIso: new Date().toISOString(),
+          zCodeTags: canonicalZCodeTags
+        }
   )
 }
 
@@ -355,7 +374,8 @@ export default function AdminDataControlPanel({
   onSetZCodeDomainSurveyAnswerNullification,
   onSaveEnrollmentNavigators,
   onSaveIntervalAssessmentRule,
-  onSaveIntake
+  onSaveIntake,
+  onOverrideEnrolleeZCodes
 }: AdminDataControlPanelProps) {
   // The UI can render before registry hydration completes; use an empty shape so
   // all mutation helpers stay null-safe and write against one consistent structure.
@@ -785,8 +805,39 @@ export default function AdminDataControlPanel({
     setIsSubmittingEnrollee(true)
     try {
       if (enrolleeDraft.kind === 'existing') {
-        await Promise.resolve(onSaveIntake(enrolleeDraft.intake))
-        setPortalMessage(`Saved enrollee intake for ${enrolleeDraft.intake.fullName || enrolleeDraft.profile.fullName}.`)
+        const normalizedDraftZCodes = selectedDraftZCodes
+        const activeProfileZCodes = Array.from(
+          new Set(enrolleeDraft.profile.activeZCodeDetails.map((detail) => detail.zCode.trim().toUpperCase()).filter(Boolean))
+        )
+        const removedWithoutReason = activeProfileZCodes.filter((zCode) => !normalizedDraftZCodes.includes(zCode))
+        if (removedWithoutReason.length) {
+          // The canonical override command requires an audited reason for every uncheck.
+          // Fail loudly in admin until this editor collects those reasons explicitly.
+          setPortalMessage(
+            `Unable to remove ${removedWithoutReason.join(', ')} here because each uncheck requires a reason. Use "update z-codes" on the enrollee page to record removals.`
+          )
+          return
+        }
+        if (!enrolleeDraft.profile.enrollmentId) {
+          setPortalMessage(`Unable to save ${enrolleeDraft.intake.fullName || enrolleeDraft.profile.fullName}: enrollment id is missing.`)
+          return
+        }
+        const overrideResult = await onOverrideEnrolleeZCodes(enrolleeDraft.profile.enrollmentId, {
+          checkedZCodes: normalizedDraftZCodes,
+          uncheckReasons: []
+        })
+        if (!overrideResult) {
+          throw new Error('Z-code override was not persisted by the database.')
+        }
+        await Promise.resolve(onSaveIntake({ ...enrolleeDraft.intake, zCodeTags: overrideResult.zCodeTags }))
+        setEnrolleeDraft((current) =>
+          current && current.kind === 'existing'
+            ? { ...current, intake: { ...current.intake, zCodeTags: overrideResult.zCodeTags } }
+            : current
+        )
+        setPortalMessage(
+          `Saved enrollee intake for ${enrolleeDraft.intake.fullName || enrolleeDraft.profile.fullName} with canonical z-code sync.`
+        )
       } else {
         await commitRegistry(
           {
@@ -799,6 +850,8 @@ export default function AdminDataControlPanel({
           `Saved custom enrollee draft for ${enrolleeDraft.record.fullName || enrolleeDraft.record.caseId || 'new enrollee'}.`
         )
       }
+    } catch (error) {
+      setPortalMessage(error instanceof Error ? error.message : 'Unable to save enrollee updates right now.')
     } finally {
       setIsSubmittingEnrollee(false)
     }
@@ -1516,6 +1569,35 @@ export default function AdminDataControlPanel({
                           ))}
                         </select>
                       </Field>
+                      {enrolleeDraft.kind === 'custom' ? (
+                        <Field label="status">
+                          <select
+                            value={enrolleeDraft.record.status}
+                            onChange={(event) =>
+                              setEnrolleeDraft((current) =>
+                                current && current.kind === 'custom'
+                                  ? {
+                                      ...current,
+                                      // Draft custom enrollees remain admin-only until explicitly promoted
+                                      // to active, which makes operational intent visible in the registry.
+                                      record: {
+                                        ...current.record,
+                                        status: event.target.value as AdminPortalCustomEnrolleeRecord['status']
+                                      }
+                                    }
+                                  : current
+                              )
+                            }
+                            className="atlas-admin-input"
+                          >
+                            {CUSTOM_ENROLLEE_STATUS_OPTIONS.map((statusOption) => (
+                              <option key={statusOption} value={statusOption}>
+                                {statusOption}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      ) : null}
                     </div>
                     <Field label="enrollment start">
                       <input

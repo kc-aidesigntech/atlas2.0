@@ -53,6 +53,29 @@ async function persistRouteLogsToSupabase(logs: RouteLogEvent[]) {
     if (isOptionalSupabaseDataError(error)) return
     throw error
   }
+  // Read-after-write continuity check: the same request cycle must observe the
+  // just-written payload size, otherwise timeline actions fail loudly instead of
+  // silently diverging across sessions.
+  const { data: verifyRows, error: verifyError } = await (supabase as any)
+    .schema('atlas')
+    .from('app_config_documents')
+    .select('payload')
+    .eq('surface', CONFIG_SURFACE)
+    .eq('config_key', ROUTE_LOG_CONFIG_KEY)
+    .eq('version', CONFIG_VERSION)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (verifyError) {
+    if (isOptionalSupabaseDataError(verifyError)) return
+    throw verifyError
+  }
+  const persistedPayload = verifyRows?.[0]?.payload
+  const persistedLength = Array.isArray(persistedPayload) ? persistedPayload.length : -1
+  if (persistedLength !== payload.length) {
+    throw new Error(
+      `Route-log write verification failed: expected ${payload.length} rows, observed ${persistedLength}.`
+    )
+  }
 }
 
 export async function loadLocalLogs(): Promise<RouteLogEvent[]> {

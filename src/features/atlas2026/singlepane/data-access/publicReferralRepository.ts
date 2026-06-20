@@ -3,6 +3,7 @@ import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 const LOCAL_PUBLIC_REFERRAL_QUEUE_KEY = 'atlas2026.public.referral-queue.v1'
 let remoteQueueTableUnavailable = false
+type ReferralQueueStatus = UnassignedEnrolleePickupRecord['status']
 
 function canUseLocalStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -62,7 +63,7 @@ async function loadRemoteQueueRecords() {
   const { data, error } = await (supabase as any)
     .schema('atlas')
     .from('public_referral_intake_events')
-    .select('payload')
+    .select('external_record_id,payload,submitted_at')
     .order('submitted_at', { ascending: false })
     .limit(100)
   if (error) {
@@ -72,7 +73,16 @@ async function loadRemoteQueueRecords() {
     return []
   }
   return (data || [])
-    .map((row: { payload?: unknown }) => parseRemotePayload(row.payload))
+    .map((row: { payload?: unknown; external_record_id?: string; submitted_at?: string }) => {
+      const parsed = parseRemotePayload(row.payload)
+      if (!parsed) return null
+      // Keep ids/timestamps deterministic from canonical row metadata when present.
+      return {
+        ...parsed,
+        id: String(row.external_record_id || parsed.id || '').trim() || parsed.id,
+        referredAtIso: String(parsed.referredAtIso || row.submitted_at || '').trim() || parsed.referredAtIso
+      } satisfies UnassignedEnrolleePickupRecord
+    })
     .filter((row: UnassignedEnrolleePickupRecord | null): row is UnassignedEnrolleePickupRecord => row !== null)
 }
 
@@ -131,5 +141,43 @@ export async function enqueuePublicReferralQueueRecord(record: UnassignedEnrolle
   // Dual-write to Database (DB) so referral continuity survives browser/device changes.
   await persistRemoteQueueRecord(record)
   return record
+}
+
+export async function setPublicReferralQueueRecordStatus(
+  recordId: string,
+  status: ReferralQueueStatus,
+  options: { claimedByNavigatorName?: string | null } = {}
+): Promise<UnassignedEnrolleePickupRecord> {
+  const normalizedRecordId = recordId.trim()
+  if (!normalizedRecordId) {
+    throw new Error('A referral queue record id is required to update status.')
+  }
+  const currentQueue = await loadPublicReferralQueueRecords()
+  const existing = currentQueue.find((record) => record.id === normalizedRecordId)
+  if (!existing) {
+    throw new Error(`Referral queue record ${normalizedRecordId} was not found in canonical intake events.`)
+  }
+  const nextRecord: UnassignedEnrolleePickupRecord = {
+    ...existing,
+    status,
+    claimedByNavigatorName: status === 'claimed' ? options.claimedByNavigatorName?.trim() || null : null,
+    claimedAtIso: status === 'claimed' ? new Date().toISOString() : null
+  }
+  writeQueue([nextRecord, ...currentQueue.filter((record) => record.id !== normalizedRecordId)])
+  if (hasSupabaseConfig && supabase) {
+    const { error } = await (supabase as any)
+      .schema('atlas')
+      .from('public_referral_intake_events')
+      .update({
+        payload: nextRecord
+      })
+      .eq('external_record_id', normalizedRecordId)
+      .eq('source', 'public_landing')
+      .in('event_type', ['referral', 'partner_inquiry'])
+    if (error) {
+      throw new Error(`Referral status could not be persisted to canonical intake events: ${error.message || 'unknown error'}`)
+    }
+  }
+  return nextRecord
 }
 

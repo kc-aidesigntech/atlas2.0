@@ -83,7 +83,9 @@ export default function SinglePaneApp() {
     partnerStripSuccessHistory,
     resolvedZCodeStripMarkers,
     currentNavigatorName,
+    canSwitchActiveExperience,
     navigatorAggregateLoad,
+    navigatorLoadContributors,
     navigatorAggregateLoadBreakdown,
     navigatorEnrollmentAssignments,
     viewerCanViewNavigatorAssignmentNames,
@@ -665,6 +667,7 @@ export default function SinglePaneApp() {
           <AccountSettingsPanel
             isOpen={isAccountSettingsOpen}
             role={role}
+            canSwitchActiveExperience={canSwitchActiveExperience}
             settings={accountSettings}
             onClose={() => setIsAccountSettingsOpen(false)}
             onRoleChange={setRole}
@@ -753,6 +756,7 @@ export default function SinglePaneApp() {
             isOpen={isLoadTableOpen}
             load={displayLoad}
             breakdown={displayLoadBreakdown}
+            navigatorContributors={isNavigatorMyProfile ? navigatorLoadContributors : []}
             onClose={() => setIsLoadTableOpen(false)}
           />
           <PartnerSpecialtyOverlay
@@ -1001,6 +1005,7 @@ export default function SinglePaneApp() {
                           onSaveEnrollmentNavigators={saveAccessMatrixEnrollmentNavigators}
                           onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
                           onSaveIntake={saveEnrolleeIntake}
+                          onOverrideEnrolleeZCodes={overrideEnrolleeZCodes}
                         />
                       </div>
                     ) : (

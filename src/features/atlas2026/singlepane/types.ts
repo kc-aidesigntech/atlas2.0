@@ -108,6 +108,14 @@ export interface DomainLoad {
   socialNetworks: number
 }
 
+export interface NavigatorLoadContributor {
+  enrolleeId: string
+  enrolleeName: string
+  habitat: number
+  work: number
+  socialNetworks: number
+}
+
 export type DomainLoadBucket = 'habitat' | 'work' | 'socialNetworks'
 export type DomainLoadSourceKind = 'partnerSurvey' | 'enrolleeRecords' | 'enrolleeSurvey'
 

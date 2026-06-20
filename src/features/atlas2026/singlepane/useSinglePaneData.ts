@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AccessMatrixDataset,
   AdminPortalPersonRecord,
@@ -23,6 +23,7 @@ import type {
   JourneyStationMarker,
   NavigatorProgramState,
   NavigatorEnrollmentAssignmentRecord,
+  NavigatorLoadContributor,
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
   PartnerTroubleshootingGrant,
@@ -73,6 +74,8 @@ import {
   loadZCodeDomainSurveyHistorySummary,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
+  invalidateJourneyStationMarkersCache,
+  invalidateRouteCandidatesCache,
   setZCodeDomainSurveyAnswerNullified,
   uploadEnrolleeProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
@@ -137,7 +140,11 @@ import {
 } from '@/features/atlas2026/singlepane/data-access/localStateRepository'
 import { isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
-import { loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
+import {
+  enqueuePublicReferralQueueRecord,
+  loadPublicReferralQueueRecords,
+  setPublicReferralQueueRecordStatus
+} from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { inferZCodesForReferral } from '@/services/atlas2026/demoInferenceService'
 
@@ -708,6 +715,24 @@ function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
   }
 }
 
+function deriveNavigatorLoadContributors(enrollees: EnrolleeProfile[], loads: DomainLoad[]): NavigatorLoadContributor[] {
+  if (!enrollees.length || !loads.length) return []
+  const loadsByEnrolleeId = new Map(loads.map((load) => [load.enrolleeId, load]))
+  return enrollees
+    .map((enrollee) => {
+      const load = loadsByEnrolleeId.get(enrollee.id)
+      if (!load) return null
+      return {
+        enrolleeId: enrollee.id,
+        enrolleeName: enrollee.fullName,
+        habitat: load.habitat,
+        work: load.work,
+        socialNetworks: load.socialNetworks
+      } satisfies NavigatorLoadContributor
+    })
+    .filter((item): item is NavigatorLoadContributor => Boolean(item))
+}
+
 function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadBreakdown>, navigatorName: string): DomainLoadBreakdown | null {
   const values = Object.values(loadBreakdowns)
   if (!values.length) return null
@@ -842,7 +867,8 @@ interface SupervisorNavigatorDirectoryEntry {
 }
 
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
-  const [role, setRole] = useState<AtlasRole>(() => readSessionRole(initialRole))
+  const [role, setRoleState] = useState<AtlasRole>(() => readSessionRole(initialRole))
+  const adminDefaultAppliedForEmailRef = useRef<string | null>(null)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>(() => readSessionStorageValue(SESSION_SELECTED_ENROLLEE_KEY) || '')
   const [activeMenu, setActiveMenu] = useState<string>(() => readSessionStorageValue(SESSION_ACTIVE_MENU_KEY) || '')
   const [adminPortalRegistry, setAdminPortalRegistry] = useState<AdminPortalRegistry | null>(null)
@@ -875,6 +901,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [accountProfileImageUploadError, setAccountProfileImageUploadError] = useState<string | null>(null)
   const [sessionEmail, setSessionEmail] = useState('')
   const [authoritativeAccountRoles, setAuthoritativeAccountRoles] = useState<AtlasRole[]>([])
+  const canSwitchActiveExperience = useMemo(
+    () => authoritativeAccountRoles.includes('administrator') || role === 'administrator',
+    [authoritativeAccountRoles, role]
+  )
   const [regulationTestHistory, setRegulationTestHistory] = useState<RegulationTestSubmissionRecord[]>([])
   const [isSavingRegulationTest, setIsSavingRegulationTest] = useState(false)
   const [regulationTestError, setRegulationTestError] = useState<string | null>(null)
@@ -1477,6 +1507,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [currentNavigatorName, supervisorNavigatorCompetency]
   )
   const navigatorAggregateLoad = useMemo(() => deriveNavigatorLoad(scopedLoads), [scopedLoads])
+  const navigatorLoadContributors = useMemo(
+    () => deriveNavigatorLoadContributors(scopedEnrollees, scopedLoads),
+    [scopedEnrollees, scopedLoads]
+  )
   const navigatorAggregateLoadBreakdown = useMemo(
     () => deriveNavigatorLoadBreakdown(scopedLoadBreakdownsByEnrolleeId, currentNavigatorName),
     [currentNavigatorName, scopedLoadBreakdownsByEnrolleeId]
@@ -1608,9 +1642,23 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setRemoteSession(null)
     }
     if (!authoritativeAccountRoles.includes(role)) {
-      setRole(authoritativeAccountRoles[0])
+      setRoleState(authoritativeAccountRoles[0])
     }
   }, [authoritativeAccountRoles, remoteSession, role])
+
+  useEffect(() => {
+    const normalizedEmail = sessionEmail.trim().toLowerCase()
+    if (!normalizedEmail) return
+    if (!authoritativeAccountRoles.includes('administrator')) {
+      // Reset the one-shot bootstrap marker when switching away from an admin account.
+      adminDefaultAppliedForEmailRef.current = null
+      return
+    }
+    if (adminDefaultAppliedForEmailRef.current === normalizedEmail) return
+    adminDefaultAppliedForEmailRef.current = normalizedEmail
+    // Admin sessions should always boot into administrator view by default.
+    setRoleState('administrator')
+  }, [authoritativeAccountRoles, sessionEmail])
 
   useEffect(() => {
     let isMounted = true
@@ -1805,7 +1853,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       }
     }))
     if (!derivedRoles.includes(role)) {
-      setRole(derivedRoles[0] || 'navigator')
+      setRoleState(derivedRoles[0] || 'navigator')
     }
   }, [accountSettings.enabledRoles, remoteSession, role, setBootstrapState, viewerPerson])
 
@@ -1966,6 +2014,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function appendRouteLog(label: string) {
+    ensureWriteAllowed('routeLogs.write', 'append route logs')
     if (!selectedEnrollee || !label.trim()) return
     const last = selectedLogs[selectedLogs.length - 1]
     const newPhase = nextPhase(last?.phase)
@@ -1983,7 +2032,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         milestoneType: 'intervention',
         domainsRelieved: domains
       }
-      appendRouteLogRecord(updatedLogs, next).then((finalLogs) => setLogs(finalLogs))
+      appendRouteLogRecord(updatedLogs, next)
+        .then((finalLogs) => setLogs(finalLogs))
+        .catch((error) => {
+          setNavigatorProgramError(
+            toSupabaseErrorMessage(error, 'Unable to append route log. The write did not persist to the canonical store.')
+          )
+        })
       return
     }
     const next: RouteLogEvent = {
@@ -1996,10 +2051,17 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       milestoneType: 'intervention',
       domainsRelieved: domains
     }
-    appendRouteLogRecord(logs, next).then((finalLogs) => setLogs(finalLogs))
+    appendRouteLogRecord(logs, next)
+      .then((finalLogs) => setLogs(finalLogs))
+      .catch((error) => {
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to append route log. The write did not persist to the canonical store.')
+        )
+      })
   }
 
   function updateRouteLogTimelinePosition(logId: string, timelinePositionRatio: number | null) {
+    ensureWriteAllowed('routeLogs.write', 'update route log timeline positions')
     setLogs((current) => {
       const nextLogs = current.map((log) =>
         log.id === logId
@@ -2012,12 +2074,17 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
             }
           : log
       )
-      persistRouteLogs(nextLogs).catch((error) => console.warn('Failed to persist route log timeline position.', error))
+      persistRouteLogs(nextLogs).catch((error) => {
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to persist route-log timeline position to the canonical store.')
+        )
+      })
       return nextLogs
     })
   }
 
   function updateRouteLogDate(logId: string, nextTimestampIso: string) {
+    ensureWriteAllowed('routeLogs.write', 'update route log dates')
     setLogs((current) => {
       const nextLogs = current.map((log) =>
         log.id === logId
@@ -2028,17 +2095,24 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
             }
           : log
       )
-      persistRouteLogs(nextLogs)
-        .catch((error) => console.warn('Failed to persist route log date override.', error))
+      persistRouteLogs(nextLogs).catch((error) => {
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to persist route-log date updates to the canonical store.')
+        )
+      })
       return nextLogs
     })
   }
 
   function deleteRouteLog(logId: string) {
+    ensureWriteAllowed('routeLogs.write', 'delete route logs')
     setLogs((current) => {
       const nextLogs = current.filter((log) => log.id !== logId)
-      persistRouteLogs(nextLogs)
-        .catch((error) => console.warn('Failed to persist route log deletion.', error))
+      persistRouteLogs(nextLogs).catch((error) => {
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to persist route-log deletion to the canonical store.')
+        )
+      })
       return nextLogs
     })
   }
@@ -2057,6 +2131,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function updateTimelineConfig(nextConfig: TimelineConfig) {
+    ensureWriteAllowed('timeline.write', 'update timeline configuration')
     if (!selectedEnrollee) return
     const normalizedTimelineConfig = normalizeTimelineConfig(nextConfig)
     setBootstrapState((current) => ({
@@ -2079,9 +2154,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         enrollmentId: selectedEnrollee.enrollmentId
       },
       normalizedTimelineConfig
-    ).catch((error) =>
-      console.warn('Failed to persist enrollee timeline config.', error)
-    )
+    ).catch((error) => {
+      setNavigatorProgramError(
+        toSupabaseErrorMessage(error, 'Unable to persist timeline configuration to the canonical store.')
+      )
+    })
   }
 
   async function saveAccountSettings(nextSettings: AccountSettings) {
@@ -2107,7 +2184,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         partnerStationProfile: stationProfile
       }))
       if (!saved.enabledRoles.includes(role)) {
-        setRole(saved.enabledRoles[0] || 'navigator')
+        setRoleState(saved.enabledRoles[0] || 'navigator')
       }
     } catch (error) {
       console.warn('Failed to save account settings.', error)
@@ -2173,7 +2250,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function replaceSelectedEnrolleeProfileImage(file: File) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('intake.write', 'replace enrollee profile images')
     if (!selectedEnrollee) {
       throw new Error('Select an enrollee profile before uploading an image.')
     }
@@ -2215,7 +2292,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('intake.write', 'save enrollee intake')
     persistEnrolleeIntake(nextIntake).then((saved) => {
       // Forced regulation review: intake-added enrollees get the review enabled by default
       // (no-op for enrollees that already carry an explicit setting).
@@ -2250,7 +2327,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function saveRouteAssignment(candidate: RouteCandidateRecord, phase: StabilizationPhase) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('routeAssignment.write', 'save route assignments')
     if (!selectedEnrollee) return
     const assignment: RouteAssignmentRecord = {
       enrolleeId: selectedEnrollee.id,
@@ -2268,6 +2345,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           [saved.enrolleeId]: saved
         }
       }))
+      invalidateJourneyStationMarkersCache(selectedEnrollee.enrollmentId)
+      void refreshAssignmentParityViews()
     })
   }
 
@@ -2276,7 +2355,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isResolved: boolean,
     input: EnrolleeZCodeResolutionInput = {}
   ) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('zcodes.write', 'update z-code resolution')
     if (!selectedEnrollee || !enrolleeZCodeId) return null
     const saved = await persistEnrolleeZCodeResolution(enrolleeZCodeId, isResolved, input)
     setBootstrapState((current) => ({
@@ -2306,11 +2385,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         }
       })
     }))
+    invalidateRouteCandidatesCache(selectedEnrollee.enrollmentId)
     return saved
   }
 
   async function overrideEnrolleeZCodes(enrollmentId: string, input: EnrolleeZCodeOverrideInput) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('zcodes.write', 'override z-codes')
     const trimmedEnrollmentId = enrollmentId.trim()
     if (!trimmedEnrollmentId) return null
     // The command RPC reconciles the active set atomically and returns the
@@ -2330,11 +2410,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         }
       })
     }))
+    invalidateRouteCandidatesCache(trimmedEnrollmentId)
     return saved
   }
 
   async function savePartnerServiceCapacitySurvey(input: PartnerServiceCapacitySubmissionInput) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('partnerReferral.submit', 'save partner service-capacity surveys')
     setIsSavingPartnerServiceCapacitySurvey(true)
     setPartnerServiceCapacitySurveyError(null)
     try {
@@ -2365,9 +2446,14 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         email: input.header.email || accountSettings.email,
         organization: input.header.organizationName
       }
+      const refreshedStationProfile = await loadPartnerStationProfile(input.header.organizationName, {
+        fullName: nextAccountSettings.fullName,
+        email: nextAccountSettings.email
+      })
       setBootstrapState((current) => ({
         ...current,
-        accountSettings: nextAccountSettings
+        accountSettings: nextAccountSettings,
+        partnerStationProfile: refreshedStationProfile
       }))
       persistAccountSettings(nextAccountSettings)
       return saved
@@ -2401,7 +2487,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveEnrolleeBurdenSurvey(input: EnrolleeBurdenSurveySubmissionInput) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('intake.write', 'save enrollee burden surveys')
     setIsSavingEnrolleeBurdenSurvey(true)
     setEnrolleeBurdenSurveyError(null)
     try {
@@ -2479,7 +2565,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function deletePartnerServiceCapacityDraft(submissionId: string) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('partnerReferral.submit', 'delete partner service-capacity drafts')
     setIsSavingPartnerServiceCapacitySurvey(true)
     setPartnerServiceCapacitySurveyError(null)
     try {
@@ -2522,7 +2608,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function deleteEnrolleeBurdenSurveyDraft(submissionId: string, enrollmentId: string) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('intake.write', 'delete enrollee burden drafts')
     setIsSavingEnrolleeBurdenSurvey(true)
     setEnrolleeBurdenSurveyError(null)
     try {
@@ -2550,7 +2636,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     formVersion: string
     answers: NavigatorCompetencyAssessmentRecord['answers']
   }) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'save navigator competency assessments')
     const saved = await persistNavigatorCompetencyAssessment(input)
     setBootstrapState((current) => ({
       ...current,
@@ -2640,9 +2726,26 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setRemoteSession(null)
   }
 
-  function ensureWriteAllowed() {
+  type SinglePaneWriteActionKey =
+    | 'intake.write'
+    | 'zcodes.write'
+    | 'routeAssignment.write'
+    | 'routeLogs.write'
+    | 'timeline.write'
+    | 'navigatorProgram.write'
+    | 'regulationReview.write'
+    | 'regulationTests.write'
+    | 'partnerReferral.submit'
+
+  function ensureWriteAllowed(actionKey: SinglePaneWriteActionKey, actionLabel: string) {
     if (remoteSession?.targetRole === 'partner' && !remoteSession.partnerGrant?.allowWrite) {
       throw new Error('This partner troubleshooting session is read-only until the partner grants write access.')
+    }
+    // Keep write-path enforcement aligned with the same per-action policy keys
+    // that drive User Interface (UI) affordances, so hidden actions are never
+    // still callable through callbacks.
+    if (!isViewerPolicyAllowed('actionToggles', actionKey)) {
+      throw new Error(`You do not have permission to ${actionLabel}.`)
     }
   }
 
@@ -2692,6 +2795,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveAccessMatrixSupervisorAssignments(navigatorPersonId: string, supervisorPersonIds: string[]) {
+    ensureAdminPermissionWrite('update supervisor assignments')
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
     try {
@@ -2840,6 +2944,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveNavigatorProgramState(state: NavigatorProgramState) {
+    ensureWriteAllowed('navigatorProgram.write', 'save navigator program state')
     setNavigatorProgramError(null)
     try {
       const saved = await persistNavigatorProgramState(state)
@@ -2855,7 +2960,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     recordId: string,
     status: 'available' | 'accepted' | 'claimed' | 'archived'
   ) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'update referral queue status')
     const trimmedId = recordId.trim()
     if (!trimmedId) {
       throw new Error('Missing referral queue record id.')
@@ -2866,25 +2971,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         `No referral queue row with id "${trimmedId}" is loaded. Refresh the assignment board and try again.`
       )
     }
-    const nowIso = new Date().toISOString()
-    const nextState = {
-      ...mergedNavigatorProgramState,
-      pickupQueue: mergedNavigatorProgramState.pickupQueue.map((record) =>
-        record.id === trimmedId
-          ? {
-              ...record,
-              status,
-              claimedByNavigatorName: status === 'claimed' ? currentNavigatorName : record.claimedByNavigatorName,
-              claimedAtIso: status === 'claimed' ? nowIso : record.claimedAtIso
-            }
-          : record
-      )
-    }
-    return saveNavigatorProgramState(nextState)
+    const statusSaved = await setPublicReferralQueueRecordStatus(trimmedId, status, {
+      claimedByNavigatorName: status === 'claimed' ? currentNavigatorName : null
+    })
+    setPublicQueueRecords((current) => {
+      const next = current.filter((record) => record.id !== statusSaved.id)
+      next.unshift(statusSaved)
+      return next
+    })
+    return statusSaved
   }
 
   async function claimPickupQueueRecord(recordId: string) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'claim referral queue records')
     const claimedRecord = mergedNavigatorProgramState.pickupQueue.find((record) => record.id === recordId) || null
     if (!claimedRecord) {
       throw new Error('Unable to claim this referral because it is no longer available in your queue view.')
@@ -2914,7 +3013,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveNavigatorSelfAssessment(record: NavigatorSelfAssessmentRecord) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'save navigator self-assessments')
     const nextState = {
       ...mergedNavigatorProgramState,
       selfAssessments: [
@@ -2926,7 +3025,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveSupervisionSession(record: SupervisionSessionRecord) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'save supervision sessions')
     const nextState = {
       ...mergedNavigatorProgramState,
       supervisionSessions: [
@@ -2938,7 +3037,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveIntervalAssessmentRule(rule: IntervalAssessmentRule) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'save interval assessment rules')
     const nextState = {
       ...mergedNavigatorProgramState,
       intervalAssessmentRules: [
@@ -2950,7 +3049,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveRegulationReviewSettings(settings: RegulationReviewSettings) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('regulationReview.write', 'save regulation review settings')
     try {
       const saved = await persistRegulationReviewSettings(settings)
       setRegulationReviewSettings(saved)
@@ -2993,20 +3092,22 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function submitPartnerReferral(input: PartnerReferralSubmissionInput) {
-    ensureWriteAllowed()
-    const { nextRecord, nextState } = buildReferralQueueUpdate(input, mergedNavigatorProgramState, {
+    ensureWriteAllowed('partnerReferral.submit', 'submit partner referrals')
+    const { nextRecord } = buildReferralQueueUpdate(input, mergedNavigatorProgramState, {
       accountFullName: accountSettings.fullName,
       accountOrganization: effectiveAccountSettings.organization,
       partnerStationOrganizationName: effectivePartnerStationProfile?.organizationName || null,
       actorRoleLabel: role,
       sourceLabel: 'single-pane referral portal'
     })
-    await saveNavigatorProgramState(nextState)
+    await enqueuePublicReferralQueueRecord(nextRecord)
+    const refreshedQueue = await loadPublicReferralQueueRecords()
+    setPublicQueueRecords(refreshedQueue)
     return nextRecord
   }
 
   async function saveNavigatorRegulationTest(input: RegulationTestSubmissionInput) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('regulationTests.write', 'save regulation tests')
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
     try {
@@ -3032,7 +3133,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function deleteNavigatorRegulationTestDraft(submissionId: string) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('regulationTests.write', 'delete regulation-test drafts')
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
     try {
@@ -3062,6 +3163,16 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }): Promise<PartnerIdentifierRecord> {
     return ensurePartnerIdentifierRecordForSurvey(header)
   }
+
+  const setRole = useCallback(
+    (nextRole: AtlasRole) => {
+      // Active experience switching is admin-only. Non-admin users remain pinned
+      // to their permission-scoped experience (their JWT-authoritative role).
+      if (!authoritativeAccountRoles.includes('administrator')) return
+      setRoleState(nextRole)
+    },
+    [authoritativeAccountRoles]
+  )
 
   return {
     role,
@@ -3124,7 +3235,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isUploadingAccountProfileImage,
     accountProfileImageUploadError,
     currentNavigatorName,
+    canSwitchActiveExperience,
     navigatorAggregateLoad,
+    navigatorLoadContributors,
     navigatorAggregateLoadBreakdown,
     pickupQueue,
     navigatorSelfAssessments,

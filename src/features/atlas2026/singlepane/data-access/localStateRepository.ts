@@ -454,14 +454,25 @@ export async function loadRouteAssignments(): Promise<Record<string, RouteAssign
 }
 
 export async function saveRouteAssignment(assignment: RouteAssignmentRecord): Promise<RouteAssignmentRecord> {
+  const configKey = `${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}${assignment.enrolleeId}`
   persistLocalRouteAssignmentState({
     ...loadLocalRouteAssignmentState(),
     [assignment.enrolleeId]: assignment
   })
-  const error = await upsertConfigPayload(`${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}${assignment.enrolleeId}`, assignment)
+  const error = await upsertConfigPayload(configKey, assignment)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return assignment
     throw error
+  }
+  // Read-after-write verification keeps route assignment state deterministic
+  // across tabs/sessions by confirming the just-written canonical payload.
+  const { payload: persistedAssignment, error: verifyError } = await loadLatestConfigPayload<RouteAssignmentRecord>(configKey)
+  if (verifyError) {
+    if (!isOptionalSupabaseDataError(verifyError)) throw verifyError
+    return assignment
+  }
+  if (!persistedAssignment || persistedAssignment.stationId !== assignment.stationId) {
+    throw new Error(`Route assignment verification failed for enrollee ${assignment.enrolleeId}.`)
   }
   return assignment
 }
@@ -508,10 +519,19 @@ export async function saveTimelineConfig(
   persistLocalTimelineConfigState(nextLocalState)
 
   for (const key of keys) {
-    const error = await upsertConfigPayload(`${TIMELINE_CONFIG_KEY_PREFIX}${key}`, config)
+    const configKey = `${TIMELINE_CONFIG_KEY_PREFIX}${key}`
+    const error = await upsertConfigPayload(configKey, config)
     if (error) {
       if (isOptionalSupabaseDataError(error)) return config
       throw error
+    }
+    const { payload: persistedConfig, error: verifyError } = await loadLatestConfigPayload<TimelineConfig>(configKey)
+    if (verifyError) {
+      if (!isOptionalSupabaseDataError(verifyError)) throw verifyError
+      continue
+    }
+    if (!persistedConfig || persistedConfig.planStartIso !== config.planStartIso) {
+      throw new Error(`Timeline config verification failed for key ${configKey}.`)
     }
   }
   return config
