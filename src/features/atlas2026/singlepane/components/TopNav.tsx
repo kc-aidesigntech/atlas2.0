@@ -45,6 +45,16 @@ export default function TopNav({
         ? ADD_ENROLLEES_OPTION_VALUE
         : selectedEnrolleeId || MY_ENROLLEES_OPTION_VALUE
       : selectedEnrolleeId || ''
+  const enrolleeSelectorLabel = React.useMemo(() => {
+    if (role === 'navigator') {
+      if (enrolleeSelectorValue === ADD_ENROLLEES_OPTION_VALUE) return 'add enrollees'
+      if (enrolleeSelectorValue === MY_ENROLLEES_OPTION_VALUE || !enrolleeSelectorValue) return 'my enrollees'
+    }
+    const selectedEnrollee = enrollees.find((enrollee) => enrollee.id === enrolleeSelectorValue)
+    return selectedEnrollee?.fullName || 'select enrollee'
+  }, [enrolleeSelectorValue, enrollees, role])
+  // Size by active label length so long names keep a clear lane for the chevron/spinner.
+  const enrolleeSelectorWidthCh = Math.min(Math.max(enrolleeSelectorLabel.length + 6, 18), 42)
   const adminControlsMenu = React.useMemo(() => {
     if (role !== 'administrator') return ''
     const adminSpecific = roleConfig.topMenus.find((menu) => {
@@ -110,8 +120,13 @@ export default function TopNav({
                       }
                       onSelectEnrollee(event.target.value)
                     }}
-                    className="atlas-select min-h-[34px] appearance-none rounded-full border-white/30 bg-black pl-3 pr-9 text-[15px] font-medium text-white"
-                    style={{ textTransform: 'none' }}
+                    className="atlas-select min-h-[34px] w-auto appearance-none rounded-full border-white/30 bg-black pl-3 text-[15px] font-medium text-white"
+                    style={{
+                      textTransform: 'none',
+                      width: `${enrolleeSelectorWidthCh}ch`,
+                      maxWidth: 'min(80vw, 42ch)',
+                      paddingRight: hasSyncingEnrollees ? '3.2rem' : '2.5rem'
+                    }}
                     aria-label="Assigned enrollees"
                   >
                     {role === 'navigator' ? (
