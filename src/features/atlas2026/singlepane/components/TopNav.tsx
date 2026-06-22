@@ -21,7 +21,6 @@ interface TopNavProps {
 }
 
 const ADD_ENROLLEES_OPTION_VALUE = '__atlas_add_enrollees__'
-const MY_ENROLLEES_OPTION_VALUE = '__atlas_my_enrollees__'
 export default function TopNav({
   role,
   roleConfig,
@@ -43,13 +42,10 @@ export default function TopNav({
     role === 'navigator'
       ? navigatorEnrolleeView === 'add'
         ? ADD_ENROLLEES_OPTION_VALUE
-        : selectedEnrolleeId || MY_ENROLLEES_OPTION_VALUE
+        : selectedEnrolleeId || enrollees[0]?.id || ADD_ENROLLEES_OPTION_VALUE
       : selectedEnrolleeId || ''
   const enrolleeSelectorLabel = React.useMemo(() => {
-    if (role === 'navigator') {
-      if (enrolleeSelectorValue === ADD_ENROLLEES_OPTION_VALUE) return 'add enrollees'
-      if (enrolleeSelectorValue === MY_ENROLLEES_OPTION_VALUE || !enrolleeSelectorValue) return 'my enrollees'
-    }
+    if (role === 'navigator' && enrolleeSelectorValue === ADD_ENROLLEES_OPTION_VALUE) return 'add enrollees'
     const selectedEnrollee = enrollees.find((enrollee) => enrollee.id === enrolleeSelectorValue)
     return selectedEnrollee?.fullName || 'select enrollee'
   }, [enrolleeSelectorValue, enrollees, role])
@@ -116,7 +112,6 @@ export default function TopNav({
                           return
                         }
                         onNavigatorEnrolleeViewChange?.('my')
-                        if (event.target.value === MY_ENROLLEES_OPTION_VALUE) return
                       }
                       onSelectEnrollee(event.target.value)
                     }}
@@ -129,11 +124,6 @@ export default function TopNav({
                     }}
                     aria-label="Assigned enrollees"
                   >
-                    {role === 'navigator' ? (
-                      <option value={MY_ENROLLEES_OPTION_VALUE} className="bg-black text-white">
-                        my enrollees
-                      </option>
-                    ) : null}
                     {role === 'navigator' ? (
                       <option value={ADD_ENROLLEES_OPTION_VALUE} className="bg-black text-white">
                         add enrollees

@@ -1,11 +1,13 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasMetricPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type { AdminPortalPersonRecord } from '@/features/atlas2026/singlepane/types'
+import type { PermissionExceptionRow } from '@/features/atlas2026/admin/components/types'
 
 interface AdminPermissionsSectionProps {
-  permissionExceptionRows: Array<any>
+  permissionExceptionRows: PermissionExceptionRow[]
   totalPermissionExceptionCount: number
-  onClearPersonPermissionExceptions: (person: any) => Promise<void>
+  onClearPersonPermissionExceptions: (person: AdminPortalPersonRecord) => Promise<void>
 }
 
 export default function AdminPermissionsSection({
@@ -67,7 +69,7 @@ export default function AdminPermissionsSection({
                 </AtlasTextButton>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {row.entries.map((entry: any) => (
+                {row.entries.map((entry) => (
                   <span
                     key={entry.id}
                     className="rounded-full border px-2 py-1 text-[11px] leading-none"

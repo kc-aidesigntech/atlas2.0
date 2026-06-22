@@ -1,28 +1,34 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type {
+  AdminDirectorySectionDataProps,
+  FieldComponentType,
+  RecordTableComponentType,
+  StatusPillComponentType
+} from '@/features/atlas2026/admin/components/types'
 
 interface AdminDirectorySectionProps {
-  setPersonDraft: (value: any) => void
-  buildBlankPerson: () => any
-  combinedPeople: Array<any>
-  selectedPersonId: string | null
-  setSelectedPersonId: (value: string | null) => void
-  combinedOrganizations: Array<any>
-  personDraft: any
-  ROLE_OPTIONS: readonly string[]
-  supervisors: Array<any>
-  isCapabilityAllowedForAnyRole: (...args: any[]) => boolean
-  toAtlasRoles: (roles: string[]) => any[]
-  toggleCapabilityOverride: (...args: any[]) => any
-  ADMIN_POLICY_SCREEN_KEYS: readonly string[]
-  ADMIN_POLICY_CARD_KEYS: readonly string[]
-  ADMIN_POLICY_ACTION_KEYS: readonly string[]
-  handleSavePersonDraft: () => Promise<void>
-  handleDeletePerson: (person: any) => Promise<void>
-  RecordTableComponent: React.ComponentType<any>
-  StatusPillComponent: React.ComponentType<any>
-  FieldComponent: React.ComponentType<any>
+  setPersonDraft: AdminDirectorySectionDataProps['setPersonDraft']
+  buildBlankPerson: AdminDirectorySectionDataProps['buildBlankPerson']
+  combinedPeople: AdminDirectorySectionDataProps['combinedPeople']
+  selectedPersonId: AdminDirectorySectionDataProps['selectedPersonId']
+  setSelectedPersonId: AdminDirectorySectionDataProps['setSelectedPersonId']
+  combinedOrganizations: AdminDirectorySectionDataProps['combinedOrganizations']
+  personDraft: AdminDirectorySectionDataProps['personDraft']
+  supervisors: AdminDirectorySectionDataProps['supervisors']
+  isCapabilityAllowedForAnyRole: AdminDirectorySectionDataProps['isCapabilityAllowedForAnyRole']
+  toAtlasRoles: AdminDirectorySectionDataProps['toAtlasRoles']
+  toggleCapabilityOverride: AdminDirectorySectionDataProps['toggleCapabilityOverride']
+  handleSavePersonDraft: AdminDirectorySectionDataProps['handleSavePersonDraft']
+  handleDeletePerson: AdminDirectorySectionDataProps['handleDeletePerson']
+  ROLE_OPTIONS: AdminDirectorySectionDataProps['roleOptions']
+  ADMIN_POLICY_SCREEN_KEYS: AdminDirectorySectionDataProps['adminPolicyScreenKeys']
+  ADMIN_POLICY_CARD_KEYS: AdminDirectorySectionDataProps['adminPolicyCardKeys']
+  ADMIN_POLICY_ACTION_KEYS: AdminDirectorySectionDataProps['adminPolicyActionKeys']
+  RecordTableComponent: RecordTableComponentType
+  StatusPillComponent: StatusPillComponentType
+  FieldComponent: FieldComponentType
 }
 
 export default function AdminDirectorySection({
@@ -157,12 +163,12 @@ export default function AdminDirectorySection({
                     <AtlasTextButton
                       key={role}
                       onClick={() =>
-                        setPersonDraft((current: any) =>
+                        setPersonDraft((current) =>
                           current
                             ? {
                                 ...current,
                                 roles: current.roles.includes(role)
-                                  ? current.roles.filter((value: string) => value !== role)
+                                  ? current.roles.filter((value) => value !== role)
                                   : [...current.roles, role]
                               }
                             : current
@@ -217,7 +223,7 @@ export default function AdminDirectorySection({
               <div className="flex flex-wrap items-center gap-2">
                 <AtlasTextButton
                   onClick={() =>
-                    setPersonDraft((current: any) =>
+                    setPersonDraft((current) =>
                       current
                         ? {
                             ...current,
@@ -267,7 +273,7 @@ export default function AdminDirectorySection({
               <div className="flex flex-wrap items-center gap-2">
                 <AtlasTextButton
                   onClick={() =>
-                    setPersonDraft((current: any) =>
+                    setPersonDraft((current) =>
                       current
                         ? {
                             ...current,
@@ -316,7 +322,7 @@ export default function AdminDirectorySection({
                         <AtlasTextButton
                           key={key}
                           onClick={() =>
-                            setPersonDraft((current: any) =>
+                            setPersonDraft((current) =>
                               current
                                 ? {
                                     ...current,
@@ -367,7 +373,7 @@ export default function AdminDirectorySection({
                         <AtlasTextButton
                           key={key}
                           onClick={() =>
-                            setPersonDraft((current: any) =>
+                            setPersonDraft((current) =>
                               current
                                 ? {
                                     ...current,
@@ -418,7 +424,7 @@ export default function AdminDirectorySection({
                         <AtlasTextButton
                           key={key}
                           onClick={() =>
-                            setPersonDraft((current: any) =>
+                            setPersonDraft((current) =>
                               current
                                 ? {
                                     ...current,

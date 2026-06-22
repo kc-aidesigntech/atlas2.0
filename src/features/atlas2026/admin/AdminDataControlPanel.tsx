@@ -19,6 +19,12 @@ import AdminRelationshipsSection from '@/features/atlas2026/admin/components/Adm
 import AdminAssessmentsSection from '@/features/atlas2026/admin/components/AdminAssessmentsSection'
 import AdminPermissionsSection from '@/features/atlas2026/admin/components/AdminPermissionsSection'
 import type {
+  CombinedEnrolleeRow,
+  NavigatorCoverageOption,
+  PermissionExceptionRow,
+  RegulationReviewRosterRow
+} from '@/features/atlas2026/admin/components/types'
+import type {
   AccessMatrixDataset,
   AdminPortalCustomEnrolleeRecord,
   AdminPortalOrganizationRecord,
@@ -53,9 +59,6 @@ import {
 // Admin control panel composes multiple registry contracts (people, organizations,
 // enrollee drafts, interval rules) into one operator console with explicit save paths.
 type AdminPortalSection = 'overview' | 'enrollees' | 'directory' | 'organizations' | 'relationships' | 'assessments' | 'permissions'
-type CombinedEnrolleeRow =
-  | { kind: 'existing'; id: string; profile: EnrolleeProfile; intake: EnrolleeIntakeRecord }
-  | { kind: 'custom'; id: string; record: AdminPortalCustomEnrolleeRecord }
 
 interface AdminDataControlPanelProps {
   metrics: AdminDataQualityMetric[]
@@ -547,7 +550,7 @@ export default function AdminDataControlPanel({
     () => combinedPeople.filter((person) => person.roles.includes('supervisor') || person.roles.includes('administrator')),
     [combinedPeople]
   )
-  const navigatorCoverageOptions = useMemo(() => {
+  const navigatorCoverageOptions = useMemo<NavigatorCoverageOption[]>(() => {
     const options = (accessMatrixDataset?.people || [])
       .filter((person) => person.roleKeys.includes('navigator'))
       .map((person) => ({
@@ -635,7 +638,7 @@ export default function AdminDataControlPanel({
     () => combinedOrganizations.find((org) => org.id === selectedOrganizationId) || null,
     [combinedOrganizations, selectedOrganizationId]
   )
-  const permissionExceptionRows = useMemo(() => {
+  const permissionExceptionRows = useMemo<PermissionExceptionRow[]>(() => {
     return combinedPeople
       .map((person) => {
         const roles = toAtlasRoles(person.roles)
@@ -1017,7 +1020,7 @@ export default function AdminDataControlPanel({
 
   // Admin roster for per-enrollee review toggles: every visible enrollee plus any persisted
   // entry whose enrollee is no longer visible (archived/renamed) so it stays manageable.
-  const regulationReviewRoster = useMemo(() => {
+  const regulationReviewRoster = useMemo<RegulationReviewRosterRow[]>(() => {
     const rows = visibleEnrollees.map((row) => ({
       enrolleeId: row.kind === 'existing' ? row.profile.id : row.record.enrolleeId,
       enrolleeName: row.kind === 'existing' ? row.profile.fullName : row.record.fullName

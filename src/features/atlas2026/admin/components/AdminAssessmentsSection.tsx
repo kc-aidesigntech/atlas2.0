@@ -1,27 +1,15 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasMetricPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type {
+  AdminAssessmentsSectionDataProps,
+  FieldComponentType,
+  StatusPillComponentType
+} from '@/features/atlas2026/admin/components/types'
 
-interface AdminAssessmentsSectionProps {
-  setIntervalRuleDraft: (value: any) => void
-  buildBlankIntervalAssessmentRule: () => any
-  navigatorProgramState: any
-  intervalRuleDraft: any
-  handleSaveIntervalRule: () => Promise<void>
-  handleSaveRegulationReviewSettings: () => Promise<void>
-  regulationReviewDraft: any
-  isSavingRegulationReview: boolean
-  regulationReviewError: string | null
-  effectiveRegulationReview: any
-  setRegulationReviewDraft: (value: any) => void
-  regulationReviewDueItems: Array<any>
-  regulationReviewRoster: Array<any>
-  updateRegulationReviewEnrolleeSetting: (enrolleeId: string, enrolleeName: string, updates: any) => void
-  navigatorIntervalDueItems: Array<any>
-  supervisorNavigatorCompetency: Array<any>
-  formatDateLabel: (value?: string | null) => string
-  StatusPillComponent: React.ComponentType<any>
-  FieldComponent: React.ComponentType<any>
+interface AdminAssessmentsSectionProps extends AdminAssessmentsSectionDataProps {
+  StatusPillComponent: StatusPillComponentType
+  FieldComponent: FieldComponentType
 }
 
 export default function AdminAssessmentsSection({
@@ -64,7 +52,7 @@ export default function AdminAssessmentsSection({
           </AtlasTextButton>
         </div>
         <div className="space-y-3">
-          {navigatorProgramState.intervalAssessmentRules.map((rule: any) => (
+          {navigatorProgramState.intervalAssessmentRules.map((rule) => (
             <button
               key={rule.id}
               type="button"
@@ -371,7 +359,7 @@ export default function AdminAssessmentsSection({
               <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">pickup queue watch</small>
               <div className="mt-1 text-[22px] font-medium text-white">Unassigned intake pool</div>
               <div className="mt-3 space-y-2">
-                {navigatorProgramState.pickupQueue.slice(0, 5).map((item: any) => (
+                {navigatorProgramState.pickupQueue.slice(0, 5).map((item) => (
                   <div key={item.id} className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-2">
                     <div className="text-[14px] font-medium text-white">{item.fullName}</div>
                     <small className="block text-[12px] text-[var(--foreground-secondary)]">

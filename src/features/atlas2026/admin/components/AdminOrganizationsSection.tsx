@@ -1,21 +1,27 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type {
+  AdminOrganizationsSectionDataProps,
+  FieldComponentType,
+  RecordTableComponentType,
+  StatusPillComponentType
+} from '@/features/atlas2026/admin/components/types'
 
 interface AdminOrganizationsSectionProps {
-  setOrganizationDraft: (value: any) => void
-  buildBlankOrganization: () => any
-  combinedOrganizations: Array<any>
-  selectedOrganizationId: string | null
-  setSelectedOrganizationId: (value: string | null) => void
-  combinedPeople: Array<any>
-  organizationDraft: any
-  ORG_TYPE_OPTIONS: string[]
-  handleSaveOrganizationDraft: () => Promise<void>
-  handleDeleteOrganization: (organization: any) => Promise<void>
-  RecordTableComponent: React.ComponentType<any>
-  StatusPillComponent: React.ComponentType<any>
-  FieldComponent: React.ComponentType<any>
+  setOrganizationDraft: AdminOrganizationsSectionDataProps['setOrganizationDraft']
+  buildBlankOrganization: AdminOrganizationsSectionDataProps['buildBlankOrganization']
+  combinedOrganizations: AdminOrganizationsSectionDataProps['combinedOrganizations']
+  selectedOrganizationId: AdminOrganizationsSectionDataProps['selectedOrganizationId']
+  setSelectedOrganizationId: AdminOrganizationsSectionDataProps['setSelectedOrganizationId']
+  combinedPeople: AdminOrganizationsSectionDataProps['combinedPeople']
+  organizationDraft: AdminOrganizationsSectionDataProps['organizationDraft']
+  handleSaveOrganizationDraft: AdminOrganizationsSectionDataProps['handleSaveOrganizationDraft']
+  handleDeleteOrganization: AdminOrganizationsSectionDataProps['handleDeleteOrganization']
+  ORG_TYPE_OPTIONS: AdminOrganizationsSectionDataProps['organizationTypeOptions']
+  RecordTableComponent: RecordTableComponentType
+  StatusPillComponent: StatusPillComponentType
+  FieldComponent: FieldComponentType
 }
 
 export default function AdminOrganizationsSection({

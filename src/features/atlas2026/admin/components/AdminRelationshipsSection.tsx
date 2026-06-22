@@ -1,19 +1,8 @@
 import React from 'react'
 import { AtlasInsetCard } from '@/features/atlas2026/components/AtlasPrimitives'
+import type { AdminRelationshipsSectionDataProps } from '@/features/atlas2026/admin/components/types'
 
-interface AdminRelationshipsSectionProps {
-  navigators: Array<any>
-  supervisors: Array<any>
-  handlePersonSupervisorAssignment: (navigatorId: string, supervisorId: string | null) => Promise<void>
-  visibleEnrollees: Array<any>
-  accessMatrixDataset: any
-  navigatorCoverageOptions: Array<any>
-  handleNavigatorCoverageSelection: (row: any, navigatorIds: string[]) => Promise<void>
-  handleNavigatorAssignment: (row: any, navigatorLabel: string) => Promise<void>
-  combinedPeople: Array<any>
-  combinedOrganizations: Array<any>
-  handlePersonOrganizationAssignment: (personId: string, organizationId: string | null) => Promise<void>
-}
+interface AdminRelationshipsSectionProps extends AdminRelationshipsSectionDataProps {}
 
 export default function AdminRelationshipsSection({
   navigators,
@@ -66,9 +55,7 @@ export default function AdminRelationshipsSection({
             const label = row.kind === 'existing' ? row.intake.fullName || row.profile.fullName : row.record.fullName || row.record.caseId || 'untitled enrollee'
             const assignment =
               row.kind === 'existing' && row.profile.enrollmentId
-                ? accessMatrixDataset?.enrollmentAssignments.find(
-                    (entry: any) => entry.enrollmentId === row.profile.enrollmentId
-                  ) || null
+                ? accessMatrixDataset?.enrollmentAssignments.find((entry) => entry.enrollmentId === row.profile.enrollmentId) || null
                 : null
             const selectedNavigatorIds = assignment?.navigatorPersonIds || []
             return (
