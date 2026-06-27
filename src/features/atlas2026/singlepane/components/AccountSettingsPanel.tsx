@@ -18,6 +18,7 @@ export interface AccountSecurityPanelProps {
 interface AccountSettingsPanelProps {
   isOpen: boolean
   role: AtlasRole
+  canSwitchActiveExperience: boolean
   settings: AccountSettings
   onClose: () => void
   onRoleChange: (role: AtlasRole) => void
@@ -62,6 +63,7 @@ function arePartnerGrantEqual(left: PartnerTroubleshootingGrant | null, right: P
 export default function AccountSettingsPanel({
   isOpen,
   role,
+  canSwitchActiveExperience,
   settings,
   onClose,
   onRoleChange,
@@ -165,7 +167,11 @@ export default function AccountSettingsPanel({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           <CollapsibleAccountSection
             title="active experience"
-            description="Switch the live shell instantly to preview each role experience while keeping saved role assignments below."
+            description={
+              canSwitchActiveExperience
+                ? 'Switch the live shell instantly to preview each role experience while keeping saved role assignments below.'
+                : 'Active experience is read-only for your account permissions. Administrators can assume other views for troubleshooting.'
+            }
             isExpanded={expandedSections.activeExperience}
             onToggle={() => toggleSection('activeExperience')}
           >
@@ -174,7 +180,8 @@ export default function AccountSettingsPanel({
               <select
                 value={role}
                 onChange={(event) => onRoleChange(event.target.value as AtlasRole)}
-                className="atlas-select mt-2 bg-black text-[16px] text-white"
+                disabled={!canSwitchActiveExperience}
+                className="atlas-select mt-2 bg-black text-[16px] text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
@@ -183,6 +190,11 @@ export default function AccountSettingsPanel({
                 ))}
               </select>
             </label>
+            {!canSwitchActiveExperience ? (
+              <small className="atlas-caption mt-2 block text-[#bcbcbc]">
+                This view is locked to your current permission level.
+              </small>
+            ) : null}
           </CollapsibleAccountSection>
 
           <CollapsibleAccountSection

@@ -1,14 +1,39 @@
 import React from 'react'
 import { Check } from 'lucide-react'
-import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import type {
+  EnrolleeActiveZCode,
   EnrolleeProfile,
   EnrolleeZCodeResolutionInput,
-  RouteCandidateRecord
+  RouteCandidateRecord,
+  ZCodeConfidenceLevel,
+  ZCodeReviewStatus
 } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { toSupabaseErrorMessage } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { getZCodeParentColor } from '@atlas/shared'
+
+// Readiness criteria selectors rendered per Z-code: the code review tri-state
+// drives the existing resolved semantics ('resolved' <=> isResolved), and the
+// confidence level is an independent quality signal.
+const CODE_REVIEW_OPTIONS: Array<{ value: ZCodeReviewStatus; label: string }> = [
+  { value: 'not_resolved', label: 'not resolved' },
+  { value: 'partially_resolved', label: 'partially resolved' },
+  { value: 'resolved', label: 'resolved' }
+]
+
+const CONFIDENCE_OPTIONS: Array<{ value: ZCodeConfidenceLevel; label: string }> = [
+  { value: 'low', label: 'low' },
+  { value: 'medium', label: 'medium' },
+  { value: 'high', label: 'high' }
+]
+
+// Rows persisted before the readiness-criteria columns fall back to the
+// legacy boolean so the selectors always render a coherent selection.
+function getCodeReviewStatus(detail: EnrolleeActiveZCode): ZCodeReviewStatus {
+  return detail.codeReviewStatus ?? (detail.isResolved ? 'resolved' : 'not_resolved')
+}
 
 interface ResolvedZCodesOverlayProps {
   isOpen: boolean
@@ -83,31 +108,61 @@ export default function ResolvedZCodesOverlay({
 
   if (!isOpen || !enrollee) return null
 
-  async function handleToggle(enrolleeZCodeId: string, isResolved: boolean) {
+  /**
+   * Persists the readiness criteria for one Z-code. Both selectors funnel
+   * through here so every save carries the full (status, confidence) pair:
+   * the resolution Remote Procedure Call (RPC) overwrites both columns, so
+   * omitting the untouched one would silently clear it.
+   */
+  async function handleCriteriaSave(
+    detail: EnrolleeActiveZCode,
+    nextStatus: ZCodeReviewStatus,
+    nextConfidence: ZCodeConfidenceLevel | null
+  ) {
+    const isResolved = nextStatus === 'resolved'
+    const wasResolved = detail.isResolved
     // Manual resolutions require attribution context to keep downstream audit/history screens actionable.
-    if (isResolved && !isRouteBoardLaunch && !selectedPartnerId && !trimmedNote) {
+    // Already-resolved rows keep their stored attribution when only confidence changes.
+    if (isResolved && !wasResolved && !isRouteBoardLaunch && !selectedPartnerId && !trimmedNote) {
       setValidationMessage('Select a partner station or add a note before marking a Z-code resolved.')
       return
     }
     setValidationMessage(null)
     const input: EnrolleeZCodeResolutionInput = isResolved
       ? {
-          partnerId: isRouteBoardLaunch ? candidate?.partnerId || null : selectedPartnerId || null,
-          partnerName: isRouteBoardLaunch ? candidate?.stationName || null : selectedPartnerLabel || null,
-          resolutionNote: trimmedNote || null
+          // Re-saving an already-resolved code (e.g. a confidence tweak) must
+          // not wipe its stored partner attribution, so reuse the detail's
+          // persisted values before falling back to the form selections.
+          partnerId: wasResolved
+            ? detail.resolutionPartnerId ?? (isRouteBoardLaunch ? candidate?.partnerId || null : selectedPartnerId || null)
+            : isRouteBoardLaunch
+              ? candidate?.partnerId || null
+              : selectedPartnerId || null,
+          partnerName: wasResolved
+            ? detail.resolutionPartnerName ?? (isRouteBoardLaunch ? candidate?.stationName || null : selectedPartnerLabel || null)
+            : isRouteBoardLaunch
+              ? candidate?.stationName || null
+              : selectedPartnerLabel || null,
+          resolutionNote: (wasResolved ? detail.resolutionNote || trimmedNote : trimmedNote) || null,
+          codeReviewStatus: nextStatus,
+          confidenceLevel: nextConfidence
         }
       : {
           partnerId: null,
           partnerName: null,
-          resolutionNote: null
+          resolutionNote: null,
+          codeReviewStatus: nextStatus,
+          confidenceLevel: nextConfidence
         }
-    setSavingIds((current) => [...current, enrolleeZCodeId])
+    setSavingIds((current) => [...current, detail.enrolleeZCodeId])
     try {
-      await onToggleResolution(enrolleeZCodeId, isResolved, input)
+      await onToggleResolution(detail.enrolleeZCodeId, isResolved, input)
     } catch (error) {
-      setValidationMessage(error instanceof Error ? error.message : 'Unable to save this Z-code resolution right now.')
+      // Supabase/PostgREST rejections are plain objects, not Error instances;
+      // surface their real message instead of a generic fallback.
+      setValidationMessage(toSupabaseErrorMessage(error, 'Unable to save this Z-code resolution right now.'))
     } finally {
-      setSavingIds((current) => current.filter((id) => id !== enrolleeZCodeId))
+      setSavingIds((current) => current.filter((id) => id !== detail.enrolleeZCodeId))
     }
   }
 
@@ -184,16 +239,16 @@ export default function ResolvedZCodesOverlay({
             detailsToRender.map((detail) => {
               const parentFill = getZCodeParentColor(detail.parentCode) || SP_COLORS.yellow
               const isSaving = savingIds.includes(detail.enrolleeZCodeId)
+              const reviewStatus = getCodeReviewStatus(detail)
+              const confidenceLevel = detail.confidenceLevel ?? null
               return (
-                <button
+                <div
                   key={detail.enrolleeZCodeId}
-                  type="button"
-                  onClick={() => handleToggle(detail.enrolleeZCodeId, !detail.isResolved)}
-                  disabled={isSaving}
-                  className="flex w-full items-start gap-3 rounded-[20px] border px-3 py-3 text-left transition-[border-color,box-shadow,opacity] duration-150 hover:border-white/50 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15)] disabled:opacity-60"
+                  className="flex w-full items-start gap-3 rounded-[20px] border px-3 py-3 text-left transition-[border-color,box-shadow,opacity] duration-150"
                   style={{
                     borderColor: detail.isResolved ? `${SP_COLORS.deepGreen}88` : '#ffffff22',
-                    backgroundColor: detail.isResolved ? 'rgba(111,207,151,0.08)' : 'var(--surface-panel-raised)'
+                    backgroundColor: detail.isResolved ? 'rgba(111,207,151,0.08)' : 'var(--surface-panel-raised)',
+                    opacity: isSaving ? 0.6 : 1
                   }}
                 >
                   <ZCodeBadge value={detail.zCode} fill={parentFill} size="resolved" stripLeadingZ />
@@ -213,18 +268,71 @@ export default function ResolvedZCodesOverlay({
                         {detail.resolutionNote ? ` | note: ${detail.resolutionNote}` : ''}
                       </small>
                     ) : null}
+                    {/* Readiness criteria: code review drives resolved semantics; confidence is independent. */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <small className="atlas-overline w-[112px] shrink-0" style={{ color: '#9ea8b4' }}>
+                        code review
+                      </small>
+                      {CODE_REVIEW_OPTIONS.map((option) => {
+                        const isSelected = reviewStatus === option.value
+                        const accent = option.value === 'resolved' ? SP_COLORS.deepGreen : option.value === 'partially_resolved' ? SP_COLORS.yellow : '#ffffff'
+                        return (
+                          <AtlasTextButton
+                            key={option.value}
+                            disabled={isSaving}
+                            onClick={() => void handleCriteriaSave(detail, option.value, confidenceLevel)}
+                            className="px-[10px] py-[4px] text-[12px] md:text-[13px]"
+                            style={{
+                              ['--button-border-color' as const]: isSelected ? accent : '#ffffff22',
+                              backgroundColor: 'var(--surface-button-strong)',
+                              color: SP_COLORS.white,
+                              boxShadow: isSelected ? `0 0 0 1px ${accent}66` : 'none'
+                            } as React.CSSProperties}
+                          >
+                            {option.label}
+                          </AtlasTextButton>
+                        )
+                      })}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <small className="atlas-overline w-[112px] shrink-0" style={{ color: '#9ea8b4' }}>
+                        confidence in status
+                      </small>
+                      {CONFIDENCE_OPTIONS.map((option) => {
+                        const isSelected = confidenceLevel === option.value
+                        return (
+                          <AtlasTextButton
+                            key={option.value}
+                            disabled={isSaving}
+                            onClick={() => void handleCriteriaSave(detail, reviewStatus, isSelected ? null : option.value)}
+                            className="px-[10px] py-[4px] text-[12px] md:text-[13px]"
+                            style={{
+                              ['--button-border-color' as const]: isSelected ? SP_COLORS.white : '#ffffff22',
+                              backgroundColor: 'var(--surface-button-strong)',
+                              color: SP_COLORS.white,
+                              boxShadow: isSelected ? '0 0 0 1px #ffffff66' : 'none'
+                            } as React.CSSProperties}
+                          >
+                            {option.label}
+                          </AtlasTextButton>
+                        )
+                      })}
+                    </div>
                   </div>
-                  <span
-                    aria-hidden="true"
-                    className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border"
+                  <button
+                    type="button"
+                    onClick={() => void handleCriteriaSave(detail, detail.isResolved ? 'not_resolved' : 'resolved', confidenceLevel)}
+                    disabled={isSaving}
+                    aria-label={detail.isResolved ? `mark ${detail.zCode} unresolved` : `mark ${detail.zCode} resolved`}
+                    className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border transition-[border-color,box-shadow] duration-150 hover:border-white/60 disabled:opacity-60"
                     style={{
                       borderColor: detail.isResolved ? SP_COLORS.deepGreen : '#ffffff35',
                       color: detail.isResolved ? SP_COLORS.deepGreen : SP_COLORS.white
                     } as React.CSSProperties}
                   >
                     <Check size={17} strokeWidth={2.1} />
-                  </span>
-                </button>
+                  </button>
+                </div>
               )
             })
           ) : (

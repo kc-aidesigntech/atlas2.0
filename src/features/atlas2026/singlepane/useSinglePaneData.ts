@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AccessMatrixDataset,
   AdminPortalPersonRecord,
@@ -16,12 +16,14 @@ import type {
   EnrolleeIntakeRecord,
   EnrollmentRequestRecord,
   EnrolleeProfile,
+  EnrolleeZCodeOverrideInput,
   EnrolleeZCodeResolutionInput,
   IntervalAssessmentDueItem,
   IntervalAssessmentRule,
   JourneyStationMarker,
   NavigatorProgramState,
   NavigatorEnrollmentAssignmentRecord,
+  NavigatorLoadContributor,
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary,
   PartnerTroubleshootingGrant,
@@ -35,6 +37,8 @@ import type {
   NavigatorCompetencyAssessmentRecord,
   SupervisorNavigatorCompetencySummary,
   RoleMenuConfig,
+  RegulationReviewDueItem,
+  RegulationReviewSettings,
   RegulationTestSubmissionInput,
   RegulationTestSubmissionRecord,
   RegulationTestStripMarker,
@@ -70,6 +74,8 @@ import {
   loadZCodeDomainSurveyHistorySummary,
   searchPartnerIdentifierRecordMatches,
   ensurePartnerIdentifierRecordForSurvey,
+  invalidateJourneyStationMarkersCache,
+  invalidateRouteCandidatesCache,
   setZCodeDomainSurveyAnswerNullified,
   uploadEnrolleeProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
@@ -81,6 +87,7 @@ import {
   saveEnrolleeBurdenSurvey as persistEnrolleeBurdenSurvey,
   saveNavigatorProgramState as persistNavigatorProgramState,
   savePartnerTroubleshootingGrant as persistPartnerTroubleshootingGrant,
+  overrideEnrolleeZCodes as persistEnrolleeZCodeOverride,
   setEnrolleeZCodeResolution as persistEnrolleeZCodeResolution,
   savePartnerServiceCapacitySurvey as persistPartnerServiceCapacitySurvey,
   saveNavigatorCompetencyAssessment as persistNavigatorCompetencyAssessment,
@@ -94,6 +101,7 @@ import {
   upsertEnrollmentInferredZCodes,
   loadAccessMatrixDataset
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
+import { toSupabaseErrorMessage } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/useJourneyStationMarkers'
 import { usePartnerServiceCapacityHistory } from '@/features/atlas2026/singlepane/hooks/usePartnerServiceCapacityHistory'
 import { useRouteCandidates } from '@/features/atlas2026/singlepane/hooks/useRouteCandidates'
@@ -121,11 +129,22 @@ import {
 } from '@/features/atlas2026/singlepane/useSinglePaneDataTransforms'
 import {
   deleteRegulationTestDraft,
+  loadLatestCompletedRegulationReviewTimes,
   loadRegulationTestHistory,
   saveRegulationTestSubmission
 } from '@/features/atlas2026/singlepane/data-access/regulationTestsRepository'
+import {
+  getDefaultRegulationReviewSettings,
+  loadRegulationReviewSettings,
+  saveRegulationReviewSettings as persistRegulationReviewSettings
+} from '@/features/atlas2026/singlepane/data-access/localStateRepository'
+import { isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
-import { loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
+import {
+  enqueuePublicReferralQueueRecord,
+  loadPublicReferralQueueRecords,
+  setPublicReferralQueueRecordStatus
+} from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { inferZCodesForReferral } from '@/services/atlas2026/demoInferenceService'
 
@@ -634,6 +653,49 @@ function buildIntervalDueItems(
     })
 }
 
+const REGULATION_REVIEW_DAY_IN_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Forced regulation review due computation.
+ *
+ * One item per owned enrollee whose review is active. "Due now" means there is no
+ * completed regulation-stage test submission inside the current cadence window; a
+ * completed submission satisfies the cycle until the window elapses again.
+ */
+function buildRegulationReviewDueItems(
+  settings: RegulationReviewSettings,
+  ownedEnrollees: EnrolleeProfile[],
+  latestCompletedByEnrolleeId: Record<string, string>
+): RegulationReviewDueItem[] {
+  const nowMs = Date.now()
+  return ownedEnrollees
+    .map((enrollee) => {
+      const override = settings.enrolleeSettings[enrollee.id] || null
+      // Default-active contract: enrollees without an explicit per-enrollee entry inherit
+      // the admin default so newly added enrollees are enforced without extra setup.
+      const isActive = override ? override.isActive : settings.isActiveForNewEnrollees
+      if (!isActive) return null
+      const cadence = override?.cadence || settings.defaultCadence
+      const windowMs = cadenceDays(cadence) * REGULATION_REVIEW_DAY_IN_MS
+      const lastCompletedAtIso = latestCompletedByEnrolleeId[enrollee.id] || null
+      const lastCompletedMs = lastCompletedAtIso ? new Date(lastCompletedAtIso).getTime() : null
+      const isSatisfied = lastCompletedMs !== null && nowMs - lastCompletedMs < windowMs
+      return {
+        id: `regulation-review-${enrollee.id}`,
+        enrolleeId: enrollee.id,
+        enrolleeName: enrollee.fullName,
+        navigatorName: enrollee.assignedNavigator || null,
+        cadence,
+        // Never-reviewed enrollees are due immediately; otherwise the next cycle boundary.
+        dueAtIso:
+          lastCompletedMs !== null ? new Date(lastCompletedMs + windowMs).toISOString() : new Date(nowMs).toISOString(),
+        lastCompletedAtIso,
+        status: isSatisfied ? 'completed' : 'open'
+      } satisfies RegulationReviewDueItem
+    })
+    .filter((item): item is RegulationReviewDueItem => Boolean(item))
+}
+
 function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
   if (!loads.length) return null
   const totals = loads.reduce(
@@ -651,6 +713,24 @@ function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
     work: totals.work / loads.length,
     socialNetworks: totals.socialNetworks / loads.length
   }
+}
+
+function deriveNavigatorLoadContributors(enrollees: EnrolleeProfile[], loads: DomainLoad[]): NavigatorLoadContributor[] {
+  if (!enrollees.length || !loads.length) return []
+  const loadsByEnrolleeId = new Map(loads.map((load) => [load.enrolleeId, load]))
+  return enrollees
+    .map((enrollee) => {
+      const load = loadsByEnrolleeId.get(enrollee.id)
+      if (!load) return null
+      return {
+        enrolleeId: enrollee.id,
+        enrolleeName: enrollee.fullName,
+        habitat: load.habitat,
+        work: load.work,
+        socialNetworks: load.socialNetworks
+      } satisfies NavigatorLoadContributor
+    })
+    .filter((item): item is NavigatorLoadContributor => Boolean(item))
 }
 
 function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadBreakdown>, navigatorName: string): DomainLoadBreakdown | null {
@@ -787,7 +867,8 @@ interface SupervisorNavigatorDirectoryEntry {
 }
 
 export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
-  const [role, setRole] = useState<AtlasRole>(() => readSessionRole(initialRole))
+  const [role, setRoleState] = useState<AtlasRole>(() => readSessionRole(initialRole))
+  const adminDefaultAppliedForEmailRef = useRef<string | null>(null)
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string>(() => readSessionStorageValue(SESSION_SELECTED_ENROLLEE_KEY) || '')
   const [activeMenu, setActiveMenu] = useState<string>(() => readSessionStorageValue(SESSION_ACTIVE_MENU_KEY) || '')
   const [adminPortalRegistry, setAdminPortalRegistry] = useState<AdminPortalRegistry | null>(null)
@@ -809,10 +890,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   >({})
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
+  // Forced regulation review: admin cadence policy (null until the config document loads)
+  // plus the latest completed regulation-stage submission time per enrollee.
+  const [regulationReviewSettings, setRegulationReviewSettings] = useState<RegulationReviewSettings | null>(null)
+  const [regulationReviewError, setRegulationReviewError] = useState<string | null>(null)
+  const [latestRegulationReviewCompletionByEnrolleeId, setLatestRegulationReviewCompletionByEnrolleeId] = useState<
+    Record<string, string>
+  >({})
   const [isUploadingAccountProfileImage, setIsUploadingAccountProfileImage] = useState(false)
   const [accountProfileImageUploadError, setAccountProfileImageUploadError] = useState<string | null>(null)
   const [sessionEmail, setSessionEmail] = useState('')
   const [authoritativeAccountRoles, setAuthoritativeAccountRoles] = useState<AtlasRole[]>([])
+  const canSwitchActiveExperience = useMemo(
+    () => authoritativeAccountRoles.includes('administrator') || role === 'administrator',
+    [authoritativeAccountRoles, role]
+  )
   const [regulationTestHistory, setRegulationTestHistory] = useState<RegulationTestSubmissionRecord[]>([])
   const [isSavingRegulationTest, setIsSavingRegulationTest] = useState(false)
   const [regulationTestError, setRegulationTestError] = useState<string | null>(null)
@@ -926,6 +1018,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   )
   const viewerCanUseAssignmentActions = useMemo(
     () => isViewerPolicyAllowed('actionToggles', 'assignmentBoard.assignSelf'),
+    [isViewerPolicyAllowed]
+  )
+  const viewerCanAddAssignmentBoardReferral = useMemo(
+    () => isViewerPolicyAllowed('actionToggles', 'assignmentBoard.addReferral'),
     [isViewerPolicyAllowed]
   )
   const viewerCanAccessAdminRegistryCards = useMemo(
@@ -1362,6 +1458,51 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       ),
     [currentNavigatorName, navigatorCompetencyAssessments, navigatorIntervalRules, navigatorSelfAssessments, navigatorSupervisionSessions]
   )
+  // Forced regulation review wiring. Fall back to the weekly-active defaults until the
+  // persisted config document loads so due items never silently disappear at startup.
+  const effectiveRegulationReviewSettings = useMemo(
+    () => regulationReviewSettings ?? getDefaultRegulationReviewSettings(),
+    [regulationReviewSettings]
+  )
+  // Stable string key prevents the completion-times fetch from re-running on every render
+  // even though scopedEnrollees is recomputed as a new array reference.
+  const regulationReviewEnrolleeIdsKey = useMemo(
+    () =>
+      scopedEnrollees
+        .map((enrollee) => enrollee.id)
+        .sort()
+        .join('|'),
+    [scopedEnrollees]
+  )
+  useEffect(() => {
+    let isMounted = true
+    const enrolleeIds = regulationReviewEnrolleeIdsKey ? regulationReviewEnrolleeIdsKey.split('|') : []
+    if (!enrolleeIds.length) {
+      setLatestRegulationReviewCompletionByEnrolleeId({})
+      return
+    }
+    loadLatestCompletedRegulationReviewTimes(enrolleeIds)
+      .then((times) => {
+        if (!isMounted) return
+        setLatestRegulationReviewCompletionByEnrolleeId(times)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setRegulationReviewError(toSupabaseErrorMessage(error, 'Unable to load regulation review completion history.'))
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [regulationReviewEnrolleeIdsKey])
+  const regulationReviewDueItems = useMemo(
+    () =>
+      buildRegulationReviewDueItems(
+        effectiveRegulationReviewSettings,
+        scopedEnrollees,
+        latestRegulationReviewCompletionByEnrolleeId
+      ),
+    [effectiveRegulationReviewSettings, latestRegulationReviewCompletionByEnrolleeId, scopedEnrollees]
+  )
   const navigatorAssignedCompetencySummary = useMemo(
     () =>
       supervisorNavigatorCompetency.find((summary) => summary.navigatorName === currentNavigatorName) ||
@@ -1370,6 +1511,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [currentNavigatorName, supervisorNavigatorCompetency]
   )
   const navigatorAggregateLoad = useMemo(() => deriveNavigatorLoad(scopedLoads), [scopedLoads])
+  const navigatorLoadContributors = useMemo(
+    () => deriveNavigatorLoadContributors(scopedEnrollees, scopedLoads),
+    [scopedEnrollees, scopedLoads]
+  )
   const navigatorAggregateLoadBreakdown = useMemo(
     () => deriveNavigatorLoadBreakdown(scopedLoadBreakdownsByEnrolleeId, currentNavigatorName),
     [currentNavigatorName, scopedLoadBreakdownsByEnrolleeId]
@@ -1501,9 +1646,23 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setRemoteSession(null)
     }
     if (!authoritativeAccountRoles.includes(role)) {
-      setRole(authoritativeAccountRoles[0])
+      setRoleState(authoritativeAccountRoles[0])
     }
   }, [authoritativeAccountRoles, remoteSession, role])
+
+  useEffect(() => {
+    const normalizedEmail = sessionEmail.trim().toLowerCase()
+    if (!normalizedEmail) return
+    if (!authoritativeAccountRoles.includes('administrator')) {
+      // Reset the one-shot bootstrap marker when switching away from an admin account.
+      adminDefaultAppliedForEmailRef.current = null
+      return
+    }
+    if (adminDefaultAppliedForEmailRef.current === normalizedEmail) return
+    adminDefaultAppliedForEmailRef.current = normalizedEmail
+    // Admin sessions should always boot into administrator view by default.
+    setRoleState('administrator')
+  }, [authoritativeAccountRoles, sessionEmail])
 
   useEffect(() => {
     let isMounted = true
@@ -1533,6 +1692,25 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       .catch((error) => {
         if (!isMounted) return
         setNavigatorProgramError(error instanceof Error ? error.message : 'Unable to load navigator program state.')
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    // Load the forced regulation review policy once at startup; it persists in the same
+    // app_config_documents store as the navigator program state above.
+    let isMounted = true
+    loadRegulationReviewSettings()
+      .then((settings) => {
+        if (!isMounted) return
+        setRegulationReviewSettings(settings)
+        setRegulationReviewError(null)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setRegulationReviewError(toSupabaseErrorMessage(error, 'Unable to load regulation review settings.'))
       })
     return () => {
       isMounted = false
@@ -1679,7 +1857,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       }
     }))
     if (!derivedRoles.includes(role)) {
-      setRole(derivedRoles[0] || 'navigator')
+      setRoleState(derivedRoles[0] || 'navigator')
     }
   }, [accountSettings.enabledRoles, remoteSession, role, setBootstrapState, viewerPerson])
 
@@ -1840,6 +2018,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function appendRouteLog(label: string) {
+    ensureWriteAllowed('routeLogs.write', 'append route logs')
     if (!selectedEnrollee || !label.trim()) return
     const last = selectedLogs[selectedLogs.length - 1]
     const newPhase = nextPhase(last?.phase)
@@ -1857,7 +2036,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         milestoneType: 'intervention',
         domainsRelieved: domains
       }
-      appendRouteLogRecord(updatedLogs, next).then((finalLogs) => setLogs(finalLogs))
+      appendRouteLogRecord(updatedLogs, next)
+        .then((finalLogs) => setLogs(finalLogs))
+        .catch((error) => {
+          setNavigatorProgramError(
+            toSupabaseErrorMessage(error, 'Unable to append route log. The write did not persist to the canonical store.')
+          )
+        })
       return
     }
     const next: RouteLogEvent = {
@@ -1870,10 +2055,17 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       milestoneType: 'intervention',
       domainsRelieved: domains
     }
-    appendRouteLogRecord(logs, next).then((finalLogs) => setLogs(finalLogs))
+    appendRouteLogRecord(logs, next)
+      .then((finalLogs) => setLogs(finalLogs))
+      .catch((error) => {
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to append route log. The write did not persist to the canonical store.')
+        )
+      })
   }
 
   function updateRouteLogTimelinePosition(logId: string, timelinePositionRatio: number | null) {
+    ensureWriteAllowed('routeLogs.write', 'update route log timeline positions')
     setLogs((current) => {
       const nextLogs = current.map((log) =>
         log.id === logId
@@ -1886,12 +2078,17 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
             }
           : log
       )
-      persistRouteLogs(nextLogs).catch((error) => console.warn('Failed to persist route log timeline position.', error))
+      persistRouteLogs(nextLogs).catch((error) => {
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to persist route-log timeline position to the canonical store.')
+        )
+      })
       return nextLogs
     })
   }
 
   function updateRouteLogDate(logId: string, nextTimestampIso: string) {
+    ensureWriteAllowed('routeLogs.write', 'update route log dates')
     setLogs((current) => {
       const nextLogs = current.map((log) =>
         log.id === logId
@@ -1902,17 +2099,24 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
             }
           : log
       )
-      persistRouteLogs(nextLogs)
-        .catch((error) => console.warn('Failed to persist route log date override.', error))
+      persistRouteLogs(nextLogs).catch((error) => {
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to persist route-log date updates to the canonical store.')
+        )
+      })
       return nextLogs
     })
   }
 
   function deleteRouteLog(logId: string) {
+    ensureWriteAllowed('routeLogs.write', 'delete route logs')
     setLogs((current) => {
       const nextLogs = current.filter((log) => log.id !== logId)
-      persistRouteLogs(nextLogs)
-        .catch((error) => console.warn('Failed to persist route log deletion.', error))
+      persistRouteLogs(nextLogs).catch((error) => {
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to persist route-log deletion to the canonical store.')
+        )
+      })
       return nextLogs
     })
   }
@@ -1931,6 +2135,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function updateTimelineConfig(nextConfig: TimelineConfig) {
+    ensureWriteAllowed('timeline.write', 'update timeline configuration')
     if (!selectedEnrollee) return
     const normalizedTimelineConfig = normalizeTimelineConfig(nextConfig)
     setBootstrapState((current) => ({
@@ -1953,9 +2158,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         enrollmentId: selectedEnrollee.enrollmentId
       },
       normalizedTimelineConfig
-    ).catch((error) =>
-      console.warn('Failed to persist enrollee timeline config.', error)
-    )
+    ).catch((error) => {
+      setNavigatorProgramError(
+        toSupabaseErrorMessage(error, 'Unable to persist timeline configuration to the canonical store.')
+      )
+    })
   }
 
   async function saveAccountSettings(nextSettings: AccountSettings) {
@@ -1981,7 +2188,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         partnerStationProfile: stationProfile
       }))
       if (!saved.enabledRoles.includes(role)) {
-        setRole(saved.enabledRoles[0] || 'navigator')
+        setRoleState(saved.enabledRoles[0] || 'navigator')
       }
     } catch (error) {
       console.warn('Failed to save account settings.', error)
@@ -2047,7 +2254,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function replaceSelectedEnrolleeProfileImage(file: File) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('intake.write', 'replace enrollee profile images')
     if (!selectedEnrollee) {
       throw new Error('Select an enrollee profile before uploading an image.')
     }
@@ -2089,8 +2296,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('intake.write', 'save enrollee intake')
     persistEnrolleeIntake(nextIntake).then((saved) => {
+      // Forced regulation review: intake-added enrollees get the review enabled by default
+      // (no-op for enrollees that already carry an explicit setting).
+      void ensureRegulationReviewSettingForEnrollee(saved.enrolleeId, saved.fullName)
       setBootstrapState((current) => ({
         ...current,
         intakeFormsByEnrolleeId: {
@@ -2121,7 +2331,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   function saveRouteAssignment(candidate: RouteCandidateRecord, phase: StabilizationPhase) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('routeAssignment.write', 'save route assignments')
     if (!selectedEnrollee) return
     const assignment: RouteAssignmentRecord = {
       enrolleeId: selectedEnrollee.id,
@@ -2139,6 +2349,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           [saved.enrolleeId]: saved
         }
       }))
+      invalidateJourneyStationMarkersCache(selectedEnrollee.enrollmentId)
+      void refreshAssignmentParityViews()
     })
   }
 
@@ -2147,7 +2359,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isResolved: boolean,
     input: EnrolleeZCodeResolutionInput = {}
   ) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('zcodes.write', 'update z-code resolution')
     if (!selectedEnrollee || !enrolleeZCodeId) return null
     const saved = await persistEnrolleeZCodeResolution(enrolleeZCodeId, isResolved, input)
     setBootstrapState((current) => ({
@@ -2162,7 +2374,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
                 resolutionAt: saved.resolutionAt,
                 resolutionPartnerId: saved.resolutionPartnerId ?? (saved.isResolved ? input.partnerId ?? null : null),
                 resolutionPartnerName: saved.resolutionPartnerName ?? (saved.isResolved ? input.partnerName ?? null : null),
-                resolutionNote: saved.resolutionNote ?? (saved.isResolved ? input.resolutionNote?.trim() || null : null)
+                resolutionNote: saved.resolutionNote ?? (saved.isResolved ? input.resolutionNote?.trim() || null : null),
+                // Readiness criteria echo whatever the Remote Procedure Call
+                // (RPC) persisted so pills stay in sync without a refetch.
+                codeReviewStatus: saved.codeReviewStatus,
+                confidenceLevel: saved.confidenceLevel
               }
             : detail
         )
@@ -2173,11 +2389,37 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         }
       })
     }))
+    invalidateRouteCandidatesCache(selectedEnrollee.enrollmentId)
+    return saved
+  }
+
+  async function overrideEnrolleeZCodes(enrollmentId: string, input: EnrolleeZCodeOverrideInput) {
+    ensureWriteAllowed('zcodes.write', 'override z-codes')
+    const trimmedEnrollmentId = enrollmentId.trim()
+    if (!trimmedEnrollmentId) return null
+    // The command RPC reconciles the active set atomically and returns the
+    // refreshed active z-code payload, so state is replaced (not patched)
+    // for the affected enrollment - keeping partner matching inputs exact.
+    const saved = await persistEnrolleeZCodeOverride(trimmedEnrollmentId, input)
+    if (!saved) return null
+    setBootstrapState((current) => ({
+      ...current,
+      enrollees: current.enrollees.map((enrollee) => {
+        if (enrollee.enrollmentId !== trimmedEnrollmentId) return enrollee
+        return {
+          ...enrollee,
+          zCodeTags: saved.zCodeTags,
+          activeZCodeDetails: saved.activeZCodeDetails,
+          completedParentCodes: buildCompletedParentCodes(saved.activeZCodeDetails)
+        }
+      })
+    }))
+    invalidateRouteCandidatesCache(trimmedEnrollmentId)
     return saved
   }
 
   async function savePartnerServiceCapacitySurvey(input: PartnerServiceCapacitySubmissionInput) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('partnerReferral.submit', 'save partner service-capacity surveys')
     setIsSavingPartnerServiceCapacitySurvey(true)
     setPartnerServiceCapacitySurveyError(null)
     try {
@@ -2208,14 +2450,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         email: input.header.email || accountSettings.email,
         organization: input.header.organizationName
       }
+      const refreshedStationProfile = await loadPartnerStationProfile(input.header.organizationName, {
+        fullName: nextAccountSettings.fullName,
+        email: nextAccountSettings.email
+      })
       setBootstrapState((current) => ({
         ...current,
-        accountSettings: nextAccountSettings
+        accountSettings: nextAccountSettings,
+        partnerStationProfile: refreshedStationProfile
       }))
       persistAccountSettings(nextAccountSettings)
       return saved
     } catch (error) {
-      setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to save service capacity survey.')
+      // Surface the real database/PostgREST message (these are plain objects,
+      // not Error instances) so save failures fail loudly per the data contract.
+      setPartnerServiceCapacitySurveyError(toSupabaseErrorMessage(error, 'Unable to save service capacity survey.'))
       throw error
     } finally {
       setIsSavingPartnerServiceCapacitySurvey(false)
@@ -2242,7 +2491,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveEnrolleeBurdenSurvey(input: EnrolleeBurdenSurveySubmissionInput) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('intake.write', 'save enrollee burden surveys')
     setIsSavingEnrolleeBurdenSurvey(true)
     setEnrolleeBurdenSurveyError(null)
     try {
@@ -2298,7 +2547,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       setPartnerServiceCapacitySurveyHistory(rows)
     } catch (error) {
       setPartnerServiceCapacitySurveyError(
-        error instanceof Error ? error.message : 'Unable to load service capacity survey.'
+        toSupabaseErrorMessage(error, 'Unable to load service capacity survey.')
       )
     }
   }
@@ -2320,7 +2569,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function deletePartnerServiceCapacityDraft(submissionId: string) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('partnerReferral.submit', 'delete partner service-capacity drafts')
     setIsSavingPartnerServiceCapacitySurvey(true)
     setPartnerServiceCapacitySurveyError(null)
     try {
@@ -2330,7 +2579,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       )
       return deleted
     } catch (error) {
-      setPartnerServiceCapacitySurveyError(error instanceof Error ? error.message : 'Unable to delete service capacity draft.')
+      setPartnerServiceCapacitySurveyError(toSupabaseErrorMessage(error, 'Unable to delete service capacity draft.'))
       throw error
     } finally {
       setIsSavingPartnerServiceCapacitySurvey(false)
@@ -2363,7 +2612,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function deleteEnrolleeBurdenSurveyDraft(submissionId: string, enrollmentId: string) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('intake.write', 'delete enrollee burden drafts')
     setIsSavingEnrolleeBurdenSurvey(true)
     setEnrolleeBurdenSurveyError(null)
     try {
@@ -2391,7 +2640,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     formVersion: string
     answers: NavigatorCompetencyAssessmentRecord['answers']
   }) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'save navigator competency assessments')
     const saved = await persistNavigatorCompetencyAssessment(input)
     setBootstrapState((current) => ({
       ...current,
@@ -2481,9 +2730,26 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setRemoteSession(null)
   }
 
-  function ensureWriteAllowed() {
+  type SinglePaneWriteActionKey =
+    | 'intake.write'
+    | 'zcodes.write'
+    | 'routeAssignment.write'
+    | 'routeLogs.write'
+    | 'timeline.write'
+    | 'navigatorProgram.write'
+    | 'regulationReview.write'
+    | 'regulationTests.write'
+    | 'partnerReferral.submit'
+
+  function ensureWriteAllowed(actionKey: SinglePaneWriteActionKey, actionLabel: string) {
     if (remoteSession?.targetRole === 'partner' && !remoteSession.partnerGrant?.allowWrite) {
       throw new Error('This partner troubleshooting session is read-only until the partner grants write access.')
+    }
+    // Keep write-path enforcement aligned with the same per-action policy keys
+    // that drive User Interface (UI) affordances, so hidden actions are never
+    // still callable through callbacks.
+    if (!isViewerPolicyAllowed('actionToggles', actionKey)) {
+      throw new Error(`You do not have permission to ${actionLabel}.`)
     }
   }
 
@@ -2533,6 +2799,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveAccessMatrixSupervisorAssignments(navigatorPersonId: string, supervisorPersonIds: string[]) {
+    ensureAdminPermissionWrite('update supervisor assignments')
     setIsSavingAccessMatrix(true)
     setAccessMatrixError(null)
     try {
@@ -2681,6 +2948,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveNavigatorProgramState(state: NavigatorProgramState) {
+    ensureWriteAllowed('navigatorProgram.write', 'save navigator program state')
     setNavigatorProgramError(null)
     try {
       const saved = await persistNavigatorProgramState(state)
@@ -2696,7 +2964,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     recordId: string,
     status: 'available' | 'accepted' | 'claimed' | 'archived'
   ) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'update referral queue status')
     const trimmedId = recordId.trim()
     if (!trimmedId) {
       throw new Error('Missing referral queue record id.')
@@ -2707,25 +2975,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         `No referral queue row with id "${trimmedId}" is loaded. Refresh the assignment board and try again.`
       )
     }
-    const nowIso = new Date().toISOString()
-    const nextState = {
-      ...mergedNavigatorProgramState,
-      pickupQueue: mergedNavigatorProgramState.pickupQueue.map((record) =>
-        record.id === trimmedId
-          ? {
-              ...record,
-              status,
-              claimedByNavigatorName: status === 'claimed' ? currentNavigatorName : record.claimedByNavigatorName,
-              claimedAtIso: status === 'claimed' ? nowIso : record.claimedAtIso
-            }
-          : record
-      )
-    }
-    return saveNavigatorProgramState(nextState)
+    const statusSaved = await setPublicReferralQueueRecordStatus(trimmedId, status, {
+      claimedByNavigatorName: status === 'claimed' ? currentNavigatorName : null
+    })
+    setPublicQueueRecords((current) => {
+      const next = current.filter((record) => record.id !== statusSaved.id)
+      next.unshift(statusSaved)
+      return next
+    })
+    return statusSaved
   }
 
   async function claimPickupQueueRecord(recordId: string) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'claim referral queue records')
     const claimedRecord = mergedNavigatorProgramState.pickupQueue.find((record) => record.id === recordId) || null
     if (!claimedRecord) {
       throw new Error('Unable to claim this referral because it is no longer available in your queue view.')
@@ -2736,6 +2998,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
     // Re-apply explicit self-assignment after materialization so claim and assignment remain tightly coupled.
     await persistAssignNavigatorEnrollmentToSelf(materialized.enrollmentId)
+    // Forced regulation review: newly claimed enrollees get the review enabled by default.
+    await ensureRegulationReviewSettingForEnrollee(materialized.enrolleeId, materialized.enrolleeName)
     try {
       const inferred = await inferZCodesForReferral({
         fullName: claimedRecord.fullName,
@@ -2753,7 +3017,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveNavigatorSelfAssessment(record: NavigatorSelfAssessmentRecord) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'save navigator self-assessments')
     const nextState = {
       ...mergedNavigatorProgramState,
       selfAssessments: [
@@ -2765,7 +3029,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveSupervisionSession(record: SupervisionSessionRecord) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'save supervision sessions')
     const nextState = {
       ...mergedNavigatorProgramState,
       supervisionSessions: [
@@ -2777,7 +3041,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function saveIntervalAssessmentRule(rule: IntervalAssessmentRule) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('navigatorProgram.write', 'save interval assessment rules')
     const nextState = {
       ...mergedNavigatorProgramState,
       intervalAssessmentRules: [
@@ -2788,26 +3052,80 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return saveNavigatorProgramState(nextState)
   }
 
+  async function saveRegulationReviewSettings(settings: RegulationReviewSettings) {
+    ensureWriteAllowed('regulationReview.write', 'save regulation review settings')
+    try {
+      const saved = await persistRegulationReviewSettings(settings)
+      setRegulationReviewSettings(saved)
+      setRegulationReviewError(null)
+      return saved
+    } catch (error) {
+      setRegulationReviewError(toSupabaseErrorMessage(error, 'Unable to save regulation review settings.'))
+      throw error
+    }
+  }
+
+  async function ensureRegulationReviewSettingForEnrollee(enrolleeId: string, enrolleeName: string) {
+    // Enrollee-add contract: auto-provision an explicit active entry so administrators can
+    // see and toggle the review for the new enrollee immediately.
+    const trimmedId = enrolleeId.trim()
+    if (!trimmedId) return
+    const current = regulationReviewSettings ?? getDefaultRegulationReviewSettings()
+    if (current.enrolleeSettings[trimmedId]) return
+    const next: RegulationReviewSettings = {
+      ...current,
+      enrolleeSettings: {
+        ...current.enrolleeSettings,
+        [trimmedId]: {
+          enrolleeId: trimmedId,
+          enrolleeName: enrolleeName.trim(),
+          isActive: current.isActiveForNewEnrollees,
+          cadence: null,
+          updatedAtIso: new Date().toISOString()
+        }
+      }
+    }
+    try {
+      const saved = await persistRegulationReviewSettings(next)
+      setRegulationReviewSettings(saved)
+    } catch (error) {
+      // Surface the failure but never abort enrollee creation: the default-active policy
+      // still enforces the review for enrollees without an explicit entry.
+      setRegulationReviewError(toSupabaseErrorMessage(error, 'Unable to auto-provision the regulation review setting.'))
+    }
+  }
+
   async function submitPartnerReferral(input: PartnerReferralSubmissionInput) {
-    ensureWriteAllowed()
-    const { nextRecord, nextState } = buildReferralQueueUpdate(input, mergedNavigatorProgramState, {
+    ensureWriteAllowed('partnerReferral.submit', 'submit partner referrals')
+    const { nextRecord } = buildReferralQueueUpdate(input, mergedNavigatorProgramState, {
       accountFullName: accountSettings.fullName,
       accountOrganization: effectiveAccountSettings.organization,
       partnerStationOrganizationName: effectivePartnerStationProfile?.organizationName || null,
       actorRoleLabel: role,
       sourceLabel: 'single-pane referral portal'
     })
-    await saveNavigatorProgramState(nextState)
+    await enqueuePublicReferralQueueRecord(nextRecord)
+    const refreshedQueue = await loadPublicReferralQueueRecords()
+    setPublicQueueRecords(refreshedQueue)
     return nextRecord
   }
 
   async function saveNavigatorRegulationTest(input: RegulationTestSubmissionInput) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('regulationTests.write', 'save regulation tests')
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
     try {
       const saved = await saveRegulationTestSubmission(input)
       setRegulationTestHistory((current) => upsertRegulationTestHistory(current, saved))
+      if (saved.status === 'completed' && !isRenewalAssessmentType(saved.testType)) {
+        // A completed regulation-stage submission satisfies the forced regulation review
+        // cycle immediately, without waiting for the next remote fetch.
+        setLatestRegulationReviewCompletionByEnrolleeId((current) => {
+          const existing = current[saved.enrolleeId]
+          if (existing && new Date(existing).getTime() >= new Date(saved.submittedAtIso).getTime()) return current
+          return { ...current, [saved.enrolleeId]: saved.submittedAtIso }
+        })
+      }
       return saved
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save regulation test.'
@@ -2819,7 +3137,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }
 
   async function deleteNavigatorRegulationTestDraft(submissionId: string) {
-    ensureWriteAllowed()
+    ensureWriteAllowed('regulationTests.write', 'delete regulation-test drafts')
     setIsSavingRegulationTest(true)
     setRegulationTestError(null)
     try {
@@ -2849,6 +3167,16 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }): Promise<PartnerIdentifierRecord> {
     return ensurePartnerIdentifierRecordForSurvey(header)
   }
+
+  const setRole = useCallback(
+    (nextRole: AtlasRole) => {
+      // Active experience switching is admin-only. Non-admin users remain pinned
+      // to their permission-scoped experience (their JWT-authoritative role).
+      if (!authoritativeAccountRoles.includes('administrator')) return
+      setRoleState(nextRole)
+    },
+    [authoritativeAccountRoles]
+  )
 
   return {
     role,
@@ -2911,7 +3239,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isUploadingAccountProfileImage,
     accountProfileImageUploadError,
     currentNavigatorName,
+    canSwitchActiveExperience,
     navigatorAggregateLoad,
+    navigatorLoadContributors,
     navigatorAggregateLoadBreakdown,
     pickupQueue,
     navigatorSelfAssessments,
@@ -2920,6 +3250,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     viewerCanViewNavigatorAssignmentNames,
     viewerCanAccessAssignmentBoard,
     viewerCanUseAssignmentActions,
+    viewerCanAddAssignmentBoardReferral,
     viewerCanAccessAdminRegistryCards,
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
@@ -2930,6 +3261,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     supervisorNavigatorDirectory,
     navigatorIntervalRules,
     navigatorIntervalDueItems,
+    regulationReviewSettings: effectiveRegulationReviewSettings,
+    regulationReviewDueItems,
+    regulationReviewError,
+    saveRegulationReviewSettings,
     searchPartnerIdentifierMatches,
     ensurePartnerIdentifier,
     supervisorNavigatorCompetency,
@@ -2971,6 +3306,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
+    overrideEnrolleeZCodes,
     saveRouteAssignment,
     savePartnerServiceCapacitySurvey,
     setZCodeDomainSurveyAnswerNullification,

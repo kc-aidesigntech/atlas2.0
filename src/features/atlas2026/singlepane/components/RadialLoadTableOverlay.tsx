@@ -1,20 +1,28 @@
 import React from 'react'
 import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import type { DomainLoad, DomainLoadBreakdown } from '@/features/atlas2026/singlepane/types'
+import type { DomainLoad, DomainLoadBreakdown, NavigatorLoadContributor } from '@/features/atlas2026/singlepane/types'
 
 interface RadialLoadTableOverlayProps {
   isOpen: boolean
   load: DomainLoad | null
   breakdown: DomainLoadBreakdown | null
+  navigatorContributors?: NavigatorLoadContributor[]
   onClose: () => void
 }
 
-export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClose }: RadialLoadTableOverlayProps) {
+export default function RadialLoadTableOverlay({
+  isOpen,
+  load,
+  breakdown,
+  navigatorContributors = [],
+  onClose
+}: RadialLoadTableOverlayProps) {
   if (!isOpen) return null
 
   // Snapshot rows immediately so rendering remains stable even if upstream data refreshes while overlay is open.
   const rows = breakdown?.rows || []
+  const isNavigatorAggregate = (breakdown?.subjectId || '').toLowerCase() === 'navigator-aggregate'
   const isPartnerSurvey = breakdown?.sourceKind === 'partnerSurvey'
   const isPartnerDomainSpectrum = isPartnerSurvey && (breakdown?.sourceLabel || '').toLowerCase().includes('domain spectrum')
   const isRouteBoardCapacityInversion = (breakdown?.sourceLabel || '').toLowerCase().includes('route-board capacity inversion')
@@ -49,6 +57,46 @@ export default function RadialLoadTableOverlay({ isOpen, load, breakdown, onClos
             color={SP_COLORS.blue}
           />
         </div>
+
+        {isNavigatorAggregate && navigatorContributors.length ? (
+          <div className="mb-5 rounded-[26px] border p-4" style={{ borderColor: '#ffffff25' }}>
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <small className="block text-[12px] uppercase tracking-[0.12em] text-[#bdbdbd]">
+                  assigned enrollee load scores
+                </small>
+                <small className="text-[12px] text-[#8f8f8f]">
+                  These are the per-enrollee radial values that substantiate the navigator average.
+                </small>
+              </div>
+              <small className="text-[12px] text-[#9f9f9f]">
+                {navigatorContributors.length} enrollee{navigatorContributors.length === 1 ? '' : 's'}
+              </small>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-separate border-spacing-0 text-left text-[13px] text-white">
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-[0.08em] text-[#9f9f9f]">
+                    <th className="border-b border-white/10 px-3 py-2 font-medium">enrollee</th>
+                    <th className="border-b border-white/10 px-3 py-2 font-medium text-right">habitat</th>
+                    <th className="border-b border-white/10 px-3 py-2 font-medium text-right">work</th>
+                    <th className="border-b border-white/10 px-3 py-2 font-medium text-right">social networks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {navigatorContributors.map((row) => (
+                    <tr key={row.enrolleeId}>
+                      <td className="border-b border-white/5 px-3 py-3">{row.enrolleeName}</td>
+                      <td className="border-b border-white/5 px-3 py-3 text-right">{formatMetricValue(row.habitat)}</td>
+                      <td className="border-b border-white/5 px-3 py-3 text-right">{formatMetricValue(row.work)}</td>
+                      <td className="border-b border-white/5 px-3 py-3 text-right">{formatMetricValue(row.socialNetworks)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
 
         <div className="rounded-[26px] border p-4" style={{ borderColor: '#ffffff25' }}>
           <div className="mb-3 flex flex-wrap items-end justify-between gap-3">

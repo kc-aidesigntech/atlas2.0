@@ -15,7 +15,17 @@ export const ADMIN_POLICY_CARD_KEYS = ['navigatorCoverageCard', 'liveAccessMatri
 export const ADMIN_POLICY_ACTION_KEYS = [
   'assignmentBoard.viewNavigatorNames',
   'assignmentBoard.assignSelf',
-  'admin.saveRegistry'
+  'assignmentBoard.addReferral',
+  'admin.saveRegistry',
+  'intake.write',
+  'zcodes.write',
+  'routeAssignment.write',
+  'routeLogs.write',
+  'timeline.write',
+  'navigatorProgram.write',
+  'regulationReview.write',
+  'regulationTests.write',
+  'partnerReferral.submit'
 ] as const
 
 type CapabilityScope = keyof AdminPortalFeaturePolicy
@@ -35,7 +45,17 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
     actionToggles: {
       'assignmentBoard.viewNavigatorNames': true,
       'assignmentBoard.assignSelf': false,
-      'admin.saveRegistry': true
+      'assignmentBoard.addReferral': false,
+      'admin.saveRegistry': true,
+      'intake.write': true,
+      'zcodes.write': true,
+      'routeAssignment.write': true,
+      'routeLogs.write': true,
+      'timeline.write': true,
+      'navigatorProgram.write': true,
+      'regulationReview.write': true,
+      'regulationTests.write': true,
+      'partnerReferral.submit': true
     }
   },
   supervisor: {
@@ -50,7 +70,17 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
     actionToggles: {
       'assignmentBoard.viewNavigatorNames': false,
       'assignmentBoard.assignSelf': false,
-      'admin.saveRegistry': false
+      'assignmentBoard.addReferral': false,
+      'admin.saveRegistry': false,
+      'intake.write': false,
+      'zcodes.write': false,
+      'routeAssignment.write': false,
+      'routeLogs.write': true,
+      'timeline.write': false,
+      'navigatorProgram.write': true,
+      'regulationReview.write': false,
+      'regulationTests.write': true,
+      'partnerReferral.submit': true
     }
   },
   navigator: {
@@ -65,7 +95,17 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
     actionToggles: {
       'assignmentBoard.viewNavigatorNames': false,
       'assignmentBoard.assignSelf': true,
-      'admin.saveRegistry': false
+      'assignmentBoard.addReferral': false,
+      'admin.saveRegistry': false,
+      'intake.write': true,
+      'zcodes.write': true,
+      'routeAssignment.write': true,
+      'routeLogs.write': true,
+      'timeline.write': true,
+      'navigatorProgram.write': true,
+      'regulationReview.write': false,
+      'regulationTests.write': true,
+      'partnerReferral.submit': true
     }
   },
   partner: {
@@ -80,7 +120,17 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
     actionToggles: {
       'assignmentBoard.viewNavigatorNames': false,
       'assignmentBoard.assignSelf': false,
-      'admin.saveRegistry': false
+      'assignmentBoard.addReferral': false,
+      'admin.saveRegistry': false,
+      'intake.write': false,
+      'zcodes.write': false,
+      'routeAssignment.write': false,
+      'routeLogs.write': false,
+      'timeline.write': false,
+      'navigatorProgram.write': false,
+      'regulationReview.write': false,
+      'regulationTests.write': false,
+      'partnerReferral.submit': true
     }
   }
 }

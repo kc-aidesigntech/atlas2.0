@@ -4,8 +4,11 @@ import type {
   AtlasRole,
   EnrolleeIntakeRecord,
   EnrolleeProfile,
+  IntervalCadence,
   NavigatorProgramState,
   PartnerTroubleshootingGrant,
+  RegulationReviewEnrolleeSetting,
+  RegulationReviewSettings,
   RouteAssignmentRecord,
   TimelineConfig
 } from '@/features/atlas2026/singlepane/types'
@@ -31,6 +34,8 @@ const LOCAL_TIMELINE_CONFIGS_KEY = 'atlas2026.singlepane.timeline-configs.v1'
 const LOCAL_ADMIN_PORTAL_REGISTRY_KEY = 'atlas2026.singlepane.admin-portal-registry.v1'
 const NAVIGATOR_PROGRAM_STATE_CONFIG_KEY = 'navigator_program_state'
 const LOCAL_NAVIGATOR_PROGRAM_STATE_KEY = 'atlas2026.singlepane.navigator-program-state.v1'
+const REGULATION_REVIEW_SETTINGS_CONFIG_KEY = 'regulation_review_settings'
+const LOCAL_REGULATION_REVIEW_SETTINGS_KEY = 'atlas2026.singlepane.regulation-review-settings.v1'
 const PARTNER_TROUBLESHOOTING_GRANT_CONFIG_KEY_PREFIX = 'partner_troubleshooting_grant:'
 const LOCAL_PARTNER_TROUBLESHOOTING_GRANTS_KEY = 'atlas2026.singlepane.partner-troubleshooting-grants.v1'
 const ALLOW_SENSITIVE_LOCAL_CACHE = import.meta.env.VITE_ALLOW_SENSITIVE_LOCAL_CACHE === 'true'
@@ -449,14 +454,25 @@ export async function loadRouteAssignments(): Promise<Record<string, RouteAssign
 }
 
 export async function saveRouteAssignment(assignment: RouteAssignmentRecord): Promise<RouteAssignmentRecord> {
+  const configKey = `${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}${assignment.enrolleeId}`
   persistLocalRouteAssignmentState({
     ...loadLocalRouteAssignmentState(),
     [assignment.enrolleeId]: assignment
   })
-  const error = await upsertConfigPayload(`${ROUTE_ASSIGNMENT_CONFIG_KEY_PREFIX}${assignment.enrolleeId}`, assignment)
+  const error = await upsertConfigPayload(configKey, assignment)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return assignment
     throw error
+  }
+  // Read-after-write verification keeps route assignment state deterministic
+  // across tabs/sessions by confirming the just-written canonical payload.
+  const { payload: persistedAssignment, error: verifyError } = await loadLatestConfigPayload<RouteAssignmentRecord>(configKey)
+  if (verifyError) {
+    if (!isOptionalSupabaseDataError(verifyError)) throw verifyError
+    return assignment
+  }
+  if (!persistedAssignment || persistedAssignment.stationId !== assignment.stationId) {
+    throw new Error(`Route assignment verification failed for enrollee ${assignment.enrolleeId}.`)
   }
   return assignment
 }
@@ -503,10 +519,19 @@ export async function saveTimelineConfig(
   persistLocalTimelineConfigState(nextLocalState)
 
   for (const key of keys) {
-    const error = await upsertConfigPayload(`${TIMELINE_CONFIG_KEY_PREFIX}${key}`, config)
+    const configKey = `${TIMELINE_CONFIG_KEY_PREFIX}${key}`
+    const error = await upsertConfigPayload(configKey, config)
     if (error) {
       if (isOptionalSupabaseDataError(error)) return config
       throw error
+    }
+    const { payload: persistedConfig, error: verifyError } = await loadLatestConfigPayload<TimelineConfig>(configKey)
+    if (verifyError) {
+      if (!isOptionalSupabaseDataError(verifyError)) throw verifyError
+      continue
+    }
+    if (!persistedConfig || persistedConfig.planStartIso !== config.planStartIso) {
+      throw new Error(`Timeline config verification failed for key ${configKey}.`)
     }
   }
   return config
@@ -557,6 +582,105 @@ export async function saveNavigatorProgramState(state: NavigatorProgramState): P
   })
   persistLocalNavigatorProgramState(normalized)
   const error = await upsertConfigPayload(NAVIGATOR_PROGRAM_STATE_CONFIG_KEY, normalized)
+  if (error) {
+    if (isOptionalSupabaseDataError(error)) return normalized
+    throw error
+  }
+  return normalized
+}
+
+// Forced regulation review settings -------------------------------------------------------
+// Stored as one JSON config document so admin cadence edits and per-enrollee overrides
+// persist durably without new tables or Remote Procedure Calls (RPCs).
+
+function normalizeIntervalCadence(value: unknown, fallback: IntervalCadence): IntervalCadence {
+  return value === 'weekly' || value === 'monthly' || value === 'quarterly' ? value : fallback
+}
+
+export function getDefaultRegulationReviewSettings(): RegulationReviewSettings {
+  return {
+    // Client mandate: the review is weekly and active by default for new enrollees.
+    defaultCadence: 'weekly',
+    isActiveForNewEnrollees: true,
+    enrolleeSettings: {},
+    updatedAtIso: new Date().toISOString()
+  }
+}
+
+function normalizeRegulationReviewEnrolleeSetting(
+  payload: Partial<RegulationReviewEnrolleeSetting> | null | undefined,
+  enrolleeId: string
+): RegulationReviewEnrolleeSetting {
+  return {
+    enrolleeId,
+    enrolleeName: String(payload?.enrolleeName || '').trim(),
+    // Missing flags are treated as active so a partially written entry never silently
+    // disables a client-mandated review.
+    isActive: payload?.isActive !== false,
+    cadence:
+      payload?.cadence === 'weekly' || payload?.cadence === 'monthly' || payload?.cadence === 'quarterly'
+        ? payload.cadence
+        : null,
+    updatedAtIso: payload?.updatedAtIso || new Date().toISOString()
+  }
+}
+
+export function normalizeRegulationReviewSettings(
+  payload: Partial<RegulationReviewSettings> | null | undefined
+): RegulationReviewSettings {
+  const fallback = getDefaultRegulationReviewSettings()
+  const rawEntries =
+    payload?.enrolleeSettings && typeof payload.enrolleeSettings === 'object' ? payload.enrolleeSettings : {}
+  return {
+    defaultCadence: normalizeIntervalCadence(payload?.defaultCadence, fallback.defaultCadence),
+    isActiveForNewEnrollees: payload?.isActiveForNewEnrollees !== false,
+    enrolleeSettings: Object.fromEntries(
+      Object.entries(rawEntries)
+        .filter(([enrolleeId]) => String(enrolleeId).trim())
+        .map(([enrolleeId, entry]) => [
+          enrolleeId,
+          normalizeRegulationReviewEnrolleeSetting(entry as Partial<RegulationReviewEnrolleeSetting>, enrolleeId)
+        ])
+    ),
+    updatedAtIso: payload?.updatedAtIso || fallback.updatedAtIso
+  }
+}
+
+function loadLocalRegulationReviewSettingsState(): RegulationReviewSettings {
+  return loadLocalStorageState(
+    LOCAL_REGULATION_REVIEW_SETTINGS_KEY,
+    getDefaultRegulationReviewSettings(),
+    (parsed) => normalizeRegulationReviewSettings(parsed as Partial<RegulationReviewSettings>)
+  )
+}
+
+function persistLocalRegulationReviewSettingsState(settings: RegulationReviewSettings) {
+  persistLocalStorageState(LOCAL_REGULATION_REVIEW_SETTINGS_KEY, settings)
+}
+
+export async function loadRegulationReviewSettings(): Promise<RegulationReviewSettings> {
+  const { payload, error } = await loadLatestConfigPayload<Partial<RegulationReviewSettings>>(
+    REGULATION_REVIEW_SETTINGS_CONFIG_KEY
+  )
+  if (error) {
+    // Only schema-optional environments fall back to local cache; real failures must surface.
+    if (isOptionalSupabaseDataError(error)) return loadLocalRegulationReviewSettingsState()
+    throw error
+  }
+  const normalized = normalizeRegulationReviewSettings(payload)
+  persistLocalRegulationReviewSettingsState(normalized)
+  return normalized
+}
+
+export async function saveRegulationReviewSettings(
+  settings: RegulationReviewSettings
+): Promise<RegulationReviewSettings> {
+  const normalized = normalizeRegulationReviewSettings({
+    ...settings,
+    updatedAtIso: new Date().toISOString()
+  })
+  persistLocalRegulationReviewSettingsState(normalized)
+  const error = await upsertConfigPayload(REGULATION_REVIEW_SETTINGS_CONFIG_KEY, normalized)
   if (error) {
     if (isOptionalSupabaseDataError(error)) return normalized
     throw error

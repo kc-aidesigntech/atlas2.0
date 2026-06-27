@@ -78,8 +78,10 @@
     --card-border: rgba(255, 255, 255, 0.08);
 
     --foreground-primary: #f5f7fa;
-    --foreground-secondary: rgba(226, 232, 240, 0.7);
-    --foreground-tertiary: rgba(226, 232, 240, 0.55);
+    /* Elevated opacity improves legibility for secondary/help text without
+       changing primary hierarchy or introducing one-off per-component overrides. */
+    --foreground-secondary: rgba(226, 232, 240, 0.82);
+    --foreground-tertiary: rgba(226, 232, 240, 0.7);
 
     --border-subtle: rgba(255, 255, 255, 0.08);
     --border-strong: rgba(255, 255, 255, 0.22);

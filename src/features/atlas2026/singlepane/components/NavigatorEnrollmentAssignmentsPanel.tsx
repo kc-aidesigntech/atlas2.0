@@ -1,6 +1,6 @@
 import React from 'react'
 import { getZCodeParentColor } from '@atlas/shared'
-import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasPlusButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import type { NavigatorEnrollmentAssignmentRecord } from '@/features/atlas2026/singlepane/types'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
@@ -12,6 +12,8 @@ interface NavigatorEnrollmentAssignmentsPanelProps {
   assigningEnrollmentId: string | null
   canViewNavigatorAssignmentNames: boolean
   canToggleAssignments: boolean
+  canOpenReferralComposer?: boolean
+  onOpenReferralComposer?: () => void
   onToggleAssignment: (
     enrollmentId: string,
     mode: 'accept' | 'archive' | 'assign' | 'unassign'
@@ -25,6 +27,8 @@ export default function NavigatorEnrollmentAssignmentsPanel({
   assigningEnrollmentId,
   canViewNavigatorAssignmentNames,
   canToggleAssignments,
+  canOpenReferralComposer = false,
+  onOpenReferralComposer,
   onToggleAssignment
 }: NavigatorEnrollmentAssignmentsPanelProps) {
   const [expandedEnrollmentIds, setExpandedEnrollmentIds] = React.useState<string[]>([])
@@ -37,10 +41,23 @@ export default function NavigatorEnrollmentAssignmentsPanel({
 
   return (
     <div className="atlas-surface-panel w-full px-5 py-5 text-white" style={{ borderColor: '#ffffff50' }}>
-      <small className="atlas-overline mb-2 block text-[#cfcfcf]">navigator assignment board</small>
-      <small className="atlas-panel-copy mb-4 block max-w-[780px] text-[#cfcfcf]">
-        Review current navigator ownership occupancy. You can still assign to yourself while multi-assignment is enabled.
-      </small>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <small className="atlas-overline mb-2 block text-[#cfcfcf]">navigator assignment board</small>
+          <small className="atlas-panel-copy block max-w-[780px] text-[#cfcfcf]">
+            Review current navigator ownership occupancy. You can still assign to yourself while multi-assignment is enabled.
+          </small>
+        </div>
+        {canOpenReferralComposer ? (
+          // Assignment board referral creation reuses the canonical referral workflow instead of introducing a parallel intake path.
+          <AtlasPlusButton
+            onClick={onOpenReferralComposer}
+            label="add enrollee referral"
+            title="add enrollee"
+            className="h-11 w-11 text-[25px]"
+          />
+        ) : null}
+      </div>
       {error ? (
         <div
           className="mb-4 rounded-[16px] border px-4 py-3"

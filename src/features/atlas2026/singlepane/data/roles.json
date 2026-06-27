@@ -1,22 +1,22 @@
 [
   {
     "role": "navigator",
-    "topMenus": ["assigned enrollees", "requests to enroll", "referral portal", "route planning", "my station", "county commons"],
+    "topMenus": ["assigned enrollees", "requests to enroll", "referral portal", "route planning", "my station"],
     "actionMenus": ["log contact", "append route step", "escalate risk"]
   },
   {
     "role": "partner",
-    "topMenus": ["referral portal", "my station", "service capacity", "county commons"],
+    "topMenus": ["referral portal", "my station", "service capacity"],
     "actionMenus": []
   },
   {
     "role": "supervisor",
-    "topMenus": ["assigned navigators", "navigator assessments", "referral portal", "route planning", "team burden", "county commons"],
+    "topMenus": ["assigned navigators", "navigator assessments", "referral portal", "route planning", "team burden"],
     "actionMenus": []
   },
   {
     "role": "administrator",
-    "topMenus": ["assigned enrollees", "system operations", "route planning", "governance", "county commons"],
+    "topMenus": ["assigned enrollees", "system operations", "route planning", "governance"],
     "actionMenus": []
   }
 ]

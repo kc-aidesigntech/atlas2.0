@@ -120,6 +120,16 @@ export default function MobileRouteBoardPanel({
           renewal
         </AtlasTextButton>
       )
+    } else {
+      // Until readiness completes the parent withholds onRenewalTestsClick; show the
+      // default passive state: plain green "renewal" lettering (mirrors how readiness
+      // appears when an enrollee is first entered), transitioning to the button above
+      // once readiness is complete.
+      phaseButtons.push(
+        <span key="renewal-phase" className="px-[14px] py-[7px] text-[13px] font-medium" style={{ color: SP_COLORS.deepGreen }}>
+          renewal
+        </span>
+      )
     }
 
     return (
@@ -263,7 +273,14 @@ export default function MobileRouteBoardPanel({
                 >
                   renewal
                 </AtlasTextButton>
-              ) : null}
+              ) : (
+                // Default passive state while readiness is incomplete: plain green
+                // "renewal" lettering, replaced by the actionable button once the
+                // parent provides onRenewalTestsClick (readiness complete).
+                <span className="px-[14px] py-[7px] text-[13px] font-medium" style={{ color: SP_COLORS.deepGreen }}>
+                  renewal
+                </span>
+              )}
             </div>
             <div className="atlas-empty-state mt-3 bg-[var(--surface-panel-raised)] text-[11px] text-[#cfd6de]">
               {timelineConfig.durationMonths * 30}d outlook anchored from {formatDateLabelShort(timelineConfig.planStartIso)}.

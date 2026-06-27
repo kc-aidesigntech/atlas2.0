@@ -21,36 +21,6 @@ interface TopNavProps {
 }
 
 const ADD_ENROLLEES_OPTION_VALUE = '__atlas_add_enrollees__'
-const MY_ENROLLEES_OPTION_VALUE = '__atlas_my_enrollees__'
-const ADMIN_MENU_GROUP_ORDER = ['care', 'workforce', 'partner', 'admin', 'other'] as const
-
-type AdminMenuGroupKey = (typeof ADMIN_MENU_GROUP_ORDER)[number]
-
-const ADMIN_MENU_GROUP_LABELS: Record<AdminMenuGroupKey, string> = {
-  care: 'care delivery',
-  workforce: 'workforce',
-  partner: 'partner + referral',
-  admin: 'admin controls',
-  other: 'other'
-}
-
-function getAdminMenuGroup(menu: string): AdminMenuGroupKey {
-  const normalized = menu.trim().toLowerCase()
-  if (normalized === 'enrollees' || normalized === 'assigned enrollees' || normalized === 'requests to enroll' || normalized === 'route planning') {
-    return 'care'
-  }
-  if (normalized === 'assigned navigators' || normalized === 'navigator assessments' || normalized === 'team burden') {
-    return 'workforce'
-  }
-  if (normalized === 'referral portal' || normalized === 'my station' || normalized === 'service capacity') {
-    return 'partner'
-  }
-  if (normalized === 'system operations' || normalized === 'governance' || normalized === 'county commons') {
-    return 'admin'
-  }
-  return 'other'
-}
-
 export default function TopNav({
   role,
   roleConfig,
@@ -72,28 +42,24 @@ export default function TopNav({
     role === 'navigator'
       ? navigatorEnrolleeView === 'add'
         ? ADD_ENROLLEES_OPTION_VALUE
-        : selectedEnrolleeId || MY_ENROLLEES_OPTION_VALUE
+        : selectedEnrolleeId || enrollees[0]?.id || ADD_ENROLLEES_OPTION_VALUE
       : selectedEnrolleeId || ''
-  const adminMenuGroups = React.useMemo(() => {
-    if (role !== 'administrator') return []
-    const grouped = new Map<AdminMenuGroupKey, string[]>()
-    for (const menu of roleConfig.topMenus.slice(1)) {
-      const key = getAdminMenuGroup(menu)
-      const existing = grouped.get(key) || []
-      grouped.set(key, [...existing, menu])
-    }
-    return ADMIN_MENU_GROUP_ORDER
-      .map((groupKey) => {
-        const menus = grouped.get(groupKey) || []
-        if (!menus.length) return null
-        return {
-          key: groupKey,
-          label: ADMIN_MENU_GROUP_LABELS[groupKey],
-          menus
-        }
-      })
-      .filter((group): group is { key: AdminMenuGroupKey; label: string; menus: string[] } => Boolean(group))
-  }, [role, roleConfig.topMenus])
+  const enrolleeSelectorLabel = React.useMemo(() => {
+    if (role === 'navigator' && enrolleeSelectorValue === ADD_ENROLLEES_OPTION_VALUE) return 'add enrollees'
+    const selectedEnrollee = enrollees.find((enrollee) => enrollee.id === enrolleeSelectorValue)
+    return selectedEnrollee?.fullName || 'select enrollee'
+  }, [enrolleeSelectorValue, enrollees, role])
+  // Size by active label length so long names keep a clear lane for the chevron/spinner.
+  const enrolleeSelectorWidthCh = Math.min(Math.max(enrolleeSelectorLabel.length + 6, 18), 42)
+  const adminControlsMenu = React.useMemo(() => {
+    if (role !== 'administrator') return ''
+    const adminSpecific = roleConfig.topMenus.find((menu) => {
+      const normalized = menu.trim().toLowerCase()
+      return normalized === 'system operations' || normalized === 'governance'
+    })
+    return adminSpecific || roleConfig.topMenus[1] || firstMenu
+  }, [firstMenu, role, roleConfig.topMenus])
+  const isAdminControlsActive = role === 'administrator' && (activeMenu === adminControlsMenu || activeMenu === 'system operations' || activeMenu === 'governance')
 
   return (
     <header className="border-b bg-black" style={{ borderColor: '#ffffff70' }}>
@@ -146,19 +112,18 @@ export default function TopNav({
                           return
                         }
                         onNavigatorEnrolleeViewChange?.('my')
-                        if (event.target.value === MY_ENROLLEES_OPTION_VALUE) return
                       }
                       onSelectEnrollee(event.target.value)
                     }}
-                    className="atlas-select min-h-[34px] appearance-none rounded-full border-white/30 bg-black pl-3 pr-9 text-[15px] font-medium text-white"
-                    style={{ textTransform: 'none' }}
+                    className="atlas-select min-h-[34px] w-auto appearance-none rounded-full border-white/30 bg-black pl-3 text-[15px] font-medium text-white"
+                    style={{
+                      textTransform: 'none',
+                      width: `${enrolleeSelectorWidthCh}ch`,
+                      maxWidth: 'min(80vw, 42ch)',
+                      paddingRight: hasSyncingEnrollees ? '3.2rem' : '2.5rem'
+                    }}
                     aria-label="Assigned enrollees"
                   >
-                    {role === 'navigator' ? (
-                      <option value={MY_ENROLLEES_OPTION_VALUE} className="bg-black text-white">
-                        my enrollees
-                      </option>
-                    ) : null}
                     {role === 'navigator' ? (
                       <option value={ADD_ENROLLEES_OPTION_VALUE} className="bg-black text-white">
                         add enrollees
@@ -200,33 +165,15 @@ export default function TopNav({
           </div>
 
           {role === 'administrator'
-            ? adminMenuGroups.map((group) => (
-                <div key={group.key} className="flex items-center gap-2">
-                  <small className="atlas-overline whitespace-nowrap text-[11px] text-[#bdbdbd]">{group.label}</small>
-                  <div className="relative inline-flex items-center">
-                    <select
-                      value={group.menus.includes(activeMenu) ? activeMenu : ''}
-                      onChange={(event) => {
-                        if (!event.target.value) return
-                        onMenuSelect(event.target.value)
-                      }}
-                      className="atlas-select min-h-[32px] appearance-none rounded-full border-white/30 bg-black pl-3 pr-8 text-[13px] font-medium text-white"
-                      style={{ textTransform: 'none', minWidth: '182px' }}
-                      aria-label={`${group.label} menus`}
-                    >
-                      <option value="" className="bg-black text-white">
-                        {group.label}
-                      </option>
-                      {group.menus.map((menu) => (
-                        <option key={menu} value={menu} className="bg-black text-white">
-                          {menu}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} className="pointer-events-none absolute right-3 text-white" />
-                  </div>
-                </div>
-              ))
+            ? (
+              <button
+                className="atlas-font-body whitespace-nowrap text-[15px] font-medium text-white"
+                onClick={() => onMenuSelect(adminControlsMenu)}
+                style={{ textDecoration: isAdminControlsActive ? 'underline' : 'none' }}
+              >
+                admin controls
+              </button>
+              )
             : roleConfig.topMenus.slice(1).map((menu) => (
                 <button
                   key={menu}

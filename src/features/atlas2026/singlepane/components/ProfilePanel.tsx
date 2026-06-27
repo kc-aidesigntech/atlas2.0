@@ -22,6 +22,8 @@ interface ProfilePanelProps {
   enrollmentStartLabel?: string
   onOpenBurdenSurvey?: () => void
   burdenSurveyLabel?: string
+  onOpenReferralPortal?: () => void
+  referralLabel?: string
 }
 
 interface ParentZCodeGroup {
@@ -82,7 +84,9 @@ export default function ProfilePanel({
   onSelectZCode,
   enrollmentStartLabel,
   onOpenBurdenSurvey,
-  burdenSurveyLabel = 'open burden survey'
+  burdenSurveyLabel = 'open burden survey',
+  onOpenReferralPortal,
+  referralLabel = 'refer'
 }: ProfilePanelProps) {
   const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(enrollee.fullName), [enrollee.fullName])
   // Preserve legacy demo portrait behavior while still supporting
@@ -124,16 +128,30 @@ export default function ProfilePanel({
             }
           }}
         />
-        {onOpenBurdenSurvey ? (
-          <div className="mt-3 flex justify-center">
-            <AtlasTextButton
-              type="button"
-              onClick={onOpenBurdenSurvey}
-              className="justify-center px-[19px] py-[10px] text-[14px] font-medium"
-              style={{ borderColor: '#ffffff', backgroundColor: '#ffffff', color: '#111111' }}
-            >
-              {burdenSurveyLabel}
-            </AtlasTextButton>
+        {onOpenBurdenSurvey || onOpenReferralPortal ? (
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            {onOpenBurdenSurvey ? (
+              <AtlasTextButton
+                type="button"
+                onClick={onOpenBurdenSurvey}
+                className="justify-center px-[19px] py-[10px] text-[14px] font-medium"
+                style={{ borderColor: '#ffffff', backgroundColor: '#ffffff', color: '#111111' }}
+              >
+                {burdenSurveyLabel}
+              </AtlasTextButton>
+            ) : null}
+            {onOpenReferralPortal ? (
+              // Keep referral entrypoint colocated with profile actions so "my station"
+              // uses one predictable icon-adjacent control zone.
+              <AtlasTextButton
+                type="button"
+                onClick={onOpenReferralPortal}
+                className="justify-center px-[19px] py-[10px] text-[14px] font-medium"
+                style={{ borderColor: '#ffffff', backgroundColor: '#ffffff', color: '#111111' }}
+              >
+                {referralLabel}
+              </AtlasTextButton>
+            ) : null}
           </div>
         ) : null}
         <div className="mt-4 flex flex-wrap items-center gap-[10px]">

@@ -7,7 +7,11 @@ import AccountSettingsPanel from './components/AccountSettingsPanel'
 import ContextPanels from './components/ContextPanels'
 import LiveAccessMatrixPanel from './components/LiveAccessMatrixPanel'
 import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
-import EnrolleeBurdenSurveyPanel from './components/EnrolleeBurdenSurveyPanel'
+// The in-depth enrollee burden survey (EnrolleeBurdenSurveyPanel and its data
+// plumbing in useSinglePaneData / enrolleeBurdenSurveyRepository) is preserved
+// in the repo for future reincorporation, but is un-wired from this entry
+// point in favor of the streamlined Z-code override panel below.
+import EnrolleeZCodeOverridePanel from './components/EnrolleeZCodeOverridePanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
 import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
 import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
@@ -79,12 +83,15 @@ export default function SinglePaneApp() {
     partnerStripSuccessHistory,
     resolvedZCodeStripMarkers,
     currentNavigatorName,
+    canSwitchActiveExperience,
     navigatorAggregateLoad,
+    navigatorLoadContributors,
     navigatorAggregateLoadBreakdown,
     navigatorEnrollmentAssignments,
     viewerCanViewNavigatorAssignmentNames,
     viewerCanAccessAssignmentBoard,
     viewerCanUseAssignmentActions,
+    viewerCanAddAssignmentBoardReferral,
     viewerCanAccessAdminRegistryCards,
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
@@ -97,6 +104,10 @@ export default function SinglePaneApp() {
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,
     navigatorIntervalDueItems,
+    regulationReviewSettings,
+    regulationReviewDueItems,
+    regulationReviewError,
+    saveRegulationReviewSettings,
     navigatorProgramState,
     enrolleeBurdenSurveyHistoryByEnrollmentId,
     selectedRouteAssignment,
@@ -148,6 +159,7 @@ export default function SinglePaneApp() {
     replaceSelectedEnrolleeProfileImage,
     saveEnrolleeIntake,
     setEnrolleeZCodeResolution,
+    overrideEnrolleeZCodes,
     saveRouteAssignment,
     saveEnrolleeBurdenSurvey,
     setZCodeDomainSurveyAnswerNullification,
@@ -180,6 +192,7 @@ export default function SinglePaneApp() {
   const [assessmentInitialTestType, setAssessmentInitialTestType] = React.useState<'mh_sca' | 'svs' | 'ipf' | 'b_ipf' | null>(null)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [isReferralPortalOpen, setIsReferralPortalOpen] = React.useState(false)
+  const [isNavigatorAssignmentReferralOpen, setIsNavigatorAssignmentReferralOpen] = React.useState(false)
   const [isPartnerHistoryOpen, setIsPartnerHistoryOpen] = React.useState(false)
   const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
@@ -198,6 +211,9 @@ export default function SinglePaneApp() {
     () => enrollees.find((item) => item.id === enrolleeSurveyTargetId) || null,
     [enrollees, enrolleeSurveyTargetId]
   )
+  // Preserved burden-survey plumbing: the in-depth survey UI is currently
+  // un-wired (replaced by the streamlined Z-code override), but its history
+  // selector stays intact for future reincorporation.
   const activeEnrolleeSurveyHistory = React.useMemo(
     () =>
       activeEnrolleeSurveyTarget?.enrollmentId
@@ -228,6 +244,7 @@ export default function SinglePaneApp() {
     if (!previousRole || previousRole === uiRole) return
 
     setIsReferralPortalOpen(false)
+    setIsNavigatorAssignmentReferralOpen(false)
 
     const isReferralPortalSelection = activeMenu === 'referral portal' || activeMenu === 'refer'
     if (!isReferralPortalSelection || uiRole === 'partner') return
@@ -276,21 +293,18 @@ export default function SinglePaneApp() {
     hashSyncBootstrappedRef.current = true
   }, [selectedRoleConfig.topMenus, setActiveMenu])
 
-  const openEnrolleeBurdenSurvey = React.useCallback(
-    async (enrolleeId: string) => {
+  // Opens the streamlined Z-code override overlay (the slot previously used to
+  // launch the in-depth enrollee burden survey, which is preserved for future
+  // reincorporation). The override panel reads the enrollee's live active
+  // z-code details, so no history prefetch is needed here.
+  const openEnrolleeZCodeOverride = React.useCallback(
+    (enrolleeId: string) => {
       const target = enrollees.find((item) => item.id === enrolleeId) || null
       if (!target) return
       setSelectedEnrolleeId(enrolleeId)
       setEnrolleeSurveyTargetId(enrolleeId)
-      if (target.enrollmentId) {
-        // Best-effort history prefetch: a failed reload must not block opening the survey,
-        // which can still capture a fresh submission without prior history.
-        try {
-          await reloadEnrolleeBurdenSurveyHistoryForEnrollment(target.enrollmentId)
-        } catch {}
-      }
     },
-    [enrollees, reloadEnrolleeBurdenSurveyHistoryForEnrollment, setSelectedEnrolleeId]
+    [enrollees, setSelectedEnrolleeId]
   )
 
   React.useEffect(() => {
@@ -396,6 +410,10 @@ export default function SinglePaneApp() {
   const canUseReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
   const isNavigatorMyProfile = uiRole === 'navigator' && activeMenu === 'my profile'
   const isNavigatorEnrolleeMenu = uiRole === 'navigator' && activeMenu === 'enrollees'
+  const canOpenNavigatorAssignmentReferral = uiRole === 'navigator' && viewerCanAddAssignmentBoardReferral
+  // Hide the referral CTA on the standard enrollee page so that profile and care
+  // workflow actions remain the only primary controls in that context.
+  const isStandardEnrolleePage = activeMenu === 'enrollees'
   const assignmentBoardRows = viewerCanAccessAssignmentBoard ? navigatorEnrollmentAssignments : []
   const assignmentBoardError = viewerCanAccessAssignmentBoard
     ? navigatorEnrollmentAssignmentsError
@@ -624,6 +642,27 @@ export default function SinglePaneApp() {
             </div>
           </div>
         ) : null}
+        {isNavigatorAssignmentReferralOpen && canOpenNavigatorAssignmentReferral ? (
+          <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-[2px]">
+            <div className="relative max-h-[92vh] w-full max-w-[1040px] overflow-y-auto">
+              <div className="mb-3 flex justify-end">
+                <AtlasCloseButton
+                  onClick={() => setIsNavigatorAssignmentReferralOpen(false)}
+                  style={{ ['--button-border-color' as const]: '#ffffff30', color: '#ffffff' } as React.CSSProperties}
+                />
+              </div>
+              {/* Assignment-board quick add intentionally reuses the same referral intake contract so
+                  navigator-created rows land in the pickup queue through one canonical write path. */}
+              <PartnerReferralWorkflowPanel
+                defaultReferrerName={currentNavigatorName || accountSettings.fullName}
+                defaultPartnerOrganizationName={accountSettings.organization.trim()}
+                recentReferrals={pickupQueue}
+                onSubmit={submitPartnerReferral}
+                accentColor={SP_COLORS.yellow}
+              />
+            </div>
+          </div>
+        ) : null}
         <section
           className="relative mx-auto min-h-[calc(100vh-112px)] w-full rounded-[38px] border bg-black px-[20px] pb-[12px] pt-[14px]"
           style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
@@ -656,6 +695,7 @@ export default function SinglePaneApp() {
           <AccountSettingsPanel
             isOpen={isAccountSettingsOpen}
             role={role}
+            canSwitchActiveExperience={canSwitchActiveExperience}
             settings={accountSettings}
             onClose={() => setIsAccountSettingsOpen(false)}
             onRoleChange={setRole}
@@ -744,6 +784,7 @@ export default function SinglePaneApp() {
             isOpen={isLoadTableOpen}
             load={displayLoad}
             breakdown={displayLoadBreakdown}
+            navigatorContributors={isNavigatorMyProfile ? navigatorLoadContributors : []}
             onClose={() => setIsLoadTableOpen(false)}
           />
           <PartnerSpecialtyOverlay
@@ -776,25 +817,20 @@ export default function SinglePaneApp() {
               <div className="atlas-surface-panel max-h-[92vh] w-full max-w-[1180px] overflow-y-auto bg-[color:var(--surface-panel)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.45)] md:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
-                    <small className="atlas-overline block text-[#9fb0c1]">intervallic assessments</small>
-                    <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">enrollee burden survey</div>
+                    <small className="atlas-overline block text-[#9fb0c1]">z-code status</small>
+                    <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">enrollee z-code update</div>
                   </div>
                   <AtlasCloseButton
                     onClick={() => setEnrolleeSurveyTargetId(null)}
                     style={{ ['--button-border-color' as const]: '#ffffff30', color: '#ffffff' } as React.CSSProperties}
                   />
                 </div>
-                <EnrolleeBurdenSurveyPanel
+                {/* Streamlined binary override replaces the in-depth burden survey
+                    (EnrolleeBurdenSurveyPanel is preserved for reincorporation). */}
+                <EnrolleeZCodeOverridePanel
                   enrollee={activeEnrolleeSurveyTarget}
-                  respondentName={accountSettings.fullName || currentNavigatorName}
-                  respondentRole={viewerRole === 'supervisor' ? 'supervisor' : 'navigator'}
-                  organizationName={accountSettings.organization}
                   canEdit={viewerRole === 'navigator' && viewerCanWrite}
-                  submissionHistory={activeEnrolleeSurveyHistory}
-                  isSaving={isSavingEnrolleeBurdenSurvey}
-                  saveError={enrolleeBurdenSurveyError}
-                  onSubmit={saveEnrolleeBurdenSurvey}
-                  onDeleteDraft={deleteEnrolleeBurdenSurveyDraft}
+                  onSave={overrideEnrolleeZCodes}
                 />
               </div>
             </div>
@@ -837,17 +873,20 @@ export default function SinglePaneApp() {
                     assigningEnrollmentId={assigningNavigatorEnrollmentId}
                     canViewNavigatorAssignmentNames={viewerCanViewNavigatorAssignmentNames}
                     canToggleAssignmentActions={viewerCanUseAssignmentActions}
+                    canOpenAssignmentBoardReferral={canOpenNavigatorAssignmentReferral}
                     competencySummary={navigatorAssignedCompetencySummary}
                     selfAssessmentSummary={navigatorSelfAssessmentSummary}
                     selfAssessments={navigatorSelfAssessments}
                     supervisionSessions={navigatorSupervisionSessions}
                     dueItems={navigatorIntervalDueItems}
+                    regulationReviewDueItems={regulationReviewDueItems}
                     programError={navigatorProgramError}
                     onOpenLoadTable={() => setIsLoadTableOpen(true)}
                     isUploadingAvatar={isUploadingAccountProfileImage}
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
-                    onOpenEnrolleeSurvey={(enrolleeId) => void openEnrolleeBurdenSurvey(enrolleeId)}
+                    onOpenEnrolleeSurvey={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
+                    onOpenAssignmentBoardReferral={() => setIsNavigatorAssignmentReferralOpen(true)}
                     onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
                     onSaveSelfAssessment={saveNavigatorSelfAssessment}
                     onSaveSupervisionSession={saveSupervisionSession}
@@ -883,6 +922,8 @@ export default function SinglePaneApp() {
                         assigningEnrollmentId={assigningNavigatorEnrollmentId}
                         canViewNavigatorAssignmentNames={viewerCanViewNavigatorAssignmentNames}
                         canToggleAssignments={viewerCanUseAssignmentActions}
+                        canOpenReferralComposer={canOpenNavigatorAssignmentReferral}
+                        onOpenReferralComposer={() => setIsNavigatorAssignmentReferralOpen(true)}
                         onToggleAssignment={assignNavigatorEnrollmentToSelf}
                       />
                     </div>
@@ -915,10 +956,19 @@ export default function SinglePaneApp() {
                         enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
                         onOpenBurdenSurvey={
                           viewerRole === 'navigator' || viewerRole === 'supervisor'
-                            ? () => void openEnrolleeBurdenSurvey(selectedEnrollee.id)
+                            ? () => openEnrolleeZCodeOverride(selectedEnrollee.id)
                             : undefined
                         }
-                        burdenSurveyLabel={viewerRole === 'supervisor' ? 'review burden survey' : 'open burden survey'}
+                        burdenSurveyLabel={viewerRole === 'supervisor' ? 'review z-codes' : 'update z-codes'}
+                        onOpenReferralPortal={
+                          isNavigatorMyStation
+                            ? () => {
+                                // Scope referral entry to navigator "my station" profile actions
+                                // so participant profile pages do not surface duplicate CTAs.
+                                setIsReferralPortalOpen(true)
+                              }
+                            : undefined
+                        }
                       />
                     </div>
                     <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
@@ -932,26 +982,6 @@ export default function SinglePaneApp() {
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
                   </div>
                 ) : null}
-                {canUseReferralPortal && !isReferralPortalMenu ? (
-                  <div className="flex items-center justify-center py-1">
-                    <AtlasTextButton
-                      onClick={() => {
-                        if (uiRole === 'partner') {
-                          setActiveMenu('referral portal')
-                          setIsReferralPortalOpen(false)
-                          return
-                        }
-                        setIsReferralPortalOpen(true)
-                      }}
-                      className="px-[19px] py-[6px] text-[14px] text-white"
-                      style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
-                      title="Open referral portal."
-                    >
-                      refer
-                    </AtlasTextButton>
-                  </div>
-                ) : null}
-
                 {isAdminSection ? (
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
                     {viewerCanAccessAdminRegistryCards ? (
@@ -983,6 +1013,10 @@ export default function SinglePaneApp() {
                           supervisorNavigatorCompetency={supervisorNavigatorCompetency}
                           navigatorProgramState={navigatorProgramState}
                           navigatorIntervalDueItems={navigatorIntervalDueItems}
+                          regulationReviewSettings={regulationReviewSettings}
+                          regulationReviewDueItems={regulationReviewDueItems}
+                          regulationReviewError={regulationReviewError}
+                          onSaveRegulationReviewSettings={saveRegulationReviewSettings}
                           accessMatrixDataset={accessMatrixDataset}
                           registry={adminPortalRegistry}
                           isSavingRegistry={isSavingAdminPortalRegistry}
@@ -992,6 +1026,7 @@ export default function SinglePaneApp() {
                           onSaveEnrollmentNavigators={saveAccessMatrixEnrollmentNavigators}
                           onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
                           onSaveIntake={saveEnrolleeIntake}
+                          onOverrideEnrolleeZCodes={overrideEnrolleeZCodes}
                         />
                       </div>
                     ) : (
@@ -1191,7 +1226,8 @@ function LoadingSpinnerOverlay() {
       <div className="flex flex-col items-center gap-4 rounded-[24px] border border-white/10 bg-black/55 px-9 py-8">
         <div
           className="h-12 w-12 animate-spin rounded-full border-[3px]"
-          style={{ borderColor: 'rgba(255,255,255,0.16)', borderTopColor: SP_COLORS.yellow }}
+          // Override Tailwind's default 1s spin to a snappier 0.7s/rotation per product request.
+          style={{ borderColor: 'rgba(255,255,255,0.16)', borderTopColor: SP_COLORS.yellow, animationDuration: '0.7s' }}
         />
         <small className="atlas-overline text-[#cfcfcf]">loading your workspace…</small>
       </div>

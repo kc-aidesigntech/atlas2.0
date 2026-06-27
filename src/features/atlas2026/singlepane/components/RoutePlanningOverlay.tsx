@@ -55,8 +55,9 @@ export default function RoutePlanningOverlay({
             <h3 className="text-[28px] font-medium text-white">{enrollee.fullName}</h3>
             <div className="mt-2 flex flex-wrap gap-2">
               {enrollee.zCodeTags.length ? (
+                // Route-board Z-code tag pills use the same readability floor as metric pills in this overlay.
                 enrollee.zCodeTags.map((tag) => (
-                  <span key={tag} className="inline-flex rounded-full border px-2.5 py-1 text-[11px]" style={{ borderColor: '#ffffff24', color: '#d8e1ea' }}>
+                  <span key={tag} className="inline-flex rounded-full border px-2.5 py-1 text-[12px]" style={{ borderColor: '#ffffff24', color: '#d8e1ea' }}>
                     {tag}
                   </span>
                 ))

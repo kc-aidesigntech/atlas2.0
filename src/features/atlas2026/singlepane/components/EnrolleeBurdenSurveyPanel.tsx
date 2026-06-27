@@ -1,3 +1,9 @@
+// PRESERVED FOR FUTURE REINCORPORATION: this in-depth enrollee burden survey
+// was un-wired from the navigator User Interface (UI) entry point in favor of
+// the streamlined Z-code override panel (EnrolleeZCodeOverridePanel). The
+// component and its data plumbing (useSinglePaneData burden-survey state and
+// enrolleeBurdenSurveyRepository) are intentionally kept intact so the survey
+// can be re-attached later without reconstruction.
 import React from 'react'
 import { getZCodeParentColor } from '@atlas/shared'
 import { AtlasTextButton } from '../../components/AtlasPrimitives'
