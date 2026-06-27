@@ -34,6 +34,7 @@ interface NavigatorMyProfilePanelProps {
   assigningEnrollmentId: string | null
   canViewNavigatorAssignmentNames: boolean
   canToggleAssignmentActions: boolean
+  canOpenAssignmentBoardReferral: boolean
   competencySummary: SupervisorNavigatorCompetencySummary | null
   selfAssessmentSummary: NavigatorSelfAssessmentSummary
   selfAssessments: NavigatorSelfAssessmentRecord[]
@@ -48,6 +49,7 @@ interface NavigatorMyProfilePanelProps {
   avatarUploadError?: string | null
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenEnrolleeSurvey?: (enrolleeId: string) => void
+  onOpenAssignmentBoardReferral?: () => void
   onToggleEnrollmentAssignment: (
     enrollmentId: string,
     mode: 'accept' | 'archive' | 'assign' | 'unassign'
@@ -79,6 +81,7 @@ export default function NavigatorMyProfilePanel({
   assigningEnrollmentId,
   canViewNavigatorAssignmentNames,
   canToggleAssignmentActions,
+  canOpenAssignmentBoardReferral,
   competencySummary,
   selfAssessmentSummary,
   selfAssessments,
@@ -91,6 +94,7 @@ export default function NavigatorMyProfilePanel({
   avatarUploadError = null,
   onReplaceAvatar,
   onOpenEnrolleeSurvey,
+  onOpenAssignmentBoardReferral,
   onToggleEnrollmentAssignment,
   onSaveSelfAssessment,
   onSaveSupervisionSession
@@ -175,6 +179,8 @@ export default function NavigatorMyProfilePanel({
           assigningEnrollmentId={assigningEnrollmentId}
           canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
           canToggleAssignments={canToggleAssignmentActions}
+          canOpenReferralComposer={canOpenAssignmentBoardReferral}
+          onOpenReferralComposer={onOpenAssignmentBoardReferral}
           onToggleAssignment={onToggleEnrollmentAssignment}
         />
 

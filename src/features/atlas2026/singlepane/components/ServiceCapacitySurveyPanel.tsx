@@ -119,6 +119,8 @@ const ROLE_OPTIONS: Array<{ value: PartnerSurveyRespondentRole; label: string }>
 type PanelView = 'history' | 'survey'
 const SUPPORT_EMAIL = 'support@transitionalcare.net'
 const SERVICE_CAPACITY_SAVE_ERROR = 'Unable to save service capacity survey.'
+const AUTOSAVE_RETRY_DELAY_MS = 2500
+const AUTOSAVE_MAX_RETRY_ATTEMPTS = 3
 const BURDEN_SURVEY_CONFIG: SurveyCardConfig = {
   formVersion: SERVICE_CAPACITY_FORM_VERSION,
   scale: null,
@@ -209,6 +211,21 @@ function getErrorMessage(error: unknown, fallbackMessage: string) {
 
 function describeBlockingSaveIssue(message: string) {
   const normalizedMessage = message.toLowerCase()
+
+  if (
+    normalizedMessage.includes('query has no destination for result data') ||
+    normalizedMessage.includes('(42601)') ||
+    normalizedMessage.includes('42601')
+  ) {
+    return {
+      title: 'Survey completion command is out of date',
+      detail:
+        'This environment is still running an older partner service-capacity save function. Completion can fail until the latest database migration is applied.',
+      guidance:
+        'Draft autosave can continue, but completion may fail until the service-capacity function migration is deployed.',
+      canDismiss: true
+    }
+  }
 
   if (normalizedMessage.includes('supabase is required')) {
     return {
@@ -433,6 +450,8 @@ function ServiceCapacitySurveyForm({
   const [isEnsuringPartnerIdentifier, setIsEnsuringPartnerIdentifier] = useState(false)
   const [selectedPartnerIdentifierId, setSelectedPartnerIdentifierId] = useState<string | null>(null)
   const [autosaveState, setAutosaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [autosaveRetryTick, setAutosaveRetryTick] = useState(0)
+  const [saveContinuityMessage, setSaveContinuityMessage] = useState<string | null>(null)
   const [blockingSaveError, setBlockingSaveError] = useState<string | null>(saveError)
   const [dismissedBlockingSaveError, setDismissedBlockingSaveError] = useState<string | null>(null)
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(initialSubmission?.id ?? null)
@@ -442,6 +461,8 @@ function ServiceCapacitySurveyForm({
   const firstNameInputRef = useRef<HTMLInputElement | null>(null)
   const hasAutoFocusedFirstName = useRef(false)
   const autosaveTimeoutRef = useRef<number | null>(null)
+  const autosaveRetryTimeoutRef = useRef<number | null>(null)
+  const autosaveRetryAttemptsRef = useRef(0)
   const lastAutosavedSnapshotRef = useRef<string>('')
   const hasPendingAutosaveRef = useRef(false)
   const onSubmitRef = useRef(onSubmit)
@@ -453,6 +474,14 @@ function ServiceCapacitySurveyForm({
   useEffect(() => {
     onSubmitRef.current = onSubmit
   }, [onSubmit])
+
+  useEffect(() => {
+    return () => {
+      if (autosaveRetryTimeoutRef.current) {
+        window.clearTimeout(autosaveRetryTimeoutRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     setBlockingSaveError(saveError)
@@ -691,6 +720,7 @@ function ServiceCapacitySurveyForm({
 
   function updateHeader<K extends keyof PartnerServiceCapacityHeader>(key: K, value: PartnerServiceCapacityHeader[K]) {
     hasPendingAutosaveRef.current = true
+    setSaveContinuityMessage(null)
     if (key === 'firstName' || key === 'lastName' || key === 'email' || key === 'organizationName') {
       setSelectedPartnerIdentifierId(null)
     }
@@ -706,6 +736,7 @@ function ServiceCapacitySurveyForm({
 
   function applyPartnerIdentifierMatch(match: PartnerIdentifierRecord) {
     hasPendingAutosaveRef.current = true
+    setSaveContinuityMessage(null)
     setSelectedPartnerIdentifierId(match.partnerId)
     setPartnerIdentifierMatches([])
     setPartnerIdentifierError(null)
@@ -731,6 +762,7 @@ function ServiceCapacitySurveyForm({
 
   function updateAnswer(promptId: string, updates: Partial<DraftAnswer>) {
     hasPendingAutosaveRef.current = true
+    setSaveContinuityMessage(null)
     setDraft((current) => ({
       ...current,
       answers: current.answers.map((answer) => {
@@ -774,7 +806,7 @@ function ServiceCapacitySurveyForm({
       formVersion: surveyConfig.formVersion
     }
     const snapshot = JSON.stringify(payload)
-    if (snapshot === lastAutosavedSnapshotRef.current) return
+    if (snapshot === lastAutosavedSnapshotRef.current && !hasPendingAutosaveRef.current) return
 
     if (autosaveTimeoutRef.current) {
       window.clearTimeout(autosaveTimeoutRef.current)
@@ -792,12 +824,29 @@ function ServiceCapacitySurveyForm({
           }
           lastAutosavedSnapshotRef.current = snapshot
           hasPendingAutosaveRef.current = false
+          autosaveRetryAttemptsRef.current = 0
+          if (autosaveRetryTimeoutRef.current) {
+            window.clearTimeout(autosaveRetryTimeoutRef.current)
+            autosaveRetryTimeoutRef.current = null
+          }
           setAutosaveState('saved')
           setBlockingSaveError(null)
         })
         .catch((error) => {
+          hasPendingAutosaveRef.current = true
           setAutosaveState('error')
           setBlockingSaveError(getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR))
+          if (autosaveRetryAttemptsRef.current < AUTOSAVE_MAX_RETRY_ATTEMPTS) {
+            autosaveRetryAttemptsRef.current += 1
+            if (autosaveRetryTimeoutRef.current) {
+              window.clearTimeout(autosaveRetryTimeoutRef.current)
+            }
+            // Retry failed autosaves so transient network/PostgREST faults do not require
+            // manual user edits to trigger the next persistence attempt.
+            autosaveRetryTimeoutRef.current = window.setTimeout(() => {
+              setAutosaveRetryTick((current) => current + 1)
+            }, AUTOSAVE_RETRY_DELAY_MS)
+          }
         })
     }, 500)
 
@@ -806,7 +855,7 @@ function ServiceCapacitySurveyForm({
         window.clearTimeout(autosaveTimeoutRef.current)
       }
     }
-  }, [draft, draftKey])
+  }, [autosaveRetryTick, draft, draftKey])
 
   async function handleSubmit() {
     const trimmedFirstName = draft.header.firstName.trim()
@@ -843,13 +892,49 @@ function ServiceCapacitySurveyForm({
         formVersion: surveyConfig.formVersion
       })
     } catch (error) {
+      const completionErrorMessage = getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR)
       setAutosaveState('error')
-      setBlockingSaveError(getErrorMessage(error, SERVICE_CAPACITY_SAVE_ERROR))
+      setBlockingSaveError(completionErrorMessage)
+      try {
+        // Continuity fallback: if completion fails, preserve the latest answers by forcing
+        // a draft save through the same command path so users do not lose survey progress.
+        const recoveredDraftRecord = await onSubmit({
+          draftKey,
+          status: 'draft',
+          completedAtIso: null,
+          header: {
+            ...draft.header,
+            firstName: trimmedFirstName,
+            lastName: trimmedLastName,
+            email: draft.header.email.trim(),
+            organizationName: trimmedOrganization,
+            jobTitle: draft.header.jobTitle.trim(),
+            otherRoleText: draft.header.otherRoleText.trim()
+          },
+          answers: completedAnswers,
+          formVersion: surveyConfig.formVersion
+        })
+        if (isSubmissionRecord(recoveredDraftRecord)) {
+          setCurrentRecordId(recoveredDraftRecord.id)
+          if (recoveredDraftRecord.draftKey) setDraftKey(recoveredDraftRecord.draftKey)
+        }
+        hasPendingAutosaveRef.current = false
+        autosaveRetryAttemptsRef.current = 0
+        setAutosaveState('saved')
+        setBlockingSaveError(null)
+        setSaveContinuityMessage(
+          'Completion failed, but your latest answers were saved as a draft. Use "back to list" and "resume draft" after support deploys the service-capacity save fix.'
+        )
+      } catch {
+        setAutosaveState('error')
+        setBlockingSaveError(completionErrorMessage)
+      }
       return
     }
     if (isSubmissionRecord(completedRecord)) setCurrentRecordId(completedRecord.id)
     persistSurveyDraft(null)
     setAutosaveState('saved')
+    setSaveContinuityMessage(null)
     setBlockingSaveError(null)
     onCompleted(completedRecord || null)
   }
@@ -955,6 +1040,14 @@ function ServiceCapacitySurveyForm({
           style={{ borderColor: `${SP_COLORS.yellow}55`, backgroundColor: `${SP_COLORS.yellow}10`, color: '#e8e8e8' }}
         >
           {sessionResumeMessage}
+        </div>
+      ) : null}
+      {saveContinuityMessage ? (
+        <div
+          className="mt-4 rounded-[12px] border px-4 py-3 text-[13px] leading-snug md:text-[14px]"
+          style={{ borderColor: `${SP_COLORS.yellow}55`, backgroundColor: `${SP_COLORS.yellow}10`, color: '#e8e8e8' }}
+        >
+          {saveContinuityMessage}
         </div>
       ) : null}
 

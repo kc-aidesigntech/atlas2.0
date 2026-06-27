@@ -91,6 +91,7 @@ export default function SinglePaneApp() {
     viewerCanViewNavigatorAssignmentNames,
     viewerCanAccessAssignmentBoard,
     viewerCanUseAssignmentActions,
+    viewerCanAddAssignmentBoardReferral,
     viewerCanAccessAdminRegistryCards,
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
@@ -191,6 +192,7 @@ export default function SinglePaneApp() {
   const [assessmentInitialTestType, setAssessmentInitialTestType] = React.useState<'mh_sca' | 'svs' | 'ipf' | 'b_ipf' | null>(null)
   const [isLoadTableOpen, setIsLoadTableOpen] = React.useState(false)
   const [isReferralPortalOpen, setIsReferralPortalOpen] = React.useState(false)
+  const [isNavigatorAssignmentReferralOpen, setIsNavigatorAssignmentReferralOpen] = React.useState(false)
   const [isPartnerHistoryOpen, setIsPartnerHistoryOpen] = React.useState(false)
   const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
@@ -242,6 +244,7 @@ export default function SinglePaneApp() {
     if (!previousRole || previousRole === uiRole) return
 
     setIsReferralPortalOpen(false)
+    setIsNavigatorAssignmentReferralOpen(false)
 
     const isReferralPortalSelection = activeMenu === 'referral portal' || activeMenu === 'refer'
     if (!isReferralPortalSelection || uiRole === 'partner') return
@@ -407,6 +410,10 @@ export default function SinglePaneApp() {
   const canUseReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
   const isNavigatorMyProfile = uiRole === 'navigator' && activeMenu === 'my profile'
   const isNavigatorEnrolleeMenu = uiRole === 'navigator' && activeMenu === 'enrollees'
+  const canOpenNavigatorAssignmentReferral = uiRole === 'navigator' && viewerCanAddAssignmentBoardReferral
+  // Hide the referral CTA on the standard enrollee page so that profile and care
+  // workflow actions remain the only primary controls in that context.
+  const isStandardEnrolleePage = activeMenu === 'enrollees'
   const assignmentBoardRows = viewerCanAccessAssignmentBoard ? navigatorEnrollmentAssignments : []
   const assignmentBoardError = viewerCanAccessAssignmentBoard
     ? navigatorEnrollmentAssignmentsError
@@ -635,6 +642,27 @@ export default function SinglePaneApp() {
             </div>
           </div>
         ) : null}
+        {isNavigatorAssignmentReferralOpen && canOpenNavigatorAssignmentReferral ? (
+          <div className="fixed inset-0 z-[92] flex items-center justify-center bg-black/65 px-4 py-6 backdrop-blur-[2px]">
+            <div className="relative max-h-[92vh] w-full max-w-[1040px] overflow-y-auto">
+              <div className="mb-3 flex justify-end">
+                <AtlasCloseButton
+                  onClick={() => setIsNavigatorAssignmentReferralOpen(false)}
+                  style={{ ['--button-border-color' as const]: '#ffffff30', color: '#ffffff' } as React.CSSProperties}
+                />
+              </div>
+              {/* Assignment-board quick add intentionally reuses the same referral intake contract so
+                  navigator-created rows land in the pickup queue through one canonical write path. */}
+              <PartnerReferralWorkflowPanel
+                defaultReferrerName={currentNavigatorName || accountSettings.fullName}
+                defaultPartnerOrganizationName={accountSettings.organization.trim()}
+                recentReferrals={pickupQueue}
+                onSubmit={submitPartnerReferral}
+                accentColor={SP_COLORS.yellow}
+              />
+            </div>
+          </div>
+        ) : null}
         <section
           className="relative mx-auto min-h-[calc(100vh-112px)] w-full rounded-[38px] border bg-black px-[20px] pb-[12px] pt-[14px]"
           style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
@@ -845,6 +873,7 @@ export default function SinglePaneApp() {
                     assigningEnrollmentId={assigningNavigatorEnrollmentId}
                     canViewNavigatorAssignmentNames={viewerCanViewNavigatorAssignmentNames}
                     canToggleAssignmentActions={viewerCanUseAssignmentActions}
+                    canOpenAssignmentBoardReferral={canOpenNavigatorAssignmentReferral}
                     competencySummary={navigatorAssignedCompetencySummary}
                     selfAssessmentSummary={navigatorSelfAssessmentSummary}
                     selfAssessments={navigatorSelfAssessments}
@@ -857,6 +886,7 @@ export default function SinglePaneApp() {
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
                     onOpenEnrolleeSurvey={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
+                    onOpenAssignmentBoardReferral={() => setIsNavigatorAssignmentReferralOpen(true)}
                     onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
                     onSaveSelfAssessment={saveNavigatorSelfAssessment}
                     onSaveSupervisionSession={saveSupervisionSession}
@@ -892,6 +922,8 @@ export default function SinglePaneApp() {
                         assigningEnrollmentId={assigningNavigatorEnrollmentId}
                         canViewNavigatorAssignmentNames={viewerCanViewNavigatorAssignmentNames}
                         canToggleAssignments={viewerCanUseAssignmentActions}
+                        canOpenReferralComposer={canOpenNavigatorAssignmentReferral}
+                        onOpenReferralComposer={() => setIsNavigatorAssignmentReferralOpen(true)}
                         onToggleAssignment={assignNavigatorEnrollmentToSelf}
                       />
                     </div>
@@ -928,6 +960,15 @@ export default function SinglePaneApp() {
                             : undefined
                         }
                         burdenSurveyLabel={viewerRole === 'supervisor' ? 'review z-codes' : 'update z-codes'}
+                        onOpenReferralPortal={
+                          isNavigatorMyStation
+                            ? () => {
+                                // Scope referral entry to navigator "my station" profile actions
+                                // so participant profile pages do not surface duplicate CTAs.
+                                setIsReferralPortalOpen(true)
+                              }
+                            : undefined
+                        }
                       />
                     </div>
                     <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
@@ -941,26 +982,6 @@ export default function SinglePaneApp() {
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
                   </div>
                 ) : null}
-                {canUseReferralPortal && !isReferralPortalMenu ? (
-                  <div className="flex items-center justify-center py-1">
-                    <AtlasTextButton
-                      onClick={() => {
-                        if (uiRole === 'partner') {
-                          setActiveMenu('referral portal')
-                          setIsReferralPortalOpen(false)
-                          return
-                        }
-                        setIsReferralPortalOpen(true)
-                      }}
-                      className="px-[19px] py-[6px] text-[14px] text-white"
-                      style={{ ['--button-border-color' as const]: '#ffffff', color: '#111111' } as React.CSSProperties}
-                      title="Open referral portal."
-                    >
-                      refer
-                    </AtlasTextButton>
-                  </div>
-                ) : null}
-
                 {isAdminSection ? (
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
                     {viewerCanAccessAdminRegistryCards ? (

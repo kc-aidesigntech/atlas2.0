@@ -4,6 +4,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import { Group } from '@visx/group'
 import { LinePath } from '@visx/shape'
 import { scaleTime } from 'd3-scale'
@@ -29,7 +30,6 @@ import {
 } from './timelineDateUtils'
 import { TIMELINE_PHASE_COLORS, TIMELINE_STATUS_COLORS } from './timelineVisualConfig'
 import { SP_COLORS } from '../theme'
-import milestoneArrowIcon from '../../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png'
 
 interface StripMapTimelineProps {
   events: RouteLogEvent[]
@@ -183,7 +183,6 @@ export default function StripMapTimeline({
   const editorHeight = 148
   const editorOffsetX = 20
   const editorOffsetY = 14
-  const phaseLabelY = baselineY + 76
 
   useEffect(() => {
     const node = wrapperRef.current
@@ -455,7 +454,7 @@ export default function StripMapTimeline({
             centerX,
             color: TIMELINE_PHASE_COLORS.readiness,
             textColor: SP_COLORS.bg,
-            iconHref: milestoneArrowIcon
+            showArrowIcon: true
           }
         }
 
@@ -479,7 +478,7 @@ export default function StripMapTimeline({
       centerX: number
       color: string
       textColor: string
-      iconHref?: string
+      showArrowIcon?: boolean
       disabled?: boolean
     }>
   }, [
@@ -515,6 +514,9 @@ export default function StripMapTimeline({
     : baselineY
   const incrementLabelBottom = incrementMarkers.length ? baselineY + 34 : baselineY
   const phaseButtonsTop = Math.max(deepestResolvedMarkerBottom, deepestPartnerActiveBottom, incrementLabelBottom) + 42
+  // Keep passive phase text (no CTA button) aligned with the active button row so
+  // mixed states like "regulation button + readiness text + renewal text" share one baseline.
+  const phaseLabelY = phaseButtonsTop + 28
   const focusedStationTop = phaseButtonsTop + 64
   const containerHeight = highlightedStationName ? Math.max(height, focusedStationTop + 72) : Math.max(height, phaseButtonsTop + 64)
 
@@ -733,12 +735,11 @@ export default function StripMapTimeline({
             } as React.CSSProperties}
           >
             {button.label}
-            {button.iconHref ? (
-              <img
-                src={button.iconHref}
-                alt=""
-                aria-hidden="true"
-                className="h-[1.1rem] w-[1.1rem] rotate-90"
+            {button.showArrowIcon ? (
+              <AtlasArrowIcon
+                decorative
+                direction="right"
+                className="h-[1.1rem] w-[1.1rem]"
                 style={button.textColor === SP_COLORS.bg ? { filter: 'brightness(0) saturate(100%)' } : undefined}
               />
             ) : null}
@@ -796,7 +797,15 @@ export default function StripMapTimeline({
           {phaseSeparatorPositions.map((separator) => (
             <g key={separator.key} transform={`translate(${separator.x}, ${baselineY})`} aria-hidden="true">
               <line x1="-24" y1="0" x2="24" y2="0" stroke="#000000" strokeWidth="10" strokeLinecap="round" />
-              <image href={milestoneArrowIcon} x={-17} y={-17} width={34} height={34} transform="rotate(90 0 0)" opacity={1} />
+              {/* Draw separator arrows inline so timeline markers do not depend on external asset URLs. */}
+              <polyline
+                points="-8,-10 8,0 -8,10"
+                fill="none"
+                stroke={SP_COLORS.white}
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </g>
           ))}
 

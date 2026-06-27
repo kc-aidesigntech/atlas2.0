@@ -12,7 +12,8 @@ export const ATLAS_NEUTRAL_COLORS = {
   surface: "#0d0d0d",
   border: "#2a2a2a",
   text: "#ffffff",
-  muted: "#a7a9ac",
+  // Raised for stronger small-text contrast on dark surfaces across overlays/panels.
+  muted: "#bcc2c8",
   steel: "#808183",
 } as const;
 

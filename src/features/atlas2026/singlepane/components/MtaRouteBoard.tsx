@@ -217,7 +217,8 @@ export default function MtaRouteBoard({
                       )}
                     </div>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]" style={{ color: '#9fafbd' }}>
+                    {/* Keep metric pill text at a readable floor so numeric routing signals remain legible in dense rows. */}
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]" style={{ color: '#9fafbd' }}>
                       <StatChip label="score" value={formatMetricValue(candidate.score)} />
                       <StatChip label="match" value={formatMatchPercent(candidate.matchedZCodeCount, activeZCodeCount)} />
                       <StatChip label="station burden" value={formatMetricValue(candidate.partnerBurdenTotal)} />

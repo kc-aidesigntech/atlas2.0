@@ -268,6 +268,63 @@ export default function AdminDirectorySection({
                   Allows this user to click assignment-count labels and view assigned navigator names.
                 </small>
               </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <AtlasTextButton
+                  onClick={() =>
+                    setPersonDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            featurePolicy: {
+                              ...current.featurePolicy,
+                              actionToggles: (() => {
+                                const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
+                                  toAtlasRoles(current.roles),
+                                  'actionToggles',
+                                  'assignmentBoard.addReferral',
+                                  undefined
+                                )
+                                return toggleCapabilityOverride(
+                                  current.featurePolicy.actionToggles,
+                                  roleDefaultsToAllowed,
+                                  'assignmentBoard.addReferral'
+                                )
+                              })()
+                            }
+                          }
+                        : current
+                    )
+                  }
+                  className="px-[14px] py-[7px] text-[13px] font-medium"
+                  style={
+                    (() => {
+                      const canAddFromBoard = isCapabilityAllowedForAnyRole(
+                        toAtlasRoles(personDraft.roles),
+                        'actionToggles',
+                        'assignmentBoard.addReferral',
+                        personDraft.featurePolicy.actionToggles
+                      )
+                      return {
+                        ['--button-border-color' as const]: canAddFromBoard ? SP_COLORS.deepGreen : '#ffffff25',
+                        color: canAddFromBoard ? SP_COLORS.deepGreen : SP_COLORS.white,
+                        backgroundColor: canAddFromBoard ? 'rgba(69,191,85,0.12)' : 'transparent'
+                      } as React.CSSProperties
+                    })()
+                  }
+                >
+                  {isCapabilityAllowedForAnyRole(
+                    toAtlasRoles(personDraft.roles),
+                    'actionToggles',
+                    'assignmentBoard.addReferral',
+                    personDraft.featurePolicy.actionToggles
+                  )
+                    ? 'assignment board + enabled'
+                    : 'assignment board + disabled'}
+                </AtlasTextButton>
+                <small className="text-[12px] text-[var(--foreground-secondary)]">
+                  Controls whether this user can add an enrollee from the assignment board using the referral workflow.
+                </small>
+              </div>
             </FieldComponent>
             <FieldComponent label="signup approval">
               <div className="flex flex-wrap items-center gap-2">

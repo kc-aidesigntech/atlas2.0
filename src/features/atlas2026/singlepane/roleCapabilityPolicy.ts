@@ -15,6 +15,7 @@ export const ADMIN_POLICY_CARD_KEYS = ['navigatorCoverageCard', 'liveAccessMatri
 export const ADMIN_POLICY_ACTION_KEYS = [
   'assignmentBoard.viewNavigatorNames',
   'assignmentBoard.assignSelf',
+  'assignmentBoard.addReferral',
   'admin.saveRegistry',
   'intake.write',
   'zcodes.write',
@@ -44,6 +45,7 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
     actionToggles: {
       'assignmentBoard.viewNavigatorNames': true,
       'assignmentBoard.assignSelf': false,
+      'assignmentBoard.addReferral': false,
       'admin.saveRegistry': true,
       'intake.write': true,
       'zcodes.write': true,
@@ -68,6 +70,7 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
     actionToggles: {
       'assignmentBoard.viewNavigatorNames': false,
       'assignmentBoard.assignSelf': false,
+      'assignmentBoard.addReferral': false,
       'admin.saveRegistry': false,
       'intake.write': false,
       'zcodes.write': false,
@@ -92,6 +95,7 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
     actionToggles: {
       'assignmentBoard.viewNavigatorNames': false,
       'assignmentBoard.assignSelf': true,
+      'assignmentBoard.addReferral': false,
       'admin.saveRegistry': false,
       'intake.write': true,
       'zcodes.write': true,
@@ -116,6 +120,7 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
     actionToggles: {
       'assignmentBoard.viewNavigatorNames': false,
       'assignmentBoard.assignSelf': false,
+      'assignmentBoard.addReferral': false,
       'admin.saveRegistry': false,
       'intake.write': false,
       'zcodes.write': false,

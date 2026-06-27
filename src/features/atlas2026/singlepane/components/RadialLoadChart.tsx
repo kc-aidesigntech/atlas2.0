@@ -100,27 +100,29 @@ export default function RadialLoadChart({ load, onClick, size = 'default' }: Rad
   const habitat = load?.habitat || 0
   const work = load?.work || 0
   const social = load?.socialNetworks || 0
-  const habitatWorkBlend = (habitat + work) / 2
-  const workSocialBlend = (work + social) / 2
-  const socialHabitatBlend = (social + habitat) / 2
+  const habitatSocialBlend = (habitat + social) / 2
+  const socialWorkBlend = (social + work) / 2
+  const workHabitatBlend = (work + habitat) / 2
   const maxDomainValue = Math.max(
     habitat,
-    habitatWorkBlend,
-    work,
-    workSocialBlend,
+    habitatSocialBlend,
     social,
-    socialHabitatBlend,
+    socialWorkBlend,
+    work,
+    workHabitatBlend,
     1
   )
   const chartDomainMax = Math.max(6, Math.min(9, Math.ceil(maxDomainValue + 2)))
 
+  // Keep vertex order aligned with domain-spectrum controls so clockwise
+  // orientation is consistent anywhere we render habitat/social/work.
   const data: ChartAxisPoint[] = [
     { axis: 'habitat', label: 'habitat', value: habitat },
-    { axis: 'habitat-work-blend', label: '', value: habitatWorkBlend },
-    { axis: 'work', label: 'work', value: work },
-    { axis: 'work-social-blend', label: '', value: workSocialBlend },
+    { axis: 'habitat-social-blend', label: '', value: habitatSocialBlend },
     { axis: 'social-networks', label: 'social networks', value: social },
-    { axis: 'social-habitat-blend', label: '', value: socialHabitatBlend }
+    { axis: 'social-work-blend', label: '', value: socialWorkBlend },
+    { axis: 'work', label: 'work', value: work },
+    { axis: 'work-habitat-blend', label: '', value: workHabitatBlend }
   ]
   const axisLabelMap = React.useMemo(() => new Map(data.map((point) => [point.axis, point.label])), [data])
   const tickCount = Math.min(Math.max(Math.ceil(chartDomainMax), 3), 6)

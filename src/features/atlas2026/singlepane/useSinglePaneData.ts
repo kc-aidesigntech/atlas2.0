@@ -1020,6 +1020,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     () => isViewerPolicyAllowed('actionToggles', 'assignmentBoard.assignSelf'),
     [isViewerPolicyAllowed]
   )
+  const viewerCanAddAssignmentBoardReferral = useMemo(
+    () => isViewerPolicyAllowed('actionToggles', 'assignmentBoard.addReferral'),
+    [isViewerPolicyAllowed]
+  )
   const viewerCanAccessAdminRegistryCards = useMemo(
     () =>
       isViewerPolicyAllowed('cardToggles', 'navigatorCoverageCard') &&
@@ -3246,6 +3250,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     viewerCanViewNavigatorAssignmentNames,
     viewerCanAccessAssignmentBoard,
     viewerCanUseAssignmentActions,
+    viewerCanAddAssignmentBoardReferral,
     viewerCanAccessAdminRegistryCards,
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
