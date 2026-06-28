@@ -66,8 +66,10 @@ import {
   saveEnrolleeBurdenSurvey
 } from '@/features/atlas2026/singlepane/data-access/enrolleeBurdenSurveyRepository'
 import {
+  deleteAdminServiceCapacitySubmission,
   deletePartnerServiceCapacityDraftRecord,
   ensurePartnerIdentifierRecordForSurvey,
+  loadAdminDeletableServiceCapacitySubmissions,
   loadZCodeDomainSurveyHistorySummary,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
@@ -82,7 +84,7 @@ import {
   saveAccessMatrixPersonRoles,
   saveAccessMatrixSupervisorAssignments
 } from '@/features/atlas2026/singlepane/data-access/accessMatrixRepository'
-import { toNormalizedRadialDomainLoad } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
+import { mapZCodeToDomainBucket, toNormalizedRadialDomainLoad } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
@@ -353,14 +355,41 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
 
   const loadBreakdownsByEnrolleeId = Object.fromEntries(
     uniqueVisibleProfiles.map((profile) => {
-      const rows = visibleBreakdownRows
-        .filter((row) => row.enrollmentId === profile.enrollmentId)
-        .map((row) => ({
-          id: `${profile.enrolleeId}:${row.zCodeGroup}`,
-          zCodeGroup: row.zCodeGroup,
-          mappedDomain: row.mappedDomain,
-          rawCount: row.rawCount
-        }))
+      const canonicalRows = profile.activeZCodeDetails
+        .map((detail) => {
+          const normalizedZCode = detail.zCode.trim().toUpperCase()
+          if (!normalizedZCode) return null
+          const parentCode = detail.parentCode.trim().toUpperCase()
+          return {
+            id: detail.enrolleeZCodeId,
+            zCodeGroup: normalizedZCode,
+            parentCode,
+            mappedDomain: mapZCodeToDomainBucket(parentCode, normalizedZCode),
+            rawCount: 1,
+            responseCount: 1,
+            // Keep a direct pointer to the canonical enrollee_z_codes record so
+            // drilldown actions edit the true source row behind this chart value.
+            drilldownTarget: {
+              kind: 'enrolleeZCode' as const,
+              enrolleeId: profile.enrolleeId,
+              enrollmentId: profile.enrollmentId,
+              enrolleeZCodeId: detail.enrolleeZCodeId,
+              normalizedZCode
+            }
+          }
+        })
+        .filter((row): row is DomainLoadBreakdown['rows'][number] => Boolean(row))
+      const rows =
+        canonicalRows.length > 0
+          ? canonicalRows
+          : visibleBreakdownRows
+              .filter((row) => row.enrollmentId === profile.enrollmentId)
+              .map((row) => ({
+                id: `${profile.enrolleeId}:${row.zCodeGroup}`,
+                zCodeGroup: row.zCodeGroup,
+                mappedDomain: row.mappedDomain,
+                rawCount: row.rawCount
+              }))
       const totals = rows.reduce(
         (accumulator, row) => {
           if (row.mappedDomain === 'habitat') accumulator.habitatTotal += row.rawCount
@@ -1052,6 +1081,7 @@ export {
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
   deletePartnerServiceCapacityDraftRecord,
+  deleteAdminServiceCapacitySubmission,
   loadRouteAssignments,
   saveAdminPortalRegistry,
   saveAccountSettings,
@@ -1072,6 +1102,7 @@ export {
   deleteEnrolleeBurdenSurveyDraftRecord,
   ensurePartnerIdentifierRecordForSurvey,
   searchPartnerIdentifierRecordMatches,
+  loadAdminDeletableServiceCapacitySubmissions,
   loadZCodeDomainSurveyHistorySummary,
   setZCodeDomainSurveyAnswerNullified
 }

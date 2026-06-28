@@ -25,6 +25,7 @@ import type {
   RegulationReviewRosterRow
 } from '@/features/atlas2026/admin/components/types'
 import type {
+  AdminDeletableServiceCapacitySubmissionRecord,
   AccessMatrixDataset,
   AdminPortalCustomEnrolleeRecord,
   AdminPortalOrganizationRecord,
@@ -63,6 +64,10 @@ type AdminPortalSection = 'overview' | 'enrollees' | 'directory' | 'organization
 interface AdminDataControlPanelProps {
   metrics: AdminDataQualityMetric[]
   zCodeDomainSurveyHistorySummary: ZCodeDomainSurveyHistorySummary[]
+  deletableServiceCapacitySubmissions: AdminDeletableServiceCapacitySubmissionRecord[]
+  isLoadingDeletableServiceCapacitySubmissions: boolean
+  deletingServiceCapacitySubmissionId: string | null
+  serviceCapacityDeletionError: string | null
   isLoadingZCodeDomainSurveyHistorySummary: boolean
   isSavingZCodeDomainSurveyNullification: boolean
   zCodeDomainSurveyHistoryError: string | null
@@ -90,6 +95,13 @@ interface AdminDataControlPanelProps {
     isNullified: boolean
     nullifiedReason?: string | null
   }) => Promise<unknown> | unknown
+  onDeleteServiceCapacitySubmission: (input: {
+    submissionId: string
+    reasonCode: 'obsolete' | 'not_relevant' | 'mistakenly_entered' | 'contained_errors' | 'other'
+    reasonOtherText?: string | null
+  }) => Promise<unknown> | unknown
+  requestedDomainSurveyZCode?: string | null
+  onAcknowledgeRequestedDomainSurveyZCode?: () => void
   onSaveEnrollmentNavigators: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<unknown> | unknown
   onSaveIntervalAssessmentRule: (rule: IntervalAssessmentRule) => Promise<unknown> | unknown
   onSaveIntake: (intake: EnrolleeIntakeRecord) => Promise<unknown> | unknown
@@ -361,6 +373,10 @@ function RecordTable({
 export default function AdminDataControlPanel({
   metrics,
   zCodeDomainSurveyHistorySummary,
+  deletableServiceCapacitySubmissions,
+  isLoadingDeletableServiceCapacitySubmissions,
+  deletingServiceCapacitySubmissionId,
+  serviceCapacityDeletionError,
   isLoadingZCodeDomainSurveyHistorySummary,
   isSavingZCodeDomainSurveyNullification,
   zCodeDomainSurveyHistoryError,
@@ -382,6 +398,9 @@ export default function AdminDataControlPanel({
   registryError,
   onSaveRegistry,
   onSetZCodeDomainSurveyAnswerNullification,
+  onDeleteServiceCapacitySubmission,
+  requestedDomainSurveyZCode,
+  onAcknowledgeRequestedDomainSurveyZCode,
   onSaveEnrollmentNavigators,
   onSaveIntervalAssessmentRule,
   onSaveIntake,
@@ -1093,6 +1112,16 @@ export default function AdminDataControlPanel({
     setSelectedDomainSurveyZCode(zCodeDomainSurveyHistorySummary[0].normalizedZCode)
   }, [selectedDomainSurveyZCode, zCodeDomainSurveyHistorySummary])
 
+  useEffect(() => {
+    const normalized = requestedDomainSurveyZCode?.trim().toUpperCase()
+    if (!normalized) return
+    // Chart drilldown should land admins in the exact overview workflow where
+    // source answer rows can be nullified/restored against the canonical records.
+    setActiveSection('overview')
+    setSelectedDomainSurveyZCode(normalized)
+    onAcknowledgeRequestedDomainSurveyZCode?.()
+  }, [onAcknowledgeRequestedDomainSurveyZCode, requestedDomainSurveyZCode])
+
   const selectedDomainSurveySummary = useMemo(
     () => zCodeDomainSurveyHistorySummary.find((entry) => entry.normalizedZCode === selectedDomainSurveyZCode) || null,
     [selectedDomainSurveyZCode, zCodeDomainSurveyHistorySummary]
@@ -1212,11 +1241,18 @@ export default function AdminDataControlPanel({
               isLoadingZCodeDomainSurveyHistorySummary={isLoadingZCodeDomainSurveyHistorySummary}
               zCodeDomainSurveyHistoryError={zCodeDomainSurveyHistoryError}
               zCodeDomainSurveyHistorySummary={zCodeDomainSurveyHistorySummary}
+              deletableServiceCapacitySubmissions={deletableServiceCapacitySubmissions}
+              isLoadingDeletableServiceCapacitySubmissions={isLoadingDeletableServiceCapacitySubmissions}
+              deletingServiceCapacitySubmissionId={deletingServiceCapacitySubmissionId}
+              serviceCapacityDeletionError={serviceCapacityDeletionError}
               selectedDomainSurveySummary={selectedDomainSurveySummary}
               setSelectedDomainSurveyZCode={setSelectedDomainSurveyZCode}
               nullificationReasonByAnswerId={nullificationReasonByAnswerId}
               setNullificationReasonByAnswerId={setNullificationReasonByAnswerId}
               handleSetDomainSurveyNullification={handleSetDomainSurveyNullification}
+              handleDeleteServiceCapacitySubmission={async (input) => {
+                await onDeleteServiceCapacitySubmission(input)
+              }}
               formatMetricLabel={formatMetricLabel}
               formatDateLabel={formatDateLabel}
               StatusPillComponent={StatusPill}

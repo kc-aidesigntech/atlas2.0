@@ -4,6 +4,12 @@ export type PartnerSurveyRespondentRole =
   | "other";
 
 export type PartnerServiceCapacitySubmissionStatus = "draft" | "completed";
+export type PartnerServiceCapacityDeletionReasonCode =
+  | "obsolete"
+  | "not_relevant"
+  | "mistakenly_entered"
+  | "contained_errors"
+  | "other";
 
 export type EnrolleeBurdenSurveyRespondentRole = "navigator" | "supervisor";
 
@@ -55,6 +61,19 @@ export interface PartnerServiceCapacitySubmissionRecord
   draftKey: string;
   status: PartnerServiceCapacitySubmissionStatus;
   completedAtIso: string | null;
+}
+
+export interface AdminDeletableServiceCapacitySubmissionRecord {
+  id: string;
+  draftKey: string;
+  status: PartnerServiceCapacitySubmissionStatus;
+  formVersion: string;
+  organizationName: string;
+  respondentName: string;
+  respondentEmail: string;
+  submittedAtIso: string;
+  completedAtIso: string | null;
+  answerCount: number;
 }
 
 export interface EnrolleeBurdenSurveyHeader {

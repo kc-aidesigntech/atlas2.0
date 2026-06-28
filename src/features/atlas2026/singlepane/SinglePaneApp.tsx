@@ -29,7 +29,7 @@ import StripMapTimeline from './components/StripMapTimeline'
 import TopNav from './components/TopNav'
 import VerticalStripMapTimeline from './components/VerticalStripMapTimeline'
 import { SP_COLORS } from './theme'
-import type { AtlasRole, RouteCandidateRecord, StabilizationPhase } from './types'
+import type { AtlasRole, DomainLoadDrilldownTarget, RouteCandidateRecord, StabilizationPhase } from './types'
 import { useSinglePaneData } from './useSinglePaneData'
 
 const PERSISTED_ACTION_LABELS = new Set([
@@ -69,6 +69,10 @@ export default function SinglePaneApp() {
     countyHeatmap,
     adminMetrics,
     zCodeDomainSurveyHistorySummary,
+    adminDeletableServiceCapacitySubmissions,
+    isLoadingAdminDeletableServiceCapacitySubmissions,
+    deletingAdminServiceCapacitySubmissionId,
+    adminServiceCapacityDeletionError,
     isLoadingZCodeDomainSurveyHistorySummary,
     isSavingZCodeDomainSurveyNullification,
     zCodeDomainSurveyHistoryError,
@@ -163,6 +167,7 @@ export default function SinglePaneApp() {
     saveRouteAssignment,
     saveEnrolleeBurdenSurvey,
     setZCodeDomainSurveyAnswerNullification,
+    deleteAdminServiceCapacitySubmission,
     saveNavigatorCompetencyAssessment,
     saveNavigatorRegulationTest,
     deleteNavigatorRegulationTestDraft,
@@ -195,6 +200,7 @@ export default function SinglePaneApp() {
   const [isNavigatorAssignmentReferralOpen, setIsNavigatorAssignmentReferralOpen] = React.useState(false)
   const [isPartnerHistoryOpen, setIsPartnerHistoryOpen] = React.useState(false)
   const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
+  const [requestedAdminDomainSurveyZCode, setRequestedAdminDomainSurveyZCode] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
   const [selectedPartnerSpecialtyGroup, setSelectedPartnerSpecialtyGroup] = React.useState<(typeof partnerStationSpecialties)[number] | null>(null)
@@ -305,6 +311,22 @@ export default function SinglePaneApp() {
       setEnrolleeSurveyTargetId(enrolleeId)
     },
     [enrollees, setSelectedEnrolleeId]
+  )
+
+  const handleOpenTrueRecord = React.useCallback(
+    (target: DomainLoadDrilldownTarget) => {
+      if (target.kind === 'enrolleeZCode' && target.enrolleeId) {
+        openEnrolleeZCodeOverride(target.enrolleeId)
+        return
+      }
+      if (target.kind === 'zCodeSurveyHistory' && target.normalizedZCode && viewerRole === 'administrator') {
+        setRequestedAdminDomainSurveyZCode(target.normalizedZCode.trim().toUpperCase())
+        if (activeMenu !== 'system operations') {
+          setActiveMenu('system operations')
+        }
+      }
+    },
+    [activeMenu, openEnrolleeZCodeOverride, setActiveMenu, viewerRole]
   )
 
   React.useEffect(() => {
@@ -785,6 +807,7 @@ export default function SinglePaneApp() {
             load={displayLoad}
             breakdown={displayLoadBreakdown}
             navigatorContributors={isNavigatorMyProfile ? navigatorLoadContributors : []}
+            onOpenTrueRecord={handleOpenTrueRecord}
             onClose={() => setIsLoadTableOpen(false)}
           />
           <PartnerSpecialtyOverlay
@@ -829,7 +852,7 @@ export default function SinglePaneApp() {
                     (EnrolleeBurdenSurveyPanel is preserved for reincorporation). */}
                 <EnrolleeZCodeOverridePanel
                   enrollee={activeEnrolleeSurveyTarget}
-                  canEdit={viewerRole === 'navigator' && viewerCanWrite}
+                  canEdit={(viewerRole === 'navigator' || viewerRole === 'administrator') && viewerCanWrite}
                   onSave={overrideEnrolleeZCodes}
                 />
               </div>
@@ -1005,6 +1028,10 @@ export default function SinglePaneApp() {
                           isLoadingZCodeDomainSurveyHistorySummary={isLoadingZCodeDomainSurveyHistorySummary}
                           isSavingZCodeDomainSurveyNullification={isSavingZCodeDomainSurveyNullification}
                           zCodeDomainSurveyHistoryError={zCodeDomainSurveyHistoryError}
+                          deletableServiceCapacitySubmissions={adminDeletableServiceCapacitySubmissions}
+                          isLoadingDeletableServiceCapacitySubmissions={isLoadingAdminDeletableServiceCapacitySubmissions}
+                          deletingServiceCapacitySubmissionId={deletingAdminServiceCapacitySubmissionId}
+                          serviceCapacityDeletionError={adminServiceCapacityDeletionError}
                           enrollees={enrollees}
                           intakeFormsByEnrolleeId={intakeFormsByEnrolleeId}
                           selectedEnrollee={selectedEnrollee}
@@ -1023,6 +1050,9 @@ export default function SinglePaneApp() {
                           registryError={adminPortalRegistryError}
                           onSaveRegistry={saveAdminPortalRegistry}
                           onSetZCodeDomainSurveyAnswerNullification={setZCodeDomainSurveyAnswerNullification}
+                          onDeleteServiceCapacitySubmission={deleteAdminServiceCapacitySubmission}
+                          requestedDomainSurveyZCode={requestedAdminDomainSurveyZCode}
+                          onAcknowledgeRequestedDomainSurveyZCode={() => setRequestedAdminDomainSurveyZCode(null)}
                           onSaveEnrollmentNavigators={saveAccessMatrixEnrollmentNavigators}
                           onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
                           onSaveIntake={saveEnrolleeIntake}

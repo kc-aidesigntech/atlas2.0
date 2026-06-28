@@ -1,5 +1,6 @@
 import type React from 'react'
 import type {
+  AdminDeletableServiceCapacitySubmissionRecord,
   AccessMatrixDataset,
   AdminDataQualityMetric,
   AdminPortalCustomEnrolleeRecord,
@@ -17,6 +18,7 @@ import type {
   RegulationReviewEnrolleeSetting,
   RegulationReviewSettings,
   SupervisorNavigatorCompetencySummary,
+  PartnerServiceCapacityDeletionReasonCode,
   ZCodeDomainSurveyHistorySummary
 } from '@/features/atlas2026/singlepane/types'
 
@@ -73,11 +75,20 @@ export interface AdminOverviewSectionDataProps {
   isLoadingZCodeDomainSurveyHistorySummary: boolean
   zCodeDomainSurveyHistoryError: string | null
   zCodeDomainSurveyHistorySummary: ZCodeDomainSurveyHistorySummary[]
+  deletableServiceCapacitySubmissions: AdminDeletableServiceCapacitySubmissionRecord[]
+  isLoadingDeletableServiceCapacitySubmissions: boolean
+  deletingServiceCapacitySubmissionId: string | null
+  serviceCapacityDeletionError: string | null
   selectedDomainSurveySummary: ZCodeDomainSurveyHistorySummary | null
   setSelectedDomainSurveyZCode: (value: string) => void
   nullificationReasonByAnswerId: Record<string, string>
   setNullificationReasonByAnswerId: SetState<Record<string, string>>
   handleSetDomainSurveyNullification: (answerId: string, isNullified: boolean) => Promise<void>
+  handleDeleteServiceCapacitySubmission: (input: {
+    submissionId: string
+    reasonCode: PartnerServiceCapacityDeletionReasonCode
+    reasonOtherText?: string | null
+  }) => Promise<void>
   formatMetricLabel: (value: string) => string
   formatDateLabel: (value?: string | null) => string
 }

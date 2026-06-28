@@ -4,6 +4,7 @@
  */
 import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import ServiceCapacitySurveyPanel from '@/features/atlas2026/singlepane/components/ServiceCapacitySurveyPanel'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePaneData'
@@ -91,6 +92,7 @@ export default function StandaloneZCodeSurveysPage() {
 
   function backToWorkspace() {
     if (typeof window === 'undefined') return
+    // Preserve partner context so the shell lands in the same workspace lane after leaving surveys.
     window.sessionStorage.setItem(SESSION_ROLE_KEY, 'partner')
     window.sessionStorage.setItem(SESSION_ACTIVE_MENU_KEY, 'my station')
     window.location.assign(new URL('/', window.location.origin).toString())
@@ -98,39 +100,59 @@ export default function StandaloneZCodeSurveysPage() {
 
   return (
     <div
-      className="atlas-shell-edge-buffer min-h-screen overflow-x-hidden bg-black py-6 text-white md:py-8"
+      className="min-h-screen overflow-x-hidden bg-black text-white"
       style={{ backgroundColor: SP_COLORS.bg, color: SP_COLORS.text, fontFamily: 'Helvetica, Arial, sans-serif' }}
     >
-      <main className="mx-auto w-full max-w-[1240px] space-y-4">
-        <div className="atlas-surface-panel flex flex-wrap items-center gap-2 px-4 py-3">
-          <AtlasTextButton
-            onClick={() => navigateToTab('serviceCapacity')}
-            className="px-[14px] py-[7px] text-[13px] font-medium"
-            style={{
-              ['--button-border-color' as const]: activeTab === 'serviceCapacity' ? SP_COLORS.yellow : '#ffffff2f',
-              color: activeTab === 'serviceCapacity' ? SP_COLORS.yellow : SP_COLORS.white
-            } as React.CSSProperties}
+      <header className="border-b bg-black" style={{ borderColor: '#ffffff70' }}>
+        <div className="atlas-shell-edge-buffer flex h-[54px] items-center border-b" style={{ borderColor: '#ffffff45' }}>
+          <button
+            type="button"
+            onClick={backToWorkspace}
+            className="atlas-font-heading text-[17px] font-medium tracking-[0.08em] text-white"
+            aria-label="Go to ATLAS home"
           >
-            Service capacity survey
-          </AtlasTextButton>
-          <AtlasTextButton
-            onClick={() => navigateToTab('domainSpectrum')}
-            className="px-[14px] py-[7px] text-[13px] font-medium"
-            style={{
-              ['--button-border-color' as const]: activeTab === 'domainSpectrum' ? SP_COLORS.yellow : '#ffffff2f',
-              color: activeTab === 'domainSpectrum' ? SP_COLORS.yellow : SP_COLORS.white
-            } as React.CSSProperties}
-          >
-            Domain spectrum survey
-          </AtlasTextButton>
+            ATLAS
+          </button>
         </div>
-
+        <div className="atlas-shell-edge-buffer flex min-h-[54px] items-center py-2">
+          <div className="flex min-w-max flex-wrap items-center gap-2 text-white">
+            <AtlasTextButton
+              onClick={backToWorkspace}
+              className="inline-flex items-center gap-2 px-[14px] py-[7px] text-[13px] font-medium"
+              style={{ ['--button-border-color' as const]: '#ffffff2f', color: SP_COLORS.white } as React.CSSProperties}
+            >
+              <AtlasArrowIcon decorative direction="left" className="h-[1.1rem] w-[1.1rem] opacity-90" />
+              back
+            </AtlasTextButton>
+            <AtlasTextButton
+              onClick={() => navigateToTab('serviceCapacity')}
+              className="px-[14px] py-[7px] text-[13px] font-medium"
+              style={{
+                ['--button-border-color' as const]: activeTab === 'serviceCapacity' ? SP_COLORS.yellow : '#ffffff2f',
+                color: activeTab === 'serviceCapacity' ? SP_COLORS.yellow : SP_COLORS.white
+              } as React.CSSProperties}
+            >
+              Service capacity survey
+            </AtlasTextButton>
+            <AtlasTextButton
+              onClick={() => navigateToTab('domainSpectrum')}
+              className="px-[14px] py-[7px] text-[13px] font-medium"
+              style={{
+                ['--button-border-color' as const]: activeTab === 'domainSpectrum' ? SP_COLORS.yellow : '#ffffff2f',
+                color: activeTab === 'domainSpectrum' ? SP_COLORS.yellow : SP_COLORS.white
+              } as React.CSSProperties}
+            >
+              Domain spectrum survey
+            </AtlasTextButton>
+          </div>
+        </div>
+      </header>
+      <main className="atlas-shell-edge-buffer mx-auto w-full max-w-[1240px] space-y-4 py-6 md:py-8">
         <ServiceCapacitySurveyPanel
           submissionHistory={partnerServiceCapacitySurveyHistory}
           defaultHeader={partnerServiceCapacityDefaultHeader}
           isSaving={isSavingPartnerServiceCapacitySurvey}
           saveError={partnerServiceCapacitySurveyError}
-          onBackToWorkspace={backToWorkspace}
           onSearchPartnerIdentifiers={searchPartnerIdentifierMatches}
           onEnsurePartnerIdentifier={ensurePartnerIdentifier}
           onSubmit={savePartnerServiceCapacitySurvey}

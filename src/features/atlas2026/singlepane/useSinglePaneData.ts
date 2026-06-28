@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AccessMatrixDataset,
+  AdminDeletableServiceCapacitySubmissionRecord,
   AdminPortalPersonRecord,
   AdminPortalRegistry,
   AdminPortalPersonRole,
@@ -32,6 +33,7 @@ import type {
   PartnerIdentifierRecord,
   PartnerReferralSubmissionInput,
   PartnerServiceCapacityHeader,
+  PartnerServiceCapacityDeletionReasonCode,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
   NavigatorCompetencyAssessmentRecord,
@@ -66,6 +68,7 @@ import {
   prefetchJourneyStationMarkersForEnrollments,
   prefetchRouteCandidatesForEnrollments,
   loadPartnerServiceCapacitySurveyHistory,
+  loadAdminDeletableServiceCapacitySubmissions,
   loadPartnerStationProfile,
   loadNavigatorProgramState,
   loadNavigatorEnrollmentAssignments,
@@ -77,6 +80,7 @@ import {
   invalidateJourneyStationMarkersCache,
   invalidateRouteCandidatesCache,
   setZCodeDomainSurveyAnswerNullified,
+  deleteAdminServiceCapacitySubmission as deleteAdminServiceCapacitySubmissionRecord,
   uploadEnrolleeProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
   saveAccountSettings as persistAccountSettings,
@@ -760,7 +764,10 @@ function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadB
     rawCount: row.rawCount / row.sampleCount,
     specializeCount: row.specializeCount ? row.specializeCount / row.sampleCount : undefined,
     interfereCount: row.interfereCount ? row.interfereCount / row.sampleCount : undefined,
-    responseCount: row.sampleCount
+    responseCount: row.sampleCount,
+    // Aggregate rows blend multiple enrollees, so a single "true record" pointer
+    // would be misleading; keep drilldown disabled at this level.
+    drilldownTarget: undefined
   }))
   const habitatRows = rows.filter((row) => row.mappedDomain === 'habitat')
   const workRows = rows.filter((row) => row.mappedDomain === 'work')
@@ -822,7 +829,16 @@ function buildNavigatorRouteBoardLoadBreakdown(
         rawCount: invertedBurden,
         responseCount: routeCandidates.length,
         partnerScoreTrace,
-        averagePartnerStrength: averageStrength
+        averagePartnerStrength: averageStrength,
+        // Route-board projections are still anchored to one canonical enrollee
+        // Z-code row; this keeps "open true record" focused on editable source data.
+        drilldownTarget: {
+          kind: 'enrolleeZCode',
+          enrolleeId: selectedEnrollee.id,
+          enrollmentId: selectedEnrollee.enrollmentId,
+          enrolleeZCodeId: detail.enrolleeZCodeId,
+          normalizedZCode
+        }
       } satisfies DomainLoadBreakdown['rows'][number]
     })
     .filter(Boolean) as DomainLoadBreakdown['rows']
@@ -920,6 +936,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [demoTaggedEnrollmentIds, setDemoTaggedEnrollmentIds] = useState<string[]>([])
   const [publicQueueRecords, setPublicQueueRecords] = useState<UnassignedEnrolleePickupRecord[]>([])
   const [zCodeDomainSurveyHistorySummary, setZCodeDomainSurveyHistorySummary] = useState<ZCodeDomainSurveyHistorySummary[]>([])
+  const [adminDeletableServiceCapacitySubmissions, setAdminDeletableServiceCapacitySubmissions] = useState<
+    AdminDeletableServiceCapacitySubmissionRecord[]
+  >([])
+  const [isLoadingAdminDeletableServiceCapacitySubmissions, setIsLoadingAdminDeletableServiceCapacitySubmissions] =
+    useState(false)
+  const [deletingAdminServiceCapacitySubmissionId, setDeletingAdminServiceCapacitySubmissionId] = useState<string | null>(null)
+  const [adminServiceCapacityDeletionError, setAdminServiceCapacityDeletionError] = useState<string | null>(null)
   const [isLoadingZCodeDomainSurveyHistorySummary, setIsLoadingZCodeDomainSurveyHistorySummary] = useState(false)
   const [isSavingZCodeDomainSurveyNullification, setIsSavingZCodeDomainSurveyNullification] = useState(false)
   const [zCodeDomainSurveyHistoryError, setZCodeDomainSurveyHistoryError] = useState<string | null>(null)
@@ -1569,9 +1592,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     if (viewerRole !== 'administrator') {
       setZCodeDomainSurveyHistorySummary([])
       setZCodeDomainSurveyHistoryError(null)
+      setAdminDeletableServiceCapacitySubmissions([])
+      setAdminServiceCapacityDeletionError(null)
       return
     }
     void reloadZCodeDomainSurveyHistory()
+    void reloadAdminDeletableServiceCapacitySubmissions()
   }, [viewerRole])
 
   const backgroundPrefetchEnrollments = useMemo(
@@ -2568,6 +2594,22 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
   }
 
+  async function reloadAdminDeletableServiceCapacitySubmissions() {
+    if (viewerRole !== 'administrator') return
+    setIsLoadingAdminDeletableServiceCapacitySubmissions(true)
+    setAdminServiceCapacityDeletionError(null)
+    try {
+      const rows = await loadAdminDeletableServiceCapacitySubmissions()
+      setAdminDeletableServiceCapacitySubmissions(rows)
+    } catch (error) {
+      setAdminServiceCapacityDeletionError(
+        toSupabaseErrorMessage(error, 'Unable to load deletable service capacity survey records.')
+      )
+    } finally {
+      setIsLoadingAdminDeletableServiceCapacitySubmissions(false)
+    }
+  }
+
   async function deletePartnerServiceCapacityDraft(submissionId: string) {
     ensureWriteAllowed('partnerReferral.submit', 'delete partner service-capacity drafts')
     setIsSavingPartnerServiceCapacitySurvey(true)
@@ -2608,6 +2650,32 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       throw error
     } finally {
       setIsSavingZCodeDomainSurveyNullification(false)
+    }
+  }
+
+  async function deleteAdminServiceCapacitySubmission(input: {
+    submissionId: string
+    reasonCode: PartnerServiceCapacityDeletionReasonCode
+    reasonOtherText?: string | null
+  }) {
+    ensureAdminPermissionWrite('delete service-capacity survey submissions')
+    setDeletingAdminServiceCapacitySubmissionId(input.submissionId)
+    setAdminServiceCapacityDeletionError(null)
+    try {
+      await deleteAdminServiceCapacitySubmissionRecord(input)
+      // Refresh both grids because deleting one submission affects domain history
+      // rollups and the deletable-record inventory at the same time.
+      await Promise.all([
+        reloadZCodeDomainSurveyHistory(),
+        reloadAdminDeletableServiceCapacitySubmissions()
+      ])
+    } catch (error) {
+      setAdminServiceCapacityDeletionError(
+        toSupabaseErrorMessage(error, 'Unable to delete the selected survey record.')
+      )
+      throw error
+    } finally {
+      setDeletingAdminServiceCapacitySubmissionId(null)
     }
   }
 
@@ -3202,6 +3270,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     countyHeatmap,
     adminMetrics,
     zCodeDomainSurveyHistorySummary,
+    adminDeletableServiceCapacitySubmissions,
+    isLoadingAdminDeletableServiceCapacitySubmissions,
+    deletingAdminServiceCapacitySubmissionId,
+    adminServiceCapacityDeletionError,
     isLoadingZCodeDomainSurveyHistorySummary,
     isSavingZCodeDomainSurveyNullification,
     zCodeDomainSurveyHistoryError,
@@ -3310,6 +3382,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     saveRouteAssignment,
     savePartnerServiceCapacitySurvey,
     setZCodeDomainSurveyAnswerNullification,
+    deleteAdminServiceCapacitySubmission,
     saveEnrolleeBurdenSurvey,
     deletePartnerServiceCapacityDraft,
     deleteEnrolleeBurdenSurveyDraft,

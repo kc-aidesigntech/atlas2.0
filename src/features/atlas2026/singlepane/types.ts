@@ -1,4 +1,5 @@
 import type {
+  AdminDeletableServiceCapacitySubmissionRecord,
   EnrolleeBurdenSurveyAnswer,
   EnrolleeBurdenSurveyHeader,
   EnrolleeBurdenSurveySubmissionInput,
@@ -6,6 +7,7 @@ import type {
   EnrolleeBurdenSurveyRespondentRole,
   PartnerIdentifierRecord,
   PartnerServiceCapacityAnswer,
+  PartnerServiceCapacityDeletionReasonCode,
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
@@ -125,6 +127,14 @@ export interface DomainLoadPartnerScoreTraceRow {
   score: number
 }
 
+export interface DomainLoadDrilldownTarget {
+  kind: 'enrolleeZCode' | 'zCodeSurveyHistory'
+  enrolleeId?: string
+  enrollmentId?: string
+  enrolleeZCodeId?: string
+  normalizedZCode?: string
+}
+
 export interface DomainLoadBreakdownRow {
   id: string
   zCodeGroup: string
@@ -136,6 +146,7 @@ export interface DomainLoadBreakdownRow {
   interfereCount?: number
   partnerScoreTrace?: DomainLoadPartnerScoreTraceRow[]
   averagePartnerStrength?: number
+  drilldownTarget?: DomainLoadDrilldownTarget
 }
 
 export interface DomainLoadBreakdown {
@@ -234,6 +245,7 @@ export interface RouteCandidateParentSummary {
 }
 
 export type {
+  AdminDeletableServiceCapacitySubmissionRecord,
   EnrolleeBurdenSurveyAnswer,
   EnrolleeBurdenSurveyHeader,
   EnrolleeBurdenSurveySubmissionInput,
@@ -241,6 +253,7 @@ export type {
   EnrolleeBurdenSurveyRespondentRole,
   PartnerIdentifierRecord,
   PartnerServiceCapacityAnswer,
+  PartnerServiceCapacityDeletionReasonCode,
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,

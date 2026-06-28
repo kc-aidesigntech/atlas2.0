@@ -8,8 +8,10 @@ import {
   normalizeOrganizationName,
 } from "../atlas2026/partnerServiceCapacity";
 import type {
+  AdminDeletableServiceCapacitySubmissionRecord,
   AtlasDatabase,
   PartnerIdentifierRecord,
+  PartnerServiceCapacityDeletionReasonCode,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
   PartnerServiceCapacitySubmissionStatus,
@@ -70,6 +72,27 @@ function mapPartnerIdentifierRow(
     lastName: row.last_name || "",
     organizationName: row.organization_name,
     email: row.email || "",
+  };
+}
+
+function mapAdminSubmissionRow(
+  submission: AtlasDatabase["atlas"]["Tables"]["partner_service_capacity_submissions"]["Row"],
+  answerCount: number,
+): AdminDeletableServiceCapacitySubmissionRecord {
+  const firstName = submission.respondent_first_name || "";
+  const lastName = submission.respondent_last_name || "";
+  const respondentName = `${firstName} ${lastName}`.trim();
+  return {
+    id: submission.id,
+    draftKey: submission.draft_key || submission.id,
+    status: submission.status || "completed",
+    formVersion: submission.form_version,
+    organizationName: submission.organization_name || "",
+    respondentName,
+    respondentEmail: submission.respondent_email || "",
+    submittedAtIso: submission.submitted_at,
+    completedAtIso: submission.completed_at || null,
+    answerCount,
   };
 }
 
@@ -320,6 +343,85 @@ export async function deletePartnerServiceCapacityDraft(
   return {
     id: result.id || trimmedSubmissionId,
     draftKey: result.draftKey || trimmedSubmissionId,
+  };
+}
+
+export async function listAdminDeletablePartnerServiceCapacitySubmissions(
+  client: SupabaseClient<AtlasDatabase>,
+  limit = 120,
+): Promise<AdminDeletableServiceCapacitySubmissionRecord[]> {
+  const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.floor(limit), 1), 300) : 120;
+
+  const { data: submissions, error } = await client
+    .schema("atlas")
+    .from("partner_service_capacity_submissions")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(safeLimit);
+
+  if (error) throw error;
+  if (!submissions?.length) return [];
+
+  const submissionIds = submissions.map((submission) => submission.id);
+  const { data: answerRows, error: answersError } = await client
+    .schema("atlas")
+    .from("partner_service_capacity_answers")
+    .select("submission_id")
+    .in("submission_id", submissionIds);
+
+  if (answersError) throw answersError;
+  const answerCountBySubmissionId = new Map<string, number>();
+  (answerRows || []).forEach((row) => {
+    const key = row.submission_id;
+    answerCountBySubmissionId.set(key, (answerCountBySubmissionId.get(key) || 0) + 1);
+  });
+
+  return submissions.map((submission) =>
+    mapAdminSubmissionRow(submission, answerCountBySubmissionId.get(submission.id) || 0),
+  );
+}
+
+export async function deletePartnerServiceCapacitySubmissionAsAdmin(
+  client: SupabaseClient<AtlasDatabase>,
+  input: {
+    submissionId: string;
+    reasonCode: PartnerServiceCapacityDeletionReasonCode;
+    reasonOtherText?: string | null;
+  },
+) {
+  const submissionId = input.submissionId.trim();
+  if (!submissionId) {
+    throw new Error("A submission id is required.");
+  }
+
+  const reasonCode = input.reasonCode.trim().toLowerCase() as PartnerServiceCapacityDeletionReasonCode;
+  const reasonOtherText = input.reasonOtherText?.trim() || null;
+  if (reasonCode === "other" && !reasonOtherText) {
+    throw new Error("Please describe the reason when selecting other.");
+  }
+
+  // Administrative deletion is executed through one server-side Remote Procedure Call (RPC)
+  // so the snapshot audit log and record delete remain atomic.
+  const { data, error } = await client.schema("atlas").rpc("fn_admin_delete_partner_service_capacity_submission", {
+    p_submission_id: submissionId,
+    p_reason_code: reasonCode,
+    p_reason_other_text: reasonCode === "other" ? reasonOtherText : null,
+  });
+
+  if (error) throw error;
+  const result = (data || {}) as {
+    id?: string;
+    deletedAt?: string;
+    recordDeleted?: string;
+    reasonCode?: PartnerServiceCapacityDeletionReasonCode;
+    reasonOtherText?: string | null;
+  };
+  return {
+    id: result.id || submissionId,
+    deletedAtIso: result.deletedAt || new Date().toISOString(),
+    recordDeleted: result.recordDeleted || `partner_service_capacity_submissions:${submissionId}`,
+    reasonCode: result.reasonCode || reasonCode,
+    reasonOtherText: result.reasonOtherText || null,
   };
 }
 

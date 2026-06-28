@@ -1,13 +1,19 @@
 import React from 'react'
 import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import type { DomainLoad, DomainLoadBreakdown, NavigatorLoadContributor } from '@/features/atlas2026/singlepane/types'
+import type {
+  DomainLoad,
+  DomainLoadBreakdown,
+  DomainLoadDrilldownTarget,
+  NavigatorLoadContributor
+} from '@/features/atlas2026/singlepane/types'
 
 interface RadialLoadTableOverlayProps {
   isOpen: boolean
   load: DomainLoad | null
   breakdown: DomainLoadBreakdown | null
   navigatorContributors?: NavigatorLoadContributor[]
+  onOpenTrueRecord?: (target: DomainLoadDrilldownTarget) => void
   onClose: () => void
 }
 
@@ -16,6 +22,7 @@ export default function RadialLoadTableOverlay({
   load,
   breakdown,
   navigatorContributors = [],
+  onOpenTrueRecord,
   onClose
 }: RadialLoadTableOverlayProps) {
   if (!isOpen) return null
@@ -27,6 +34,7 @@ export default function RadialLoadTableOverlay({
   const isPartnerDomainSpectrum = isPartnerSurvey && (breakdown?.sourceLabel || '').toLowerCase().includes('domain spectrum')
   const isRouteBoardCapacityInversion = (breakdown?.sourceLabel || '').toLowerCase().includes('route-board capacity inversion')
   const isWeightedSurvey = breakdown?.sourceKind === 'partnerSurvey' || breakdown?.sourceKind === 'enrolleeSurvey'
+  const hasDrilldownRows = rows.some((row) => Boolean(row.drilldownTarget))
 
   return (
     <div className="absolute inset-0 z-30 flex items-start justify-center bg-black/65 px-5 py-6 backdrop-blur-[2px]" onClick={onClose}>
@@ -113,6 +121,11 @@ export default function RadialLoadTableOverlay({
                     ? 'Enrollee chart values are weighted domain averages from the latest burden survey.'
                     : 'Enrollee chart values are derived from active Z-Code records mapped into habitat, work, and social domains.'}
               </small>
+              {hasDrilldownRows ? (
+                <small className="mt-1 block text-[12px] text-[#9f9f9f]">
+                  Use open record to audit or edit the canonical source row for each chart input.
+                </small>
+              ) : null}
             </div>
             <small className="text-[12px] text-[#9f9f9f]">{rows.length} grouped row{rows.length === 1 ? '' : 's'}</small>
           </div>
@@ -137,6 +150,7 @@ export default function RadialLoadTableOverlay({
                       <th className="border-b border-white/10 px-3 py-2 font-medium">partner score trace</th>
                     ) : null}
                     {isPartnerSurvey ? <th className="border-b border-white/10 px-3 py-2 font-medium text-right">surveys</th> : null}
+                    {hasDrilldownRows ? <th className="border-b border-white/10 px-3 py-2 font-medium text-right">true record</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -152,6 +166,21 @@ export default function RadialLoadTableOverlay({
                       ) : null}
                       {isPartnerSurvey ? (
                         <td className="border-b border-white/5 px-3 py-3 text-right">{row.responseCount || 0}</td>
+                      ) : null}
+                      {hasDrilldownRows ? (
+                        <td className="border-b border-white/5 px-3 py-3 text-right">
+                          {row.drilldownTarget ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenTrueRecord?.(row.drilldownTarget)}
+                              className="rounded-full border border-white/20 px-3 py-1 text-[11px] uppercase tracking-[0.08em] text-[#d9f5ef] transition hover:border-[#9ce6d7] hover:text-[#9ce6d7]"
+                            >
+                              open record
+                            </button>
+                          ) : (
+                            <span className="text-[#7f7f7f]">n/a</span>
+                          )}
+                        </td>
                       ) : null}
                     </tr>
                   ))}

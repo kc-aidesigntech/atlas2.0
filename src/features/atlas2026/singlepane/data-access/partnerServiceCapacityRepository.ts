@@ -1,7 +1,9 @@
 import {
+  deletePartnerServiceCapacitySubmissionAsAdmin,
   ensurePartnerIdentifierRecord,
   deletePartnerServiceCapacityDraft,
   normalizeOrganizationName,
+  listAdminDeletablePartnerServiceCapacitySubmissions,
   savePartnerServiceCapacityRecord,
   searchPartnerIdentifierRecords,
   getPartnerServiceCapacitySubmissionByDraftKey,
@@ -12,7 +14,9 @@ import {
   setZCodeDomainSurveyAnswerNullification
 } from '@atlas/shared'
 import type {
+  AdminDeletableServiceCapacitySubmissionRecord,
   PartnerIdentifierRecord,
+  PartnerServiceCapacityDeletionReasonCode,
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
   ZCodeDomainSurveyHistorySummary
@@ -125,6 +129,26 @@ export async function loadZCodeDomainSurveyHistorySummary(): Promise<ZCodeDomain
   }
 
   return listZCodeDomainSurveyHistory(supabase)
+}
+
+export async function loadAdminDeletableServiceCapacitySubmissions(
+  limit = 120
+): Promise<AdminDeletableServiceCapacitySubmissionRecord[]> {
+  if (!hasSupabaseConfig || !supabase) {
+    return []
+  }
+  return listAdminDeletablePartnerServiceCapacitySubmissions(supabase, limit)
+}
+
+export async function deleteAdminServiceCapacitySubmission(input: {
+  submissionId: string
+  reasonCode: PartnerServiceCapacityDeletionReasonCode
+  reasonOtherText?: string | null
+}) {
+  if (!hasSupabaseConfig || !supabase) {
+    throw new Error('Supabase is required to delete service capacity survey records.')
+  }
+  return deletePartnerServiceCapacitySubmissionAsAdmin(supabase, input)
 }
 
 export async function setZCodeDomainSurveyAnswerNullified(input: {

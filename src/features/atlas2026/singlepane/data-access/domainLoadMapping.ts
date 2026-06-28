@@ -123,7 +123,13 @@ export function buildSurveyDomainLoadBreakdown<TAnswer extends BurdenAnswerLike>
     parentCode: normalizeParentCode(answer.parentCode),
     mappedDomain: mapZCodeToDomainBucket(answer.parentCode, answer.normalizedZCode),
     rawCount: answer.score ?? 0,
-    responseCount: 1
+    responseCount: 1,
+    // Survey-derived chart points must link back to the canonical Z-code response
+    // history so operators can audit/nullify source answers instead of editing aggregates.
+    drilldownTarget: {
+      kind: 'zCodeSurveyHistory',
+      normalizedZCode: answer.normalizedZCode.trim().toUpperCase()
+    }
   }))
 
   const totals = toDomainTotals(rows)
@@ -292,7 +298,11 @@ export function buildPartnerBurdenBreakdownFromHistory(
         parentCode: entry.parentCode,
         mappedDomain: 'habitat' as const,
         rawCount: entry.habitatTotal / entry.count,
-        responseCount: entry.count
+        responseCount: entry.count,
+        drilldownTarget: {
+          kind: 'zCodeSurveyHistory',
+          normalizedZCode
+        }
       },
       {
         id: `${normalizedZCode}-social`,
@@ -300,7 +310,11 @@ export function buildPartnerBurdenBreakdownFromHistory(
         parentCode: entry.parentCode,
         mappedDomain: 'socialNetworks' as const,
         rawCount: entry.socialNetworksTotal / entry.count,
-        responseCount: entry.count
+        responseCount: entry.count,
+        drilldownTarget: {
+          kind: 'zCodeSurveyHistory',
+          normalizedZCode
+        }
       },
       {
         id: `${normalizedZCode}-work`,
@@ -308,7 +322,11 @@ export function buildPartnerBurdenBreakdownFromHistory(
         parentCode: entry.parentCode,
         mappedDomain: 'work' as const,
         rawCount: entry.workTotal / entry.count,
-        responseCount: entry.count
+        responseCount: entry.count,
+        drilldownTarget: {
+          kind: 'zCodeSurveyHistory',
+          normalizedZCode
+        }
       }
     ] satisfies DomainLoadBreakdownRow[]
   })
@@ -319,7 +337,11 @@ export function buildPartnerBurdenBreakdownFromHistory(
     parentCode: entry.parentCode,
     mappedDomain: entry.mappedDomain,
     rawCount: entry.count ? entry.total / entry.count : 0,
-    responseCount: entry.count
+    responseCount: entry.count,
+    drilldownTarget: {
+      kind: 'zCodeSurveyHistory',
+      normalizedZCode
+    }
   }))
 
   const rows = (domainSpectrumRows.length ? domainSpectrumRows : burdenRows).sort((left, right) => {

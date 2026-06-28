@@ -1,11 +1,27 @@
-import React from 'react'
-import { Building2, GitBranch, Users } from 'lucide-react'
+import React, { useState } from 'react'
+import { Building2, GitBranch, Trash2, Users } from 'lucide-react'
 import { AtlasInsetCard, AtlasStatusPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
 import type { AdminOverviewSectionDataProps, StatusPillComponentType } from '@/features/atlas2026/admin/components/types'
 
 interface AdminOverviewSectionProps extends AdminOverviewSectionDataProps {
   StatusPillComponent: StatusPillComponentType
+}
+
+const SERVICE_CAPACITY_DELETION_REASON_OPTIONS: Array<{
+  value: 'obsolete' | 'not_relevant' | 'mistakenly_entered' | 'contained_errors' | 'other'
+  label: string
+}> = [
+  { value: 'obsolete', label: 'obsolete' },
+  { value: 'not_relevant', label: 'not relevant' },
+  { value: 'mistakenly_entered', label: 'mistakenly entered' },
+  { value: 'contained_errors', label: 'contained errors' },
+  { value: 'other', label: 'other (provide detail)' }
+]
+
+function getSurveyTypeLabel(formVersion: string) {
+  const normalized = formVersion.trim().toLowerCase()
+  return normalized === '2026-z-domain-spectrum-v1' ? 'domain spectrum survey' : 'service capacity survey'
 }
 
 export default function AdminOverviewSection({
@@ -17,15 +33,47 @@ export default function AdminOverviewSection({
   isLoadingZCodeDomainSurveyHistorySummary,
   zCodeDomainSurveyHistoryError,
   zCodeDomainSurveyHistorySummary,
+  deletableServiceCapacitySubmissions,
+  isLoadingDeletableServiceCapacitySubmissions,
+  deletingServiceCapacitySubmissionId,
+  serviceCapacityDeletionError,
   selectedDomainSurveySummary,
   setSelectedDomainSurveyZCode,
   nullificationReasonByAnswerId,
   setNullificationReasonByAnswerId,
   handleSetDomainSurveyNullification,
+  handleDeleteServiceCapacitySubmission,
   formatMetricLabel,
   formatDateLabel,
   StatusPillComponent
 }: AdminOverviewSectionProps) {
+  const [deletionReasonBySubmissionId, setDeletionReasonBySubmissionId] = useState<Record<string, string>>({})
+  const [deletionOtherReasonBySubmissionId, setDeletionOtherReasonBySubmissionId] = useState<Record<string, string>>({})
+
+  async function handleDeleteSubmission(submissionId: string) {
+    const reasonCode = (deletionReasonBySubmissionId[submissionId] || '').trim()
+    if (!reasonCode) return
+    const reasonOtherText = (deletionOtherReasonBySubmissionId[submissionId] || '').trim()
+    if (reasonCode === 'other' && !reasonOtherText) return
+    await handleDeleteServiceCapacitySubmission({
+      submissionId,
+      reasonCode: reasonCode as 'obsolete' | 'not_relevant' | 'mistakenly_entered' | 'contained_errors' | 'other',
+      reasonOtherText: reasonCode === 'other' ? reasonOtherText : null
+    })
+    // Clear local reason state after a successful delete so recycled row keys
+    // cannot carry stale rationale into the next destructive action.
+    setDeletionReasonBySubmissionId((current) => {
+      const next = { ...current }
+      delete next[submissionId]
+      return next
+    })
+    setDeletionOtherReasonBySubmissionId((current) => {
+      const next = { ...current }
+      delete next[submissionId]
+      return next
+    })
+  }
+
   // Keep high-signal operational cards together so status scanning remains
   // predictable while the parent file manages data orchestration only.
   return (
@@ -253,6 +301,114 @@ export default function AdminOverviewSection({
                 </div>
               ) : null}
             </div>
+          </div>
+        ) : null}
+      </AtlasInsetCard>
+
+      <AtlasInsetCard className="rounded-[22px] px-5 py-5 lg:col-span-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+              survey record deletion
+            </small>
+            <div className="mt-1 text-[22px] font-medium text-white">Delete residual survey submissions</div>
+            <small className="mt-1 block text-[13px] text-[var(--foreground-secondary)]">
+              Remove service-capacity and domain-spectrum submissions (draft or completed) with a required deletion reason.
+            </small>
+          </div>
+          <AtlasStatusPill color={deletingServiceCapacitySubmissionId ? SP_COLORS.yellow : SP_COLORS.deepGreen}>
+            {deletingServiceCapacitySubmissionId ? 'deleting record' : 'ready'}
+          </AtlasStatusPill>
+        </div>
+        {serviceCapacityDeletionError ? (
+          <small className="mt-4 block text-[13px]" style={{ color: SP_COLORS.red }}>
+            {serviceCapacityDeletionError}
+          </small>
+        ) : null}
+        {isLoadingDeletableServiceCapacitySubmissions ? (
+          <small className="mt-4 block text-[13px] text-[var(--foreground-secondary)]">
+            Loading deletable survey submissions...
+          </small>
+        ) : null}
+        {!isLoadingDeletableServiceCapacitySubmissions && !deletableServiceCapacitySubmissions.length ? (
+          <small className="mt-4 block text-[13px] text-[var(--foreground-secondary)]">
+            No service-capacity or domain-spectrum submissions are currently available for deletion.
+          </small>
+        ) : null}
+        {deletableServiceCapacitySubmissions.length ? (
+          <div className="mt-4 space-y-2">
+            {deletableServiceCapacitySubmissions.map((submission) => {
+              const selectedReason = deletionReasonBySubmissionId[submission.id] || ''
+              const requiresOtherReason = selectedReason === 'other'
+              const otherReasonText = deletionOtherReasonBySubmissionId[submission.id] || ''
+              const isDeleting = deletingServiceCapacitySubmissionId === submission.id
+              const canDelete = Boolean(selectedReason) && (!requiresOtherReason || Boolean(otherReasonText.trim())) && !isDeleting
+              return (
+                <div key={submission.id} className="rounded-[14px] border border-white/10 bg-white/5 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[13px] font-medium text-white">
+                        {submission.organizationName || 'Unknown organization'} · {getSurveyTypeLabel(submission.formVersion)}
+                      </div>
+                      <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                        {submission.respondentName || 'Unknown respondent'} · {submission.respondentEmail || 'email not provided'}
+                      </small>
+                      <small className="block text-[12px] text-[var(--foreground-secondary)]">
+                        {submission.status} · submitted {formatDateLabel(submission.submittedAtIso)} · answers {submission.answerCount}
+                      </small>
+                    </div>
+                    <AtlasStatusPill color={submission.status === 'completed' ? SP_COLORS.deepGreen : SP_COLORS.yellow}>
+                      {submission.status}
+                    </AtlasStatusPill>
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-[220px_minmax(0,1fr)_auto]">
+                    <select
+                      value={selectedReason}
+                      onChange={(event) =>
+                        setDeletionReasonBySubmissionId((current) => ({
+                          ...current,
+                          [submission.id]: event.target.value
+                        }))
+                      }
+                      className="atlas-admin-input"
+                    >
+                      <option value="">select reason</option>
+                      {SERVICE_CAPACITY_DELETION_REASON_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      value={otherReasonText}
+                      onChange={(event) =>
+                        setDeletionOtherReasonBySubmissionId((current) => ({
+                          ...current,
+                          [submission.id]: event.target.value
+                        }))
+                      }
+                      placeholder={requiresOtherReason ? 'describe other reason' : 'optional detail'}
+                      className="atlas-admin-input"
+                      disabled={!requiresOtherReason}
+                    />
+                    <AtlasTextButton
+                      onClick={() => void handleDeleteSubmission(submission.id)}
+                      disabled={!canDelete}
+                      className="inline-flex h-10 w-10 items-center justify-center px-0 py-0"
+                      style={{
+                        ['--button-border-color' as const]: SP_COLORS.red,
+                        color: SP_COLORS.red,
+                        opacity: canDelete ? 1 : 0.6
+                      } as React.CSSProperties}
+                      aria-label={`Delete survey record ${submission.id}`}
+                      title={isDeleting ? 'Deleting record' : 'Delete record'}
+                    >
+                      <Trash2 className={`h-4 w-4 ${isDeleting ? 'animate-pulse' : ''}`} />
+                    </AtlasTextButton>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         ) : null}
       </AtlasInsetCard>
