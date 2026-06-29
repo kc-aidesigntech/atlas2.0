@@ -9,6 +9,8 @@ import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePane
 
 const SESSION_ROLE_KEY = 'atlas2026.singlepane.session.role'
 const SESSION_ACTIVE_MENU_KEY = 'atlas2026.singlepane.session.active-menu'
+const SURVEY_RETURN_ROLE_KEY = 'atlas2026.surveys.return.role'
+const SURVEY_RETURN_MENU_KEY = 'atlas2026.surveys.return.menu'
 
 export default function StandaloneServiceCapacitySurveyPage() {
   const {
@@ -23,6 +25,15 @@ export default function StandaloneServiceCapacitySurveyPage() {
     savePartnerServiceCapacitySurvey,
     deletePartnerServiceCapacityDraft
   } = useSinglePaneData('partner')
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    const currentRole = window.sessionStorage.getItem(SESSION_ROLE_KEY)
+    const currentMenu = window.sessionStorage.getItem(SESSION_ACTIVE_MENU_KEY)
+    // Capture pre-survey shell context once per entry so Back can restore role/menu continuity.
+    if (currentRole) window.sessionStorage.setItem(SURVEY_RETURN_ROLE_KEY, currentRole)
+    if (currentMenu) window.sessionStorage.setItem(SURVEY_RETURN_MENU_KEY, currentMenu)
+  }, [])
 
   React.useEffect(() => {
     // This route hard-pins partner context so shared data hooks do not inherit
@@ -42,9 +53,23 @@ export default function StandaloneServiceCapacitySurveyPage() {
 
   function backToWorkspace() {
     if (typeof window === 'undefined') return
-    window.sessionStorage.setItem(SESSION_ROLE_KEY, 'partner')
-    window.sessionStorage.setItem(SESSION_ACTIVE_MENU_KEY, 'my station')
-    window.location.assign(new URL('/app#my-station', window.location.origin).toString())
+    const returnRole = window.sessionStorage.getItem(SURVEY_RETURN_ROLE_KEY)
+    const returnMenu = window.sessionStorage.getItem(SURVEY_RETURN_MENU_KEY)
+    if (returnRole) window.sessionStorage.setItem(SESSION_ROLE_KEY, returnRole)
+    if (returnMenu) window.sessionStorage.setItem(SESSION_ACTIVE_MENU_KEY, returnMenu)
+    window.sessionStorage.removeItem(SURVEY_RETURN_ROLE_KEY)
+    window.sessionStorage.removeItem(SURVEY_RETURN_MENU_KEY)
+    let hasSameOriginReferrer = false
+    try {
+      hasSameOriginReferrer = Boolean(window.document.referrer) && new URL(window.document.referrer).origin === window.location.origin
+    } catch {
+      hasSameOriginReferrer = false
+    }
+    if (hasSameOriginReferrer || window.history.length > 1) {
+      window.history.back()
+      return
+    }
+    window.location.assign(new URL('/app', window.location.origin).toString())
   }
 
   return (

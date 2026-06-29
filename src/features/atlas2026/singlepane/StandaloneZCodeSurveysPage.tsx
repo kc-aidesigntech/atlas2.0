@@ -11,6 +11,8 @@ import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePane
 
 const SESSION_ROLE_KEY = 'atlas2026.singlepane.session.role'
 const SESSION_ACTIVE_MENU_KEY = 'atlas2026.singlepane.session.active-menu'
+const SURVEY_RETURN_ROLE_KEY = 'atlas2026.surveys.return.role'
+const SURVEY_RETURN_MENU_KEY = 'atlas2026.surveys.return.menu'
 type ZCodeSurveyTab = 'serviceCapacity' | 'domainSpectrum'
 const HASH_BY_TAB: Record<ZCodeSurveyTab, string> = {
   serviceCapacity: 'service-capacity',
@@ -41,6 +43,15 @@ export default function StandaloneZCodeSurveysPage() {
     if (typeof window === 'undefined') return 'serviceCapacity'
     return tabFromHash(window.location.hash) || 'serviceCapacity'
   })
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    const currentRole = window.sessionStorage.getItem(SESSION_ROLE_KEY)
+    const currentMenu = window.sessionStorage.getItem(SESSION_ACTIVE_MENU_KEY)
+    // Capture pre-survey shell context once per entry so Back can restore role/menu continuity.
+    if (currentRole) window.sessionStorage.setItem(SURVEY_RETURN_ROLE_KEY, currentRole)
+    if (currentMenu) window.sessionStorage.setItem(SURVEY_RETURN_MENU_KEY, currentMenu)
+  }, [])
 
   React.useEffect(() => {
     if (role !== 'partner') {
@@ -92,10 +103,23 @@ export default function StandaloneZCodeSurveysPage() {
 
   function backToWorkspace() {
     if (typeof window === 'undefined') return
-    // Preserve partner context so the shell lands in the same workspace lane after leaving surveys.
-    window.sessionStorage.setItem(SESSION_ROLE_KEY, 'partner')
-    window.sessionStorage.setItem(SESSION_ACTIVE_MENU_KEY, 'my station')
-    window.location.assign(new URL('/', window.location.origin).toString())
+    const returnRole = window.sessionStorage.getItem(SURVEY_RETURN_ROLE_KEY)
+    const returnMenu = window.sessionStorage.getItem(SURVEY_RETURN_MENU_KEY)
+    if (returnRole) window.sessionStorage.setItem(SESSION_ROLE_KEY, returnRole)
+    if (returnMenu) window.sessionStorage.setItem(SESSION_ACTIVE_MENU_KEY, returnMenu)
+    window.sessionStorage.removeItem(SURVEY_RETURN_ROLE_KEY)
+    window.sessionStorage.removeItem(SURVEY_RETURN_MENU_KEY)
+    let hasSameOriginReferrer = false
+    try {
+      hasSameOriginReferrer = Boolean(window.document.referrer) && new URL(window.document.referrer).origin === window.location.origin
+    } catch {
+      hasSameOriginReferrer = false
+    }
+    if (hasSameOriginReferrer || window.history.length > 1) {
+      window.history.back()
+      return
+    }
+    window.location.assign(new URL('/app', window.location.origin).toString())
   }
 
   return (

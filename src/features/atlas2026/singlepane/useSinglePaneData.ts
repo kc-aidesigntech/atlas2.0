@@ -142,6 +142,10 @@ import {
   loadRegulationReviewSettings,
   saveRegulationReviewSettings as persistRegulationReviewSettings
 } from '@/features/atlas2026/singlepane/data-access/localStateRepository'
+import {
+  DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION,
+  flattenSurveyPrompts
+} from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
 import { isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import {
@@ -791,6 +795,29 @@ function normalizeZCode(value: string) {
   return value.trim().toUpperCase()
 }
 
+function buildZCodeTimelineShortLabel(description: string, fallbackCode: string) {
+  const normalized = description.trim()
+  if (!normalized) return fallbackCode
+  const cleaned = normalized
+    .replace(/\b(and|or|with|without|related|problem|problems|specified|unspecified|other|to|of|the|in)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const words = cleaned.split(' ').filter(Boolean)
+  if (!words.length) return fallbackCode
+  if (words.length === 1) {
+    const single = words[0]
+    return single.length <= 18 ? single : `${single.slice(0, 17)}...`
+  }
+  const shorthand = words
+    .slice(0, 4)
+    .map((word) => {
+      if (word.length <= 4) return word
+      return `${word.slice(0, 4)}.`
+    })
+    .join(' ')
+  return shorthand.length <= 24 ? shorthand : `${shorthand.slice(0, 23)}...`
+}
+
 function buildNavigatorRouteBoardLoadBreakdown(
   selectedEnrollee: EnrolleeProfile | null,
   routeCandidates: RouteCandidateRecord[]
@@ -1060,6 +1087,14 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       : null
   const isNavigatorMyStationView = viewerRole === 'navigator' && activeMenu.trim().toLowerCase() === 'my station'
   const isPartnerStationView = viewerRole === 'partner' || isNavigatorMyStationView
+  const serviceCapacityPromptByNormalizedZCode = useMemo(() => {
+    return new Map(
+      flattenSurveyPrompts(DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION.sections).map((prompt) => [
+        normalizeZCode(prompt.normalizedZCode || prompt.zCode),
+        prompt
+      ])
+    )
+  }, [])
   const effectivePartnerOrganizationName =
     remoteSession?.targetRole === 'partner'
       ? remotePartnerAssignment?.organizationName || remoteSession.targetOrganizationName || ''
@@ -1395,6 +1430,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       const phaseEntryIso = latestRegulationFailureIso || getPhaseEntryIso(logsForEnrollee, effectivePhase)
       const occurredAtIso = referralIsoFromQueue || routeAssignment?.assignedAtIso || phaseEntryIso
       const anonymousLabel = `participant-${String(index + 1).padStart(3, '0')}`
+      const enrolleeName = enrollee.fullName?.trim() || anonymousLabel
 
       if (hasRenewalEvidence) {
         successHistory.push({
@@ -1404,25 +1440,80 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
           outcomeLabel: 'renewal reached',
           anonymousLabel
         })
-      } else {
+      }
+
+      const unresolvedActiveDetails = enrollee.activeZCodeDetails.filter((detail) => !detail.isResolved)
+      const resolvedActiveDetails = enrollee.activeZCodeDetails
+        .filter((detail) => detail.isResolved)
+        .slice()
+        .sort(
+          (left, right) =>
+            new Date(right.resolutionAt || 0).getTime() - new Date(left.resolutionAt || 0).getTime()
+        )
+      const prioritizedActiveDetails = unresolvedActiveDetails.length ? unresolvedActiveDetails : resolvedActiveDetails
+      const zCodeDetailsFromActive = prioritizedActiveDetails
+        .map((detail) => ({
+          enrolleeZCodeId: detail.enrolleeZCodeId,
+          parentCode: detail.parentCode.trim().toUpperCase(),
+          zCode: normalizeZCode(detail.zCode),
+          description: (detail.description || detail.title || detail.zCode).trim()
+        }))
+        .filter((detail) => detail.parentCode && detail.zCode)
+      const zCodeDetailsFromTags = enrollee.zCodeTags
+        .map((tag) => normalizeZCode(tag))
+        .filter(Boolean)
+        .map((normalizedZCode) => {
+          const prompt = serviceCapacityPromptByNormalizedZCode.get(normalizedZCode)
+          const parentCode = (prompt?.parentCode || normalizedZCode.split('.')[0] || '').trim().toUpperCase()
+          const description = (prompt?.description || prompt?.title || normalizedZCode).trim()
+          return {
+            enrolleeZCodeId: undefined,
+            parentCode,
+            zCode: normalizedZCode,
+            description
+          }
+        })
+        .filter((detail) => detail.parentCode && detail.zCode)
+      const rawTimelineDetails = zCodeDetailsFromActive.length ? zCodeDetailsFromActive : zCodeDetailsFromTags
+      const timelineDetails = Array.from(
+        new Map(rawTimelineDetails.map((detail) => [`${detail.parentCode}:${detail.zCode}`, detail])).values()
+      )
+
+      if (!timelineDetails.length) return
+
+      timelineDetails.forEach((detail) => {
         referredDots.push({
-          id: `referred-${enrollee.id}`,
+          id: `referred-${enrollee.id}-${detail.zCode}`,
           source: 'referred',
           phase: effectivePhase,
           occurredAtIso,
-          anonymousLabel
+          anonymousLabel,
+          enrolleeId: enrollee.id,
+          enrolleeName,
+          enrolleeZCodeId: detail.enrolleeZCodeId,
+          parentCode: detail.parentCode,
+          zCode: detail.zCode,
+          zCodeDescription: detail.description,
+          zCodeShortLabel: buildZCodeTimelineShortLabel(detail.description, detail.zCode)
         })
-      }
 
-      if (routeAssignment) {
-        activeDots.push({
-          id: `active-${enrollee.id}`,
-          source: 'active',
-          phase: effectivePhase,
-          occurredAtIso: latestRegulationFailureIso || routeAssignment.assignedAtIso || occurredAtIso,
-          anonymousLabel
-        })
-      }
+        if (routeAssignment) {
+          activeDots.push({
+            id: `active-${enrollee.id}-${detail.zCode}`,
+            source: 'active',
+            phase: effectivePhase,
+            occurredAtIso: latestRegulationFailureIso || routeAssignment.assignedAtIso || occurredAtIso,
+            anonymousLabel,
+            enrolleeId: enrollee.id,
+            enrolleeName,
+            enrolleeZCodeId: detail.enrolleeZCodeId,
+            parentCode: detail.parentCode,
+            zCode: detail.zCode,
+            zCodeDescription: detail.description,
+            zCodeShortLabel: buildZCodeTimelineShortLabel(detail.description, detail.zCode)
+          })
+        }
+      })
     })
 
     successHistory.sort(
@@ -1442,6 +1533,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     routeAssignmentsByEnrolleeId,
     scopedEnrolleeIdSet,
     scopedEnrollees,
+    serviceCapacityPromptByNormalizedZCode,
     isPartnerStationView
   ])
   const navigatorSelfAssessments = useMemo(

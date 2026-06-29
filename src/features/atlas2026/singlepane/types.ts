@@ -439,6 +439,13 @@ export interface PartnerStripAggregateDot {
   phase: StabilizationPhase
   occurredAtIso: string
   anonymousLabel: string
+  enrolleeId?: string
+  enrolleeName?: string
+  enrolleeZCodeId?: string
+  parentCode?: string
+  zCode?: string
+  zCodeDescription?: string
+  zCodeShortLabel?: string
 }
 
 export interface PartnerStripHistoryRecord {

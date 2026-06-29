@@ -124,6 +124,7 @@ export default function SinglePaneApp() {
     updateTimelineConfig,
     accountSettings,
     partnerStationProfile,
+    partnerServiceCapacitySurveyHistory,
     intakeFormsByEnrolleeId,
     selectedIntake,
     hasSavedIntake,
@@ -495,6 +496,20 @@ export default function SinglePaneApp() {
     : selectedRouteAssignment?.stationName || null
   const displayLoad = isNavigatorMyProfile ? navigatorAggregateLoad : selectedLoad
   const displayLoadBreakdown = isNavigatorMyProfile ? navigatorAggregateLoadBreakdown : selectedLoadBreakdown
+  // Partner traversal controls are always rendered for partner-station overlays; navigation
+  // enables when more than one organization is present in the available survey history scope.
+  const partnerOverlayOrganizations = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          partnerServiceCapacitySurveyHistory
+            .map((submission) => submission.header.organizationName.trim())
+            .filter(Boolean)
+        )
+      ),
+    [partnerServiceCapacitySurveyHistory]
+  )
+  const canTraversePartnerOverlay = partnerOverlayOrganizations.length > 1
   const partnerContactName = React.useMemo(() => {
     const firstName = partnerStationProfile?.primaryContactFirstName?.trim() || ''
     const lastName = partnerStationProfile?.primaryContactLastName?.trim() || ''
@@ -807,7 +822,12 @@ export default function SinglePaneApp() {
             load={displayLoad}
             breakdown={displayLoadBreakdown}
             navigatorContributors={isNavigatorMyProfile ? navigatorLoadContributors : []}
+            partnerSurveyHistory={isPartnerStationView ? partnerServiceCapacitySurveyHistory : []}
             onOpenTrueRecord={handleOpenTrueRecord}
+            onSelectPreviousPartner={isPartnerStationView ? () => undefined : undefined}
+            onSelectNextPartner={isPartnerStationView ? () => undefined : undefined}
+            canSelectPreviousPartner={canTraversePartnerOverlay}
+            canSelectNextPartner={canTraversePartnerOverlay}
             onClose={() => setIsLoadTableOpen(false)}
           />
           <PartnerSpecialtyOverlay
@@ -1105,6 +1125,7 @@ export default function SinglePaneApp() {
                             partnerAggregateReferredDots={partnerStripReferredDots}
                             partnerAggregateActiveDots={partnerStripActiveDots}
                             onPartnerHistoryClick={() => setIsPartnerHistoryOpen(true)}
+                            onOpenPartnerAggregateRecord={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
                             onRenewalTestsClick={() => setIsPartnerHistoryOpen(true)}
                             onEventDelete={deleteRouteLog}
                             onEventPositionChange={updateRouteLogTimelinePosition}
