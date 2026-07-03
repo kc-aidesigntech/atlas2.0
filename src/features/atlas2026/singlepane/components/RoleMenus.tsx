@@ -1,6 +1,6 @@
 import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface RoleMenusProps {
   labels?: string[]

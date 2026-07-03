@@ -4,9 +4,9 @@
  */
 import React, { useMemo, useState } from 'react'
 import { AtlasCloseButton, AtlasInsetCard, AtlasPlusButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import atlasLogoSrc from '../../../../../assets/ATLAS_LOGO_simple_lucidGreenBlue4.png'
+import type { PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import atlasLogoSrc from '@/features/atlas2026/assets/branding/ATLAS_LOGO_simple_lucidGreenBlue4.png'
 
 interface PartnerReferralWorkflowPanelProps {
   defaultReferrerName: string

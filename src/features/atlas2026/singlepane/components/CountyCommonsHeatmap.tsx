@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
-import type { CountyHeatPoint } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type { CountyHeatPoint } from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface CountyCommonsHeatmapProps {
   points: CountyHeatPoint[]

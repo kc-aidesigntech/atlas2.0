@@ -3,7 +3,7 @@ import type {
   RegulationTestSubmissionInput,
   RegulationTestSubmissionRecord,
   RegulationTestType
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { computeAssessmentScoreSummary, isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'

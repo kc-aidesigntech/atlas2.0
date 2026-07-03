@@ -16,11 +16,13 @@ import type {
   SupervisorIpsAssessmentRecord,
   SupervisionSessionRecord,
   SupervisorNavigatorCompetencySummary
-} from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+} from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import NavigatorEnrollmentAssignmentsPanel from './NavigatorEnrollmentAssignmentsPanel'
 import ProfileNavigationCard from './ProfileNavigationCard'
+import AtlasImageUploadTile from '@/features/atlas2026/components/AtlasImageUploadTile'
+import { createFallbackAvatarDataUrl } from '@/features/atlas2026/components/avatarFallback'
 
 interface NavigatorMyProfilePanelProps {
   accountSettings: AccountSettings
@@ -111,6 +113,7 @@ function formatDateLabel(value: string | null | undefined) {
 
 export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelProps) {
   const {
+    accountSettings,
     currentNavigatorName,
     assignedEnrolleeCount,
     assignedEnrollees,
@@ -133,6 +136,9 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
     dueItems,
     regulationReviewDueItems = [],
     programError = null,
+    isUploadingAvatar = false,
+    avatarUploadError = null,
+    onReplaceAvatar,
     onOpenEnrolleeSurvey,
     onOpenAssignmentBoardReferral,
     onToggleEnrollmentAssignment,
@@ -143,6 +149,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
   } = props
 
   const [activeOverlay, setActiveOverlay] = React.useState<OverlayKey | null>(null)
+  const assignmentBoardRef = React.useRef<HTMLElement | null>(null)
   const [selectedIpsccEnrolleeId, setSelectedIpsccEnrolleeId] = React.useState<string>('')
   const [ipsccScoreDraft, setIpsccScoreDraft] = React.useState('4,4,4,4,4,4,4,4,4,4')
   const [ipsccNoteDraft, setIpsccNoteDraft] = React.useState('')
@@ -172,33 +179,85 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
     }
   }, [assignedEnrollees, selectedIpsccEnrolleeId])
 
+  const navigatorDisplayName = currentNavigatorName.trim() || accountSettings.fullName.trim() || 'navigator'
+  const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(navigatorDisplayName), [navigatorDisplayName])
+  const avatarSrc = accountSettings.avatarUrl || fallbackAvatarSrc
+
   return (
     <div className="relative flex flex-col gap-4">
-      <div className="atlas-surface-panel px-5 py-4">
-        <div className="atlas-h4 text-[24px] font-medium text-white">navigator my profile</div>
-        <small className="mt-1 block text-[#9eacb9]">
-          {currentNavigatorName} · {assignedEnrolleeCount} assigned enrollees
-        </small>
-        {programError ? (
-          <div className="mt-3 rounded-[14px] border px-3 py-2 text-[12px]" style={{ borderColor: `${SP_COLORS.red}80`, color: SP_COLORS.red }}>
-            {programError}
+      <div className="atlas-navigator-profile-layout">
+        <div className="atlas-navigator-profile-main space-y-4">
+          <div className="atlas-surface-panel px-5 py-4">
+            <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
+              <AtlasImageUploadTile
+                imageSrc={avatarSrc}
+                alt={`${navigatorDisplayName} profile`}
+                onSelectFile={onReplaceAvatar}
+                disabled={!onReplaceAvatar}
+                buttonTitle={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
+                statusText={isUploadingAvatar ? 'uploading image...' : null}
+                errorText={avatarUploadError}
+                onImageError={(event) => {
+                  if (event.currentTarget.src !== fallbackAvatarSrc) {
+                    event.currentTarget.src = fallbackAvatarSrc
+                  }
+                }}
+              />
+              <div className="min-w-[220px] flex-1 space-y-0.5 pt-[2px] text-white" style={{ textTransform: 'none' }}>
+                <h2 className="atlas-h3 text-[34px] font-medium leading-[1.1]" style={{ textTransform: 'none' }}>
+                  {navigatorDisplayName}
+                </h2>
+                <small className="atlas-meta block text-white">Role: navigator</small>
+                <small className="atlas-meta block text-white">Org: {accountSettings.organization || 'not recorded'}</small>
+                <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
+                  E: {accountSettings.email || 'not recorded'}
+                </small>
+                <small className="atlas-meta block text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
+                <small className="atlas-meta block text-white">Active sections: {CARD_DEFS.length}</small>
+              </div>
+            </div>
+            {programError ? (
+              <div className="mt-3 rounded-[14px] border px-3 py-2 text-[12px]" style={{ borderColor: `${SP_COLORS.red}80`, color: SP_COLORS.red }}>
+                {programError}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
-
-      <div className="atlas-profile-nav-grid">
-        {CARD_DEFS.map((card) => (
-          <ProfileNavigationCard
-            key={card.key}
-            sequenceNumber={Number(card.key.replace('section_', '').split('_')[0])}
-            title={card.cardTitle}
-            subtitle={card.cardSubtitle}
-            actionLabel={card.actionLabel}
-            variant={card.variant}
-            illustration={card.illustration}
-            onClick={() => setActiveOverlay(card.key)}
-          />
-        ))}
+          {/* Keep assignment controls always visible so navigators can claim/triage work
+              without switching context through a card overlay. */}
+          <section ref={assignmentBoardRef} className="atlas-surface-panel p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <small className="atlas-overline block text-[#9eacb9]">navigator workflow</small>
+                <div className="text-[18px] font-medium text-white">enrollment assignment board</div>
+              </div>
+            </div>
+            <NavigatorEnrollmentAssignmentsPanel
+              rows={navigatorEnrollmentAssignments}
+              isLoading={isLoadingNavigatorEnrollmentAssignments}
+              error={navigatorEnrollmentAssignmentsError}
+              assigningEnrollmentId={assigningEnrollmentId}
+              canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
+              canToggleAssignments={canToggleAssignmentActions}
+              canOpenReferralComposer={canOpenAssignmentBoardReferral}
+              onOpenReferralComposer={onOpenAssignmentBoardReferral}
+              onToggleAssignment={onToggleEnrollmentAssignment}
+            />
+          </section>
+        </div>
+        <div className="atlas-navigator-profile-rail">
+          {CARD_DEFS.map((card) => (
+            <ProfileNavigationCard
+              key={card.key}
+              sequenceNumber={Number(card.key.replace('section_', '').split('_')[0])}
+              title={card.cardTitle}
+              subtitle={card.cardSubtitle}
+              actionLabel={card.actionLabel}
+              variant={card.variant}
+              illustration={card.illustration}
+              onClick={() => setActiveOverlay(card.key)}
+            />
+          ))}
+        </div>
       </div>
 
       {activeOverlay ? (
@@ -402,17 +461,22 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
             ) : null}
 
             {activeOverlay === 'section_4_assignments' ? (
-              <NavigatorEnrollmentAssignmentsPanel
-                rows={navigatorEnrollmentAssignments}
-                isLoading={isLoadingNavigatorEnrollmentAssignments}
-                error={navigatorEnrollmentAssignmentsError}
-                assigningEnrollmentId={assigningEnrollmentId}
-                canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
-                canToggleAssignments={canToggleAssignmentActions}
-                canOpenReferralComposer={canOpenAssignmentBoardReferral}
-                onOpenReferralComposer={onOpenAssignmentBoardReferral}
-                onToggleAssignment={onToggleEnrollmentAssignment}
-              />
+              <div className="atlas-surface-raised space-y-3 px-3 py-3 text-white">
+                <div className="text-[13px]">
+                  assignment board is pinned to the left column so you can pick up enrollees without opening a card.
+                </div>
+                <div className="flex justify-end">
+                  <AtlasTextButton
+                    className="px-3 py-1 text-[12px]"
+                    onClick={() => {
+                      setActiveOverlay(null)
+                      assignmentBoardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    jump to assignment board
+                  </AtlasTextButton>
+                </div>
+              </div>
             ) : null}
 
             {activeOverlay === 'section_5_zcode_updates' ? (

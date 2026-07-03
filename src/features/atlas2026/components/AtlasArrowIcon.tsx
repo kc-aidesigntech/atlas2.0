@@ -1,7 +1,7 @@
 import React from 'react'
 
 const atlasArrowIconUrl = new URL(
-  '../../../../assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
+  '../assets/icons/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png',
   import.meta.url
 ).href
 

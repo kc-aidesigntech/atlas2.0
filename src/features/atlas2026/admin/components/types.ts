@@ -20,7 +20,7 @@ import type {
   SupervisorNavigatorCompetencySummary,
   PartnerServiceCapacityDeletionReasonCode,
   ZCodeDomainSurveyHistorySummary
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 
 // Shared admin-section contracts keep extracted components aligned with the parent's
 // data model so refactors do not silently loosen type guarantees.

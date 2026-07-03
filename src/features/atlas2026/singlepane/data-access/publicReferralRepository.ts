@@ -1,4 +1,4 @@
-import type { UnassignedEnrolleePickupRecord } from '@/features/atlas2026/singlepane/types'
+import type { UnassignedEnrolleePickupRecord } from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 const LOCAL_PUBLIC_REFERRAL_QUEUE_KEY = 'atlas2026.public.referral-queue.v1'

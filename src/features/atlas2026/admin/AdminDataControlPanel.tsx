@@ -10,7 +10,7 @@ import {
 } from '@/features/atlas2026/components/AtlasPrimitives'
 import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import { DEFAULT_SERVICE_CAPACITY_SECTIONS } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import AdminEnrolleesSection from '@/features/atlas2026/admin/components/AdminEnrolleesSection'
 import AdminOverviewSection from '@/features/atlas2026/admin/components/AdminOverviewSection'
 import AdminDirectorySection from '@/features/atlas2026/admin/components/AdminDirectorySection'
@@ -48,14 +48,14 @@ import type {
   SupervisorNavigatorCompetencySummary,
   ZCodeDomainSurveyHistorySummary,
   ZCodeSurveyPrompt
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import {
   ADMIN_POLICY_ACTION_KEYS,
   ADMIN_POLICY_CARD_KEYS,
   ADMIN_POLICY_SCREEN_KEYS,
   isCapabilityAllowedForAnyRole,
   toggleCapabilityOverride
-} from '@/features/atlas2026/singlepane/roleCapabilityPolicy'
+} from '@/features/atlas2026/shared/roleCapabilityPolicy'
 
 // Admin control panel composes multiple registry contracts (people, organizations,
 // enrollee drafts, interval rules) into one operator console with explicit save paths.

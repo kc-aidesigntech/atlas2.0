@@ -42,12 +42,15 @@ export default function ProfileNavigationCard({
 }: ProfileNavigationCardProps) {
   const style = VARIANT_STYLES[variant]
   const illustrationSrc = ILLUSTRATION_BY_KEY[illustration]
+  const cornerChamferPx = 22
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group relative flex h-[248px] w-[400px] overflow-hidden rounded-[24px] border border-[#d8d8d8] bg-[#f7f7f7] text-left text-[#0f1115] shadow-[0_14px_24px_rgba(0,0,0,0.35)] transition hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      className="group relative mx-auto flex h-[248px] w-full max-w-[400px] overflow-hidden rounded-[24px] border border-[#d8d8d8] bg-[#f7f7f7] text-left text-[#0f1115] shadow-[0_14px_24px_rgba(0,0,0,0.35)] transition hover:-translate-y-[1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+      // Match the physical-card motif: keep rounded corners but chamfer the top-right corner.
+      style={{ clipPath: `polygon(0 0, calc(100% - ${cornerChamferPx}px) 0, 100% ${cornerChamferPx}px, 100% 100%, 0 100%)` }}
       aria-label={`${title} card`}
     >
       {/* Keep fixed geometry so all role menus share one physical-card silhouette. */}

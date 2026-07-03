@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { EnrolleeProfile, JourneyStationMarker, RouteCandidateRecord, RouteLogEvent } from '@/features/atlas2026/singlepane/types'
+import type { EnrolleeProfile, JourneyStationMarker, RouteCandidateRecord, RouteLogEvent } from '@/features/atlas2026/shared/contracts'
 import { loadJourneyStationMarkers } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 
 /**

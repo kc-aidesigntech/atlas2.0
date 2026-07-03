@@ -4,7 +4,7 @@ import type {
   IpsccCompetencyKey,
   IpsccEncounterSubmissionRecord,
   SupervisorIpsAssessmentRecord
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 

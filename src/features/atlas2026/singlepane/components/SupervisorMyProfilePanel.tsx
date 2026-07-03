@@ -1,6 +1,6 @@
 import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { SupervisorIpsAssessmentRecord, SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/singlepane/types'
+import type { SupervisorIpsAssessmentRecord, SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/shared/contracts'
 import ProfileNavigationCard from './ProfileNavigationCard'
 
 interface SupervisorNavigatorDirectoryEntry {

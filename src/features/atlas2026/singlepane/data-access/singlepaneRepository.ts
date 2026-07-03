@@ -13,7 +13,7 @@ import type {
   PartnerStationProfile,
   RouteCandidateRecord,
   UnassignedEnrolleePickupRecord
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import {
   fetchAppRoleNavigation,
   fetchEnrollmentAssignmentBoard,
@@ -100,13 +100,13 @@ import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 
 export interface SinglePaneBootstrapData {
-  enrollees: import('@/features/atlas2026/singlepane/types').EnrolleeProfile[]
+  enrollees: import('@/features/atlas2026/shared/contracts').EnrolleeProfile[]
   loads: DomainLoad[]
   loadBreakdownsByEnrolleeId: Record<string, DomainLoadBreakdown>
-  roleConfigs: import('@/features/atlas2026/singlepane/types').RoleMenuConfig[]
-  timelineConfig: import('@/features/atlas2026/singlepane/types').TimelineConfig
-  timelineConfigsByEnrolleeId: Record<string, import('@/features/atlas2026/singlepane/types').TimelineConfig>
-  logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]
+  roleConfigs: import('@/features/atlas2026/shared/contracts').RoleMenuConfig[]
+  timelineConfig: import('@/features/atlas2026/shared/contracts').TimelineConfig
+  timelineConfigsByEnrolleeId: Record<string, import('@/features/atlas2026/shared/contracts').TimelineConfig>
+  logs: import('@/features/atlas2026/shared/contracts').RouteLogEvent[]
 }
 
 const routeCandidatesCache = new Map<string, RouteCandidateRecord[]>()
@@ -129,6 +129,16 @@ export interface NavigatorStationContext {
   stationId: string | null
   stationName: string | null
   countyName: string | null
+}
+
+interface NavigatorAssignmentProfileInput {
+  enrollmentId: string
+  enrolleeId: string
+  fullName: string
+  caseId: string
+  assignedNavigator: string
+  activeZCodeDetails?: Array<{ parentCode?: string }>
+  zCodeTags?: string[]
 }
 
 // Single reversible switch for the deferred county-commons experience. Flip to
@@ -232,7 +242,7 @@ function normalizeRosterAssignedNavigatorLabel(value: string | null | undefined)
   return normalized.toLowerCase() === 'unassigned' ? '' : normalized
 }
 
-function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]): SinglePaneBootstrapData {
+function createEmptyBootstrap(logs: import('@/features/atlas2026/shared/contracts').RouteLogEvent[]): SinglePaneBootstrapData {
   return {
     enrollees: [],
     loads: [],
@@ -332,6 +342,15 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     role === 'navigator'
       ? breakdownRows.filter((row) => navigatorEnrollmentIds?.has(row.enrollmentId))
       : breakdownRows
+  const fallbackLoadByEnrollmentId = new Map(visibleLoadRows.map((row) => [row.enrollmentId, row]))
+  const fallbackBreakdownRowsByEnrollmentId = visibleBreakdownRows.reduce<
+    Map<string, Array<(typeof visibleBreakdownRows)[number]>>
+  >((accumulator, row) => {
+    const current = accumulator.get(row.enrollmentId) || []
+    current.push(row)
+    accumulator.set(row.enrollmentId, current)
+    return accumulator
+  }, new Map())
 
   const bootstrapEnrollees = uniqueVisibleProfiles.map((profile) => ({
     id: profile.enrolleeId,
@@ -393,8 +412,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
       const rows =
         canonicalRows.length > 0
           ? canonicalRows
-          : visibleBreakdownRows
-              .filter((row) => row.enrollmentId === profile.enrollmentId)
+          : (fallbackBreakdownRowsByEnrollmentId.get(profile.enrollmentId) || [])
               .map((row) => ({
                 id: `${profile.enrolleeId}:${row.zCodeGroup}`,
                 zCodeGroup: row.zCodeGroup,
@@ -425,7 +443,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   )
   const loads = uniqueVisibleProfiles.map((profile) => {
     const breakdown = loadBreakdownsByEnrolleeId[profile.enrolleeId]
-    const fallbackRow = visibleLoadRows.find((row) => row.enrollmentId === profile.enrollmentId)
+    const fallbackRow = fallbackLoadByEnrollmentId.get(profile.enrollmentId)
     return {
       enrolleeId: profile.enrolleeId,
       habitat: breakdown?.habitatTotal ?? fallbackRow?.habitat ?? 0,
@@ -501,10 +519,14 @@ export async function loadEnrollmentRequests(role: AtlasRole): Promise<Enrollmen
   }))
 }
 
-export async function loadNavigatorEnrollmentAssignments(): Promise<NavigatorEnrollmentAssignmentRecord[]> {
+export async function loadNavigatorEnrollmentAssignments(
+  options?: { profileRows?: NavigatorAssignmentProfileInput[] }
+): Promise<NavigatorEnrollmentAssignmentRecord[]> {
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
   const [profiles, assignmentBoardRows, navigatorAssignments, navigatorPersonId] = await Promise.all([
-    withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
+    options?.profileRows
+      ? Promise.resolve(options.profileRows)
+      : withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
     withOptionalSupabaseFallback('singlepane.enrollmentAssignmentBoard', () => fetchEnrollmentAssignmentBoard(supabase), []),
     withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), []),
     withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)

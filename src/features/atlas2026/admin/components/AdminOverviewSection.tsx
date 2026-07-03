@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Building2, GitBranch, Trash2, Users } from 'lucide-react'
 import { AtlasInsetCard, AtlasStatusPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type { AdminOverviewSectionDataProps, StatusPillComponentType } from '@/features/atlas2026/admin/components/types'
 
 interface AdminOverviewSectionProps extends AdminOverviewSectionDataProps {

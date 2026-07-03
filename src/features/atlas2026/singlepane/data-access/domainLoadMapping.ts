@@ -5,7 +5,7 @@ import type {
   DomainLoadBucket,
   PartnerServiceCapacitySubmissionRecord,
   PartnerStationSpecialtyGroup
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import {
   ZCODE_DOMAIN_SCORE_RANGE,
   ZCODE_DOMAIN_SURVEY_FORM_VERSION

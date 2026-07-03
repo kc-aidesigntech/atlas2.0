@@ -1,8 +1,8 @@
 import React from 'react'
 import { ChevronDown, Loader2, Menu } from 'lucide-react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { AtlasRole, EnrolleeProfile, RoleMenuConfig } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type { AtlasRole, EnrolleeProfile, RoleMenuConfig } from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface TopNavProps {
   role: AtlasRole

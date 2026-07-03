@@ -11,7 +11,7 @@ import type {
   RegulationReviewSettings,
   RouteAssignmentRecord,
   TimelineConfig
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import {
   loadConfigPayloadMapByPrefix,

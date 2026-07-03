@@ -1,37 +1,39 @@
 import React from 'react'
 import { useSupabaseAuth } from '../../../auth/SupabaseAuthProvider'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled } from '../../../lib/supabaseClient'
-import AdminDataControlPanel from '../admin/AdminDataControlPanel'
 import { AtlasCloseButton, AtlasTextButton } from '../components/AtlasPrimitives'
 import AccountSettingsPanel from './components/AccountSettingsPanel'
 import ContextPanels from './components/ContextPanels'
-import LiveAccessMatrixPanel from './components/LiveAccessMatrixPanel'
 import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
 // The in-depth enrollee burden survey (EnrolleeBurdenSurveyPanel and its data
 // plumbing in useSinglePaneData / enrolleeBurdenSurveyRepository) is preserved
 // in the repo for future reincorporation, but is un-wired from this entry
 // point in favor of the streamlined Z-code override panel below.
 import EnrolleeZCodeOverridePanel from './components/EnrolleeZCodeOverridePanel'
-import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
-import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
-import SupervisorMyProfilePanel from './components/SupervisorMyProfilePanel'
-import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
-import PartnerStripHistoryOverlay from './components/PartnerStripHistoryOverlay'
-import PartnerSpecialtyOverlay from './components/PartnerSpecialtyOverlay'
-import PartnerStationProfilePanel from './components/PartnerStationProfilePanel'
-import ProfilePanel from './components/ProfilePanel'
 import RadialLoadChart from './components/RadialLoadChart'
-import RadialLoadTableOverlay from './components/RadialLoadTableOverlay'
-import RegulationTestsOverlay from './components/RegulationTestsOverlay'
-import ResolvedZCodesOverlay from './components/ResolvedZCodesOverlay'
 import RoleMenus from './components/RoleMenus'
-import RoutePlanningOverlay from './components/RoutePlanningOverlay'
-import StripMapTimeline from './components/StripMapTimeline'
 import TopNav from './components/TopNav'
-import VerticalStripMapTimeline from './components/VerticalStripMapTimeline'
 import { SP_COLORS } from './theme'
 import type { AtlasRole, DomainLoadDrilldownTarget, RouteCandidateRecord, StabilizationPhase } from './types'
 import { useSinglePaneData } from './useSinglePaneData'
+import { workspaceLoadMetrics } from './workspaceLoadMetrics'
+
+const AdminDataControlPanel = React.lazy(() => import('../admin/AdminDataControlPanel'))
+const LiveAccessMatrixPanel = React.lazy(() => import('./components/LiveAccessMatrixPanel'))
+const NavigatorMyProfilePanel = React.lazy(() => import('./components/NavigatorMyProfilePanel'))
+const NavigatorEnrollmentAssignmentsPanel = React.lazy(() => import('./components/NavigatorEnrollmentAssignmentsPanel'))
+const SupervisorMyProfilePanel = React.lazy(() => import('./components/SupervisorMyProfilePanel'))
+const PartnerReferralWorkflowPanel = React.lazy(() => import('./components/PartnerReferralWorkflowPanel'))
+const PartnerStripHistoryOverlay = React.lazy(() => import('./components/PartnerStripHistoryOverlay'))
+const PartnerSpecialtyOverlay = React.lazy(() => import('./components/PartnerSpecialtyOverlay'))
+const PartnerStationProfilePanel = React.lazy(() => import('./components/PartnerStationProfilePanel'))
+const ProfilePanel = React.lazy(() => import('./components/ProfilePanel'))
+const RadialLoadTableOverlay = React.lazy(() => import('./components/RadialLoadTableOverlay'))
+const RegulationTestsOverlay = React.lazy(() => import('./components/RegulationTestsOverlay'))
+const ResolvedZCodesOverlay = React.lazy(() => import('./components/ResolvedZCodesOverlay'))
+const RoutePlanningOverlay = React.lazy(() => import('./components/RoutePlanningOverlay'))
+const StripMapTimeline = React.lazy(() => import('./components/StripMapTimeline'))
+const VerticalStripMapTimeline = React.lazy(() => import('./components/VerticalStripMapTimeline'))
 
 const PERSISTED_ACTION_LABELS = new Set([
   'route planning',
@@ -223,6 +225,7 @@ export default function SinglePaneApp() {
   const transitionBootstrappedRef = React.useRef(false)
   const hashSyncBootstrappedRef = React.useRef(false)
   const previousUiRoleRef = React.useRef<AtlasRole | null>(null)
+  const firstUsableMarkedRoleRef = React.useRef<AtlasRole | null>(null)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const uiRole = viewerRole
   const activeEnrolleeSurveyTarget = React.useMemo(
@@ -455,6 +458,13 @@ export default function SinglePaneApp() {
   const isSupervisorMyProfileView =
     uiRole === 'supervisor' && (activeMenu === 'assigned navigators' || activeMenu === 'navigator assessments')
   const isReady = isPartnerStationView ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu || isSupervisorMyProfileView ? true : Boolean(selectedEnrollee && timelineConfig)
+
+  React.useEffect(() => {
+    if (isLoading || !isReady) return
+    if (firstUsableMarkedRoleRef.current === uiRole) return
+    firstUsableMarkedRoleRef.current = uiRole
+    workspaceLoadMetrics.markFirstUsable(uiRole)
+  }, [isLoading, isReady, uiRole])
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const visibleLogs = React.useMemo(
     () => (uiRole === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
@@ -654,6 +664,7 @@ export default function SinglePaneApp() {
       />
 
       <main className="atlas-shell-edge-buffer relative py-[10px]">
+        <React.Suspense fallback={<LazyPanelFallback />}>
         {(isLoading || !isReady) && !bootstrapError ? <LoadingSpinnerOverlay /> : null}
         {bootstrapError ? (
           // Fail-loud banner: a bootstrap failure (most importantly a grant/RLS
@@ -1258,6 +1269,7 @@ export default function SinglePaneApp() {
             )}
           </div>
         </section>
+        </React.Suspense>
       </main>
     </div>
   )
@@ -1329,6 +1341,14 @@ function LoadingShell() {
 
       <div className="h-[220px] rounded-[28px] border border-white/15 bg-white/5" />
     </>
+  )
+}
+
+function LazyPanelFallback() {
+  return (
+    <div className="absolute inset-0 z-[30] flex items-center justify-center bg-black/20">
+      <small className="atlas-overline text-[#cfcfcf]">loading panel…</small>
+    </div>
   )
 }
 

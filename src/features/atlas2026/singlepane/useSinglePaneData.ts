@@ -64,7 +64,7 @@ import type {
   UnassignedEnrolleePickupRecord,
   ZCodeDomainSurveyHistorySummary,
   ZDomain
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import {
   appendRouteLog as appendRouteLogRecord,
   deleteEnrolleeBurdenSurveyDraftRecord,
@@ -141,7 +141,7 @@ import {
   selectCompletedPartnerSurveysNewestFirst,
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
-import { isCapabilityAllowedForRole } from '@/features/atlas2026/singlepane/roleCapabilityPolicy'
+import { isCapabilityAllowedForRole } from '@/features/atlas2026/shared/roleCapabilityPolicy'
 import {
   buildPartnerServiceCapacityDefaultHeader,
   buildSupervisorNavigatorCompetencySummaries,
@@ -1408,6 +1408,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         : enrollees,
     [enrollees, scopedEnrollmentIds]
   )
+  const navigatorAssignmentProfiles = useMemo(
+    () =>
+      enrollees.map((enrollee) => ({
+        enrollmentId: enrollee.enrollmentId,
+        enrolleeId: enrollee.id,
+        fullName: enrollee.fullName,
+        caseId: enrollee.caseId,
+        assignedNavigator: enrollee.assignedNavigator,
+        activeZCodeDetails: enrollee.activeZCodeDetails,
+        zCodeTags: enrollee.zCodeTags
+      })),
+    [enrollees]
+  )
   const scopedEnrolleeIdSet = useMemo(() => new Set(scopedEnrollees.map((enrollee) => enrollee.id)), [scopedEnrollees])
   const scopedLoads = useMemo(
     () => loads.filter((item) => scopedEnrolleeIdSet.has(item.enrolleeId)),
@@ -2397,7 +2410,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }
     let isMounted = true
     setIsLoadingNavigatorEnrollmentAssignments(true)
-    loadNavigatorEnrollmentAssignments()
+    loadNavigatorEnrollmentAssignments({ profileRows: navigatorAssignmentProfiles })
       .then((rows) => {
         if (!isMounted) return
         setNavigatorEnrollmentAssignments(rows)
@@ -2415,7 +2428,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return () => {
       isMounted = false
     }
-  }, [viewerRole])
+  }, [navigatorAssignmentProfiles, viewerRole])
 
   useEffect(() => {
     if (viewerRole !== 'partner') {
@@ -3197,7 +3210,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   async function refreshAssignmentParityViews() {
     await Promise.all([
       // Assignment board and bootstrap are the canonical read paths for navigator claim state.
-      loadNavigatorEnrollmentAssignments().then((rows) => {
+      loadNavigatorEnrollmentAssignments({ profileRows: navigatorAssignmentProfiles }).then((rows) => {
         setNavigatorEnrollmentAssignments(rows)
         setNavigatorEnrollmentAssignmentsError(null)
       }),

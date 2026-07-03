@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { AtlasInsetCard } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { EnrolleeIntakeRecord } from '@/features/atlas2026/singlepane/types'
+import type { EnrolleeIntakeRecord } from '@/features/atlas2026/shared/contracts'
 
 // Admin intake form is a thin editor over the EnrolleeIntakeRecord contract.
 // It intentionally buffers edits locally and emits one normalized save payload.

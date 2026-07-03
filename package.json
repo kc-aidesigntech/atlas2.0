@@ -21,7 +21,8 @@
     "start": "serve -s dist -l $PORT",
     "heroku-postbuild": "npm run build",
     "data:partner-capabilities": "node scripts/build-partner-capabilities.js",
-    "test:route-ranking": "node scripts/test-route-ranking.js"
+    "test:route-ranking": "node scripts/test-route-ranking.js",
+    "check:repo-organization": "node scripts/validate-repo-organization.mjs"
   },
   "dependencies": {
     "@atlas/shared": "*",

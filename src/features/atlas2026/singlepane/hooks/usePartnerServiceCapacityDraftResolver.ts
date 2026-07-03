@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { PartnerServiceCapacitySubmissionRecord } from '@/features/atlas2026/singlepane/types'
+import type { PartnerServiceCapacitySubmissionRecord } from '@/features/atlas2026/shared/contracts'
 import {
   buildLocalOnlyResumeSubmissionRecord,
   getResumeDraftDisplayTimestampIso,

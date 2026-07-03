@@ -20,7 +20,7 @@ import type {
   PartnerServiceCapacitySubmissionInput,
   PartnerServiceCapacitySubmissionRecord,
   ZCodeDomainSurveyHistorySummary
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 /**

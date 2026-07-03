@@ -1,7 +1,7 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasMetricPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import type { AdminPortalPersonRecord } from '@/features/atlas2026/singlepane/types'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import type { AdminPortalPersonRecord } from '@/features/atlas2026/shared/contracts'
 import type { PermissionExceptionRow } from '@/features/atlas2026/admin/components/types'
 
 interface AdminPermissionsSectionProps {

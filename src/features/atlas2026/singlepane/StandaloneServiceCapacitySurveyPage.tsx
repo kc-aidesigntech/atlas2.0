@@ -4,7 +4,7 @@
  */
 import React from 'react'
 import ServiceCapacitySurveyPanel from '@/features/atlas2026/singlepane/components/ServiceCapacitySurveyPanel'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { useSinglePaneData } from '@/features/atlas2026/singlepane/useSinglePaneData'
 
 const SESSION_ROLE_KEY = 'atlas2026.singlepane.session.role'

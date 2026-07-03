@@ -1,8 +1,8 @@
 import React from 'react'
 import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { PartnerStationSpecialtyGroup } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type { PartnerStationSpecialtyGroup } from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface PartnerSpecialtyOverlayProps {
   specialtyGroup: PartnerStationSpecialtyGroup | null

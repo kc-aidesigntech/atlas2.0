@@ -1,7 +1,7 @@
 import React from 'react'
 import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { EnrolleeProfile, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type { EnrolleeProfile, RouteCandidateRecord } from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import MtaRouteBoard from './MtaRouteBoard'
 
 interface RoutePlanningOverlayProps {

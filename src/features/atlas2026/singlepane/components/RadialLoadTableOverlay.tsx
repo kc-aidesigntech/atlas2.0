@@ -5,14 +5,14 @@ import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitive
 import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
 import { selectCompletedPartnerSurveysNewestFirst } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { ZCODE_DOMAIN_SURVEY_FORM_VERSION } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
   DomainLoad,
   DomainLoadBreakdown,
   DomainLoadDrilldownTarget,
   NavigatorLoadContributor,
   PartnerServiceCapacitySubmissionRecord
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 
 interface RadialLoadTableOverlayProps {
   isOpen: boolean
