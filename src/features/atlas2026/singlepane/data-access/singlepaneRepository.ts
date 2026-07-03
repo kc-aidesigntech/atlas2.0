@@ -59,6 +59,16 @@ import {
   saveNavigatorCompetencyAssessment
 } from '@/features/atlas2026/singlepane/data-access/navigatorAssessmentRepository'
 import {
+  loadNavigatorCreateSessions,
+  loadNavigatorIpsSelfAssessments,
+  loadNavigatorIpsccEncounterSubmissions,
+  loadSupervisorIpsAssessments,
+  saveNavigatorCreateSession,
+  saveNavigatorIpsSelfAssessment,
+  saveNavigatorIpsccEncounterSubmission,
+  saveSupervisorIpsAssessment
+} from '@/features/atlas2026/singlepane/data-access/navigatorProfileRepository'
+import {
   deleteEnrolleeBurdenSurveyDraftRecord,
   loadEnrolleeBurdenSurvey,
   loadEnrolleeBurdenSurveyHistory,
@@ -334,7 +344,8 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     assignedNavigator: profile.assignedNavigator,
     zCodeTags: profile.zCodeTags,
     activeZCodeDetails: profile.activeZCodeDetails,
-    completedParentCodes: profile.completedParentCodes
+    completedParentCodes: profile.completedParentCodes,
+    currentPhase: profile.currentPhase
   }))
 
   const normalizedRoleConfigs = roleNavigation.map((item) => ({
@@ -1077,6 +1088,10 @@ export {
   loadPartnerTroubleshootingGrants,
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
+  loadNavigatorCreateSessions,
+  loadNavigatorIpsSelfAssessments,
+  loadNavigatorIpsccEncounterSubmissions,
+  loadSupervisorIpsAssessments,
   loadNavigatorProgramState,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
@@ -1089,6 +1104,10 @@ export {
   savePartnerTroubleshootingGrant,
   saveEnrolleeIntake,
   saveNavigatorCompetencyAssessment,
+  saveNavigatorCreateSession,
+  saveNavigatorIpsSelfAssessment,
+  saveNavigatorIpsccEncounterSubmission,
+  saveSupervisorIpsAssessment,
   saveNavigatorProgramState,
   savePartnerServiceCapacitySurvey,
   saveRouteAssignment,

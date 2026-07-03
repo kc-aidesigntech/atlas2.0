@@ -364,6 +364,25 @@
     padding-right: var(--atlas-shell-edge-buffer);
   }
 
+  .atlas-profile-nav-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1.25rem;
+    justify-items: center;
+  }
+
+  @media (min-width: 768px) {
+    .atlas-profile-nav-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .atlas-profile-nav-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
   @keyframes atlasTickerMarquee {
     0% {
       transform: translateX(0);

@@ -21,6 +21,12 @@ import type {
   EnrolleeZCodeResolutionInput,
   IntervalAssessmentDueItem,
   IntervalAssessmentRule,
+  IpsCompetencySelfAssessmentRecord,
+  IpsccCompetencyAggregate,
+  IpsccCompetencyKey,
+  IpsccEncounterSubmissionRecord,
+  IpsccSelfAwarenessCorrelationRow,
+  IpsccSelfAwarenessSummary,
   JourneyStationMarker,
   NavigatorProgramState,
   NavigatorEnrollmentAssignmentRecord,
@@ -49,7 +55,10 @@ import type {
   RouteCandidateRecord,
   RouteLogEvent,
   StabilizationPhase,
+  SupervisorIpsAssessmentRecord,
   SupervisionSessionRecord,
+  CreateInsightRow,
+  CreateSessionRecord,
   TroubleshootingSessionState,
   TimelineConfig,
   UnassignedEnrolleePickupRecord,
@@ -99,11 +108,19 @@ import {
   saveTimelineConfig as persistTimelineConfig,
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake,
+  saveNavigatorCreateSession as persistNavigatorCreateSession,
+  saveNavigatorIpsSelfAssessment as persistNavigatorIpsSelfAssessment,
+  saveNavigatorIpsccEncounterSubmission as persistNavigatorIpsccEncounterSubmission,
   assignNavigatorEnrollmentToSelf as persistAssignNavigatorEnrollmentToSelf,
   unassignNavigatorEnrollmentFromSelf as persistUnassignNavigatorEnrollmentFromSelf,
   materializeClaimedReferralIntoEnrollment,
   upsertEnrollmentInferredZCodes,
-  loadAccessMatrixDataset
+  loadAccessMatrixDataset,
+  loadNavigatorCreateSessions,
+  loadNavigatorIpsSelfAssessments,
+  loadNavigatorIpsccEncounterSubmissions,
+  loadSupervisorIpsAssessments,
+  saveSupervisorIpsAssessment as persistSupervisorIpsAssessment
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import { toSupabaseErrorMessage } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { useJourneyStationMarkers } from '@/features/atlas2026/singlepane/hooks/useJourneyStationMarkers'
@@ -268,10 +285,144 @@ function buildResolvedZCodeStripMarkers(activeZCodeDetails: EnrolleeActiveZCode[
     })) satisfies ResolvedZCodeStripMarker[]
 }
 
+const IPSCC_COMPETENCY_DEFINITIONS: Array<{ key: IpsccCompetencyKey; label: string; itemIndexes: number[] }> = [
+  { key: 'competency_1_connection', label: 'Connection', itemIndexes: [1, 2, 3, 4, 9, 10] },
+  { key: 'competency_2_learning_together', label: 'Helping to learning together', itemIndexes: [3] },
+  { key: 'competency_3_worldview_awareness', label: 'Worldview awareness', itemIndexes: [5] },
+  { key: 'competency_4_relationship_focus', label: 'Individual to relationship', itemIndexes: [2, 4, 9] },
+  { key: 'competency_5_mutuality', label: 'Mutuality', itemIndexes: [4, 5, 7, 9] },
+  { key: 'competency_6_hope_and_possibility', label: 'Fear to hope and possibility', itemIndexes: [4, 10] },
+  { key: 'competency_7_moving_towards', label: 'Moving towards', itemIndexes: [6, 8, 10] },
+  { key: 'competency_8_self_reflection', label: 'Self-reflection', itemIndexes: [1, 2] },
+  { key: 'competency_9_feedback', label: 'Give and receive feedback', itemIndexes: [3, 7] },
+  { key: 'competency_10_co_reflection', label: 'Co-reflection', itemIndexes: [9, 10] }
+]
+
+const IPSCC_ITEM_COUNT = 10
+
+function clampLikertScore(value: number) {
+  if (!Number.isFinite(value)) return 3
+  return Math.max(1, Math.min(5, Math.round(value)))
+}
+
+function mapItemScoresToCompetencyScores(itemScores: number[]): Partial<Record<IpsccCompetencyKey, number>> {
+  const normalized = Array.from({ length: IPSCC_ITEM_COUNT }, (_, index) => clampLikertScore(itemScores[index] ?? 3))
+  return Object.fromEntries(
+    IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
+      const values = definition.itemIndexes.map((itemIndex) => normalized[itemIndex - 1]).filter(Number.isFinite)
+      const average = values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)) : null
+      return [definition.key, average]
+    })
+  ) as Partial<Record<IpsccCompetencyKey, number>>
+}
+
+function buildSeedIpsccEncounterSubmissions(
+  navigatorName: string,
+  enrollees: EnrolleeProfile[]
+): IpsccEncounterSubmissionRecord[] {
+  const now = new Date()
+  return enrollees.slice(0, 2).map((enrollee, index) => {
+    const submittedAt = new Date(now)
+    submittedAt.setUTCDate(submittedAt.getUTCDate() - index * 3)
+    const itemScores = Array.from({ length: IPSCC_ITEM_COUNT }, (_, scoreIndex) => clampLikertScore(4 - ((index + scoreIndex) % 2)))
+    return {
+      id: `ipscc-seed-${index + 1}`,
+      navigatorName,
+      enrolleeId: enrollee.id,
+      enrolleeName: enrollee.fullName,
+      enrollmentId: enrollee.enrollmentId || null,
+      submittedAtIso: submittedAt.toISOString(),
+      submittedBy: 'service user',
+      itemScores,
+      note: 'Seeded point-of-care feedback for competency trend continuity.'
+    }
+  })
+}
+
+function buildSeedIpsSelfAssessments(navigatorName: string): IpsCompetencySelfAssessmentRecord[] {
+  const now = new Date()
+  return [0, 7].map((daysAgo, index) => {
+    const submittedAt = new Date(now)
+    submittedAt.setUTCDate(submittedAt.getUTCDate() - daysAgo)
+    return {
+      id: `ips-self-${index + 1}`,
+      navigatorName,
+      weekStartIso: getWeekStartIso(submittedAt.toISOString()),
+      submittedAtIso: submittedAt.toISOString(),
+      competencyScores: Object.fromEntries(
+        IPSCC_COMPETENCY_DEFINITIONS.map((definition, competencyIndex) => [
+          definition.key,
+          clampLikertScore(4 - ((index + competencyIndex) % 2))
+        ])
+      ) as Partial<Record<IpsccCompetencyKey, number>>,
+      note: 'Seeded weekly pre-supervision self-assessment.'
+    }
+  })
+}
+
+function buildSeedSupervisorIpsAssessments(
+  navigatorName: string,
+  supervisorName: string
+): SupervisorIpsAssessmentRecord[] {
+  const now = new Date()
+  return [2, 9].map((daysAgo, index) => {
+    const submittedAt = new Date(now)
+    submittedAt.setUTCDate(submittedAt.getUTCDate() - daysAgo)
+    return {
+      id: `supervisor-ips-${index + 1}`,
+      supervisorName,
+      navigatorName,
+      weekStartIso: getWeekStartIso(submittedAt.toISOString()),
+      submittedAtIso: submittedAt.toISOString(),
+      competencyScores: Object.fromEntries(
+        IPSCC_COMPETENCY_DEFINITIONS.map((definition, competencyIndex) => [
+          definition.key,
+          clampLikertScore(4 - ((index + competencyIndex + 1) % 2))
+        ])
+      ) as Partial<Record<IpsccCompetencyKey, number>>,
+      note: 'Seeded supervisor IPS assessment for comparison trend continuity.'
+    }
+  })
+}
+
+function buildSeedCreateSessions(navigatorName: string): CreateSessionRecord[] {
+  const now = new Date()
+  return [5, 12].map((daysAgo, index) => {
+    const sessionAt = new Date(now)
+    sessionAt.setUTCDate(sessionAt.getUTCDate() - daysAgo)
+    return {
+      id: `create-session-${index + 1}`,
+      navigatorName,
+      supervisorName: 'peer supervisor',
+      sessionAtIso: sessionAt.toISOString(),
+      submittedAtIso: sessionAt.toISOString(),
+      supervisionMode: 'in_person',
+      sessionDurationMinutes: 50,
+      connectFocusedListening: true,
+      recognizeNotes: index === 0 ? 'Strong rapport built with new enrollees.' : 'Consistent follow-through with existing enrollees.',
+      encourageNotes: 'Discussed current stuck points and brainstormed concrete options.',
+      acknowledgeNotes: 'Highlighted initiative and advocacy in team communication.',
+      trainNotes: 'Identified next learning resources and process confidence needs.',
+      empowerNotes: 'Reviewed materials/time support needed to execute the work.',
+      createActionPlan: 'Apply the discussed supervision commitments before next session.',
+      supervisorSubmission: 'Supervisor reinforced strengths-based coaching focus.',
+      superviseeSubmission: 'Navigator requested tighter feedback loops on difficult encounters.',
+      peerSpecialistSignature: navigatorName,
+      peerSpecialistSignedAtIso: sessionAt.toISOString(),
+      supervisorSignature: 'peer supervisor',
+      supervisorSignedAtIso: sessionAt.toISOString()
+    }
+  })
+}
+
 function createNavigatorProgramState(): NavigatorProgramState {
   return {
     pickupQueue: [],
     selfAssessments: [],
+    ipsSelfAssessments: [],
+    supervisorIpsAssessments: [],
+    ipsccEncounterSubmissions: [],
+    createSessions: [],
     supervisionSessions: [],
     intervalAssessmentRules: [],
     updatedAtIso: new Date().toISOString()
@@ -320,7 +471,8 @@ function buildOptimisticEnrolleeFromAssignmentRow(row: NavigatorEnrollmentAssign
     assignedNavigator: '',
     zCodeTags: [],
     activeZCodeDetails: [],
-    completedParentCodes: []
+    completedParentCodes: [],
+    currentPhase: row.currentPhase
   }
 }
 
@@ -552,6 +704,8 @@ function buildSeedIntervalRules(navigatorName: string): IntervalAssessmentRule[]
 function mergeNavigatorProgramState(
   rawState: NavigatorProgramState | null,
   navigatorName: string,
+  supervisorName: string,
+  enrollees: EnrolleeProfile[],
   enrollmentRequests: EnrollmentRequestRecord[],
   publicQueueRecords: UnassignedEnrolleePickupRecord[]
 ): NavigatorProgramState {
@@ -564,6 +718,14 @@ function mergeNavigatorProgramState(
   return {
     pickupQueue: mergedPickupQueue.length ? mergedPickupQueue : buildSeedPickupQueue(enrollmentRequests),
     selfAssessments: base.selfAssessments.length ? base.selfAssessments : buildSeedSelfAssessments(navigatorName),
+    ipsSelfAssessments: base.ipsSelfAssessments.length ? base.ipsSelfAssessments : buildSeedIpsSelfAssessments(navigatorName),
+    supervisorIpsAssessments:
+      base.supervisorIpsAssessments.length
+        ? base.supervisorIpsAssessments
+        : buildSeedSupervisorIpsAssessments(navigatorName, supervisorName),
+    ipsccEncounterSubmissions:
+      base.ipsccEncounterSubmissions.length ? base.ipsccEncounterSubmissions : buildSeedIpsccEncounterSubmissions(navigatorName, enrollees),
+    createSessions: base.createSessions.length ? base.createSessions : buildSeedCreateSessions(navigatorName),
     supervisionSessions: base.supervisionSessions.length ? base.supervisionSessions : buildSeedSupervisionSessions(navigatorName),
     intervalAssessmentRules: base.intervalAssessmentRules.length ? base.intervalAssessmentRules : buildSeedIntervalRules(navigatorName),
     updatedAtIso: base.updatedAtIso || new Date().toISOString()
@@ -605,6 +767,99 @@ function buildNavigatorSelfAssessmentSummary(records: NavigatorSelfAssessmentRec
     averageComposite: Number(((averageStressLoad + averageConfidence + averageSupport) / 3).toFixed(2)),
     latestSubmittedAtIso: latest?.submittedAtIso || null
   }
+}
+
+function buildIpsccCompetencyAggregates(records: IpsccEncounterSubmissionRecord[]): IpsccCompetencyAggregate[] {
+  return IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
+    const perEncounter = records
+      .map((record) => mapItemScoresToCompetencyScores(record.itemScores)[definition.key])
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    const averageScore = perEncounter.length
+      ? Number((perEncounter.reduce((sum, value) => sum + value, 0) / perEncounter.length).toFixed(2))
+      : null
+    const latestSubmittedAtIso = records
+      .slice()
+      .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime())[0]?.submittedAtIso || null
+    return {
+      key: definition.key,
+      label: definition.label,
+      sampleSize: perEncounter.length,
+      averageScore,
+      latestSubmittedAtIso
+    }
+  })
+}
+
+function buildIpsSelfAssessmentAverages(records: IpsCompetencySelfAssessmentRecord[]): Record<IpsccCompetencyKey, number | null> {
+  return Object.fromEntries(
+    IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
+      const values = records
+        .map((record) => record.competencyScores[definition.key])
+        .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+      const average = values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)) : null
+      return [definition.key, average]
+    })
+  ) as Record<IpsccCompetencyKey, number | null>
+}
+
+function buildSelfVsSupervisorAwarenessCorrelation(
+  selfAverages: Record<IpsccCompetencyKey, number | null>,
+  supervisorAverages: Record<IpsccCompetencyKey, number | null>
+): { rows: IpsccSelfAwarenessCorrelationRow[]; summary: IpsccSelfAwarenessSummary } {
+  const rows = IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
+    const selfAverage = selfAverages[definition.key] ?? null
+    const supervisorAverage = supervisorAverages[definition.key] ?? null
+    const hasPair = typeof supervisorAverage === 'number' && typeof selfAverage === 'number'
+    const gap = hasPair ? Number((selfAverage - supervisorAverage).toFixed(2)) : null
+    // Alignment compresses absolute gap into 0..1 where 1 means exact agreement.
+    const alignmentScore = hasPair ? Number((Math.max(0, 1 - Math.abs(gap || 0) / 4)).toFixed(2)) : null
+    return {
+      key: definition.key,
+      label: definition.label,
+      ipsccAverage: supervisorAverage,
+      selfAverage,
+      gap,
+      alignmentScore
+    }
+  })
+  const comparableRows = rows.filter((row) => typeof row.gap === 'number' && typeof row.alignmentScore === 'number')
+  const averageGap = comparableRows.length
+    ? Number((comparableRows.reduce((sum, row) => sum + Math.abs(row.gap || 0), 0) / comparableRows.length).toFixed(2))
+    : null
+  const overallAlignmentScore = comparableRows.length
+    ? Number((comparableRows.reduce((sum, row) => sum + (row.alignmentScore || 0), 0) / comparableRows.length).toFixed(2))
+    : null
+  return {
+    rows,
+    summary: {
+      comparedCompetencyCount: comparableRows.length,
+      averageGap,
+      overallAlignmentScore
+    }
+  }
+}
+
+function buildCreateInsights(records: CreateSessionRecord[]): CreateInsightRow[] {
+  const pillars: Array<{ key: CreateInsightRow['pillar']; label: string; pick: (record: CreateSessionRecord) => string }> = [
+    { key: 'connect', label: 'Connect', pick: (record) => (record.connectFocusedListening ? 'Yes - focused listening documented.' : 'No - follow-up needed.') },
+    { key: 'recognize', label: 'Recognize', pick: (record) => record.recognizeNotes },
+    { key: 'encourage', label: 'Encourage', pick: (record) => record.encourageNotes },
+    { key: 'acknowledge', label: 'Acknowledge', pick: (record) => record.acknowledgeNotes },
+    { key: 'train', label: 'Train', pick: (record) => record.trainNotes },
+    { key: 'empower', label: 'Empower', pick: (record) => record.empowerNotes }
+  ]
+  const sorted = records
+    .slice()
+    .sort((left, right) => new Date(right.sessionAtIso).getTime() - new Date(left.sessionAtIso).getTime())
+  return pillars.map((pillar) => {
+    const allSummaries = sorted.map((record) => pillar.pick(record).trim()).filter(Boolean)
+    return {
+      pillar: pillar.key,
+      label: pillar.label,
+      latestSummary: allSummaries[0] || 'No notes recorded yet.',
+      sessionCount: allSummaries.length
+    }
+  })
 }
 
 function cadenceDays(cadence: IntervalAssessmentRule['cadence']) {
@@ -773,13 +1028,13 @@ function deriveNavigatorLoadBreakdown(loadBreakdowns: Record<string, DomainLoadB
     // would be misleading; keep drilldown disabled at this level.
     drilldownTarget: undefined
   }))
-  const habitatRows = rows.filter((row) => row.mappedDomain === 'habitat')
-  const workRows = rows.filter((row) => row.mappedDomain === 'work')
-  const socialRows = rows.filter((row) => row.mappedDomain === 'socialNetworks')
+  // Navigator my-profile summaries must reflect the average of assigned enrollees'
+  // domain totals (same basis as navigatorAggregateLoad), not the average of grouped
+  // Z-code rows. Grouped rows are for audit visibility only.
   const totals = {
-    habitatTotal: habitatRows.length ? habitatRows.reduce((sum, row) => sum + row.rawCount, 0) / habitatRows.length : 0,
-    workTotal: workRows.length ? workRows.reduce((sum, row) => sum + row.rawCount, 0) / workRows.length : 0,
-    socialNetworksTotal: socialRows.length ? socialRows.reduce((sum, row) => sum + row.rawCount, 0) / socialRows.length : 0
+    habitatTotal: values.reduce((sum, breakdown) => sum + (breakdown.habitatTotal || 0), 0) / values.length,
+    workTotal: values.reduce((sum, breakdown) => sum + (breakdown.workTotal || 0), 0) / values.length,
+    socialNetworksTotal: values.reduce((sum, breakdown) => sum + (breakdown.socialNetworksTotal || 0), 0) / values.length
   }
   return {
     subjectId: 'navigator-aggregate',
@@ -1311,6 +1566,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       'atlas navigator',
     [effectiveAccountSettings.fullName, remoteSession?.targetDisplayName, remoteSession?.targetRole, selectedEnrollee?.assignedNavigator]
   )
+  const currentSupervisorName = useMemo(
+    () =>
+      (remoteSession?.targetRole === 'supervisor' ? remoteSession.targetDisplayName : effectiveAccountSettings.fullName).trim() ||
+      'peer supervisor',
+    [effectiveAccountSettings.fullName, remoteSession?.targetDisplayName, remoteSession?.targetRole]
+  )
 
   const supervisorNavigatorCompetency = useMemo<SupervisorNavigatorCompetencySummary[]>(
     () => buildSupervisorNavigatorCompetencySummaries(scopedEnrollees, navigatorCompetencyAssessments),
@@ -1348,8 +1609,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       .sort((left, right) => left.navigatorName.localeCompare(right.navigatorName))
   }, [accessMatrixDataset, scopedEnrollees, viewerPerson])
   const mergedNavigatorProgramState = useMemo(
-    () => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, enrollmentRequests, publicQueueRecords),
-    [currentNavigatorName, enrollmentRequests, navigatorProgramState, publicQueueRecords]
+    () => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, currentSupervisorName, enrollees, enrollmentRequests, publicQueueRecords),
+    [currentNavigatorName, currentSupervisorName, enrollees, enrollmentRequests, navigatorProgramState, publicQueueRecords]
   )
   const partnerStripJourneyModel = useMemo(() => {
     if (!isPartnerStationView) {
@@ -1403,7 +1664,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       .sort((left, right) => String(left.caseId || left.id).localeCompare(String(right.caseId || right.id), undefined, { numeric: true }))
 
     orderedEnrollees.forEach((enrollee, index) => {
-      const logsForEnrollee = scopedLogsByEnrolleeId.get(enrollee.id) || []
+      const logsForEnrollee = (scopedLogsByEnrolleeId.get(enrollee.id) || [])
+        .slice()
+        .sort((left, right) => new Date(left.timestampIso).getTime() - new Date(right.timestampIso).getTime())
       const routeAssignment = routeAssignmentsByEnrolleeId[enrollee.id] || null
       const enrollmentId = (enrollee.enrollmentId || '').trim()
       const completedRegulationForEnrollee = (regulationByEnrollmentId.get(enrollmentId) || []).filter(
@@ -1418,17 +1681,25 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       const latestSvs = [...completedRegulationForEnrollee]
         .reverse()
         .find((record) => record.testType === 'svs')
-      const latestRegulationFailureIso = [latestMhSca, latestSvs]
-        .filter((record): record is RegulationTestSubmissionRecord => Boolean(record && record.passed === false))
-        .map((record) => record.updatedAtIso)
-        .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0]
-      const inferredPhaseFromLogs = getEnrollmentJourneyPhase(logsForEnrollee, routeAssignment?.phase || 'regulation')
-      const effectivePhase = latestRegulationFailureIso ? 'regulation' : inferredPhaseFromLogs
+      const regulationClearedAtIso =
+        latestMhSca?.passed && latestSvs?.passed
+          ? [latestMhSca.updatedAtIso, latestSvs.updatedAtIso]
+              .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0]
+          : null
+      const inferredPhaseFromLogs = getEnrollmentJourneyPhase(logsForEnrollee, 'regulation')
       const hasRenewalEvidence =
-        effectivePhase === 'renewal' || logsForEnrollee.some((record) => record.phase === 'renewal') || routeAssignment?.phase === 'renewal'
+        routeAssignment?.phase === 'renewal' ||
+        enrollee.currentPhase === 'renewal' ||
+        logsForEnrollee.some((record) => record.phase === 'renewal')
+      const effectivePhase: StabilizationPhase = hasRenewalEvidence
+        ? 'renewal'
+        : regulationClearedAtIso
+          ? 'readiness'
+          : routeAssignment?.phase || enrollee.currentPhase || inferredPhaseFromLogs
       const referralIsoFromQueue = referralIsoByCaseId.get((enrollee.caseId || '').trim().toLowerCase()) || null
-      const phaseEntryIso = latestRegulationFailureIso || getPhaseEntryIso(logsForEnrollee, effectivePhase)
-      const occurredAtIso = referralIsoFromQueue || routeAssignment?.assignedAtIso || phaseEntryIso
+      const explicitPhaseEntryIso = logsForEnrollee.find((log) => log.phase === effectivePhase)?.timestampIso || null
+      const phaseEntryIso = explicitPhaseEntryIso || (effectivePhase === 'readiness' ? regulationClearedAtIso : null)
+      const occurredAtIso = phaseEntryIso || routeAssignment?.assignedAtIso || referralIsoFromQueue || new Date().toISOString()
       const anonymousLabel = `participant-${String(index + 1).padStart(3, '0')}`
       const enrolleeName = enrollee.fullName?.trim() || anonymousLabel
 
@@ -1502,7 +1773,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
             id: `active-${enrollee.id}-${detail.zCode}`,
             source: 'active',
             phase: effectivePhase,
-            occurredAtIso: latestRegulationFailureIso || routeAssignment.assignedAtIso || occurredAtIso,
+            occurredAtIso: phaseEntryIso || routeAssignment.assignedAtIso || occurredAtIso,
             anonymousLabel,
             enrolleeId: enrollee.id,
             enrolleeName,
@@ -1547,6 +1818,62 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const navigatorSelfAssessmentSummary = useMemo(
     () => buildNavigatorSelfAssessmentSummary(navigatorSelfAssessments),
     [navigatorSelfAssessments]
+  )
+  const navigatorIpsccEncounterSubmissions = useMemo(
+    () =>
+      mergedNavigatorProgramState.ipsccEncounterSubmissions
+        .filter((record) => record.navigatorName === currentNavigatorName)
+        .slice()
+        .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime()),
+    [currentNavigatorName, mergedNavigatorProgramState.ipsccEncounterSubmissions]
+  )
+  const navigatorIpsSelfAssessments = useMemo(
+    () =>
+      mergedNavigatorProgramState.ipsSelfAssessments
+        .filter((record) => record.navigatorName === currentNavigatorName)
+        .slice()
+        .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime()),
+    [currentNavigatorName, mergedNavigatorProgramState.ipsSelfAssessments]
+  )
+  const allSupervisorIpsAssessments = useMemo(
+    () =>
+      mergedNavigatorProgramState.supervisorIpsAssessments
+        .slice()
+        .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime()),
+    [mergedNavigatorProgramState.supervisorIpsAssessments]
+  )
+  const navigatorSupervisorIpsAssessments = useMemo(
+    () =>
+      allSupervisorIpsAssessments.filter((record) => record.navigatorName === currentNavigatorName),
+    [allSupervisorIpsAssessments, currentNavigatorName]
+  )
+  const navigatorCreateSessions = useMemo(
+    () =>
+      mergedNavigatorProgramState.createSessions
+        .filter((record) => record.navigatorName === currentNavigatorName)
+        .slice()
+        .sort((left, right) => new Date(right.sessionAtIso).getTime() - new Date(left.sessionAtIso).getTime()),
+    [currentNavigatorName, mergedNavigatorProgramState.createSessions]
+  )
+  const navigatorIpsccCompetencyAggregates = useMemo(
+    () => buildIpsccCompetencyAggregates(navigatorIpsccEncounterSubmissions),
+    [navigatorIpsccEncounterSubmissions]
+  )
+  const navigatorIpsSelfAverages = useMemo(
+    () => buildIpsSelfAssessmentAverages(navigatorIpsSelfAssessments),
+    [navigatorIpsSelfAssessments]
+  )
+  const navigatorSupervisorIpsAverages = useMemo(
+    () => buildIpsSelfAssessmentAverages(navigatorSupervisorIpsAssessments),
+    [navigatorSupervisorIpsAssessments]
+  )
+  const navigatorSelfAwarenessCorrelation = useMemo(
+    () => buildSelfVsSupervisorAwarenessCorrelation(navigatorIpsSelfAverages, navigatorSupervisorIpsAverages),
+    [navigatorIpsSelfAverages, navigatorSupervisorIpsAverages]
+  )
+  const navigatorCreateInsights = useMemo(
+    () => buildCreateInsights(navigatorCreateSessions),
+    [navigatorCreateSessions]
   )
   const navigatorSupervisionSessions = useMemo(
     () =>
@@ -1815,6 +2142,39 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    Promise.all([
+      loadNavigatorIpsccEncounterSubmissions(currentNavigatorName),
+      loadNavigatorIpsSelfAssessments(currentNavigatorName),
+      loadNavigatorCreateSessions(currentNavigatorName),
+      loadSupervisorIpsAssessments()
+    ])
+      .then(([ipsccEncounterSubmissions, ipsSelfAssessments, createSessions, supervisorIpsAssessments]) => {
+        if (!isMounted) return
+        setNavigatorProgramState((current) => ({
+          ...current,
+          ipsccEncounterSubmissions: ipsccEncounterSubmissions.length
+            ? ipsccEncounterSubmissions
+            : current.ipsccEncounterSubmissions,
+          ipsSelfAssessments: ipsSelfAssessments.length ? ipsSelfAssessments : current.ipsSelfAssessments,
+          createSessions: createSessions.length ? createSessions : current.createSessions,
+          supervisorIpsAssessments: supervisorIpsAssessments.length
+            ? supervisorIpsAssessments
+            : current.supervisorIpsAssessments
+        }))
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        setNavigatorProgramError(
+          toSupabaseErrorMessage(error, 'Unable to load IPSCC or C.R.E.A.T.E. supervision records.')
+        )
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [currentNavigatorName])
 
   useEffect(() => {
     // Load the forced regulation review policy once at startup; it persists in the same
@@ -3188,6 +3548,45 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     return saveNavigatorProgramState(nextState)
   }
 
+  async function saveNavigatorIpsSelfAssessment(record: IpsCompetencySelfAssessmentRecord) {
+    ensureWriteAllowed('navigatorProgram.write', 'save IPS self-assessments')
+    const savedRecord = await persistNavigatorIpsSelfAssessment(record)
+    const nextState = {
+      ...mergedNavigatorProgramState,
+      ipsSelfAssessments: [
+        savedRecord,
+        ...mergedNavigatorProgramState.ipsSelfAssessments.filter((item) => item.id !== savedRecord.id)
+      ]
+    }
+    return saveNavigatorProgramState(nextState)
+  }
+
+  async function saveSupervisorIpsAssessment(record: SupervisorIpsAssessmentRecord) {
+    ensureWriteAllowed('navigatorProgram.write', 'save supervisor IPS assessments')
+    const savedRecord = await persistSupervisorIpsAssessment(record)
+    const nextState = {
+      ...mergedNavigatorProgramState,
+      supervisorIpsAssessments: [
+        savedRecord,
+        ...mergedNavigatorProgramState.supervisorIpsAssessments.filter((item) => item.id !== savedRecord.id)
+      ]
+    }
+    return saveNavigatorProgramState(nextState)
+  }
+
+  async function saveNavigatorIpsccEncounterSubmission(record: IpsccEncounterSubmissionRecord) {
+    ensureWriteAllowed('navigatorProgram.write', 'save IPSCC encounter submissions')
+    const savedRecord = await persistNavigatorIpsccEncounterSubmission(record)
+    const nextState = {
+      ...mergedNavigatorProgramState,
+      ipsccEncounterSubmissions: [
+        savedRecord,
+        ...mergedNavigatorProgramState.ipsccEncounterSubmissions.filter((item) => item.id !== savedRecord.id)
+      ]
+    }
+    return saveNavigatorProgramState(nextState)
+  }
+
   async function saveSupervisionSession(record: SupervisionSessionRecord) {
     ensureWriteAllowed('navigatorProgram.write', 'save supervision sessions')
     const nextState = {
@@ -3195,6 +3594,19 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       supervisionSessions: [
         record,
         ...mergedNavigatorProgramState.supervisionSessions.filter((item) => item.id !== record.id)
+      ]
+    }
+    return saveNavigatorProgramState(nextState)
+  }
+
+  async function saveNavigatorCreateSession(record: CreateSessionRecord) {
+    ensureWriteAllowed('navigatorProgram.write', 'save C.R.E.A.T.E. supervision sessions')
+    const savedRecord = await persistNavigatorCreateSession(record)
+    const nextState = {
+      ...mergedNavigatorProgramState,
+      createSessions: [
+        savedRecord,
+        ...mergedNavigatorProgramState.createSessions.filter((item) => item.id !== savedRecord.id)
       ]
     }
     return saveNavigatorProgramState(nextState)
@@ -3403,11 +3815,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     isUploadingAccountProfileImage,
     accountProfileImageUploadError,
     currentNavigatorName,
+    currentSupervisorName,
     canSwitchActiveExperience,
     navigatorAggregateLoad,
     navigatorLoadContributors,
     navigatorAggregateLoadBreakdown,
     pickupQueue,
+    navigatorIpsccEncounterSubmissions,
+    navigatorIpsccCompetencyAggregates,
+    navigatorIpsSelfAssessments,
+    navigatorSupervisorIpsAssessments,
+    allSupervisorIpsAssessments,
+    navigatorSelfAwarenessCorrelationRows: navigatorSelfAwarenessCorrelation.rows,
+    navigatorSelfAwarenessSummary: navigatorSelfAwarenessCorrelation.summary,
+    navigatorCreateSessions,
+    navigatorCreateInsights,
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
     navigatorEnrollmentAssignments: navigatorAssignmentBoardRows,
@@ -3463,6 +3885,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     saveNavigatorProgramState,
     claimPickupQueueRecord,
     saveNavigatorSelfAssessment,
+    saveNavigatorIpsSelfAssessment,
+    saveSupervisorIpsAssessment,
+    saveNavigatorIpsccEncounterSubmission,
+    saveNavigatorCreateSession,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,

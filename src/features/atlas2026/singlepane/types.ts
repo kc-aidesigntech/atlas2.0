@@ -101,6 +101,7 @@ export interface EnrolleeProfile {
   zCodeTags: string[]
   activeZCodeDetails: EnrolleeActiveZCode[]
   completedParentCodes: string[]
+  currentPhase?: StabilizationPhase
 }
 
 export interface DomainLoad {
@@ -592,6 +593,108 @@ export interface NavigatorSelfAssessmentSummary {
   latestSubmittedAtIso: string | null
 }
 
+export type IpsccCompetencyKey =
+  | 'competency_1_connection'
+  | 'competency_2_learning_together'
+  | 'competency_3_worldview_awareness'
+  | 'competency_4_relationship_focus'
+  | 'competency_5_mutuality'
+  | 'competency_6_hope_and_possibility'
+  | 'competency_7_moving_towards'
+  | 'competency_8_self_reflection'
+  | 'competency_9_feedback'
+  | 'competency_10_co_reflection'
+
+export interface IpsccCompetencyDefinition {
+  key: IpsccCompetencyKey
+  label: string
+  itemIndexes: number[]
+}
+
+export interface IpsccEncounterSubmissionRecord {
+  id: string
+  navigatorName: string
+  enrolleeId: string
+  enrolleeName: string
+  enrollmentId: string | null
+  submittedAtIso: string
+  submittedBy: string
+  itemScores: number[]
+  note: string
+}
+
+export interface IpsCompetencySelfAssessmentRecord {
+  id: string
+  navigatorName: string
+  weekStartIso: string
+  submittedAtIso: string
+  competencyScores: Partial<Record<IpsccCompetencyKey, number>>
+  note: string
+}
+
+export interface SupervisorIpsAssessmentRecord {
+  id: string
+  supervisorName: string
+  navigatorName: string
+  weekStartIso: string
+  submittedAtIso: string
+  competencyScores: Partial<Record<IpsccCompetencyKey, number>>
+  note: string
+}
+
+export interface IpsccCompetencyAggregate {
+  key: IpsccCompetencyKey
+  label: string
+  sampleSize: number
+  averageScore: number | null
+  latestSubmittedAtIso: string | null
+}
+
+export interface IpsccSelfAwarenessCorrelationRow {
+  key: IpsccCompetencyKey
+  label: string
+  ipsccAverage: number | null
+  selfAverage: number | null
+  gap: number | null
+  alignmentScore: number | null
+}
+
+export interface IpsccSelfAwarenessSummary {
+  comparedCompetencyCount: number
+  averageGap: number | null
+  overallAlignmentScore: number | null
+}
+
+export interface CreateSessionRecord {
+  id: string
+  navigatorName: string
+  supervisorName: string
+  sessionAtIso: string
+  submittedAtIso: string
+  supervisionMode: 'in_person' | 'online' | 'phone_call'
+  sessionDurationMinutes: number | null
+  connectFocusedListening: boolean
+  recognizeNotes: string
+  encourageNotes: string
+  acknowledgeNotes: string
+  trainNotes: string
+  empowerNotes: string
+  createActionPlan: string
+  supervisorSubmission: string
+  superviseeSubmission: string
+  peerSpecialistSignature: string
+  peerSpecialistSignedAtIso: string | null
+  supervisorSignature: string
+  supervisorSignedAtIso: string | null
+}
+
+export interface CreateInsightRow {
+  pillar: 'connect' | 'recognize' | 'encourage' | 'acknowledge' | 'train' | 'empower'
+  label: string
+  latestSummary: string
+  sessionCount: number
+}
+
 export type SupervisionSessionStatus = 'scheduled' | 'completed'
 
 export interface SupervisionSessionRecord {
@@ -625,6 +728,10 @@ export interface IntervalAssessmentRule {
 export interface NavigatorProgramState {
   pickupQueue: UnassignedEnrolleePickupRecord[]
   selfAssessments: NavigatorSelfAssessmentRecord[]
+  ipsSelfAssessments: IpsCompetencySelfAssessmentRecord[]
+  supervisorIpsAssessments: SupervisorIpsAssessmentRecord[]
+  ipsccEncounterSubmissions: IpsccEncounterSubmissionRecord[]
+  createSessions: CreateSessionRecord[]
   supervisionSessions: SupervisionSessionRecord[]
   intervalAssessmentRules: IntervalAssessmentRule[]
   updatedAtIso: string

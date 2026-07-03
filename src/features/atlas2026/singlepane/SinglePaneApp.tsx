@@ -14,6 +14,7 @@ import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
 import EnrolleeZCodeOverridePanel from './components/EnrolleeZCodeOverridePanel'
 import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
 import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
+import SupervisorMyProfilePanel from './components/SupervisorMyProfilePanel'
 import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
 import PartnerStripHistoryOverlay from './components/PartnerStripHistoryOverlay'
 import PartnerSpecialtyOverlay from './components/PartnerSpecialtyOverlay'
@@ -87,6 +88,7 @@ export default function SinglePaneApp() {
     partnerStripSuccessHistory,
     resolvedZCodeStripMarkers,
     currentNavigatorName,
+    currentSupervisorName,
     canSwitchActiveExperience,
     navigatorAggregateLoad,
     navigatorLoadContributors,
@@ -102,8 +104,14 @@ export default function SinglePaneApp() {
     assigningNavigatorEnrollmentId,
     pendingAssignmentEnrollees,
     pickupQueue,
-    navigatorSelfAssessments,
-    navigatorSelfAssessmentSummary,
+    navigatorIpsccCompetencyAggregates,
+    navigatorIpsSelfAssessments,
+    navigatorSupervisorIpsAssessments,
+    allSupervisorIpsAssessments,
+    navigatorSelfAwarenessCorrelationRows,
+    navigatorSelfAwarenessSummary,
+    navigatorCreateSessions,
+    navigatorCreateInsights,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,
@@ -156,7 +164,10 @@ export default function SinglePaneApp() {
     stopTroubleshootingSession,
     savePartnerTroubleshootingGrant,
     claimPickupQueueRecord,
-    saveNavigatorSelfAssessment,
+    saveNavigatorIpsSelfAssessment,
+    saveSupervisorIpsAssessment,
+    saveNavigatorIpsccEncounterSubmission,
+    saveNavigatorCreateSession,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,
@@ -441,9 +452,9 @@ export default function SinglePaneApp() {
   const assignmentBoardError = viewerCanAccessAssignmentBoard
     ? navigatorEnrollmentAssignmentsError
     : 'Assignment board is hidden by administrator policy.'
-  const isSupervisorNavigatorManagementView =
+  const isSupervisorMyProfileView =
     uiRole === 'supervisor' && (activeMenu === 'assigned navigators' || activeMenu === 'navigator assessments')
-  const isReady = isPartnerStationView ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu ? true : Boolean(selectedEnrollee && timelineConfig)
+  const isReady = isPartnerStationView ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu || isSupervisorMyProfileView ? true : Boolean(selectedEnrollee && timelineConfig)
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const visibleLogs = React.useMemo(
     () => (uiRole === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
@@ -918,8 +929,13 @@ export default function SinglePaneApp() {
                     canToggleAssignmentActions={viewerCanUseAssignmentActions}
                     canOpenAssignmentBoardReferral={canOpenNavigatorAssignmentReferral}
                     competencySummary={navigatorAssignedCompetencySummary}
-                    selfAssessmentSummary={navigatorSelfAssessmentSummary}
-                    selfAssessments={navigatorSelfAssessments}
+                    ipsccCompetencyAverages={navigatorIpsccCompetencyAggregates}
+                    selfAwarenessCorrelationRows={navigatorSelfAwarenessCorrelationRows}
+                    selfAwarenessSummary={navigatorSelfAwarenessSummary}
+                    ipsSelfAssessments={navigatorIpsSelfAssessments}
+                    navigatorSupervisorIpsAssessments={navigatorSupervisorIpsAssessments}
+                    createInsights={navigatorCreateInsights}
+                    createSessions={navigatorCreateSessions}
                     supervisionSessions={navigatorSupervisionSessions}
                     dueItems={navigatorIntervalDueItems}
                     regulationReviewDueItems={regulationReviewDueItems}
@@ -931,24 +947,25 @@ export default function SinglePaneApp() {
                     onOpenEnrolleeSurvey={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
                     onOpenAssignmentBoardReferral={() => setIsNavigatorAssignmentReferralOpen(true)}
                     onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
-                    onSaveSelfAssessment={saveNavigatorSelfAssessment}
+                    onSaveIpsSelfAssessment={saveNavigatorIpsSelfAssessment}
+                    onSaveIpsccEncounterSubmission={saveNavigatorIpsccEncounterSubmission}
                     onSaveSupervisionSession={saveSupervisionSession}
+                    onSaveCreateSession={saveNavigatorCreateSession}
                   />
-                ) : isSupervisorNavigatorManagementView ? (
+                ) : isSupervisorMyProfileView ? (
                   <div
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
                     <div className="w-full">
-                      <ContextPanels
-                        role={uiRole}
-                        activeMenu={activeMenu}
-                        enrollmentRequests={enrollmentRequests}
-                        countyHeatmap={countyHeatmap}
-                        supervisorNavigatorCompetency={supervisorNavigatorCompetency}
-                        supervisorNavigatorDirectory={supervisorNavigatorDirectory}
-                        onToggleSupervisorManagedNavigator={toggleSupervisorManagedNavigator}
-                        isSavingAccessMatrix={isSavingAccessMatrix}
+                      <SupervisorMyProfilePanel
+                        currentSupervisorName={currentSupervisorName}
+                        navigatorDirectory={supervisorNavigatorDirectory}
+                        competencyByNavigator={supervisorNavigatorCompetency}
+                        allSupervisorIpsAssessments={allSupervisorIpsAssessments}
+                        onToggleManagedNavigator={toggleSupervisorManagedNavigator}
+                        isSavingAssignments={isSavingAccessMatrix}
+                        onSaveSupervisorIpsAssessment={saveSupervisorIpsAssessment}
                       />
                     </div>
                   </div>
@@ -1109,7 +1126,7 @@ export default function SinglePaneApp() {
                       accentColor="var(--atlas-signal-lucid-green)"
                     />
                   </div>
-                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerStationView ? (
+                ) : isNavigatorMyProfile || isSupervisorMyProfileView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerStationView ? (
                   <>
                     {timelineConfig ? (
                       <>

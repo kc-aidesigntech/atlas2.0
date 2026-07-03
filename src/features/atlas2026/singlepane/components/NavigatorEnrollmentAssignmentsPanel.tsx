@@ -32,10 +32,164 @@ export default function NavigatorEnrollmentAssignmentsPanel({
   onToggleAssignment
 }: NavigatorEnrollmentAssignmentsPanelProps) {
   const [expandedEnrollmentIds, setExpandedEnrollmentIds] = React.useState<string[]>([])
+  const [isPickedUpSectionExpanded, setIsPickedUpSectionExpanded] = React.useState(false)
 
   function toggleExpandedEnrollment(enrollmentId: string) {
     setExpandedEnrollmentIds((current) =>
       current.includes(enrollmentId) ? current.filter((value) => value !== enrollmentId) : [...current, enrollmentId]
+    )
+  }
+
+  const pickupAvailableRows = React.useMemo(
+    () => rows.filter((row) => row.pickupStatus === 'available'),
+    [rows]
+  )
+  const pickupFollowupRows = React.useMemo(
+    () => rows.filter((row) => row.pickupStatus && row.pickupStatus !== 'available'),
+    [rows]
+  )
+  const standardRows = React.useMemo(
+    () => rows.filter((row) => !row.pickupStatus),
+    [rows]
+  )
+
+  function renderAssignmentRow(row: NavigatorEnrollmentAssignmentRecord) {
+    return (
+      <div
+        key={row.enrollmentId}
+        className="atlas-surface-raised flex flex-wrap items-center justify-between gap-3 px-4 py-4"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="atlas-h4 truncate text-[20px] font-medium text-white">{row.enrolleeName}</div>
+          <small className="atlas-meta-muted mt-1 block text-[#cfcfcf]">
+            {row.caseId || 'case id pending'} • assignment: {row.assignedNavigatorLabel}
+            {row.navigatorAssignmentCount > 0 ? ' • ' : ''}
+            {row.navigatorAssignmentCount > 0 ? (
+              canViewNavigatorAssignmentNames ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center text-[#9bd4a5] underline-offset-2 hover:underline"
+                  onClick={() => toggleExpandedEnrollment(row.enrollmentId)}
+                  title="Toggle assigned navigator names."
+                >
+                  [{row.navigatorAssignmentCount}] navigator{row.navigatorAssignmentCount === 1 ? '' : 's'}
+                </button>
+              ) : (
+                <span className="text-[#9ea8b4]">
+                  [{row.navigatorAssignmentCount}] navigator{row.navigatorAssignmentCount === 1 ? '' : 's'}
+                </span>
+              )
+            ) : null}
+          </small>
+          <small className="atlas-caption mt-2 block text-[#9bd4a5]">
+            {row.statusNote || (row.isAssignedToViewer
+              ? 'assigned to you'
+              : row.isAssignedToAnyNavigator
+                ? 'already assigned to a navigator'
+                : 'not yet assigned')}
+          </small>
+          {canViewNavigatorAssignmentNames &&
+          expandedEnrollmentIds.includes(row.enrollmentId) &&
+          row.assignedNavigatorNames.length ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {row.assignedNavigatorNames.map((name) => (
+                <span
+                  key={`${row.enrollmentId}:${name}`}
+                  className="inline-flex rounded-full border px-2.5 py-1 text-[11px] text-white"
+                  style={{ borderColor: '#ffffff40' }}
+                >
+                  {name}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {row.zCodeParentCodes.length ? (
+              row.zCodeParentCodes.slice(0, 6).map((parentCode) => (
+                <ZCodeBadge
+                  key={`${row.enrollmentId}-${parentCode}`}
+                  value={parentCode}
+                  fill={getZCodeParentColor(parentCode) || SP_COLORS.white}
+                  size="mobile"
+                  stripLeadingZ
+                />
+              ))
+            ) : (
+              <small className="atlas-caption text-[#9ea8b4]">no z-code coins yet</small>
+            )}
+            {row.zCodeParentCodes.length > 6 ? (
+              <span className="inline-flex h-7 min-w-[2.1rem] items-center justify-center rounded-full border px-2 text-[11px] text-white" style={{ borderColor: '#ffffff40' }}>
+                +{row.zCodeParentCodes.length - 6}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        {row.pickupStatus === 'available' ? (
+          <div className="flex items-center gap-2">
+            <AtlasTextButton
+              onClick={() => void onToggleAssignment(row.enrollmentId, 'archive')}
+              disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
+              className="px-[14px] py-[8px] text-[14px] font-medium text-white"
+              style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+            >
+              {assigningEnrollmentId === row.enrollmentId ? 'archiving...' : 'archive'}
+            </AtlasTextButton>
+            <AtlasTextButton
+              onClick={() => void onToggleAssignment(row.enrollmentId, 'accept')}
+              disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
+              className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+              style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+            >
+              {assigningEnrollmentId === row.enrollmentId ? 'accepting...' : 'accept'}
+            </AtlasTextButton>
+          </div>
+        ) : row.pickupStatus === 'accepted' ? (
+          <AtlasTextButton
+            onClick={() => void onToggleAssignment(row.enrollmentId, 'assign')}
+            disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
+            className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+            style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+          >
+            {assigningEnrollmentId === row.enrollmentId ? 'claiming...' : 'assign to me'}
+          </AtlasTextButton>
+        ) : row.pickupStatus === 'claimed' ? (
+          <AtlasTextButton
+            disabled
+            className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+            style={{ ['--button-border-color' as const]: '#ffffff20', opacity: 0.45 } as React.CSSProperties}
+          >
+            claimed
+          </AtlasTextButton>
+        ) : row.pickupStatus === 'archived' ? (
+          <AtlasTextButton
+            disabled
+            className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+            style={{ ['--button-border-color' as const]: '#ffffff20', opacity: 0.45 } as React.CSSProperties}
+          >
+            archived
+          </AtlasTextButton>
+        ) : (
+          <AtlasTextButton
+            onClick={() => {
+              if (row.isActionable === false) return
+              void onToggleAssignment(row.enrollmentId, row.isAssignedToViewer ? 'unassign' : 'assign')
+            }}
+            disabled={!canToggleAssignments || row.isActionable === false || assigningEnrollmentId === row.enrollmentId}
+            className="px-[19px] py-[10px] text-[15px] font-medium text-white"
+            style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
+          >
+            {!canToggleAssignments
+              ? 'action disabled by policy'
+              : assigningEnrollmentId === row.enrollmentId
+              ? row.isAssignedToViewer
+                ? 'unassigning...'
+                : 'assigning...'
+              : row.isAssignedToViewer
+                ? 'unassign me'
+                : 'assign to me'}
+          </AtlasTextButton>
+        )}
+      </div>
     )
   }
 
@@ -76,143 +230,28 @@ export default function NavigatorEnrollmentAssignmentsPanel({
         <small className="atlas-caption block text-[#cfcfcf]">Loading navigator assignment board...</small>
       ) : rows.length ? (
         <div className="space-y-3">
-          {rows.map((row) => (
-            <div
-              key={row.enrollmentId}
-              className="atlas-surface-raised flex flex-wrap items-center justify-between gap-3 px-4 py-4"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="atlas-h4 truncate text-[20px] font-medium text-white">{row.enrolleeName}</div>
-                <small className="atlas-meta-muted mt-1 block text-[#cfcfcf]">
-                  {row.caseId || 'case id pending'} • assignment: {row.assignedNavigatorLabel}
-                  {row.navigatorAssignmentCount > 0 ? ' • ' : ''}
-                  {row.navigatorAssignmentCount > 0 ? (
-                    canViewNavigatorAssignmentNames ? (
-                      <button
-                        type="button"
-                        className="inline-flex items-center text-[#9bd4a5] underline-offset-2 hover:underline"
-                        onClick={() => toggleExpandedEnrollment(row.enrollmentId)}
-                        title="Toggle assigned navigator names."
-                      >
-                        [{row.navigatorAssignmentCount}] navigator{row.navigatorAssignmentCount === 1 ? '' : 's'}
-                      </button>
-                    ) : (
-                      <span className="text-[#9ea8b4]">
-                        [{row.navigatorAssignmentCount}] navigator{row.navigatorAssignmentCount === 1 ? '' : 's'}
-                      </span>
-                    )
-                  ) : null}
-                </small>
-                <small className="atlas-caption mt-2 block text-[#9bd4a5]">
-                  {row.statusNote || (row.isAssignedToViewer
-                    ? 'assigned to you'
-                    : row.isAssignedToAnyNavigator
-                      ? 'already assigned to a navigator'
-                      : 'not yet assigned')}
-                </small>
-                {canViewNavigatorAssignmentNames &&
-                expandedEnrollmentIds.includes(row.enrollmentId) &&
-                row.assignedNavigatorNames.length ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {row.assignedNavigatorNames.map((name) => (
-                      <span
-                        key={`${row.enrollmentId}:${name}`}
-                        className="inline-flex rounded-full border px-2.5 py-1 text-[11px] text-white"
-                        style={{ borderColor: '#ffffff40' }}
-                      >
-                        {name}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {row.zCodeParentCodes.length ? (
-                    row.zCodeParentCodes.slice(0, 6).map((parentCode) => (
-                      <ZCodeBadge
-                        key={`${row.enrollmentId}-${parentCode}`}
-                        value={parentCode}
-                        fill={getZCodeParentColor(parentCode) || SP_COLORS.white}
-                        size="mobile"
-                        stripLeadingZ
-                      />
-                    ))
-                  ) : (
-                    <small className="atlas-caption text-[#9ea8b4]">no z-code coins yet</small>
-                  )}
-                  {row.zCodeParentCodes.length > 6 ? (
-                    <span className="inline-flex h-7 min-w-[2.1rem] items-center justify-center rounded-full border px-2 text-[11px] text-white" style={{ borderColor: '#ffffff40' }}>
-                      +{row.zCodeParentCodes.length - 6}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              {row.pickupStatus === 'available' ? (
-                <div className="flex items-center gap-2">
-                  <AtlasTextButton
-                    onClick={() => void onToggleAssignment(row.enrollmentId, 'archive')}
-                    disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
-                    className="px-[14px] py-[8px] text-[14px] font-medium text-white"
-                    style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
-                  >
-                    {assigningEnrollmentId === row.enrollmentId ? 'archiving...' : 'archive'}
-                  </AtlasTextButton>
-                  <AtlasTextButton
-                    onClick={() => void onToggleAssignment(row.enrollmentId, 'accept')}
-                    disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
-                    className="px-[19px] py-[10px] text-[15px] font-medium text-white"
-                    style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
-                  >
-                    {assigningEnrollmentId === row.enrollmentId ? 'accepting...' : 'accept'}
-                  </AtlasTextButton>
-                </div>
-              ) : row.pickupStatus === 'accepted' ? (
-                <AtlasTextButton
-                  onClick={() => void onToggleAssignment(row.enrollmentId, 'assign')}
-                  disabled={!canToggleAssignments || assigningEnrollmentId === row.enrollmentId}
-                  className="px-[19px] py-[10px] text-[15px] font-medium text-white"
-                  style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
-                >
-                  {assigningEnrollmentId === row.enrollmentId ? 'claiming...' : 'assign to me'}
-                </AtlasTextButton>
-              ) : row.pickupStatus === 'claimed' ? (
-                <AtlasTextButton
-                  disabled
-                  className="px-[19px] py-[10px] text-[15px] font-medium text-white"
-                  style={{ ['--button-border-color' as const]: '#ffffff20', opacity: 0.45 } as React.CSSProperties}
-                >
-                  claimed
-                </AtlasTextButton>
-              ) : row.pickupStatus === 'archived' ? (
-                <AtlasTextButton
-                  disabled
-                  className="px-[19px] py-[10px] text-[15px] font-medium text-white"
-                  style={{ ['--button-border-color' as const]: '#ffffff20', opacity: 0.45 } as React.CSSProperties}
-                >
-                  archived
-                </AtlasTextButton>
-              ) : (
-                <AtlasTextButton
-                  onClick={() => {
-                    if (row.isActionable === false) return
-                    void onToggleAssignment(row.enrollmentId, row.isAssignedToViewer ? 'unassign' : 'assign')
-                  }}
-                  disabled={!canToggleAssignments || row.isActionable === false || assigningEnrollmentId === row.enrollmentId}
-                  className="px-[19px] py-[10px] text-[15px] font-medium text-white"
-                  style={{ ['--button-border-color' as const]: '#ffffff30' } as React.CSSProperties}
-                >
-                  {!canToggleAssignments
-                    ? 'action disabled by policy'
-                    : assigningEnrollmentId === row.enrollmentId
-                    ? row.isAssignedToViewer
-                      ? 'unassigning...'
-                      : 'assigning...'
-                    : row.isAssignedToViewer
-                      ? 'unassign me'
-                      : 'assign to me'}
-                </AtlasTextButton>
-              )}
+          {pickupAvailableRows.length ? (
+            <div className="space-y-2">
+              <small className="atlas-overline block text-[#cfcfcf]">enrollees needing pickup</small>
+              {pickupAvailableRows.map((row) => renderAssignmentRow(row))}
             </div>
-          ))}
+          ) : pickupFollowupRows.length ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                className="atlas-overline inline-flex items-center gap-2 text-[#cfcfcf]"
+                onClick={() => setIsPickedUpSectionExpanded((current) => !current)}
+              >
+                {isPickedUpSectionExpanded ? 'hide picked-up enrollees' : 'show picked-up enrollees'}
+              </button>
+              {isPickedUpSectionExpanded ? pickupFollowupRows.map((row) => renderAssignmentRow(row)) : null}
+            </div>
+          ) : null}
+          {standardRows.length ? (
+            <div className="space-y-2">
+              {standardRows.map((row) => renderAssignmentRow(row))}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="atlas-empty-state">No enrollment records found.</div>
