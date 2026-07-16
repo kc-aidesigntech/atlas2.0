@@ -16,7 +16,7 @@ import type {
   RouteAssignmentRecord,
   RouteLogEvent,
   TimelineConfig,
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import {
   loadAdminDataQuality,
   loadAccountSettings,
@@ -40,6 +40,7 @@ import {
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { isSupabasePermissionError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { workspaceLoadMetrics } from '@/features/atlas2026/singlepane/workspaceLoadMetrics'
 
 /**
  * Builds a loud, role-aware message for a failed bootstrap. Permission/Row-Level
@@ -103,6 +104,44 @@ const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
 const ROLE_PREFETCH_ORDER: AtlasRole[] = ['navigator', 'partner', 'supervisor', 'administrator']
 const bootstrapPayloadCache = new Map<AtlasRole, SinglePaneBootstrapPayload>()
 const bootstrapPayloadInFlight = new Map<AtlasRole, Promise<SinglePaneBootstrapPayload>>()
+
+async function loadCriticalBootstrapPayload(role: AtlasRole): Promise<SinglePaneBootstrapPayload> {
+  // Critical payload only: enough to paint and interact with the first role screen.
+  // Supplemental datasets load after first usable paint in a follow-up refresh.
+  const [data, nextAccountSettings, navigatorStationContext] = await Promise.all([
+    loadSinglePaneBootstrap(role),
+    loadAccountSettings(),
+    role === 'navigator' ? loadNavigatorStationContext() : Promise.resolve(null)
+  ])
+  const stationOrganizationName =
+    (role === 'navigator' ? navigatorStationContext?.organizationName : nextAccountSettings.organization)?.trim() ||
+    nextAccountSettings.organization
+  const stationProfile = await loadPartnerStationProfile(stationOrganizationName, {
+    fullName: nextAccountSettings.fullName,
+    email: nextAccountSettings.email
+  })
+  return {
+    enrollees: data.enrollees || [],
+    loads: data.loads || [],
+    loadBreakdownsByEnrolleeId: data.loadBreakdownsByEnrolleeId || {},
+    roleConfigs: data.roleConfigs || [],
+    timelineConfig: data.timelineConfig,
+    timelineConfigsByEnrolleeId: data.timelineConfigsByEnrolleeId || {},
+    logs: data.logs || [],
+    enrollmentRequests: [],
+    countyHeatmap: [],
+    adminMetrics: [],
+    partnerLoad: null,
+    partnerLoadBreakdown: null,
+    partnerStationSpecialties: [],
+    accountSettings: nextAccountSettings,
+    partnerStationProfile: stationProfile,
+    intakeFormsByEnrolleeId: {},
+    routeAssignmentsByEnrolleeId: {},
+    navigatorCompetencyAssessments: [],
+    selectedEnrolleeId: data.enrollees?.[0]?.id || ''
+  }
+}
 
 function mergeWeightedSurveyBreakdowns(
   loads: DomainLoad[],
@@ -270,6 +309,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
 
     async function bootstrap() {
       try {
+        workspaceLoadMetrics.markBootstrapStart(role)
         const cachedPayload = bootstrapPayloadCache.get(role)
         if (cachedPayload) {
           // Cached role payload keeps role switches responsive while a background
@@ -290,20 +330,37 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
             isLoading: false,
             error: null
           }))
+          workspaceLoadMetrics.markBootstrapEnd(role)
           return
         }
 
         if (isMounted) {
           setState((current) => ({ ...current, isLoading: true, error: null }))
         }
-        const payload = await loadBootstrapPayload(role)
+        const criticalPayload = await loadCriticalBootstrapPayload(role)
         if (!isMounted) return
         setState((current) => ({
           ...current,
-          ...payload,
+          ...criticalPayload,
           isLoading: false,
           error: null
         }))
+        workspaceLoadMetrics.markBootstrapEnd(role)
+        // Non-blocking enrichment: once the first role screen is usable, merge in
+        // secondary datasets (admin metrics, assignment boards, history summaries).
+        void loadBootstrapPayload(role, true)
+          .then((payload) => {
+            if (!isMounted) return
+            setState((current) => ({
+              ...current,
+              ...payload,
+              isLoading: false,
+              error: null
+            }))
+          })
+          .catch(() => {
+            // Supplemental data failures should not re-block the rendered workspace.
+          })
       } catch (error) {
         // Fail loudly: a bootstrap failure (especially a grant/RLS denial) must not
         // masquerade as a healthy-but-empty workspace. Clear role-scoped domain
@@ -321,6 +378,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
           enrollmentRequests: [],
           selectedEnrolleeId: ''
         }))
+        workspaceLoadMetrics.markBootstrapEnd(role)
       }
     }
 

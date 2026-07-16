@@ -2,12 +2,11 @@
  * Partner referral intake panel that validates submissions and forwards clean
  * queue-ready records into navigator pickup workflows.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
+import React, { useMemo, useState } from 'react'
 import { AtlasCloseButton, AtlasInsetCard, AtlasPlusButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import atlasLogoSrc from '../../../../../assets/ATLAS_LOGO_final_white_bkg.png'
+import type { PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import atlasLogoSrc from '@/features/atlas2026/assets/branding/ATLAS_LOGO_simple_lucidGreenBlue4.png'
 
 interface PartnerReferralWorkflowPanelProps {
   defaultReferrerName: string
@@ -76,8 +75,6 @@ export default function PartnerReferralWorkflowPanel({
     partnerContactEmail: '',
     partnerContactPhone: ''
   })
-  const [referralImageSrc, setReferralImageSrc] = useState(atlasLogoSrc)
-  const imageObjectUrlRef = useRef<string | null>(null)
 
   // Recent list intentionally excludes archived rows and caps to a small slice
   // so this panel remains scannable in constrained single-pane layouts.
@@ -141,16 +138,6 @@ export default function PartnerReferralWorkflowPanel({
   const accentSelectedBackground = isLucidGreenAccent(accentColor)
     ? 'color-mix(in srgb, var(--atlas-signal-lucid-green) 24%, #101010)'
     : 'color-mix(in srgb, currentColor 18%, #101010)'
-
-  useEffect(() => {
-    return () => {
-      // Revoke blob Uniform Resource Locator (URL) created from local uploads to prevent memory leaks
-      // when this panel unmounts.
-      if (imageObjectUrlRef.current) {
-        URL.revokeObjectURL(imageObjectUrlRef.current)
-      }
-    }
-  }, [])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -234,27 +221,12 @@ export default function PartnerReferralWorkflowPanel({
   return (
     <AtlasInsetCard className="atlas-surface-panel space-y-4 border-white/20 bg-[#0c0c0c] px-5 py-5">
       <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
-        <AtlasImageUploadTile
-          imageSrc={referralImageSrc}
-          alt="atlas logo"
-          onSelectFile={(file) => {
-            // Referral image stays local-only for now. This preserves
-            // a consistent User Experience (UX) with profile upload while we define storage.
-            if (!file.type.startsWith('image/')) {
-              setError('choose an image file for the logo.')
-              return
-            }
-            setError(null)
-            const objectUrl = URL.createObjectURL(file)
-            if (imageObjectUrlRef.current) {
-              URL.revokeObjectURL(imageObjectUrlRef.current)
-            }
-            imageObjectUrlRef.current = objectUrl
-            setReferralImageSrc(objectUrl)
-          }}
-          buttonTitle="replace referral image"
-          idleStatusText="add your logo here"
-        />
+        <div className="mx-auto flex w-[150px] shrink-0 flex-col items-start sm:mx-0">
+          {/* Referral portal uses one canonical logo mark here; unlike profile panels this surface does not support per-user logo uploads. */}
+          <div className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-transparent" style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}>
+            <img src={atlasLogoSrc} alt="atlas logo" className="h-full w-full object-contain" />
+          </div>
+        </div>
         <div className="min-w-[220px] flex-1 space-y-1 pt-[2px] text-white">
           <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
             referral portal

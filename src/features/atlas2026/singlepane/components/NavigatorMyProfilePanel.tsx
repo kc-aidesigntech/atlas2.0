@@ -1,26 +1,28 @@
-/**
- * Navigator-facing "my profile" workspace combining load telemetry, pickup
- * queue operations, self-assessment capture, and supervision notes.
- */
 import React from 'react'
-import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
-import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
 import type {
   AccountSettings,
+  CreateInsightRow,
+  CreateSessionRecord,
   DomainLoad,
   EnrolleeProfile,
   IntervalAssessmentDueItem,
+  IpsCompetencySelfAssessmentRecord,
+  IpsccCompetencyAggregate,
+  IpsccEncounterSubmissionRecord,
+  IpsccSelfAwarenessCorrelationRow,
+  IpsccSelfAwarenessSummary,
   NavigatorEnrollmentAssignmentRecord,
-  NavigatorSelfAssessmentRecord,
-  NavigatorSelfAssessmentSummary,
   RegulationReviewDueItem,
+  SupervisorIpsAssessmentRecord,
   SupervisionSessionRecord,
   SupervisorNavigatorCompetencySummary
-} from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+} from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import RadialLoadChart from './RadialLoadChart'
 import NavigatorEnrollmentAssignmentsPanel from './NavigatorEnrollmentAssignmentsPanel'
+import ProfileNavigationCard from './ProfileNavigationCard'
+import AtlasImageUploadTile from '@/features/atlas2026/components/AtlasImageUploadTile'
+import { createFallbackAvatarDataUrl } from '@/features/atlas2026/components/avatarFallback'
 
 interface NavigatorMyProfilePanelProps {
   accountSettings: AccountSettings
@@ -36,12 +38,15 @@ interface NavigatorMyProfilePanelProps {
   canToggleAssignmentActions: boolean
   canOpenAssignmentBoardReferral: boolean
   competencySummary: SupervisorNavigatorCompetencySummary | null
-  selfAssessmentSummary: NavigatorSelfAssessmentSummary
-  selfAssessments: NavigatorSelfAssessmentRecord[]
+  ipsccCompetencyAverages: IpsccCompetencyAggregate[]
+  selfAwarenessCorrelationRows: IpsccSelfAwarenessCorrelationRow[]
+  selfAwarenessSummary: IpsccSelfAwarenessSummary
+  ipsSelfAssessments: IpsCompetencySelfAssessmentRecord[]
+  navigatorSupervisorIpsAssessments: SupervisorIpsAssessmentRecord[]
+  createInsights: CreateInsightRow[]
+  createSessions: CreateSessionRecord[]
   supervisionSessions: SupervisionSessionRecord[]
   dueItems: IntervalAssessmentDueItem[]
-  // Forced regulation review action items for enrollees this navigator owns, recurring
-  // per the admin cadence and cleared by completed regulation test submissions.
   regulationReviewDueItems?: RegulationReviewDueItem[]
   programError?: string | null
   onOpenLoadTable?: () => void
@@ -50,13 +55,54 @@ interface NavigatorMyProfilePanelProps {
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenEnrolleeSurvey?: (enrolleeId: string) => void
   onOpenAssignmentBoardReferral?: () => void
-  onToggleEnrollmentAssignment: (
-    enrollmentId: string,
-    mode: 'accept' | 'archive' | 'assign' | 'unassign'
-  ) => Promise<void> | void
-  onSaveSelfAssessment: (record: NavigatorSelfAssessmentRecord) => Promise<unknown> | unknown
+  onToggleEnrollmentAssignment: (enrollmentId: string, mode: 'accept' | 'archive' | 'assign' | 'unassign') => Promise<void> | void
+  onSaveIpsSelfAssessment: (record: IpsCompetencySelfAssessmentRecord) => Promise<unknown> | unknown
+  onSaveIpsccEncounterSubmission: (record: IpsccEncounterSubmissionRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
+  onSaveCreateSession: (record: CreateSessionRecord) => Promise<unknown> | unknown
 }
+
+type OverlayKey =
+  | 'section_1_ipscc'
+  | 'section_2_awareness'
+  | 'section_3_create'
+  | 'section_4_assignments'
+  | 'section_5_zcode_updates'
+  | 'section_6_competency'
+  | 'section_7_schedule'
+  | 'section_8_archive'
+
+const CARD_DEFS: Array<{
+  key: OverlayKey
+  title: string
+  cardTitle: string
+  cardSubtitle: string
+  actionLabel: string
+  variant: 'green' | 'blue'
+  illustration: 'feedback' | 'reflection' | 'create'
+}> = [
+  { key: 'section_1_ipscc', title: 'Section 1: IPSCC ratings and reviews', cardTitle: 'enrollee feedback', cardSubtitle: 'ipscc', actionLabel: 'view feedback', variant: 'green', illustration: 'feedback' },
+  { key: 'section_2_awareness', title: 'Section 2: Self-awareness correlation', cardTitle: 'self-reflection', cardSubtitle: 'ips', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection' },
+  { key: 'section_3_create', title: 'Section 3: C.R.E.A.T.E. supervision form', cardTitle: 'c.r.e.a.t.e', cardSubtitle: 'create & share', actionLabel: 'create & share', variant: 'green', illustration: 'create' },
+  { key: 'section_4_assignments', title: 'Section 4: Enrollment assignment board', cardTitle: 'assignment board', cardSubtitle: 'enrollment', actionLabel: 'view board', variant: 'blue', illustration: 'feedback' },
+  { key: 'section_5_zcode_updates', title: 'Section 5: Enrollee z-code updates', cardTitle: 'z-code updates', cardSubtitle: 'enrollee', actionLabel: 'update z-codes', variant: 'green', illustration: 'reflection' },
+  { key: 'section_6_competency', title: 'Section 6: Navigator competency', cardTitle: 'competency', cardSubtitle: 'navigator', actionLabel: 'open competency', variant: 'blue', illustration: 'create' },
+  { key: 'section_7_schedule', title: 'Section 7: Scheduled assessments', cardTitle: 'schedule', cardSubtitle: 'assessments', actionLabel: 'view schedule', variant: 'green', illustration: 'feedback' },
+  { key: 'section_8_archive', title: 'Section 8: Supervision archive', cardTitle: 'archive', cardSubtitle: 'supervision', actionLabel: 'open archive', variant: 'blue', illustration: 'reflection' }
+]
+
+const IPS_KEYS = [
+  'competency_1_connection',
+  'competency_2_learning_together',
+  'competency_3_worldview_awareness',
+  'competency_4_relationship_focus',
+  'competency_5_mutuality',
+  'competency_6_hope_and_possibility',
+  'competency_7_moving_towards',
+  'competency_8_self_reflection',
+  'competency_9_feedback',
+  'competency_10_co_reflection'
+] as const
 
 function formatDateLabel(value: string | null | undefined) {
   if (!value) return 'not recorded'
@@ -65,75 +111,87 @@ function formatDateLabel(value: string | null | undefined) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed)
 }
 
-function formatRelativeRoleValue(value: number) {
-  return Number.isFinite(value) ? value.toFixed(1) : '--'
-}
+export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelProps) {
+  const {
+    accountSettings,
+    currentNavigatorName,
+    assignedEnrolleeCount,
+    assignedEnrollees,
+    navigatorEnrollmentAssignments,
+    navigatorEnrollmentAssignmentsError,
+    isLoadingNavigatorEnrollmentAssignments,
+    assigningEnrollmentId,
+    canViewNavigatorAssignmentNames,
+    canToggleAssignmentActions,
+    canOpenAssignmentBoardReferral,
+    competencySummary,
+    ipsccCompetencyAverages,
+    selfAwarenessCorrelationRows,
+    selfAwarenessSummary,
+    ipsSelfAssessments,
+    navigatorSupervisorIpsAssessments,
+    createInsights,
+    createSessions,
+    supervisionSessions,
+    dueItems,
+    regulationReviewDueItems = [],
+    programError = null,
+    isUploadingAvatar = false,
+    avatarUploadError = null,
+    onReplaceAvatar,
+    onOpenEnrolleeSurvey,
+    onOpenAssignmentBoardReferral,
+    onToggleEnrollmentAssignment,
+    onSaveIpsSelfAssessment,
+    onSaveIpsccEncounterSubmission,
+    onSaveSupervisionSession,
+    onSaveCreateSession
+  } = props
 
-export default function NavigatorMyProfilePanel({
-  accountSettings,
-  currentNavigatorName,
-  aggregateLoad,
-  assignedEnrolleeCount,
-  assignedEnrollees,
-  navigatorEnrollmentAssignments,
-  navigatorEnrollmentAssignmentsError,
-  isLoadingNavigatorEnrollmentAssignments,
-  assigningEnrollmentId,
-  canViewNavigatorAssignmentNames,
-  canToggleAssignmentActions,
-  canOpenAssignmentBoardReferral,
-  competencySummary,
-  selfAssessmentSummary,
-  selfAssessments,
-  supervisionSessions,
-  dueItems,
-  regulationReviewDueItems = [],
-  programError = null,
-  onOpenLoadTable,
-  isUploadingAvatar = false,
-  avatarUploadError = null,
-  onReplaceAvatar,
-  onOpenEnrolleeSurvey,
-  onOpenAssignmentBoardReferral,
-  onToggleEnrollmentAssignment,
-  onSaveSelfAssessment,
-  onSaveSupervisionSession
-}: NavigatorMyProfilePanelProps) {
-  const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(currentNavigatorName), [currentNavigatorName])
-  const avatarSrc = accountSettings.avatarUrl || fallbackAvatarSrc
-  const [draftAssessment, setDraftAssessment] = React.useState(() => {
-    const now = new Date().toISOString()
-    return {
-      id: `self-assessment-${Date.now()}`,
-      navigatorName: currentNavigatorName,
-      weekStartIso: now,
-      submittedAtIso: now,
-      stressLoadScore: 3,
-      confidenceScore: 3,
-      supportScore: 3,
-      note: ''
-    } satisfies NavigatorSelfAssessmentRecord
+  const [activeOverlay, setActiveOverlay] = React.useState<OverlayKey | null>(null)
+  const assignmentBoardRef = React.useRef<HTMLElement | null>(null)
+  const [selectedIpsccEnrolleeId, setSelectedIpsccEnrolleeId] = React.useState<string>('')
+  const [ipsccScoreDraft, setIpsccScoreDraft] = React.useState('4,4,4,4,4,4,4,4,4,4')
+  const [ipsccNoteDraft, setIpsccNoteDraft] = React.useState('')
+  const [ipsSelfDraftScores, setIpsSelfDraftScores] = React.useState<Record<string, number>>(
+    () => Object.fromEntries(IPS_KEYS.map((key) => [key, 3]))
+  )
+  const [ipsSelfDraftNote, setIpsSelfDraftNote] = React.useState('')
+  const [createDraft, setCreateDraft] = React.useState({
+    supervisionMode: 'in_person' as const,
+    sessionDurationMinutes: '50',
+    connectFocusedListening: true,
+    recognizeNotes: '',
+    encourageNotes: '',
+    acknowledgeNotes: '',
+    trainNotes: '',
+    empowerNotes: '',
+    createActionPlan: '',
+    supervisorSubmission: '',
+    superviseeSubmission: '',
+    peerSpecialistSignature: currentNavigatorName,
+    supervisorSignature: 'peer supervisor'
   })
-  const [isSavingAssessment, setIsSavingAssessment] = React.useState(false)
-  const [savingSessionId, setSavingSessionId] = React.useState<string | null>(null)
-  const [sessionDrafts, setSessionDrafts] = React.useState<Record<string, string>>({})
 
   React.useEffect(() => {
-    setDraftAssessment((current) => ({ ...current, navigatorName: currentNavigatorName }))
-  }, [currentNavigatorName])
+    if (assignedEnrollees.length && !selectedIpsccEnrolleeId) {
+      setSelectedIpsccEnrolleeId(assignedEnrollees[0].id)
+    }
+  }, [assignedEnrollees, selectedIpsccEnrolleeId])
+
+  const navigatorDisplayName = currentNavigatorName.trim() || accountSettings.fullName.trim() || 'navigator'
+  const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(navigatorDisplayName), [navigatorDisplayName])
+  const avatarSrc = accountSettings.avatarUrl || fallbackAvatarSrc
 
   return (
-    <div className="flex flex-col gap-4">
-      <div
-        className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px] lg:gap-x-8 xl:gap-x-12"
-        style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
-      >
-        <div className="min-w-0 flex-1 basis-[520px]">
-          <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
-            <div>
+    <div className="relative flex flex-col gap-4">
+      <div className="atlas-navigator-profile-layout">
+        <div className="atlas-navigator-profile-main space-y-4">
+          <div className="atlas-surface-panel px-5 py-4">
+            <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
               <AtlasImageUploadTile
                 imageSrc={avatarSrc}
-                alt={`${currentNavigatorName} profile`}
+                alt={`${navigatorDisplayName} profile`}
                 onSelectFile={onReplaceAvatar}
                 disabled={!onReplaceAvatar}
                 buttonTitle={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
@@ -145,340 +203,344 @@ export default function NavigatorMyProfilePanel({
                   }
                 }}
               />
-              <div className="mt-4 flex flex-wrap items-center gap-[10px]">
-                <span className="inline-flex h-11 items-center rounded-full border px-4 text-[15px] font-medium text-white" style={{ borderColor: '#ffffff35' }}>
-                  navigator
-                </span>
+              <div className="min-w-[220px] flex-1 space-y-0.5 pt-[2px] text-white" style={{ textTransform: 'none' }}>
+                <h2 className="atlas-h3 text-[34px] font-medium leading-[1.1]" style={{ textTransform: 'none' }}>
+                  {navigatorDisplayName}
+                </h2>
+                <small className="atlas-meta block text-white">Role: navigator</small>
+                <small className="atlas-meta block text-white">Org: {accountSettings.organization || 'not recorded'}</small>
+                <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
+                  E: {accountSettings.email || 'not recorded'}
+                </small>
+                <small className="atlas-meta block text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
+                <small className="atlas-meta block text-white">Active sections: {CARD_DEFS.length}</small>
               </div>
             </div>
-            <div className="min-w-[220px] flex-1 space-y-0.5 pt-[2px] text-white">
-              <h2 className="atlas-h3 text-[34px] font-medium leading-[1.1]">{currentNavigatorName}</h2>
-              <small className="atlas-meta block text-white">E: {accountSettings.email || 'not recorded'}</small>
-              <small className="atlas-meta block text-white">Org: {accountSettings.organization || 'not recorded'}</small>
-              <small className="atlas-meta block text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
-              <small className="atlas-meta block text-white">Profile view: my profile</small>
-            </div>
+            {programError ? (
+              <div className="mt-3 rounded-[14px] border px-3 py-2 text-[12px]" style={{ borderColor: `${SP_COLORS.red}80`, color: SP_COLORS.red }}>
+                {programError}
+              </div>
+            ) : null}
           </div>
+          {/* Keep assignment controls always visible so navigators can claim/triage work
+              without switching context through a card overlay. */}
+          <section ref={assignmentBoardRef} className="atlas-surface-panel p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <small className="atlas-overline block text-[#9eacb9]">navigator workflow</small>
+                <div className="text-[18px] font-medium text-white">enrollment assignment board</div>
+              </div>
+            </div>
+            <NavigatorEnrollmentAssignmentsPanel
+              rows={navigatorEnrollmentAssignments}
+              isLoading={isLoadingNavigatorEnrollmentAssignments}
+              error={navigatorEnrollmentAssignmentsError}
+              assigningEnrollmentId={assigningEnrollmentId}
+              canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
+              canToggleAssignments={canToggleAssignmentActions}
+              canOpenReferralComposer={canOpenAssignmentBoardReferral}
+              onOpenReferralComposer={onOpenAssignmentBoardReferral}
+              onToggleAssignment={onToggleEnrollmentAssignment}
+            />
+          </section>
         </div>
-        <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
-          <RadialLoadChart load={aggregateLoad} onClick={onOpenLoadTable} />
+        <div className="atlas-navigator-profile-rail">
+          {CARD_DEFS.map((card) => (
+            <ProfileNavigationCard
+              key={card.key}
+              sequenceNumber={Number(card.key.replace('section_', '').split('_')[0])}
+              title={card.cardTitle}
+              subtitle={card.cardSubtitle}
+              actionLabel={card.actionLabel}
+              variant={card.variant}
+              illustration={card.illustration}
+              onClick={() => setActiveOverlay(card.key)}
+            />
+          ))}
         </div>
       </div>
 
-      {programError ? (
-        <div className="rounded-[18px] border px-4 py-3 text-[12px]" style={{ borderColor: `${SP_COLORS.red}80`, color: SP_COLORS.red }}>
-          {programError}
+      {activeOverlay ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
+          <div className="atlas-surface-panel max-h-[90vh] w-full max-w-[980px] overflow-y-auto p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="text-[18px] font-medium text-white">
+                {CARD_DEFS.find((card) => card.key === activeOverlay)?.title || 'section'}
+              </div>
+              <AtlasTextButton onClick={() => setActiveOverlay(null)} className="px-3 py-1 text-[12px]">
+                close
+              </AtlasTextButton>
+            </div>
+
+            {activeOverlay === 'section_1_ipscc' ? (
+              <div className="space-y-3">
+                {ipsccCompetencyAverages.map((row) => (
+                  <div key={row.key} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
+                    <span className="text-white">{row.label}</span>
+                    <span style={{ color: '#d7e0e9' }}>{row.averageScore == null ? '--' : row.averageScore.toFixed(2)} · n={row.sampleSize}</span>
+                  </div>
+                ))}
+                <select className="atlas-select h-10 w-full bg-transparent text-white" value={selectedIpsccEnrolleeId} onChange={(event) => setSelectedIpsccEnrolleeId(event.target.value)}>
+                  {assignedEnrollees.map((enrollee) => (
+                    <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">{enrollee.fullName}</option>
+                  ))}
+                </select>
+                <input className="atlas-input h-10 w-full bg-transparent text-white" value={ipsccScoreDraft} onChange={(event) => setIpsccScoreDraft(event.target.value)} placeholder="4,4,4,4,4,4,4,4,4,4" />
+                <textarea className="atlas-textarea min-h-[90px] bg-transparent text-white" value={ipsccNoteDraft} onChange={(event) => setIpsccNoteDraft(event.target.value)} placeholder="service user note" />
+                <div className="flex justify-end">
+                  <AtlasTextButton
+                    onClick={async () => {
+                      const enrollee = assignedEnrollees.find((item) => item.id === selectedIpsccEnrolleeId)
+                      if (!enrollee) return
+                      const itemScores = ipsccScoreDraft.split(',').map((value) => Math.max(1, Math.min(5, Math.round(Number(value.trim()) || 3)))).slice(0, 10)
+                      if (itemScores.length !== 10) return
+                      await onSaveIpsccEncounterSubmission({
+                        id: `ipscc-${Date.now()}`,
+                        navigatorName: currentNavigatorName,
+                        enrolleeId: enrollee.id,
+                        enrolleeName: enrollee.fullName,
+                        enrollmentId: enrollee.enrollmentId || null,
+                        submittedAtIso: new Date().toISOString(),
+                        submittedBy: 'service user',
+                        itemScores,
+                        note: ipsccNoteDraft
+                      })
+                    }}
+                    className="px-4 py-2 text-[12px]"
+                  >
+                    save section 1 entry
+                  </AtlasTextButton>
+                </div>
+              </div>
+            ) : null}
+
+            {activeOverlay === 'section_2_awareness' ? (
+              <div className="space-y-3">
+                <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
+                  <div className="font-medium">Start a new IPS assessment</div>
+                  <div className="mt-1 text-[#9eacb9]">
+                    Complete the weekly IPS self-assessment below. Historical results and correlation are shown beneath.
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {IPS_KEYS.map((key) => (
+                    <label key={key} className="block">
+                      <small className="atlas-overline block text-[#9eacb9]">{key.replace('competency_', 'comp ').replaceAll('_', ' ')}</small>
+                      <select className="atlas-select h-10 w-full bg-transparent text-white" value={ipsSelfDraftScores[key]} onChange={(event) => setIpsSelfDraftScores((current) => ({ ...current, [key]: Number(event.target.value) }))}>
+                        {[1, 2, 3, 4, 5].map((option) => <option key={option} value={option} className="bg-black text-white">{option}</option>)}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+                <textarea className="atlas-textarea min-h-[90px] bg-transparent text-white" value={ipsSelfDraftNote} onChange={(event) => setIpsSelfDraftNote(event.target.value)} placeholder="weekly self-assessment note" />
+                <div className="flex justify-end">
+                  <AtlasTextButton
+                    onClick={async () => {
+                      const now = new Date().toISOString()
+                      await onSaveIpsSelfAssessment({
+                        id: `ips-self-${Date.now()}`,
+                        navigatorName: currentNavigatorName,
+                        weekStartIso: now,
+                        submittedAtIso: now,
+                        competencyScores: ipsSelfDraftScores,
+                        note: ipsSelfDraftNote
+                      })
+                    }}
+                    className="px-4 py-2 text-[12px]"
+                  >
+                    save section 2 entry
+                  </AtlasTextButton>
+                </div>
+                <div className="atlas-surface-raised px-3 py-3">
+                  <div className="text-[13px] font-medium text-white">Historical IPS results</div>
+                  <div className="mt-2 space-y-2">
+                    {[
+                      ...ipsSelfAssessments.map((record) => ({
+                        id: `self-${record.id}`,
+                        submittedAtIso: record.submittedAtIso,
+                        roleLabel: 'self',
+                        note: record.note
+                      })),
+                      ...navigatorSupervisorIpsAssessments.map((record) => ({
+                        id: `supervisor-${record.id}`,
+                        submittedAtIso: record.submittedAtIso,
+                        roleLabel: 'supervisor',
+                        note: record.note
+                      }))
+                    ]
+                      .sort((left, right) => new Date(right.submittedAtIso).getTime() - new Date(left.submittedAtIso).getTime())
+                      .slice(0, 12)
+                      .map((entry) => (
+                        <div key={entry.id} className="atlas-surface-raised grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-3 px-3 py-2 text-[12px]">
+                          <span className="text-white">{formatDateLabel(entry.submittedAtIso)}</span>
+                          <span style={{ color: '#9eacb9' }}>{entry.roleLabel}</span>
+                          <span className="truncate" style={{ color: '#d7e0e9' }}>{entry.note || 'no note'}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+                <div className="atlas-surface-raised px-3 py-3">
+                  <div className="text-[13px] font-medium text-white">Self vs supervisor correlation</div>
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <MetricCard label="compared" value={String(selfAwarenessSummary.comparedCompetencyCount)} />
+                    <MetricCard label="avg gap" value={selfAwarenessSummary.averageGap == null ? '--' : selfAwarenessSummary.averageGap.toFixed(2)} />
+                    <MetricCard label="alignment" value={selfAwarenessSummary.overallAlignmentScore == null ? '--' : selfAwarenessSummary.overallAlignmentScore.toFixed(2)} />
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {selfAwarenessCorrelationRows.map((row) => (
+                      <div key={row.key} className="atlas-surface-raised grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 px-3 py-2 text-[12px]">
+                        <span className="text-white">{row.label}</span>
+                        <span style={{ color: '#9eacb9' }}>Supervisor {row.ipsccAverage?.toFixed(2) || '--'}</span>
+                        <span style={{ color: '#9eacb9' }}>Self {row.selfAverage?.toFixed(2) || '--'}</span>
+                        <span style={{ color: '#d7e0e9' }}>Gap {row.gap?.toFixed(2) || '--'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {activeOverlay === 'section_3_create' ? (
+              <div className="space-y-3">
+                {createInsights.map((insight) => (
+                  <div key={insight.pillar} className="atlas-surface-raised px-3 py-2 text-[12px] text-white">
+                    <strong>{insight.label}:</strong> {insight.latestSummary}
+                  </div>
+                ))}
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  <label className="block"><small className="atlas-overline block text-[#9eacb9]">Mode of supervision</small><select className="atlas-select h-10 w-full bg-transparent text-white" value={createDraft.supervisionMode} onChange={(event) => setCreateDraft((current) => ({ ...current, supervisionMode: event.target.value as 'in_person' | 'online' | 'phone_call' }))}><option value="in_person" className="bg-black text-white">In-person</option><option value="online" className="bg-black text-white">Online</option><option value="phone_call" className="bg-black text-white">Phone call</option></select></label>
+                  <label className="block"><small className="atlas-overline block text-[#9eacb9]">Duration (minutes)</small><input className="atlas-input h-10 w-full bg-transparent text-white" value={createDraft.sessionDurationMinutes} onChange={(event) => setCreateDraft((current) => ({ ...current, sessionDurationMinutes: event.target.value }))} /></label>
+                </div>
+                <label className="inline-flex items-center gap-2 text-[12px] text-white"><input type="checkbox" checked={createDraft.connectFocusedListening} onChange={(event) => setCreateDraft((current) => ({ ...current, connectFocusedListening: event.target.checked }))} /> Connect: focused listening and minimized distractions</label>
+                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.recognizeNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, recognizeNotes: event.target.value }))} placeholder="Recognize: success, achievements, etc." />
+                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.encourageNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, encourageNotes: event.target.value }))} placeholder="Encourage: challenges, difficulties, etc." />
+                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.acknowledgeNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, acknowledgeNotes: event.target.value }))} placeholder="Acknowledge: initiative, leadership, advocacy, etc." />
+                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.trainNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, trainNotes: event.target.value }))} placeholder="Train: learning opportunities and support needed." />
+                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.empowerNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, empowerNotes: event.target.value }))} placeholder="Empower: time, tools, transportation, materials, etc." />
+                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.createActionPlan} onChange={(event) => setCreateDraft((current) => ({ ...current, createActionPlan: event.target.value }))} placeholder="C.R.E.A.T.E. action plan for implementation." />
+                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.superviseeSubmission} onChange={(event) => setCreateDraft((current) => ({ ...current, superviseeSubmission: event.target.value }))} placeholder="Peer specialist submission" />
+                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.supervisorSubmission} onChange={(event) => setCreateDraft((current) => ({ ...current, supervisorSubmission: event.target.value }))} placeholder="Supervisor submission" />
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  <label className="block"><small className="atlas-overline block text-[#9eacb9]">Peer specialist signature</small><input className="atlas-input h-10 w-full bg-transparent text-white" value={createDraft.peerSpecialistSignature} onChange={(event) => setCreateDraft((current) => ({ ...current, peerSpecialistSignature: event.target.value }))} /></label>
+                  <label className="block"><small className="atlas-overline block text-[#9eacb9]">Supervisor signature</small><input className="atlas-input h-10 w-full bg-transparent text-white" value={createDraft.supervisorSignature} onChange={(event) => setCreateDraft((current) => ({ ...current, supervisorSignature: event.target.value }))} /></label>
+                </div>
+                <div className="flex justify-end">
+                  <AtlasTextButton
+                    onClick={async () => {
+                      const now = new Date().toISOString()
+                      await onSaveCreateSession({
+                        id: `create-${Date.now()}`,
+                        navigatorName: currentNavigatorName,
+                        supervisorName: createDraft.supervisorSignature || 'supervisor',
+                        sessionAtIso: now,
+                        submittedAtIso: now,
+                        supervisionMode: createDraft.supervisionMode,
+                        sessionDurationMinutes: Number(createDraft.sessionDurationMinutes) || null,
+                        connectFocusedListening: createDraft.connectFocusedListening,
+                        recognizeNotes: createDraft.recognizeNotes,
+                        encourageNotes: createDraft.encourageNotes,
+                        acknowledgeNotes: createDraft.acknowledgeNotes,
+                        trainNotes: createDraft.trainNotes,
+                        empowerNotes: createDraft.empowerNotes,
+                        createActionPlan: createDraft.createActionPlan,
+                        supervisorSubmission: createDraft.supervisorSubmission,
+                        superviseeSubmission: createDraft.superviseeSubmission,
+                        peerSpecialistSignature: createDraft.peerSpecialistSignature,
+                        peerSpecialistSignedAtIso: now,
+                        supervisorSignature: createDraft.supervisorSignature,
+                        supervisorSignedAtIso: now
+                      })
+                    }}
+                    className="px-4 py-2 text-[12px]"
+                  >
+                    save section 3 entry
+                  </AtlasTextButton>
+                </div>
+                <small className="block text-[#9eacb9]">{createSessions.length} C.R.E.A.T.E. sessions recorded</small>
+              </div>
+            ) : null}
+
+            {activeOverlay === 'section_4_assignments' ? (
+              <div className="atlas-surface-raised space-y-3 px-3 py-3 text-white">
+                <div className="text-[13px]">
+                  assignment board is pinned to the left column so you can pick up enrollees without opening a card.
+                </div>
+                <div className="flex justify-end">
+                  <AtlasTextButton
+                    className="px-3 py-1 text-[12px]"
+                    onClick={() => {
+                      setActiveOverlay(null)
+                      assignmentBoardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }}
+                  >
+                    jump to assignment board
+                  </AtlasTextButton>
+                </div>
+              </div>
+            ) : null}
+
+            {activeOverlay === 'section_5_zcode_updates' ? (
+              <div className="space-y-2">
+                {assignedEnrollees.map((enrollee) => (
+                  <div key={enrollee.id} className="atlas-surface-raised flex items-center justify-between px-3 py-2">
+                    <div className="text-white">{enrollee.fullName}</div>
+                    <AtlasTextButton onClick={() => onOpenEnrolleeSurvey?.(enrollee.id)} className="px-3 py-1 text-[12px]">update z-codes</AtlasTextButton>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {activeOverlay === 'section_6_competency' ? (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                <MetricCard label="weighted avg" value={competencySummary?.weightedRollingAverage?.toFixed(2) || '--'} />
+                <MetricCard label="assessments" value={String(competencySummary?.assessmentCount || 0)} />
+                <MetricCard label="last review" value={competencySummary?.lastAssessmentAtIso ? formatDateLabel(competencySummary.lastAssessmentAtIso) : 'none'} />
+              </div>
+            ) : null}
+
+            {activeOverlay === 'section_7_schedule' ? (
+              <div className="space-y-2">
+                {[...dueItems, ...regulationReviewDueItems.map((item) => ({
+                  id: item.id,
+                  title: `regulation review · ${item.enrolleeName}`,
+                  dueAtIso: item.dueAtIso,
+                  cadence: item.cadence,
+                  status: item.status
+                }))].map((item) => (
+                  <div key={item.id} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
+                    <span className="text-white">{item.title}</span>
+                    <span style={{ color: '#9eacb9' }}>{formatDateLabel(item.dueAtIso)} · {item.status}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {activeOverlay === 'section_8_archive' ? (
+              <div className="space-y-2">
+                {supervisionSessions.map((session) => (
+                  <div key={session.id} className="atlas-surface-raised px-3 py-2 text-[12px]">
+                    <div className="text-white">{formatDateLabel(session.sessionAtIso)} · {session.supervisorName}</div>
+                    <textarea
+                      className="atlas-textarea mt-2 min-h-[70px] bg-transparent text-white"
+                      value={session.navigatorNote}
+                      onChange={(event) => onSaveSupervisionSession({ ...session, navigatorNote: event.target.value })}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
-
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <NavigatorEnrollmentAssignmentsPanel
-          rows={navigatorEnrollmentAssignments}
-          isLoading={isLoadingNavigatorEnrollmentAssignments}
-          error={navigatorEnrollmentAssignmentsError}
-          assigningEnrollmentId={assigningEnrollmentId}
-          canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
-          canToggleAssignments={canToggleAssignmentActions}
-          canOpenReferralComposer={canOpenAssignmentBoardReferral}
-          onOpenReferralComposer={onOpenAssignmentBoardReferral}
-          onToggleAssignment={onToggleEnrollmentAssignment}
-        />
-
-        <div className="grid gap-4">
-          <section className="atlas-surface-panel px-4 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-                  enrollees
-                </small>
-                {/* Entry point now opens the streamlined Z-code override (burden survey preserved for later). */}
-                <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">enrollee z-code updates</div>
-              </div>
-              <span className="rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.1em]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
-                {assignedEnrollees.length} assigned
-              </span>
-            </div>
-            <div className="mt-4 space-y-2">
-              {assignedEnrollees.length ? (
-                assignedEnrollees.slice(0, 6).map((enrollee) => (
-                  <div key={enrollee.id} className="atlas-surface-raised flex items-center justify-between gap-3 px-3 py-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-[14px] font-medium text-white">{enrollee.fullName}</div>
-                      <small style={{ color: '#9eacb9' }}>{enrollee.caseId || 'pending case id'}</small>
-                    </div>
-                    <AtlasTextButton
-                      onClick={() => onOpenEnrolleeSurvey?.(enrollee.id)}
-                      className="px-[14px] py-[7px] text-[13px] font-medium"
-                      disabled={!onOpenEnrolleeSurvey}
-                      style={{ backgroundColor: '#ffffff', color: '#111111', borderColor: '#ffffff' } as React.CSSProperties}
-                    >
-                      update z-codes
-                    </AtlasTextButton>
-                  </div>
-                ))
-              ) : (
-                <div className="atlas-empty-state">
-                  No assigned enrollees are available for z-code updates yet.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="atlas-surface-panel px-4 py-4">
-            <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-              competency
-            </small>
-            <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">navigator competency</div>
-            <div className="mt-4 grid grid-cols-3 gap-3">
-              <MetricCard label="weighted avg" value={competencySummary ? formatRelativeRoleValue(competencySummary.weightedRollingAverage) : '--'} accent={SP_COLORS.yellow} />
-              <MetricCard label="assessments" value={String(competencySummary?.assessmentCount || 0)} accent={SP_COLORS.blue} />
-              <MetricCard label="last review" value={competencySummary?.lastAssessmentAtIso ? formatDateLabel(competencySummary.lastAssessmentAtIso) : 'none'} accent={SP_COLORS.deepGreen} />
-            </div>
-          </section>
-
-          <section className="atlas-surface-panel px-4 py-4">
-            <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-              intervals
-            </small>
-            <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">scheduled assessments</div>
-            <div className="mt-4 space-y-2">
-              {dueItems.map((item) => (
-                <div key={item.id} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
-                  <div>
-                    <div className="text-white">{item.title}</div>
-                    <small style={{ color: '#9eacb9' }}>{formatDateLabel(item.dueAtIso)} · {item.cadence}</small>
-                  </div>
-                  <span style={{ color: item.status === 'completed' ? SP_COLORS.deepGreen : SP_COLORS.yellow }}>
-                    {item.status}
-                  </span>
-                </div>
-              ))}
-              {/* Forced regulation review items reuse the same due-card motif so the list
-                  reads as one schedule; each row is scoped to a single owned enrollee. */}
-              {regulationReviewDueItems.map((item) => (
-                <div key={item.id} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
-                  <div>
-                    <div className="text-white">regulation review · {item.enrolleeName}</div>
-                    <small style={{ color: '#9eacb9' }}>
-                      due {formatDateLabel(item.dueAtIso)} · {item.cadence}
-                      {item.lastCompletedAtIso ? ` · last completed ${formatDateLabel(item.lastCompletedAtIso)}` : ' · never completed'}
-                    </small>
-                  </div>
-                  <span style={{ color: item.status === 'completed' ? SP_COLORS.deepGreen : SP_COLORS.yellow }}>
-                    {item.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="atlas-surface-panel px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-                weekly self assessment
-              </small>
-              <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">weekly averages</div>
-            </div>
-            <span className="rounded-full border px-3 py-1 text-[11px]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
-              {selfAssessmentSummary.responseCount} responses
-            </span>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <MetricCard label="stress load" value={formatRelativeRoleValue(selfAssessmentSummary.averageStressLoad)} accent={SP_COLORS.red} />
-            <MetricCard label="confidence" value={formatRelativeRoleValue(selfAssessmentSummary.averageConfidence)} accent={SP_COLORS.yellow} />
-            <MetricCard label="support" value={formatRelativeRoleValue(selfAssessmentSummary.averageSupport)} accent={SP_COLORS.deepGreen} />
-            <MetricCard label="composite" value={formatRelativeRoleValue(selfAssessmentSummary.averageComposite)} accent={SP_COLORS.blue} />
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <AssessmentSelect
-              label="stress load"
-              value={draftAssessment.stressLoadScore}
-              onChange={(value) => setDraftAssessment((current) => ({ ...current, stressLoadScore: value }))}
-            />
-            <AssessmentSelect
-              label="confidence"
-              value={draftAssessment.confidenceScore}
-              onChange={(value) => setDraftAssessment((current) => ({ ...current, confidenceScore: value }))}
-            />
-            <AssessmentSelect
-              label="support"
-              value={draftAssessment.supportScore}
-              onChange={(value) => setDraftAssessment((current) => ({ ...current, supportScore: value }))}
-            />
-          </div>
-          <textarea
-            value={draftAssessment.note}
-            onChange={(event) => setDraftAssessment((current) => ({ ...current, note: event.target.value }))}
-            className="atlas-textarea mt-3 min-h-[82px] bg-transparent text-[13px] text-white"
-            placeholder="Record weekly self assessment notes..."
-          />
-          <div className="mt-3 flex justify-end">
-            <AtlasTextButton
-              onClick={async () => {
-                setIsSavingAssessment(true)
-                try {
-                  const submittedAtIso = new Date().toISOString()
-                  await onSaveSelfAssessment({
-                    ...draftAssessment,
-                    id: `self-assessment-${Date.now()}`,
-                    submittedAtIso,
-                    weekStartIso: draftAssessment.weekStartIso || submittedAtIso
-                  })
-                  setDraftAssessment({
-                    id: `self-assessment-${Date.now() + 1}`,
-                    navigatorName: currentNavigatorName,
-                    weekStartIso: submittedAtIso,
-                    submittedAtIso,
-                    stressLoadScore: 3,
-                    confidenceScore: 3,
-                    supportScore: 3,
-                    note: ''
-                  })
-                } finally {
-                  setIsSavingAssessment(false)
-                }
-              }}
-              disabled={isSavingAssessment}
-              className="px-[14px] py-[7px] text-[13px] font-medium"
-              style={{
-                ['--button-border-color' as const]: SP_COLORS.yellow,
-                ['--button-line-color' as const]: SP_COLORS.bg,
-                color: SP_COLORS.bg,
-                backgroundColor: SP_COLORS.yellow
-              } as React.CSSProperties}
-            >
-              save weekly check-in
-            </AtlasTextButton>
-          </div>
-          <div className="mt-4 space-y-2">
-            {selfAssessments.slice(0, 4).map((record) => (
-              <div key={record.id} className="atlas-surface-raised px-3 py-3 text-[12px]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-white">{formatDateLabel(record.submittedAtIso)}</span>
-                  <span style={{ color: '#9eacb9' }}>
-                    {record.stressLoadScore}/{record.confidenceScore}/{record.supportScore}
-                  </span>
-                </div>
-                {record.note ? <div className="mt-2 text-[12px] leading-[1.4]" style={{ color: '#d7e0e9' }}>{record.note}</div> : null}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="atlas-surface-panel px-4 py-4">
-          <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-            supervision archive
-          </small>
-          <div className="atlas-h4 mt-1 text-[24px] font-medium text-white">session notes</div>
-          <div className="mt-4 space-y-3">
-            {supervisionSessions.length ? (
-              supervisionSessions.map((session) => (
-                <div key={session.id} className="atlas-surface-raised px-4 py-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[16px] text-white">{formatDateLabel(session.sessionAtIso)}</div>
-                      <small style={{ color: '#9eacb9' }}>
-                        {session.supervisorName} · {session.status}
-                      </small>
-                    </div>
-                    <span className="rounded-full border px-3 py-1 text-[11px]" style={{ borderColor: '#ffffff24', color: '#d7e0e9' }}>
-                      archived
-                    </span>
-                  </div>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <div>
-                      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-                        supervisor note
-                      </small>
-                      <div className="mt-1 text-[13px] leading-[1.45] text-white">{session.supervisorNote || 'No supervisor note recorded.'}</div>
-                    </div>
-                    <div>
-                      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-                        navigator note
-                      </small>
-                      <textarea
-                        value={sessionDrafts[session.id] ?? session.navigatorNote}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setSessionDrafts((current) => ({ ...current, [session.id]: value }))
-                        }}
-                        onFocus={() => setSavingSessionId(session.id)}
-                        onBlur={() => {
-                          const nextValue = sessionDrafts[session.id] ?? session.navigatorNote
-                          setSavingSessionId(null)
-                          if (nextValue === session.navigatorNote) return
-                          void onSaveSupervisionSession({ ...session, navigatorNote: nextValue })
-                        }}
-                        className="atlas-textarea mt-1 min-h-[78px] bg-transparent text-[13px] text-white"
-                      />
-                    </div>
-                  </div>
-                  {session.actionItems ? (
-                    <div className="atlas-surface-raised mt-3 px-3 py-2 text-[12px]" style={{ color: '#d7e0e9' }}>
-                      next steps: {session.actionItems}
-                    </div>
-                  ) : null}
-                  {savingSessionId === session.id ? (
-                    <small className="mt-2 block" style={{ color: '#9eacb9' }}>
-                      saving on blur or edit...
-                    </small>
-                  ) : null}
-                </div>
-              ))
-            ) : (
-              <div className="atlas-empty-state">
-                No supervision sessions have been archived yet.
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
     </div>
   )
 }
 
-function MetricCard({ label, value, accent }: { label: string; value: string; accent: string }) {
+function MetricCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="atlas-surface-raised px-3 py-3">
-      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-        {label}
-      </small>
-      <div className="mt-2 text-[22px] font-medium" style={{ color: accent }}>
-        {value}
-      </div>
+      <small className="atlas-overline block text-[#9eacb9]">{label}</small>
+      <div className="mt-1 text-[18px] font-medium text-white">{value}</div>
     </div>
-  )
-}
-
-function AssessmentSelect({
-  label,
-  value,
-  onChange
-}: {
-  label: string
-  value: number
-  onChange: (value: number) => void
-}) {
-  return (
-    <label className="block">
-      <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-        {label}
-      </small>
-      <select
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="atlas-select mt-1 h-10 bg-transparent text-[13px] text-white"
-      >
-        {[1, 2, 3, 4, 5].map((option) => (
-          <option key={option} value={option} className="bg-black text-white">
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
   )
 }

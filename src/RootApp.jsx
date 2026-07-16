@@ -7,9 +7,11 @@ import AtlasAuthScreen from '@/auth/AtlasAuthScreen'
 import { SupabaseAuthProvider, useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
 import PublicAtlasLandingPage from '@/features/atlas2026/public/PublicAtlasLandingPage'
 import PublicAtlasDemoPage from '@/features/atlas2026/public/PublicAtlasDemoPage'
-import SinglePaneApp from '@/features/atlas2026/singlepane/SinglePaneApp'
 import StandaloneZCodeSurveysPage from '@/features/atlas2026/singlepane/StandaloneZCodeSurveysPage'
+import { workspaceLoadMetrics } from '@/features/atlas2026/singlepane/workspaceLoadMetrics'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
+
+const SinglePaneApp = React.lazy(() => import('@/features/atlas2026/singlepane/SinglePaneApp'))
 
 function normalizePathname(pathname) {
   if (!pathname) return '/'
@@ -63,6 +65,12 @@ function RootAppInner() {
     isSinglePaneSupabaseBootstrapEnabled &&
     (isWorkspaceRoute || isStandaloneZCodeSurveysRoute)
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    // Route-open is the canonical start marker for workspace-load baselines.
+    workspaceLoadMetrics.markRouteOpen(pathname)
+  }, [pathname])
+
   if (typeof window !== 'undefined' && (isLegacyServiceRoute || isLegacyDomainRoute)) {
     // Legacy survey URLs now converge on one page with explicit hash tabs so
     // shared links always land in the intended survey mode.
@@ -112,7 +120,17 @@ function RootAppInner() {
   }
 
   // At this point either auth is not required or we have a valid session.
-  return <SinglePaneApp />
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-black text-[14px] text-[#c7c7c7]">
+          Loading workspace shell…
+        </div>
+      }
+    >
+      <SinglePaneApp />
+    </React.Suspense>
+  )
 }
 
 export default function RootApp() {

@@ -11,7 +11,7 @@ import type {
   RegulationReviewSettings,
   RouteAssignmentRecord,
   TimelineConfig
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import {
   loadConfigPayloadMapByPrefix,
@@ -256,6 +256,10 @@ function getDefaultNavigatorProgramState(): NavigatorProgramState {
   return {
     pickupQueue: [],
     selfAssessments: [],
+    ipsSelfAssessments: [],
+    supervisorIpsAssessments: [],
+    ipsccEncounterSubmissions: [],
+    createSessions: [],
     supervisionSessions: [],
     intervalAssessmentRules: [],
     updatedAtIso: new Date().toISOString()
@@ -266,6 +270,10 @@ function normalizeNavigatorProgramState(payload: Partial<NavigatorProgramState> 
   return {
     pickupQueue: Array.isArray(payload?.pickupQueue) ? payload!.pickupQueue.filter(Boolean) : [],
     selfAssessments: Array.isArray(payload?.selfAssessments) ? payload!.selfAssessments.filter(Boolean) : [],
+    ipsSelfAssessments: Array.isArray(payload?.ipsSelfAssessments) ? payload!.ipsSelfAssessments.filter(Boolean) : [],
+    supervisorIpsAssessments: Array.isArray(payload?.supervisorIpsAssessments) ? payload!.supervisorIpsAssessments.filter(Boolean) : [],
+    ipsccEncounterSubmissions: Array.isArray(payload?.ipsccEncounterSubmissions) ? payload!.ipsccEncounterSubmissions.filter(Boolean) : [],
+    createSessions: Array.isArray(payload?.createSessions) ? payload!.createSessions.filter(Boolean) : [],
     supervisionSessions: Array.isArray(payload?.supervisionSessions) ? payload!.supervisionSessions.filter(Boolean) : [],
     intervalAssessmentRules: Array.isArray(payload?.intervalAssessmentRules) ? payload!.intervalAssessmentRules.filter(Boolean) : [],
     updatedAtIso: payload?.updatedAtIso || new Date().toISOString()

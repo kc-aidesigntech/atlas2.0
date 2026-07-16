@@ -1,4 +1,4 @@
-import type { NavigatorCompetencyAssessmentRecord } from '@/features/atlas2026/singlepane/types'
+import type { NavigatorCompetencyAssessmentRecord } from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 

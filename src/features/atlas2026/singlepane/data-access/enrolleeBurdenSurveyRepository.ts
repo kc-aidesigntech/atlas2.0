@@ -8,7 +8,7 @@ import {
 import type {
   EnrolleeBurdenSurveySubmissionInput,
   EnrolleeBurdenSurveySubmissionRecord
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 export async function loadEnrolleeBurdenSurvey(

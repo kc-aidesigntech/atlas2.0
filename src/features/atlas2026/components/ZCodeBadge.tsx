@@ -1,6 +1,6 @@
 import React from 'react'
 import { usesLightTextOnZCodeColor } from '@atlas/shared'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 type ZCodeBadgeSize = 'mobile' | 'board' | 'enrollee' | 'filter' | 'compact' | 'chip' | 'resolved'
 

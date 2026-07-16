@@ -409,6 +409,7 @@ function DomainSpectrumKnob({
   disabled: boolean
   onChange: (value: number) => void
 }) {
+  const knobRootRef = useRef<HTMLDivElement | null>(null)
   const span = Math.max(1, max - min)
   const toPercent = (value: number) => ((value - min) / span) * 100
   const habitatColor = '#ff9a3c'
@@ -434,10 +435,39 @@ function DomainSpectrumKnob({
     }))
   })
 
+  function getScoreFromRingPointer(clientX: number, clientY: number) {
+    const node = knobRootRef.current
+    if (!node) return null
+    const bounds = node.getBoundingClientRect()
+    const centerX = bounds.left + bounds.width / 2
+    const centerY = bounds.top + bounds.height / 2
+    const dx = clientX - centerX
+    const dy = clientY - centerY
+    const radius = Math.hypot(dx, dy)
+    // Treat clicks within the visible knob band as direct value intent; ignore center
+    // taps and far-outside taps so label/button interactions remain predictable.
+    if (radius < 78 || radius > 124) return null
+    const angleFromTopClockwise = (Math.atan2(dy, dx) * (180 / Math.PI) + 450) % 360
+    const normalizedRatio = angleFromTopClockwise / 360
+    const inferredValue = min + normalizedRatio * (max - min)
+    return Math.max(min, Math.min(max, Math.round(inferredValue)))
+  }
+
+  function handleRingPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (disabled) return
+    const target = event.target as HTMLElement
+    if (target.closest('button,input,a')) return
+    const inferredScore = getScoreFromRingPointer(event.clientX, event.clientY)
+    if (inferredScore == null) return
+    onChange(inferredScore)
+  }
+
   return (
     <div
+      ref={knobRootRef}
       className={`relative h-[280px] w-[280px] ${disabled ? 'opacity-60' : ''}`}
       style={{ filter: disabled ? 'grayscale(0.35)' : 'none' }}
+      onPointerDown={handleRingPointerDown}
     >
       {majorTicks.map((tick) => (
         <TickMark key={`major-${tick.angle}`} angle={tick.angle} radius={132} length={14} thickness={2} color="#ffffffb5" />

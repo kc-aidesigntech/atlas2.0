@@ -23,14 +23,14 @@ import {
   type AssessmentSectionDefinition,
   type AssessmentStage
 } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
   EnrolleeProfile,
   RegulationTestAnswer,
   RegulationTestSubmissionInput,
   RegulationTestSubmissionRecord,
   RegulationTestType
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 
 interface RegulationTestsOverlayProps {
   isOpen: boolean

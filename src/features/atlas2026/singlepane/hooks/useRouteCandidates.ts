@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { EnrolleeProfile, RouteCandidateRecord } from '@/features/atlas2026/singlepane/types'
+import type { EnrolleeProfile, RouteCandidateRecord } from '@/features/atlas2026/shared/contracts'
 import { loadRouteCandidates } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 
 /**

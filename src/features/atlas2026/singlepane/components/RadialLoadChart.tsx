@@ -19,6 +19,12 @@ interface ChartAxisPoint {
   value: number
 }
 
+interface RadarPoint {
+  x: number
+  y: number
+  value?: number
+}
+
 function wrapAxisLabel(label: string) {
   if (!label.includes(' ')) return [label]
   return label.split(/\s+/).filter(Boolean)
@@ -38,17 +44,59 @@ function rgbToHex(r: number, g: number, b: number) {
   return `#${[r, g, b].map((channel) => Math.max(0, Math.min(255, channel)).toString(16).padStart(2, '0')).join('')}`
 }
 
-/** Spectrum segment colors from low (manageable strain) to high (destabilizing load). */
-function loadScaleSegmentColor(lowHex: string, highHex: string, segmentIndex: number, segmentCount: number) {
-  if (segmentCount <= 1) return lowHex
-  const a = hexToRgb(lowHex)
-  const b = hexToRgb(highHex)
-  if (!a || !b) return lowHex
-  const t = segmentIndex / (segmentCount - 1)
+function interpolateHexColor(startHex: string, endHex: string, ratio: number) {
+  const a = hexToRgb(startHex)
+  const b = hexToRgb(endHex)
+  if (!a || !b) return startHex
+  const t = Math.max(0, Math.min(1, ratio))
   const r = Math.round(a[0] + (b[0] - a[0]) * t)
   const g = Math.round(a[1] + (b[1] - a[1]) * t)
   const bl = Math.round(a[2] + (b[2] - a[2]) * t)
   return rgbToHex(r, g, bl)
+}
+
+/**
+ * Burden-spectrum color ramp:
+ * - low values stay predominantly green longer (bias for low-strain readability)
+ * - then transition through yellow
+ * - then ramp to red near the upper end
+ */
+function loadScaleTriColor(greenHex: string, yellowHex: string, redHex: string, ratio: number) {
+  const t = Math.max(0, Math.min(1, ratio))
+  const lowToMidPivot = 0.45
+  if (t <= lowToMidPivot) {
+    const local = t / lowToMidPivot
+    return interpolateHexColor(greenHex, yellowHex, local ** 1.7)
+  }
+  const local = (t - lowToMidPivot) / (1 - lowToMidPivot)
+  return interpolateHexColor(yellowHex, redHex, local ** 1.05)
+}
+
+function loadScaleSegmentColor(
+  greenHex: string,
+  yellowHex: string,
+  redHex: string,
+  segmentIndex: number,
+  segmentCount: number
+) {
+  if (segmentCount <= 1) return greenHex
+  const ratio = segmentIndex / (segmentCount - 1)
+  return loadScaleTriColor(greenHex, yellowHex, redHex, ratio)
+}
+
+function loadScaleValueColor(
+  greenHex: string,
+  yellowHex: string,
+  redHex: string,
+  value: number,
+  minValue: number,
+  maxValue: number
+) {
+  const lower = Math.min(minValue, maxValue)
+  const upper = Math.max(minValue, maxValue)
+  const clampedValue = Math.max(lower, Math.min(upper, value))
+  const ratio = upper === lower ? 0 : (clampedValue - lower) / (upper - lower)
+  return loadScaleTriColor(greenHex, yellowHex, redHex, ratio)
 }
 
 function AxisTick(props: {
@@ -93,6 +141,109 @@ function AxisTick(props: {
         </tspan>
       ))}
     </text>
+  )
+}
+
+function SpectrumRadarShape(props: {
+  points?: RadarPoint[]
+  fill?: string
+  fillOpacity?: number
+  strokeWidth?: number
+  dotRadius: number
+  lowHex: string
+  highHex: string
+  midHex: string
+  valueMin: number
+  valueMax: number
+  gradientPrefix: string
+}) {
+  const points = props.points || []
+  if (!points.length) return null
+
+  const closedPoints = points.length > 1 ? [...points, points[0]] : points
+  const polygonPath = closedPoints
+    .map((point, index) => `${index === 0 ? 'M' : 'L'}${point.x},${point.y}`)
+    .join(' ')
+    .concat(' Z')
+  const gradientIds = points.map((_, index) => `${props.gradientPrefix}-segment-${index}`)
+
+  return (
+    <g>
+      <defs>
+        {points.map((point, index) => {
+          const nextPoint = points[(index + 1) % points.length]
+          const startValue = point.value ?? 0
+          const endValue = nextPoint.value ?? 0
+          const startColor = loadScaleValueColor(
+            props.lowHex,
+            props.midHex,
+            props.highHex,
+            startValue,
+            props.valueMin,
+            props.valueMax
+          )
+          const endColor = loadScaleValueColor(
+            props.lowHex,
+            props.midHex,
+            props.highHex,
+            endValue,
+            props.valueMin,
+            props.valueMax
+          )
+          return (
+            <linearGradient
+              key={gradientIds[index]}
+              id={gradientIds[index]}
+              x1={point.x}
+              y1={point.y}
+              x2={nextPoint.x}
+              y2={nextPoint.y}
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop offset="0%" stopColor={startColor} />
+              <stop offset="100%" stopColor={endColor} />
+            </linearGradient>
+          )
+        })}
+      </defs>
+      <path d={polygonPath} fill={props.fill} fillOpacity={props.fillOpacity ?? 0.5} />
+      {points.map((point, index) => {
+        const nextPoint = points[(index + 1) % points.length]
+        return (
+          <line
+            key={`segment-${index}`}
+            x1={point.x}
+            y1={point.y}
+            x2={nextPoint.x}
+            y2={nextPoint.y}
+            stroke={`url(#${gradientIds[index]})`}
+            strokeWidth={props.strokeWidth ?? 2}
+            strokeLinecap="round"
+          />
+        )
+      })}
+      {points.map((point, index) => {
+        const color = loadScaleValueColor(
+          props.lowHex,
+          props.midHex,
+          props.highHex,
+          point.value ?? 0,
+          props.valueMin,
+          props.valueMax
+        )
+        return (
+          <circle
+            key={`dot-${index}`}
+            cx={point.x}
+            cy={point.y}
+            r={props.dotRadius}
+            fill={color}
+            stroke={SP_COLORS.white}
+            strokeWidth={1.25}
+          />
+        )
+      })}
+    </g>
   )
 }
 
@@ -152,13 +303,13 @@ export default function RadialLoadChart({ load, onClick, size = 'default' }: Rad
     ? 'mt-0 block w-full max-w-[min(100%,420px)] text-center text-[12px] uppercase leading-tight tracking-[0.08em] text-[#9f9f9f]'
     : 'mt-0.5 block w-full max-w-[min(100%,392px)] text-center text-[10px] uppercase leading-tight tracking-[0.08em] text-[#9f9f9f]'
   const radarStrokeWidth = isLarge ? 1.5 : 2
-  const radarDot = isLarge
-    ? { r: 5.5, fill: SP_COLORS.white, stroke: 'var(--atlas-signal-lucid-teal)', strokeWidth: 2 }
-    : { r: 3.5, fill: SP_COLORS.white, stroke: 'var(--atlas-signal-lucid-teal)', strokeWidth: 1.5 }
+  const radarDotRadius = isLarge ? 5.5 : 3.75
 
   const loadScaleLowHex = SP_COLORS.deepGreen
+  const loadScaleMidHex = SP_COLORS.yellow
   const loadScaleHighHex = SP_COLORS.red
   const [loadScaleTooltip, setLoadScaleTooltip] = React.useState<{ x: number; y: number } | null>(null)
+  const radarGradientPrefix = React.useId()
 
   const layoutClasses = 'flex flex-col items-center gap-0'
 
@@ -209,13 +360,28 @@ export default function RadialLoadChart({ load, onClick, size = 'default' }: Rad
               />
               <Radar
                 dataKey="value"
-                stroke={SP_COLORS.white}
+                stroke="transparent"
                 fill="var(--atlas-signal-lucid-teal)"
                 fillOpacity={0.5}
                 strokeOpacity={1}
                 strokeWidth={radarStrokeWidth}
                 isAnimationActive={false}
-                dot={radarDot}
+                dot={false}
+                shape={(shapeProps) => (
+                  <SpectrumRadarShape
+                    points={shapeProps.points as RadarPoint[]}
+                    fill={shapeProps.fill as string}
+                    fillOpacity={shapeProps.fillOpacity as number}
+                    strokeWidth={shapeProps.strokeWidth as number}
+                    dotRadius={radarDotRadius}
+                    lowHex={loadScaleLowHex}
+                    midHex={loadScaleMidHex}
+                    highHex={loadScaleHighHex}
+                    valueMin={1}
+                    valueMax={9}
+                    gradientPrefix={radarGradientPrefix}
+                  />
+                )}
               />
             </RadarChart>
           </ResponsiveContainer>
@@ -255,7 +421,7 @@ export default function RadialLoadChart({ load, onClick, size = 'default' }: Rad
                 key={index}
                 className="min-w-0 flex-1"
                 style={{
-                  backgroundColor: loadScaleSegmentColor(loadScaleLowHex, loadScaleHighHex, index, tickCount)
+                  backgroundColor: loadScaleSegmentColor(loadScaleLowHex, loadScaleMidHex, loadScaleHighHex, index, tickCount)
                 }}
               />
             ))}

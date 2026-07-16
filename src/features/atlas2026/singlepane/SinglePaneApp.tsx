@@ -1,36 +1,39 @@
 import React from 'react'
 import { useSupabaseAuth } from '../../../auth/SupabaseAuthProvider'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled } from '../../../lib/supabaseClient'
-import AdminDataControlPanel from '../admin/AdminDataControlPanel'
 import { AtlasCloseButton, AtlasTextButton } from '../components/AtlasPrimitives'
 import AccountSettingsPanel from './components/AccountSettingsPanel'
 import ContextPanels from './components/ContextPanels'
-import LiveAccessMatrixPanel from './components/LiveAccessMatrixPanel'
 import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
 // The in-depth enrollee burden survey (EnrolleeBurdenSurveyPanel and its data
 // plumbing in useSinglePaneData / enrolleeBurdenSurveyRepository) is preserved
 // in the repo for future reincorporation, but is un-wired from this entry
 // point in favor of the streamlined Z-code override panel below.
 import EnrolleeZCodeOverridePanel from './components/EnrolleeZCodeOverridePanel'
-import NavigatorMyProfilePanel from './components/NavigatorMyProfilePanel'
-import NavigatorEnrollmentAssignmentsPanel from './components/NavigatorEnrollmentAssignmentsPanel'
-import PartnerReferralWorkflowPanel from './components/PartnerReferralWorkflowPanel'
-import PartnerStripHistoryOverlay from './components/PartnerStripHistoryOverlay'
-import PartnerSpecialtyOverlay from './components/PartnerSpecialtyOverlay'
-import PartnerStationProfilePanel from './components/PartnerStationProfilePanel'
-import ProfilePanel from './components/ProfilePanel'
 import RadialLoadChart from './components/RadialLoadChart'
-import RadialLoadTableOverlay from './components/RadialLoadTableOverlay'
-import RegulationTestsOverlay from './components/RegulationTestsOverlay'
-import ResolvedZCodesOverlay from './components/ResolvedZCodesOverlay'
 import RoleMenus from './components/RoleMenus'
-import RoutePlanningOverlay from './components/RoutePlanningOverlay'
-import StripMapTimeline from './components/StripMapTimeline'
 import TopNav from './components/TopNav'
-import VerticalStripMapTimeline from './components/VerticalStripMapTimeline'
 import { SP_COLORS } from './theme'
-import type { AtlasRole, RouteCandidateRecord, StabilizationPhase } from './types'
+import type { AtlasRole, DomainLoadDrilldownTarget, RouteCandidateRecord, StabilizationPhase } from './types'
 import { useSinglePaneData } from './useSinglePaneData'
+import { workspaceLoadMetrics } from './workspaceLoadMetrics'
+
+const AdminDataControlPanel = React.lazy(() => import('../admin/AdminDataControlPanel'))
+const LiveAccessMatrixPanel = React.lazy(() => import('./components/LiveAccessMatrixPanel'))
+const NavigatorMyProfilePanel = React.lazy(() => import('./components/NavigatorMyProfilePanel'))
+const NavigatorEnrollmentAssignmentsPanel = React.lazy(() => import('./components/NavigatorEnrollmentAssignmentsPanel'))
+const SupervisorMyProfilePanel = React.lazy(() => import('./components/SupervisorMyProfilePanel'))
+const PartnerReferralWorkflowPanel = React.lazy(() => import('./components/PartnerReferralWorkflowPanel'))
+const PartnerStripHistoryOverlay = React.lazy(() => import('./components/PartnerStripHistoryOverlay'))
+const PartnerSpecialtyOverlay = React.lazy(() => import('./components/PartnerSpecialtyOverlay'))
+const PartnerStationProfilePanel = React.lazy(() => import('./components/PartnerStationProfilePanel'))
+const ProfilePanel = React.lazy(() => import('./components/ProfilePanel'))
+const RadialLoadTableOverlay = React.lazy(() => import('./components/RadialLoadTableOverlay'))
+const RegulationTestsOverlay = React.lazy(() => import('./components/RegulationTestsOverlay'))
+const ResolvedZCodesOverlay = React.lazy(() => import('./components/ResolvedZCodesOverlay'))
+const RoutePlanningOverlay = React.lazy(() => import('./components/RoutePlanningOverlay'))
+const StripMapTimeline = React.lazy(() => import('./components/StripMapTimeline'))
+const VerticalStripMapTimeline = React.lazy(() => import('./components/VerticalStripMapTimeline'))
 
 const PERSISTED_ACTION_LABELS = new Set([
   'route planning',
@@ -69,6 +72,10 @@ export default function SinglePaneApp() {
     countyHeatmap,
     adminMetrics,
     zCodeDomainSurveyHistorySummary,
+    adminDeletableServiceCapacitySubmissions,
+    isLoadingAdminDeletableServiceCapacitySubmissions,
+    deletingAdminServiceCapacitySubmissionId,
+    adminServiceCapacityDeletionError,
     isLoadingZCodeDomainSurveyHistorySummary,
     isSavingZCodeDomainSurveyNullification,
     zCodeDomainSurveyHistoryError,
@@ -83,6 +90,7 @@ export default function SinglePaneApp() {
     partnerStripSuccessHistory,
     resolvedZCodeStripMarkers,
     currentNavigatorName,
+    currentSupervisorName,
     canSwitchActiveExperience,
     navigatorAggregateLoad,
     navigatorLoadContributors,
@@ -98,8 +106,14 @@ export default function SinglePaneApp() {
     assigningNavigatorEnrollmentId,
     pendingAssignmentEnrollees,
     pickupQueue,
-    navigatorSelfAssessments,
-    navigatorSelfAssessmentSummary,
+    navigatorIpsccCompetencyAggregates,
+    navigatorIpsSelfAssessments,
+    navigatorSupervisorIpsAssessments,
+    allSupervisorIpsAssessments,
+    navigatorSelfAwarenessCorrelationRows,
+    navigatorSelfAwarenessSummary,
+    navigatorCreateSessions,
+    navigatorCreateInsights,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,
@@ -120,6 +134,7 @@ export default function SinglePaneApp() {
     updateTimelineConfig,
     accountSettings,
     partnerStationProfile,
+    partnerServiceCapacitySurveyHistory,
     intakeFormsByEnrolleeId,
     selectedIntake,
     hasSavedIntake,
@@ -151,7 +166,10 @@ export default function SinglePaneApp() {
     stopTroubleshootingSession,
     savePartnerTroubleshootingGrant,
     claimPickupQueueRecord,
-    saveNavigatorSelfAssessment,
+    saveNavigatorIpsSelfAssessment,
+    saveSupervisorIpsAssessment,
+    saveNavigatorIpsccEncounterSubmission,
+    saveNavigatorCreateSession,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,
@@ -163,6 +181,7 @@ export default function SinglePaneApp() {
     saveRouteAssignment,
     saveEnrolleeBurdenSurvey,
     setZCodeDomainSurveyAnswerNullification,
+    deleteAdminServiceCapacitySubmission,
     saveNavigatorCompetencyAssessment,
     saveNavigatorRegulationTest,
     deleteNavigatorRegulationTestDraft,
@@ -195,6 +214,7 @@ export default function SinglePaneApp() {
   const [isNavigatorAssignmentReferralOpen, setIsNavigatorAssignmentReferralOpen] = React.useState(false)
   const [isPartnerHistoryOpen, setIsPartnerHistoryOpen] = React.useState(false)
   const [enrolleeSurveyTargetId, setEnrolleeSurveyTargetId] = React.useState<string | null>(null)
+  const [requestedAdminDomainSurveyZCode, setRequestedAdminDomainSurveyZCode] = React.useState<string | null>(null)
   const [selectedRouteCandidateId, setSelectedRouteCandidateId] = React.useState<string | null>(null)
   const [resolutionOverlayState, setResolutionOverlayState] = React.useState<ResolutionOverlayState | null>(null)
   const [selectedPartnerSpecialtyGroup, setSelectedPartnerSpecialtyGroup] = React.useState<(typeof partnerStationSpecialties)[number] | null>(null)
@@ -205,6 +225,7 @@ export default function SinglePaneApp() {
   const transitionBootstrappedRef = React.useRef(false)
   const hashSyncBootstrappedRef = React.useRef(false)
   const previousUiRoleRef = React.useRef<AtlasRole | null>(null)
+  const firstUsableMarkedRoleRef = React.useRef<AtlasRole | null>(null)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const uiRole = viewerRole
   const activeEnrolleeSurveyTarget = React.useMemo(
@@ -305,6 +326,22 @@ export default function SinglePaneApp() {
       setEnrolleeSurveyTargetId(enrolleeId)
     },
     [enrollees, setSelectedEnrolleeId]
+  )
+
+  const handleOpenTrueRecord = React.useCallback(
+    (target: DomainLoadDrilldownTarget) => {
+      if (target.kind === 'enrolleeZCode' && target.enrolleeId) {
+        openEnrolleeZCodeOverride(target.enrolleeId)
+        return
+      }
+      if (target.kind === 'zCodeSurveyHistory' && target.normalizedZCode && viewerRole === 'administrator') {
+        setRequestedAdminDomainSurveyZCode(target.normalizedZCode.trim().toUpperCase())
+        if (activeMenu !== 'system operations') {
+          setActiveMenu('system operations')
+        }
+      }
+    },
+    [activeMenu, openEnrolleeZCodeOverride, setActiveMenu, viewerRole]
   )
 
   React.useEffect(() => {
@@ -418,9 +455,16 @@ export default function SinglePaneApp() {
   const assignmentBoardError = viewerCanAccessAssignmentBoard
     ? navigatorEnrollmentAssignmentsError
     : 'Assignment board is hidden by administrator policy.'
-  const isSupervisorNavigatorManagementView =
+  const isSupervisorMyProfileView =
     uiRole === 'supervisor' && (activeMenu === 'assigned navigators' || activeMenu === 'navigator assessments')
-  const isReady = isPartnerStationView ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu ? true : Boolean(selectedEnrollee && timelineConfig)
+  const isReady = isPartnerStationView ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu || isSupervisorMyProfileView ? true : Boolean(selectedEnrollee && timelineConfig)
+
+  React.useEffect(() => {
+    if (isLoading || !isReady) return
+    if (firstUsableMarkedRoleRef.current === uiRole) return
+    firstUsableMarkedRoleRef.current = uiRole
+    workspaceLoadMetrics.markFirstUsable(uiRole)
+  }, [isLoading, isReady, uiRole])
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const visibleLogs = React.useMemo(
     () => (uiRole === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
@@ -473,6 +517,20 @@ export default function SinglePaneApp() {
     : selectedRouteAssignment?.stationName || null
   const displayLoad = isNavigatorMyProfile ? navigatorAggregateLoad : selectedLoad
   const displayLoadBreakdown = isNavigatorMyProfile ? navigatorAggregateLoadBreakdown : selectedLoadBreakdown
+  // Partner traversal controls are always rendered for partner-station overlays; navigation
+  // enables when more than one organization is present in the available survey history scope.
+  const partnerOverlayOrganizations = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          partnerServiceCapacitySurveyHistory
+            .map((submission) => submission.header.organizationName.trim())
+            .filter(Boolean)
+        )
+      ),
+    [partnerServiceCapacitySurveyHistory]
+  )
+  const canTraversePartnerOverlay = partnerOverlayOrganizations.length > 1
   const partnerContactName = React.useMemo(() => {
     const firstName = partnerStationProfile?.primaryContactFirstName?.trim() || ''
     const lastName = partnerStationProfile?.primaryContactLastName?.trim() || ''
@@ -606,6 +664,7 @@ export default function SinglePaneApp() {
       />
 
       <main className="atlas-shell-edge-buffer relative py-[10px]">
+        <React.Suspense fallback={<LazyPanelFallback />}>
         {(isLoading || !isReady) && !bootstrapError ? <LoadingSpinnerOverlay /> : null}
         {bootstrapError ? (
           // Fail-loud banner: a bootstrap failure (most importantly a grant/RLS
@@ -785,6 +844,12 @@ export default function SinglePaneApp() {
             load={displayLoad}
             breakdown={displayLoadBreakdown}
             navigatorContributors={isNavigatorMyProfile ? navigatorLoadContributors : []}
+            partnerSurveyHistory={isPartnerStationView ? partnerServiceCapacitySurveyHistory : []}
+            onOpenTrueRecord={handleOpenTrueRecord}
+            onSelectPreviousPartner={isPartnerStationView ? () => undefined : undefined}
+            onSelectNextPartner={isPartnerStationView ? () => undefined : undefined}
+            canSelectPreviousPartner={canTraversePartnerOverlay}
+            canSelectNextPartner={canTraversePartnerOverlay}
             onClose={() => setIsLoadTableOpen(false)}
           />
           <PartnerSpecialtyOverlay
@@ -829,7 +894,7 @@ export default function SinglePaneApp() {
                     (EnrolleeBurdenSurveyPanel is preserved for reincorporation). */}
                 <EnrolleeZCodeOverridePanel
                   enrollee={activeEnrolleeSurveyTarget}
-                  canEdit={viewerRole === 'navigator' && viewerCanWrite}
+                  canEdit={(viewerRole === 'navigator' || viewerRole === 'administrator') && viewerCanWrite}
                   onSave={overrideEnrolleeZCodes}
                 />
               </div>
@@ -875,8 +940,13 @@ export default function SinglePaneApp() {
                     canToggleAssignmentActions={viewerCanUseAssignmentActions}
                     canOpenAssignmentBoardReferral={canOpenNavigatorAssignmentReferral}
                     competencySummary={navigatorAssignedCompetencySummary}
-                    selfAssessmentSummary={navigatorSelfAssessmentSummary}
-                    selfAssessments={navigatorSelfAssessments}
+                    ipsccCompetencyAverages={navigatorIpsccCompetencyAggregates}
+                    selfAwarenessCorrelationRows={navigatorSelfAwarenessCorrelationRows}
+                    selfAwarenessSummary={navigatorSelfAwarenessSummary}
+                    ipsSelfAssessments={navigatorIpsSelfAssessments}
+                    navigatorSupervisorIpsAssessments={navigatorSupervisorIpsAssessments}
+                    createInsights={navigatorCreateInsights}
+                    createSessions={navigatorCreateSessions}
                     supervisionSessions={navigatorSupervisionSessions}
                     dueItems={navigatorIntervalDueItems}
                     regulationReviewDueItems={regulationReviewDueItems}
@@ -888,24 +958,25 @@ export default function SinglePaneApp() {
                     onOpenEnrolleeSurvey={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
                     onOpenAssignmentBoardReferral={() => setIsNavigatorAssignmentReferralOpen(true)}
                     onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
-                    onSaveSelfAssessment={saveNavigatorSelfAssessment}
+                    onSaveIpsSelfAssessment={saveNavigatorIpsSelfAssessment}
+                    onSaveIpsccEncounterSubmission={saveNavigatorIpsccEncounterSubmission}
                     onSaveSupervisionSession={saveSupervisionSession}
+                    onSaveCreateSession={saveNavigatorCreateSession}
                   />
-                ) : isSupervisorNavigatorManagementView ? (
+                ) : isSupervisorMyProfileView ? (
                   <div
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
                     <div className="w-full">
-                      <ContextPanels
-                        role={uiRole}
-                        activeMenu={activeMenu}
-                        enrollmentRequests={enrollmentRequests}
-                        countyHeatmap={countyHeatmap}
-                        supervisorNavigatorCompetency={supervisorNavigatorCompetency}
-                        supervisorNavigatorDirectory={supervisorNavigatorDirectory}
-                        onToggleSupervisorManagedNavigator={toggleSupervisorManagedNavigator}
-                        isSavingAccessMatrix={isSavingAccessMatrix}
+                      <SupervisorMyProfilePanel
+                        currentSupervisorName={currentSupervisorName}
+                        navigatorDirectory={supervisorNavigatorDirectory}
+                        competencyByNavigator={supervisorNavigatorCompetency}
+                        allSupervisorIpsAssessments={allSupervisorIpsAssessments}
+                        onToggleManagedNavigator={toggleSupervisorManagedNavigator}
+                        isSavingAssignments={isSavingAccessMatrix}
+                        onSaveSupervisorIpsAssessment={saveSupervisorIpsAssessment}
                       />
                     </div>
                   </div>
@@ -1005,6 +1076,10 @@ export default function SinglePaneApp() {
                           isLoadingZCodeDomainSurveyHistorySummary={isLoadingZCodeDomainSurveyHistorySummary}
                           isSavingZCodeDomainSurveyNullification={isSavingZCodeDomainSurveyNullification}
                           zCodeDomainSurveyHistoryError={zCodeDomainSurveyHistoryError}
+                          deletableServiceCapacitySubmissions={adminDeletableServiceCapacitySubmissions}
+                          isLoadingDeletableServiceCapacitySubmissions={isLoadingAdminDeletableServiceCapacitySubmissions}
+                          deletingServiceCapacitySubmissionId={deletingAdminServiceCapacitySubmissionId}
+                          serviceCapacityDeletionError={adminServiceCapacityDeletionError}
                           enrollees={enrollees}
                           intakeFormsByEnrolleeId={intakeFormsByEnrolleeId}
                           selectedEnrollee={selectedEnrollee}
@@ -1023,6 +1098,9 @@ export default function SinglePaneApp() {
                           registryError={adminPortalRegistryError}
                           onSaveRegistry={saveAdminPortalRegistry}
                           onSetZCodeDomainSurveyAnswerNullification={setZCodeDomainSurveyAnswerNullification}
+                          onDeleteServiceCapacitySubmission={deleteAdminServiceCapacitySubmission}
+                          requestedDomainSurveyZCode={requestedAdminDomainSurveyZCode}
+                          onAcknowledgeRequestedDomainSurveyZCode={() => setRequestedAdminDomainSurveyZCode(null)}
                           onSaveEnrollmentNavigators={saveAccessMatrixEnrollmentNavigators}
                           onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
                           onSaveIntake={saveEnrolleeIntake}
@@ -1059,7 +1137,7 @@ export default function SinglePaneApp() {
                       accentColor="var(--atlas-signal-lucid-green)"
                     />
                   </div>
-                ) : isNavigatorMyProfile || isSupervisorNavigatorManagementView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerStationView ? (
+                ) : isNavigatorMyProfile || isSupervisorMyProfileView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerStationView ? (
                   <>
                     {timelineConfig ? (
                       <>
@@ -1075,6 +1153,7 @@ export default function SinglePaneApp() {
                             partnerAggregateReferredDots={partnerStripReferredDots}
                             partnerAggregateActiveDots={partnerStripActiveDots}
                             onPartnerHistoryClick={() => setIsPartnerHistoryOpen(true)}
+                            onOpenPartnerAggregateRecord={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
                             onRenewalTestsClick={() => setIsPartnerHistoryOpen(true)}
                             onEventDelete={deleteRouteLog}
                             onEventPositionChange={updateRouteLogTimelinePosition}
@@ -1190,6 +1269,7 @@ export default function SinglePaneApp() {
             )}
           </div>
         </section>
+        </React.Suspense>
       </main>
     </div>
   )
@@ -1261,6 +1341,14 @@ function LoadingShell() {
 
       <div className="h-[220px] rounded-[28px] border border-white/15 bg-white/5" />
     </>
+  )
+}
+
+function LazyPanelFallback() {
+  return (
+    <div className="absolute inset-0 z-[30] flex items-center justify-center bg-black/20">
+      <small className="atlas-overline text-[#cfcfcf]">loading panel…</small>
+    </div>
   )
 }
 

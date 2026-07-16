@@ -8,7 +8,7 @@ import type {
   PartnerServiceCapacityHeader,
   PartnerServiceCapacitySubmissionRecord,
   ZCodeSurveyPrompt
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 
 export const SERVICE_CAPACITY_DRAFT_STORAGE_KEY = 'atlas2026.service-capacity.active-draft.v1'
 

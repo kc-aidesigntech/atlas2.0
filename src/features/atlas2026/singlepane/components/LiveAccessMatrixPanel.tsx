@@ -1,6 +1,6 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasStatusPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
   AccessMatrixPartnerRecord,
   AccessMatrixDataset,
@@ -8,7 +8,7 @@ import type {
   AtlasRole,
   PartnerTroubleshootingGrant,
   TroubleshootingSessionState
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 
 interface LiveAccessMatrixPanelProps {
   dataset: AccessMatrixDataset | null

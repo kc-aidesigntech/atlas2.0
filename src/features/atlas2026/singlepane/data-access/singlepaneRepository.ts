@@ -13,7 +13,7 @@ import type {
   PartnerStationProfile,
   RouteCandidateRecord,
   UnassignedEnrolleePickupRecord
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import {
   fetchAppRoleNavigation,
   fetchEnrollmentAssignmentBoard,
@@ -59,6 +59,16 @@ import {
   saveNavigatorCompetencyAssessment
 } from '@/features/atlas2026/singlepane/data-access/navigatorAssessmentRepository'
 import {
+  loadNavigatorCreateSessions,
+  loadNavigatorIpsSelfAssessments,
+  loadNavigatorIpsccEncounterSubmissions,
+  loadSupervisorIpsAssessments,
+  saveNavigatorCreateSession,
+  saveNavigatorIpsSelfAssessment,
+  saveNavigatorIpsccEncounterSubmission,
+  saveSupervisorIpsAssessment
+} from '@/features/atlas2026/singlepane/data-access/navigatorProfileRepository'
+import {
   deleteEnrolleeBurdenSurveyDraftRecord,
   loadEnrolleeBurdenSurvey,
   loadEnrolleeBurdenSurveyHistory,
@@ -66,8 +76,10 @@ import {
   saveEnrolleeBurdenSurvey
 } from '@/features/atlas2026/singlepane/data-access/enrolleeBurdenSurveyRepository'
 import {
+  deleteAdminServiceCapacitySubmission,
   deletePartnerServiceCapacityDraftRecord,
   ensurePartnerIdentifierRecordForSurvey,
+  loadAdminDeletableServiceCapacitySubmissions,
   loadZCodeDomainSurveyHistorySummary,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
@@ -82,19 +94,19 @@ import {
   saveAccessMatrixPersonRoles,
   saveAccessMatrixSupervisorAssignments
 } from '@/features/atlas2026/singlepane/data-access/accessMatrixRepository'
-import { toNormalizedRadialDomainLoad } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
+import { mapZCodeToDomainBucket, toNormalizedRadialDomainLoad } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 
 export interface SinglePaneBootstrapData {
-  enrollees: import('@/features/atlas2026/singlepane/types').EnrolleeProfile[]
+  enrollees: import('@/features/atlas2026/shared/contracts').EnrolleeProfile[]
   loads: DomainLoad[]
   loadBreakdownsByEnrolleeId: Record<string, DomainLoadBreakdown>
-  roleConfigs: import('@/features/atlas2026/singlepane/types').RoleMenuConfig[]
-  timelineConfig: import('@/features/atlas2026/singlepane/types').TimelineConfig
-  timelineConfigsByEnrolleeId: Record<string, import('@/features/atlas2026/singlepane/types').TimelineConfig>
-  logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]
+  roleConfigs: import('@/features/atlas2026/shared/contracts').RoleMenuConfig[]
+  timelineConfig: import('@/features/atlas2026/shared/contracts').TimelineConfig
+  timelineConfigsByEnrolleeId: Record<string, import('@/features/atlas2026/shared/contracts').TimelineConfig>
+  logs: import('@/features/atlas2026/shared/contracts').RouteLogEvent[]
 }
 
 const routeCandidatesCache = new Map<string, RouteCandidateRecord[]>()
@@ -117,6 +129,16 @@ export interface NavigatorStationContext {
   stationId: string | null
   stationName: string | null
   countyName: string | null
+}
+
+interface NavigatorAssignmentProfileInput {
+  enrollmentId: string
+  enrolleeId: string
+  fullName: string
+  caseId: string
+  assignedNavigator: string
+  activeZCodeDetails?: Array<{ parentCode?: string }>
+  zCodeTags?: string[]
 }
 
 // Single reversible switch for the deferred county-commons experience. Flip to
@@ -220,7 +242,7 @@ function normalizeRosterAssignedNavigatorLabel(value: string | null | undefined)
   return normalized.toLowerCase() === 'unassigned' ? '' : normalized
 }
 
-function createEmptyBootstrap(logs: import('@/features/atlas2026/singlepane/types').RouteLogEvent[]): SinglePaneBootstrapData {
+function createEmptyBootstrap(logs: import('@/features/atlas2026/shared/contracts').RouteLogEvent[]): SinglePaneBootstrapData {
   return {
     enrollees: [],
     loads: [],
@@ -320,6 +342,15 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     role === 'navigator'
       ? breakdownRows.filter((row) => navigatorEnrollmentIds?.has(row.enrollmentId))
       : breakdownRows
+  const fallbackLoadByEnrollmentId = new Map(visibleLoadRows.map((row) => [row.enrollmentId, row]))
+  const fallbackBreakdownRowsByEnrollmentId = visibleBreakdownRows.reduce<
+    Map<string, Array<(typeof visibleBreakdownRows)[number]>>
+  >((accumulator, row) => {
+    const current = accumulator.get(row.enrollmentId) || []
+    current.push(row)
+    accumulator.set(row.enrollmentId, current)
+    return accumulator
+  }, new Map())
 
   const bootstrapEnrollees = uniqueVisibleProfiles.map((profile) => ({
     id: profile.enrolleeId,
@@ -332,7 +363,8 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
     assignedNavigator: profile.assignedNavigator,
     zCodeTags: profile.zCodeTags,
     activeZCodeDetails: profile.activeZCodeDetails,
-    completedParentCodes: profile.completedParentCodes
+    completedParentCodes: profile.completedParentCodes,
+    currentPhase: profile.currentPhase
   }))
 
   const normalizedRoleConfigs = roleNavigation.map((item) => ({
@@ -353,14 +385,40 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
 
   const loadBreakdownsByEnrolleeId = Object.fromEntries(
     uniqueVisibleProfiles.map((profile) => {
-      const rows = visibleBreakdownRows
-        .filter((row) => row.enrollmentId === profile.enrollmentId)
-        .map((row) => ({
-          id: `${profile.enrolleeId}:${row.zCodeGroup}`,
-          zCodeGroup: row.zCodeGroup,
-          mappedDomain: row.mappedDomain,
-          rawCount: row.rawCount
-        }))
+      const canonicalRows = profile.activeZCodeDetails
+        .map((detail) => {
+          const normalizedZCode = detail.zCode.trim().toUpperCase()
+          if (!normalizedZCode) return null
+          const parentCode = detail.parentCode.trim().toUpperCase()
+          return {
+            id: detail.enrolleeZCodeId,
+            zCodeGroup: normalizedZCode,
+            parentCode,
+            mappedDomain: mapZCodeToDomainBucket(parentCode, normalizedZCode),
+            rawCount: 1,
+            responseCount: 1,
+            // Keep a direct pointer to the canonical enrollee_z_codes record so
+            // drilldown actions edit the true source row behind this chart value.
+            drilldownTarget: {
+              kind: 'enrolleeZCode' as const,
+              enrolleeId: profile.enrolleeId,
+              enrollmentId: profile.enrollmentId,
+              enrolleeZCodeId: detail.enrolleeZCodeId,
+              normalizedZCode
+            }
+          }
+        })
+        .filter((row): row is DomainLoadBreakdown['rows'][number] => Boolean(row))
+      const rows =
+        canonicalRows.length > 0
+          ? canonicalRows
+          : (fallbackBreakdownRowsByEnrollmentId.get(profile.enrollmentId) || [])
+              .map((row) => ({
+                id: `${profile.enrolleeId}:${row.zCodeGroup}`,
+                zCodeGroup: row.zCodeGroup,
+                mappedDomain: row.mappedDomain,
+                rawCount: row.rawCount
+              }))
       const totals = rows.reduce(
         (accumulator, row) => {
           if (row.mappedDomain === 'habitat') accumulator.habitatTotal += row.rawCount
@@ -385,7 +443,7 @@ export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePa
   )
   const loads = uniqueVisibleProfiles.map((profile) => {
     const breakdown = loadBreakdownsByEnrolleeId[profile.enrolleeId]
-    const fallbackRow = visibleLoadRows.find((row) => row.enrollmentId === profile.enrollmentId)
+    const fallbackRow = fallbackLoadByEnrollmentId.get(profile.enrollmentId)
     return {
       enrolleeId: profile.enrolleeId,
       habitat: breakdown?.habitatTotal ?? fallbackRow?.habitat ?? 0,
@@ -461,10 +519,14 @@ export async function loadEnrollmentRequests(role: AtlasRole): Promise<Enrollmen
   }))
 }
 
-export async function loadNavigatorEnrollmentAssignments(): Promise<NavigatorEnrollmentAssignmentRecord[]> {
+export async function loadNavigatorEnrollmentAssignments(
+  options?: { profileRows?: NavigatorAssignmentProfileInput[] }
+): Promise<NavigatorEnrollmentAssignmentRecord[]> {
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
   const [profiles, assignmentBoardRows, navigatorAssignments, navigatorPersonId] = await Promise.all([
-    withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
+    options?.profileRows
+      ? Promise.resolve(options.profileRows)
+      : withOptionalSupabaseFallback('singlepane.navigatorEnrollmentProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
     withOptionalSupabaseFallback('singlepane.enrollmentAssignmentBoard', () => fetchEnrollmentAssignmentBoard(supabase), []),
     withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), []),
     withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
@@ -1048,10 +1110,15 @@ export {
   loadPartnerTroubleshootingGrants,
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
+  loadNavigatorCreateSessions,
+  loadNavigatorIpsSelfAssessments,
+  loadNavigatorIpsccEncounterSubmissions,
+  loadSupervisorIpsAssessments,
   loadNavigatorProgramState,
   loadPartnerServiceCapacitySurvey,
   loadPartnerServiceCapacitySurveyHistory,
   deletePartnerServiceCapacityDraftRecord,
+  deleteAdminServiceCapacitySubmission,
   loadRouteAssignments,
   saveAdminPortalRegistry,
   saveAccountSettings,
@@ -1059,6 +1126,10 @@ export {
   savePartnerTroubleshootingGrant,
   saveEnrolleeIntake,
   saveNavigatorCompetencyAssessment,
+  saveNavigatorCreateSession,
+  saveNavigatorIpsSelfAssessment,
+  saveNavigatorIpsccEncounterSubmission,
+  saveSupervisorIpsAssessment,
   saveNavigatorProgramState,
   savePartnerServiceCapacitySurvey,
   saveRouteAssignment,
@@ -1072,6 +1143,7 @@ export {
   deleteEnrolleeBurdenSurveyDraftRecord,
   ensurePartnerIdentifierRecordForSurvey,
   searchPartnerIdentifierRecordMatches,
+  loadAdminDeletableServiceCapacitySubmissions,
   loadZCodeDomainSurveyHistorySummary,
   setZCodeDomainSurveyAnswerNullified
 }

@@ -1,4 +1,4 @@
-import type { RegulationTestType } from '@/features/atlas2026/singlepane/types'
+import type { RegulationTestType } from '@/features/atlas2026/shared/contracts'
 
 /**
  * Assessment catalog + scoring engine.

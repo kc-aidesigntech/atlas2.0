@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Check, Trash2, X } from 'lucide-react'
 import { AtlasIconButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface ZCodeTaskPaneProps {
   zCode: string | null

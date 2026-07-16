@@ -1,7 +1,7 @@
 import { fetchSinglePaneSurveyDefinition } from '@atlas/shared'
 import { useEffect, useState } from 'react'
 import { DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
-import type { PartnerServiceCapacityScaleOption, ZCodeSurveySection } from '@/features/atlas2026/singlepane/types'
+import type { PartnerServiceCapacityScaleOption, ZCodeSurveySection } from '@/features/atlas2026/shared/contracts'
 import { isOptionalSupabaseDataError, withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 

@@ -1,7 +1,7 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
-import type { AdminPortalCustomEnrolleeRecord, AdminPortalPersonRecord } from '@/features/atlas2026/singlepane/types'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import type { AdminPortalCustomEnrolleeRecord, AdminPortalPersonRecord } from '@/features/atlas2026/shared/contracts'
 import type {
   CombinedEnrolleeRow,
   FieldComponentType,

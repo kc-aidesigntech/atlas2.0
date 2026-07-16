@@ -1,7 +1,7 @@
 import React from 'react'
 import { getZCodeParentColor } from '@atlas/shared'
 import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface EnrolleeParentBadgeRowProps {
   parentCodes: string[]

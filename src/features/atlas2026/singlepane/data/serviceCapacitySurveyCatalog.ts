@@ -3,7 +3,7 @@ import type {
   PartnerServiceCapacityScaleOption,
   ZCodeSurveyPrompt,
   ZCodeSurveySection
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 
 /**
  * Service-capacity survey catalog.

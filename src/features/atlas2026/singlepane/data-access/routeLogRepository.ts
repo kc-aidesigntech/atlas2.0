@@ -1,4 +1,4 @@
-import type { RouteLogEvent } from '@/features/atlas2026/singlepane/types'
+import type { RouteLogEvent } from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 

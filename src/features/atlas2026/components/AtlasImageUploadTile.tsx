@@ -3,7 +3,7 @@
  * status/error messaging for avatar-style image surfaces.
  */
 import React from 'react'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface AtlasImageUploadTileProps {
   imageSrc: string
@@ -12,6 +12,7 @@ interface AtlasImageUploadTileProps {
   onImageError?: React.ReactEventHandler<HTMLImageElement>
   disabled?: boolean
   frameClassName?: string
+  frameBackgroundClassName?: string
   imgClassName?: string
   buttonTitle?: string
   ctaLabel?: string
@@ -32,6 +33,7 @@ export default function AtlasImageUploadTile({
   onImageError,
   disabled = false,
   frameClassName = 'h-[150px] w-[150px]',
+  frameBackgroundClassName = 'bg-white',
   imgClassName = 'h-full w-full object-cover',
   buttonTitle = 'replace image',
   ctaLabel = 'replace image',
@@ -52,7 +54,7 @@ export default function AtlasImageUploadTile({
   return (
     <div className="mx-auto flex w-[150px] shrink-0 flex-col items-start sm:mx-0">
       <div
-        className={`${frameClassName} overflow-hidden rounded-[38px] border bg-white`}
+        className={`${frameClassName} ${frameBackgroundClassName} overflow-hidden rounded-[38px] border`}
         style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}
       >
         <button

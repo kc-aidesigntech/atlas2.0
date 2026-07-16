@@ -28,7 +28,7 @@ import {
   formatDateTimeLabel,
   mergeDateInputWithTime
 } from './timelineDateUtils'
-import { TIMELINE_PHASE_COLORS, TIMELINE_STATUS_COLORS } from './timelineVisualConfig'
+import { TIMELINE_PHASE_COLORS } from './timelineVisualConfig'
 import { SP_COLORS } from '../theme'
 
 interface StripMapTimelineProps {
@@ -45,6 +45,7 @@ interface StripMapTimelineProps {
   partnerAggregateReferredDots?: PartnerStripAggregateDot[]
   partnerAggregateActiveDots?: PartnerStripAggregateDot[]
   onPartnerHistoryClick?: () => void
+  onOpenPartnerAggregateRecord?: (enrolleeId: string) => void
   showRoutePlanningQuickAction?: boolean
   onRoutePlanningClick?: () => void
   onRegulationTestsClick?: () => void
@@ -85,6 +86,18 @@ interface ResolvedTooltipState {
   pinned: boolean
 }
 
+interface TimelineMarkerInspectorState {
+  id: string
+  x: number
+  y: number
+  title: string
+  subtitle: string
+  details: string[]
+  eventRecord?: RouteLogEvent
+  openRecordLabel?: string
+  onOpenRecord?: () => void
+}
+
 function addDays(date: Date, days: number) {
   const clone = new Date(date)
   clone.setDate(clone.getDate() + days)
@@ -114,6 +127,84 @@ function truncateLabel(label: string, visibleChars: number) {
   const normalized = label.trim()
   if (normalized.length <= visibleChars) return normalized
   return `${normalized.slice(0, Math.max(visibleChars, 1)).trimEnd()}...`
+}
+
+function assignCollisionLanes<T extends { id: string; x: number }>(items: T[], minSpacing: number) {
+  const laneLastX: number[] = []
+  const laneById = new Map<string, number>()
+  items
+    .slice()
+    .sort((left, right) => left.x - right.x)
+    .forEach((item) => {
+      let lane = 0
+      while (laneLastX[lane] !== undefined && item.x - laneLastX[lane] < minSpacing) {
+        lane += 1
+      }
+      laneLastX[lane] = item.x
+      laneById.set(item.id, lane)
+    })
+  return laneById
+}
+
+function assignGroupedCollisionLanes<T extends { id: string; x: number; laneGroup: string }>(items: T[], minSpacing: number) {
+  const laneById = new Map<string, number>()
+  const laneStateByGroup = new Map<string, number[]>()
+  items
+    .slice()
+    .sort((left, right) => left.x - right.x)
+    .forEach((item) => {
+      const lanes = laneStateByGroup.get(item.laneGroup) || []
+      let lane = 0
+      while (lanes[lane] !== undefined && item.x - lanes[lane] < minSpacing) {
+        lane += 1
+      }
+      lanes[lane] = item.x
+      laneStateByGroup.set(item.laneGroup, lanes)
+      laneById.set(item.id, lane)
+    })
+  return laneById
+}
+
+function distributePhaseDots<T extends { phase: StabilizationPhase; x: number }>(
+  dots: T[],
+  phaseBoundsByPhase: Map<StabilizationPhase, { xStart: number; xEnd: number }>
+) {
+  const next = dots.slice()
+  const byPhase = new Map<StabilizationPhase, number[]>()
+  next.forEach((dot, index) => {
+    const current = byPhase.get(dot.phase) || []
+    current.push(index)
+    byPhase.set(dot.phase, current)
+  })
+  byPhase.forEach((indices, phase) => {
+    const bounds = phaseBoundsByPhase.get(phase)
+    if (!bounds || indices.length === 0) return
+    const minInset = 22
+    const xStart = bounds.xStart + minInset
+    const xEnd = bounds.xEnd - minInset
+    const span = Math.max(xEnd - xStart, 1)
+    const original = indices.map((index) => next[index]).sort((left, right) => left.x - right.x)
+    const minX = original[0]?.x ?? xStart
+    const maxX = original[original.length - 1]?.x ?? xEnd
+    const pinnedToEdge = minX <= xStart + 6 || maxX >= xEnd - 6
+    const tightCluster = maxX - minX < Math.max(16, indices.length * 10)
+    if (!pinnedToEdge && !tightCluster && indices.length <= 2) return
+    original.forEach((dot, slotIndex) => {
+      const slotRatio = (slotIndex + 1) / (original.length + 1)
+      const slotX = xStart + span * slotRatio
+      const targetIndex = next.findIndex((candidate) => candidate === dot)
+      if (targetIndex >= 0) {
+        next[targetIndex] = { ...next[targetIndex], x: slotX }
+      }
+    })
+  })
+  return next
+}
+
+function formatTimelinePhaseLabel(phase: StabilizationPhase) {
+  if (phase === 'regulation') return 'regulation'
+  if (phase === 'readiness') return 'plan route'
+  return 'renewal'
 }
 
 const RESOLVED_STACK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
@@ -154,6 +245,7 @@ export default function StripMapTimeline({
   partnerAggregateReferredDots = [],
   partnerAggregateActiveDots = [],
   onPartnerHistoryClick,
+  onOpenPartnerAggregateRecord,
   showRoutePlanningQuickAction = false,
   onRoutePlanningClick,
   onRegulationTestsClick,
@@ -174,11 +266,15 @@ export default function StripMapTimeline({
   const [dateEditorError, setDateEditorError] = useState<string | null>(null)
   const [isControlOverlayOpen, setIsControlOverlayOpen] = useState(false)
   const [resolvedTooltip, setResolvedTooltip] = useState<ResolvedTooltipState | null>(null)
+  const [markerInspector, setMarkerInspector] = useState<TimelineMarkerInspectorState | null>(null)
+  const [isPartnerPolicyOpen, setIsPartnerPolicyOpen] = useState(false)
   const height = 540
   const baselineY = 292
   const marginX = 90
   const laneStep = 82
   const collisionThreshold = 32
+  const partnerLaneStep = 34
+  const partnerCollisionThreshold = 26
   const editorWidth = 220
   const editorHeight = 148
   const editorOffsetX = 20
@@ -330,68 +426,117 @@ export default function StripMapTimeline({
     })
     return next
   }, [normalizedTimelineConfig.planStartIso, phaseSegments, timeScale])
-  const partnerReferredDotLayouts = useMemo(() => {
-    const stackDepthByKey = new Map<string, number>()
-    return partnerAggregateReferredDots
+  const partnerStageDotLayouts = useMemo(() => {
+    const mergedDots = [...partnerAggregateReferredDots, ...partnerAggregateActiveDots]
+    const deduped = Array.from(
+      mergedDots.reduce(
+        (acc, dot) => {
+          const dedupeKey = `${dot.enrolleeId || dot.id}:${dot.phase}:${dot.parentCode || 'NA'}:${dot.zCode || 'NA'}`
+          const existing = acc.get(dedupeKey)
+          if (!existing) {
+            acc.set(dedupeKey, {
+              ...dot,
+              sourceKinds: [dot.source] as Array<'referred' | 'active'>
+            })
+            return acc
+          }
+          const mergedSourceKinds = Array.from(new Set([...existing.sourceKinds, dot.source])) as Array<'referred' | 'active'>
+          const existingTime = new Date(existing.occurredAtIso).getTime()
+          const nextTime = new Date(dot.occurredAtIso).getTime()
+          const preferIso = Number.isFinite(existingTime) && Number.isFinite(nextTime)
+            ? new Date(Math.min(existingTime, nextTime)).toISOString()
+            : existing.occurredAtIso || dot.occurredAtIso
+          acc.set(dedupeKey, {
+            ...existing,
+            sourceKinds: mergedSourceKinds,
+            occurredAtIso: preferIso,
+            zCodeDescription: existing.zCodeDescription || dot.zCodeDescription,
+            zCodeShortLabel: existing.zCodeShortLabel || dot.zCodeShortLabel
+          })
+          return acc
+        },
+        new Map<
+          string,
+          PartnerStripAggregateDot & {
+            sourceKinds: Array<'referred' | 'active'>
+          }
+        >()
+      ).values()
+    )
+
+    const rawDots = deduped
       .slice()
       .sort((left, right) => new Date(left.occurredAtIso).getTime() - new Date(right.occurredAtIso).getTime())
       .map((dot) => {
         const bounds = phaseBoundsByPhase.get(dot.phase)
         if (!bounds) return null
         const dotDate = new Date(dot.occurredAtIso)
-        const monthStart = Number.isFinite(dotDate.getTime())
-          ? Date.UTC(dotDate.getUTCFullYear(), dotDate.getUTCMonth(), 1)
-          : Date.UTC(safePlanStart.getUTCFullYear(), safePlanStart.getUTCMonth(), 1)
-        const key = `${dot.phase}:${monthStart}`
-        const stackIndex = stackDepthByKey.get(key) || 0
-        stackDepthByKey.set(key, stackIndex + 1)
         const clampedRatio = Number.isFinite(dotDate.getTime())
           ? Math.max(0, Math.min(1, (dotDate.getTime() - safePlanStart.getTime()) / Math.max(safePlanEnd.getTime() - safePlanStart.getTime(), 1)))
           : 0.5
         const projectedX = marginX + (width - marginX * 2) * clampedRatio
         const x = Math.max(bounds.xStart + 10, Math.min(bounds.xEnd - 10, projectedX))
+        const normalizedZCode = (dot.zCode || 'ZXX.0').trim().toUpperCase()
+        const normalizedParentCode = (dot.parentCode || 'ZXX').trim().toUpperCase()
+        const fill = getZCodeParentColor(normalizedParentCode) || TIMELINE_PHASE_COLORS[dot.phase]
+        const textColor = usesLightTextOnZCodeColor(fill) ? SP_COLORS.white : SP_COLORS.bg
         return {
           id: dot.id,
           x,
-          y: baselineY - 18 - stackIndex * 14,
-          fill: TIMELINE_PHASE_COLORS[dot.phase],
+          y: baselineY,
+          fill,
+          textColor,
           phase: dot.phase,
-          occurredAtIso: dot.occurredAtIso
+          occurredAtIso: dot.occurredAtIso,
+          anonymousLabel: dot.anonymousLabel,
+          enrolleeId: dot.enrolleeId,
+          enrolleeName: dot.enrolleeName,
+          sourceKinds: dot.sourceKinds,
+          zCode: normalizedZCode,
+          parentCode: normalizedParentCode,
+          zCodeDescription: dot.zCodeDescription || dot.zCode || 'z-code marker',
+          zCodeShortLabel: dot.zCodeShortLabel || dot.zCodeDescription || dot.zCode || normalizedZCode,
+          laneGroup: `${dot.phase}:${normalizedParentCode}:${normalizedZCode}`
         }
       })
-      .filter(Boolean) as Array<{ id: string; x: number; y: number; fill: string; phase: StabilizationPhase; occurredAtIso: string }>
-  }, [baselineY, marginX, partnerAggregateReferredDots, phaseBoundsByPhase, safePlanEnd, safePlanStart, width])
-  const partnerActiveDotLayouts = useMemo(() => {
-    const stackDepthByKey = new Map<string, number>()
-    return partnerAggregateActiveDots
-      .slice()
-      .sort((left, right) => new Date(left.occurredAtIso).getTime() - new Date(right.occurredAtIso).getTime())
-      .map((dot) => {
-        const bounds = phaseBoundsByPhase.get(dot.phase)
-        if (!bounds) return null
-        const dotDate = new Date(dot.occurredAtIso)
-        const monthStart = Number.isFinite(dotDate.getTime())
-          ? Date.UTC(dotDate.getUTCFullYear(), dotDate.getUTCMonth(), 1)
-          : Date.UTC(safePlanStart.getUTCFullYear(), safePlanStart.getUTCMonth(), 1)
-        const key = `${dot.phase}:${monthStart}`
-        const stackIndex = stackDepthByKey.get(key) || 0
-        stackDepthByKey.set(key, stackIndex + 1)
-        const clampedRatio = Number.isFinite(dotDate.getTime())
-          ? Math.max(0, Math.min(1, (dotDate.getTime() - safePlanStart.getTime()) / Math.max(safePlanEnd.getTime() - safePlanStart.getTime(), 1)))
-          : 0.5
-        const projectedX = marginX + (width - marginX * 2) * clampedRatio
-        const x = Math.max(bounds.xStart + 10, Math.min(bounds.xEnd - 10, projectedX))
-        return {
-          id: dot.id,
-          x,
-          y: baselineY + 18 + stackIndex * 14,
-          fill: TIMELINE_STATUS_COLORS.active,
-          phase: dot.phase,
-          occurredAtIso: dot.occurredAtIso
-        }
-      })
-      .filter(Boolean) as Array<{ id: string; x: number; y: number; fill: string; phase: StabilizationPhase; occurredAtIso: string }>
-  }, [baselineY, marginX, partnerAggregateActiveDots, phaseBoundsByPhase, safePlanEnd, safePlanStart, width])
+      .filter(Boolean) as Array<{
+      id: string
+      x: number
+      y: number
+      fill: string
+      textColor: string
+      phase: StabilizationPhase
+      occurredAtIso: string
+      anonymousLabel: string
+      enrolleeId?: string
+      enrolleeName?: string
+      sourceKinds: Array<'referred' | 'active'>
+      zCode: string
+      parentCode: string
+      zCodeDescription: string
+      zCodeShortLabel: string
+      laneGroup: string
+    }>
+    const balancedDots = distributePhaseDots(rawDots, phaseBoundsByPhase)
+    // Stack within each phase + parent + z-code lane so partner view surfaces
+    // counts of the same code without overplotting.
+    const laneById = assignGroupedCollisionLanes(balancedDots, partnerCollisionThreshold)
+    return balancedDots.map((dot) => ({
+      ...dot,
+      y: baselineY - 14 - (laneById.get(dot.id) || 0) * partnerLaneStep
+    }))
+  }, [
+    baselineY,
+    marginX,
+    partnerAggregateActiveDots,
+    partnerAggregateReferredDots,
+    partnerCollisionThreshold,
+    partnerLaneStep,
+    phaseBoundsByPhase,
+    safePlanEnd,
+    safePlanStart,
+    width
+  ])
   const phaseSeparatorPositions = useMemo(
     () =>
       phaseSegments.slice(0, -1).map((segment) => {
@@ -509,8 +654,8 @@ export default function StripMapTimeline({
       .filter((marker) => marker.incrementDate.getTime() < safePlanEnd.getTime())
   }, [normalizedTimelineConfig.durationMonths, safePlanEnd, safePlanStart, timeScale])
   const deepestResolvedMarkerBottom = maxResolvedStackDepth ? baselineY + (maxResolvedStackDepth - 1) * 40 + 18 : baselineY
-  const deepestPartnerActiveBottom = partnerActiveDotLayouts.length
-    ? Math.max(...partnerActiveDotLayouts.map((layout) => layout.y)) + 10
+  const deepestPartnerActiveBottom = partnerStageDotLayouts.length
+    ? Math.max(...partnerStageDotLayouts.map((layout) => layout.y)) + 10
     : baselineY
   const incrementLabelBottom = incrementMarkers.length ? baselineY + 34 : baselineY
   const phaseButtonsTop = Math.max(deepestResolvedMarkerBottom, deepestPartnerActiveBottom, incrementLabelBottom) + 42
@@ -601,6 +746,32 @@ export default function StripMapTimeline({
       value: formatDateInputValue(eventRecord.timestampIso),
       logId: eventRecord.id,
       currentIso: eventRecord.timestampIso
+    })
+  }
+
+  function openMarkerInspectorPanel(nextInspector: TimelineMarkerInspectorState) {
+    // Every plotted timeline marker should expose its backing record on click so
+    // unlabeled circles never become opaque, non-auditable visuals.
+    setMarkerInspector(nextInspector)
+  }
+
+  function openEventInspector(eventRecord: RouteLogEvent, x: number, y: number, index: number) {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false
+      return
+    }
+    openMarkerInspectorPanel({
+      id: `event:${eventRecord.id}`,
+      x,
+      y,
+      title: eventRecord.label,
+      subtitle: `milestone ${index + 1} · ${eventRecord.phase} · ${eventRecord.status}`,
+      details: [
+        `timestamp: ${formatDateTimeLabel(eventRecord.timestampIso)}`,
+        `domains relieved: ${eventRecord.domainsRelieved.length ? eventRecord.domainsRelieved.join(', ') : 'none'}`,
+        `record id: ${eventRecord.id}`
+      ],
+      eventRecord
     })
   }
 
@@ -884,7 +1055,8 @@ export default function StripMapTimeline({
                   fillOpacity="0.95"
                   style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' }}
                   onPointerDown={(pointerEvent) => handlePointerDown(event.id, pointerEvent)}
-                  onClick={() => openEventDateEditor(event, x, y)}
+                  onClick={() => openEventInspector(event, x, y, index)}
+                  onDoubleClick={() => openEventDateEditor(event, x, y)}
                 />
                 <title>{`${event.label} · ${formatDateLabel(event.timestampIso)}${onEventDateChange ? ' - click to edit date' : ''}`}</title>
                 <text y={-30} textAnchor="middle" fill={SP_COLORS.white} fontFamily="Helvetica, Arial, sans-serif" fontSize="16">
@@ -907,21 +1079,74 @@ export default function StripMapTimeline({
             : null}
 
           {isPartnerAggregateMode
-            ? partnerReferredDotLayouts.map((dot) => (
-                <g key={dot.id} transform={`translate(${dot.x}, ${dot.y})`}>
-                  <title>{`referred · ${dot.phase} · ${formatDateLabel(dot.occurredAtIso)}`}</title>
-                  <circle r="6.5" fill={dot.fill} stroke={SP_COLORS.white} strokeWidth="1.2" />
-                </g>
-              ))
-            : null}
-
-          {isPartnerAggregateMode
-            ? partnerActiveDotLayouts.map((dot) => (
-                <g key={dot.id} transform={`translate(${dot.x}, ${dot.y})`}>
-                  <title>{`active assignment · ${dot.phase} · ${formatDateLabel(dot.occurredAtIso)}`}</title>
-                  <circle r="6.5" fill={dot.fill} stroke={TIMELINE_PHASE_COLORS[dot.phase]} strokeWidth="1.2" />
-                </g>
-              ))
+            ? partnerStageDotLayouts.map((dot) => {
+                const labelText = truncateLabel(dot.zCodeShortLabel || dot.zCodeDescription, 38)
+                const stackIndex = Math.max(0, Math.round((baselineY - dot.y - 14) / Math.max(partnerLaneStep, 1)))
+                const stemOffsetX = stackIndex === 0 ? 0 : stackIndex * 6
+                const diagonalRun = 62
+                const lineLift = 42 + (stackIndex % 2) * 22
+                const labelX = stemOffsetX + diagonalRun
+                const labelY = -lineLift - diagonalRun
+                const sourceLabel = dot.sourceKinds.join(' + ')
+                const openInspector = () =>
+                  openMarkerInspectorPanel({
+                    id: `partner-stage:${dot.id}`,
+                    x: dot.x,
+                    y: dot.y,
+                    title: `${dot.zCode} · ${formatTimelinePhaseLabel(dot.phase)}`,
+                    subtitle: `${dot.parentCode} parent cluster`,
+                    details: [
+                      `enrollee: ${dot.enrolleeName || dot.anonymousLabel}`,
+                      `phase stage: ${formatTimelinePhaseLabel(dot.phase)}`,
+                      `z-code: ${dot.zCode}`,
+                      `definition: ${dot.zCodeDescription}`,
+                      `source lineage: ${sourceLabel}`,
+                      `date: ${formatDateTimeLabel(dot.occurredAtIso)}`,
+                      `record id: ${dot.id}`
+                    ],
+                    openRecordLabel: 'open enrollee record',
+                    onOpenRecord: dot.enrolleeId && onOpenPartnerAggregateRecord
+                      ? () => onOpenPartnerAggregateRecord(dot.enrolleeId)
+                      : undefined
+                  })
+                return (
+                  <g
+                    key={dot.id}
+                    transform={`translate(${dot.x}, ${dot.y})`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={openInspector}
+                  >
+                    <title>{`${dot.zCode} · ${formatTimelinePhaseLabel(dot.phase)} · ${dot.enrolleeName || dot.anonymousLabel}`}</title>
+                    <circle r="28" fill="transparent" style={{ cursor: 'pointer' }} />
+                    <line x1={stemOffsetX} y1="-17" x2={stemOffsetX} y2={-lineLift} stroke={dot.fill} strokeWidth="2.2" pointerEvents="none" />
+                    <line x1={stemOffsetX} y1={-lineLift} x2={labelX} y2={labelY} stroke={dot.fill} strokeWidth="2.2" pointerEvents="none" />
+                    <circle r="17" fill={dot.fill} stroke={dot.fill} strokeWidth="2" pointerEvents="none" />
+                    <text
+                      y="5"
+                      textAnchor="middle"
+                      fill={dot.textColor}
+                      fontFamily="Helvetica, Arial, sans-serif"
+                      fontSize="11"
+                      fontWeight={700}
+                      pointerEvents="none"
+                    >
+                      {dot.zCode.replace(/^Z/i, '')}
+                    </text>
+                    <text
+                      x={labelX + 4}
+                      y={labelY - 2}
+                      transform={`rotate(-45 ${labelX + 4} ${labelY - 2})`}
+                      textAnchor="start"
+                      fill={SP_COLORS.white}
+                      fontFamily="Helvetica, Arial, sans-serif"
+                      fontSize="15"
+                      pointerEvents="none"
+                    >
+                      {labelText}
+                    </text>
+                  </g>
+                )
+              })
             : null}
 
           {!isPartnerAggregateMode && readinessSegment && visibleSuggestedMarkers.map((marker, index) => {
@@ -940,7 +1165,25 @@ export default function StripMapTimeline({
             const labelAnchorX = x + diagonalRun
             const labelAnchorY = verticalTopY - diagonalRun
             return (
-              <g key={marker.id} transform={`translate(${x}, ${circleY})`}>
+              <g
+                key={marker.id}
+                transform={`translate(${x}, ${circleY})`}
+                style={{ cursor: 'pointer' }}
+                onClick={() =>
+                  openMarkerInspectorPanel({
+                    id: `suggested:${marker.id}`,
+                    x,
+                    y: circleY,
+                    title: marker.stationName,
+                    subtitle: `rank ${index + 1} suggested station`,
+                    details: [
+                      `phase: ${marker.phase}`,
+                      `assigned at: ${formatDateTimeLabel(marker.assignedAtIso)}`,
+                      `marker id: ${marker.id}`
+                    ]
+                  })
+                }
+              >
                 <title>{`rank ${index + 1} · ${marker.stationName}`}</title>
                 <circle r="7" fill="#000000" stroke={isHighlighted ? SP_COLORS.yellow : SP_COLORS.white} strokeWidth="1.8" />
                 {needsLift ? (
@@ -1119,7 +1362,25 @@ export default function StripMapTimeline({
             const labelAnchorX = x + diagonalRun
             const labelAnchorY = verticalTopY - diagonalRun
             return (
-              <g key={marker.id} transform={`translate(${x}, ${circleY})`}>
+              <g
+                key={marker.id}
+                transform={`translate(${x}, ${circleY})`}
+                style={{ cursor: 'pointer' }}
+                onClick={() =>
+                  openMarkerInspectorPanel({
+                    id: `regulation-test:${marker.id}`,
+                    x,
+                    y: circleY,
+                    title: marker.label,
+                    subtitle: marker.passed ? 'pass' : 'fail',
+                    details: [
+                      `attempted: ${formatDateTimeLabel(marker.attemptedAtIso)}`,
+                      `test type: ${marker.testType}`,
+                      `marker id: ${marker.id}`
+                    ]
+                  })
+                }
+              >
                 <title>{`${marker.label} · ${marker.passed ? 'pass' : 'fail'} · ${formatDateLabel(marker.attemptedAtIso)}`}</title>
                 <circle r="7" fill="#000000" stroke={color} strokeWidth="1.8" />
                 {marker.isLatestCompleted ? (
@@ -1212,6 +1473,102 @@ export default function StripMapTimeline({
           <small className="mt-1 block text-[11px] leading-[1.45]" style={{ color: '#c5ced8' }}>
             resolved: {resolvedTooltip.resolvedAtLabel}
           </small>
+        </div>
+      ) : null}
+      {markerInspector ? (
+        <div
+          className="absolute z-30 w-[300px] rounded-[18px] border px-4 py-3"
+          style={{
+            left: Math.max(12, Math.min(width - 312, markerInspector.x + 18)),
+            top: Math.max(90, markerInspector.y + 18),
+            borderColor: '#ffffff24',
+            backgroundColor: 'rgba(6,6,6,0.96)'
+          }}
+        >
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div>
+              <small className="block text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+                timeline record
+              </small>
+              <div className="mt-1 text-[15px] font-medium text-white">{markerInspector.title}</div>
+              <small className="mt-0.5 block text-[11px]" style={{ color: '#c9d3dc' }}>
+                {markerInspector.subtitle}
+              </small>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMarkerInspector(null)}
+              className="rounded-full border px-2 py-0.5 text-[11px]"
+              style={{ borderColor: '#ffffff2d', color: SP_COLORS.white }}
+            >
+              close
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {markerInspector.details.map((detail, index) => (
+              <small key={`${markerInspector.id}:detail:${index}`} className="block text-[11px] leading-[1.45]" style={{ color: '#d7e0e9' }}>
+                {detail}
+              </small>
+            ))}
+          </div>
+          {markerInspector.onOpenRecord ? (
+            <div className="mt-3">
+              <AtlasTextButton
+                onClick={() => markerInspector.onOpenRecord?.()}
+                className="px-3 py-1 text-[11px]"
+                style={{ ['--button-border-color' as const]: `${SP_COLORS.white}55`, color: SP_COLORS.white } as React.CSSProperties}
+              >
+                {markerInspector.openRecordLabel || 'open record'}
+              </AtlasTextButton>
+            </div>
+          ) : null}
+          {markerInspector.eventRecord && onEventDateChange ? (
+            <div className="mt-3">
+              <AtlasTextButton
+                onClick={() => {
+                  openEventDateEditor(markerInspector.eventRecord as RouteLogEvent, markerInspector.x, markerInspector.y)
+                }}
+                className="px-3 py-1 text-[11px]"
+                style={{ ['--button-border-color' as const]: `${SP_COLORS.yellow}80`, color: SP_COLORS.yellow } as React.CSSProperties}
+              >
+                edit milestone date
+              </AtlasTextButton>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {isPartnerAggregateMode ? (
+        <div
+          className="absolute z-20"
+          style={{
+            right: 14,
+            top: 8
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setIsPartnerPolicyOpen((current) => !current)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border text-[14px] font-semibold"
+            style={{ borderColor: '#ffffff50', color: SP_COLORS.white, backgroundColor: '#050505' }}
+            aria-label="Partner timeline semantics"
+            title="Partner timeline semantics"
+          >
+            i
+          </button>
+          {isPartnerPolicyOpen ? (
+            <div
+              className="mt-2 w-[320px] rounded-[16px] border px-3 py-3 text-[11px] leading-[1.45]"
+              style={{ borderColor: '#ffffff24', backgroundColor: 'rgba(6,6,6,0.96)', color: '#d7e0e9' }}
+            >
+              <div className="mb-1 text-[10px] uppercase tracking-[0.12em]" style={{ color: SP_COLORS.muted }}>
+                partner my station semantics
+              </div>
+              <div>- Marker color follows canonical Z-code coin mapping by parent Z-code.</div>
+              <div>- Marker center text is the enrollee Z-code; callout text is the Z-code definition (short label).</div>
+              <div>- Markers stack by phase + parent + Z-code so cluster depth represents per-code count.</div>
+              <div>- Click any marker to open its associated aggregate record details and drill into the enrollee record.</div>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {highlightedStationName ? (

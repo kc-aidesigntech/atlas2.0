@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { AccountSettings, AtlasRole, PartnerTroubleshootingGrant } from '@/features/atlas2026/singlepane/types'
-import { SP_COLORS } from '@/features/atlas2026/singlepane/theme'
+import type { AccountSettings, AtlasRole, PartnerTroubleshootingGrant } from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 export type AccountSecurityAuthProvider = 'google' | 'apple'
 

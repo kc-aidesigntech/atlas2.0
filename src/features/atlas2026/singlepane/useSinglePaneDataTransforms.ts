@@ -7,7 +7,7 @@ import type {
   PartnerServiceCapacitySubmissionRecord,
   RegulationTestSubmissionRecord,
   SupervisorNavigatorCompetencySummary
-} from '@/features/atlas2026/singlepane/types'
+} from '@/features/atlas2026/shared/contracts'
 import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
 
 function sortByIsoDesc(leftIso: string, rightIso: string) {

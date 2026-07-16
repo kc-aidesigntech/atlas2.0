@@ -1,5 +1,5 @@
 import React from 'react'
-import type { SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/singlepane/types'
+import type { SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/shared/contracts'
 
 interface SupervisorNavigatorDirectoryEntry {
   navigatorPersonId: string
