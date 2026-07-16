@@ -38,3 +38,12 @@ This inventory classifies current repository assets and documentation by ownersh
 - Moved `assets/ATLAS_LOGO_simple_lucidGreenBlue4.png` -> `src/features/atlas2026/assets/branding/ATLAS_LOGO_simple_lucidGreenBlue4.png`
 - Moved `assets/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png` -> `src/features/atlas2026/assets/icons/up-arrow-icon-symbol-sign-north-point-ahead-above-vector-47696729.png`
 - Updated all known imports accordingly.
+
+## Shared Contract Extraction Executed
+
+- Moved product-shared modules out of `singlepane` internals:
+  - `singlepane/theme.ts` -> `shared/theme.ts`
+  - `singlepane/types.ts` -> `shared/contracts.ts`
+  - `singlepane/roleCapabilityPolicy.ts` -> `shared/roleCapabilityPolicy.ts`
+- Updated imports to consume `@/features/atlas2026/shared/*`.
+- Left compatibility re-export shims under `singlepane/*` for incremental safety during transition.

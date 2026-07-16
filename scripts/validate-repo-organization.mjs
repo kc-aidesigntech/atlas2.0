@@ -81,6 +81,7 @@ function checkLegacyRootAssets(violations) {
   const files = walkFiles(rootAssetsDir)
   for (const filePath of files) {
     const relativePath = path.relative(rootAssetsDir, filePath).replaceAll(path.sep, '/')
+    if (relativePath.startsWith('.')) continue
     if (!ALLOWED_LEGACY_ROOT_ASSETS.has(relativePath)) {
       violations.push(`New root asset detected outside canonical product paths: assets/${relativePath}`)
     }
