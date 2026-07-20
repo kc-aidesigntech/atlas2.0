@@ -210,9 +210,10 @@ export const DEFAULT_SERVICE_CAPACITY_SECTIONS: ZCodeSurveySection[] = [
     ]
   },
   {
-    // Z75 is the Tacoma regulation-provider parent: stable SVS + MH-SCA milestones log under
-    // Lucid as Z75 stops. Keep these codes in the navigator override catalog so navigators
-    // can also assign/resolve them explicitly on the enrollee profile.
+    // Z75 is the Tacoma regulation-provider parent: stable Stress Vulnerability Scale (SVS)
+    // and Mental Health Self-Care Agency (MH-SCA) milestones log under Lucid as Z75 stops.
+    // Keep these codes in the navigator override catalog so navigators can also
+    // assign/resolve them explicitly on the enrollee profile.
     parentCode: 'Z75',
     theme: 'Problems related to medical facilities and other health care',
     prompts: [

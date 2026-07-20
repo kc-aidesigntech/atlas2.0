@@ -261,6 +261,7 @@ function nextPhase(current?: StabilizationPhase): StabilizationPhase {
 }
 
 function getRegulationTestLabel(testType: RegulationTestSubmissionRecord['testType']) {
+  // Short labels for timeline markers; full instrument names live in assessmentCatalog.
   if (testType === 'mh_sca') return 'MH-SCA'
   if (testType === 'svs') return 'SVS'
   if (testType === 'ipf') return 'IPF'
@@ -813,21 +814,30 @@ function buildIpsSelfAssessmentAverages(records: IpsCompetencySelfAssessmentReco
   ) as Record<IpsccCompetencyKey, number | null>
 }
 
-function buildSelfVsSupervisorAwarenessCorrelation(
-  selfAverages: Record<IpsccCompetencyKey, number | null>,
-  supervisorAverages: Record<IpsccCompetencyKey, number | null>
+/**
+ * Self-awareness = alignment between service-user Individual Placement and Support Core
+ * Competencies (IPSCC) point-of-care averages and the navigator's weekly Individual Placement
+ * and Support (IPS) self-assessment averages (completed before supervision).
+ * Positive gap means the navigator self-rates higher than service users report.
+ */
+function buildIpsccVsSelfAwarenessCorrelation(
+  ipsccAggregates: IpsccCompetencyAggregate[],
+  selfAverages: Record<IpsccCompetencyKey, number | null>
 ): { rows: IpsccSelfAwarenessCorrelationRow[]; summary: IpsccSelfAwarenessSummary } {
+  const ipsccByKey = Object.fromEntries(
+    ipsccAggregates.map((row) => [row.key, row.averageScore])
+  ) as Record<IpsccCompetencyKey, number | null>
   const rows = IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
     const selfAverage = selfAverages[definition.key] ?? null
-    const supervisorAverage = supervisorAverages[definition.key] ?? null
-    const hasPair = typeof supervisorAverage === 'number' && typeof selfAverage === 'number'
-    const gap = hasPair ? Number((selfAverage - supervisorAverage).toFixed(2)) : null
+    const ipsccAverage = ipsccByKey[definition.key] ?? null
+    const hasPair = typeof ipsccAverage === 'number' && typeof selfAverage === 'number'
+    const gap = hasPair ? Number((selfAverage - ipsccAverage).toFixed(2)) : null
     // Alignment compresses absolute gap into 0..1 where 1 means exact agreement.
     const alignmentScore = hasPair ? Number((Math.max(0, 1 - Math.abs(gap || 0) / 4)).toFixed(2)) : null
     return {
       key: definition.key,
       label: definition.label,
-      ipsccAverage: supervisorAverage,
+      ipsccAverage,
       selfAverage,
       gap,
       alignmentScore
@@ -1174,7 +1184,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
   // Forced regulation review: admin cadence policy (null until the config document loads)
-  // plus latest completed SVS / MH-SCA submission times per enrollee (both required per cycle).
+  // plus latest completed Stress Vulnerability Scale (SVS) / Mental Health Self-Care Agency
+  // (MH-SCA) submission times per enrollee (both required per cycle).
   const [regulationReviewSettings, setRegulationReviewSettings] = useState<RegulationReviewSettings | null>(null)
   const [regulationReviewError, setRegulationReviewError] = useState<string | null>(null)
   const [latestRegulationReviewCompletionByEnrolleeId, setLatestRegulationReviewCompletionByEnrolleeId] =
@@ -1851,13 +1862,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     () => buildIpsSelfAssessmentAverages(navigatorIpsSelfAssessments),
     [navigatorIpsSelfAssessments]
   )
-  const navigatorSupervisorIpsAverages = useMemo(
-    () => buildIpsSelfAssessmentAverages(navigatorSupervisorIpsAssessments),
-    [navigatorSupervisorIpsAssessments]
-  )
   const navigatorSelfAwarenessCorrelation = useMemo(
-    () => buildSelfVsSupervisorAwarenessCorrelation(navigatorIpsSelfAverages, navigatorSupervisorIpsAverages),
-    [navigatorIpsSelfAverages, navigatorSupervisorIpsAverages]
+    () => buildIpsccVsSelfAwarenessCorrelation(navigatorIpsccCompetencyAggregates, navigatorIpsSelfAverages),
+    [navigatorIpsccCompetencyAggregates, navigatorIpsSelfAverages]
   )
   const navigatorCreateInsights = useMemo(
     () => buildCreateInsights(navigatorCreateSessions),

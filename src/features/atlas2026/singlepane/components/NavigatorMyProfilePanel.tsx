@@ -21,6 +21,7 @@ import type {
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import NavigatorEnrollmentAssignmentsPanel from './NavigatorEnrollmentAssignmentsPanel'
+import NavigatorCompetencyDashboard from './NavigatorCompetencyDashboard'
 import ProfileNavigationCard from './ProfileNavigationCard'
 import AtlasImageUploadTile from '@/features/atlas2026/components/AtlasImageUploadTile'
 import { createFallbackAvatarDataUrl } from '@/features/atlas2026/components/avatarFallback'
@@ -55,8 +56,9 @@ interface NavigatorMyProfilePanelProps {
   avatarUploadError?: string | null
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenEnrolleeSurvey?: (enrolleeId: string) => void
-  // Forced weekly SVS / MH-SCA review: open items must be actionable — selecting one
-  // jumps the navigator into that enrollee's regulation assessment flow.
+  // Forced weekly Stress Vulnerability Scale (SVS) / Mental Health Self-Care Agency
+  // (MH-SCA) review: open items must be actionable — selecting one jumps the navigator
+  // into that enrollee's regulation assessment flow.
   onOpenRegulationReview?: (enrolleeId: string, missingInstruments?: Array<'mh_sca' | 'svs'>) => void
   onOpenAssignmentBoardReferral?: () => void
   onToggleEnrollmentAssignment: (enrollmentId: string, mode: 'accept' | 'archive' | 'assign' | 'unassign') => Promise<void> | void
@@ -263,7 +265,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
   const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(navigatorDisplayName), [navigatorDisplayName])
   const avatarSrc = accountSettings.avatarUrl || fallbackAvatarSrc
   // Open weekly regulation reviews are non-skippable action items: both SVS and MH-SCA
-  // must be completed for each listed enrollee before the cycle clears.
+  // must be completed for each listed enrollee before the cycle clears (cannot skip).
   const openRegulationReviews = React.useMemo(
     () => regulationReviewDueItems.filter((item) => item.status === 'open'),
     [regulationReviewDueItems]
@@ -359,6 +361,15 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
               </div>
             ) : null}
           </div>
+          {/* Competency dashboard sits under the profile picture and above the assignment
+              strip so IPSCC / self-awareness / C.R.E.A.T.E. signals stay glanceable. */}
+          <NavigatorCompetencyDashboard
+            ipsccCompetencyAverages={ipsccCompetencyAverages}
+            selfAwarenessCorrelationRows={selfAwarenessCorrelationRows}
+            selfAwarenessSummary={selfAwarenessSummary}
+            createInsights={createInsights}
+            onOpenSection={(section) => setActiveOverlay(section)}
+          />
           {/* Keep assignment controls always visible so navigators can claim/triage work
               without switching context through a card overlay. */}
           <section ref={assignmentBoardRef} className="atlas-surface-panel p-4">
@@ -502,7 +513,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                 <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
                   <div className="font-medium">Weekly Individual Placement and Support (IPS) self-assessment</div>
                   <div className="mt-1 text-[#9eacb9]">
-                    Complete the weekly IPS self-assessment below. Historical results and correlation are shown beneath.
+                    Complete the weekly IPS self-assessment below. Historical results and IPSCC-vs-self correlation are shown beneath.
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -583,7 +594,8 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                   </div>
                 </div>
                 <div className="atlas-surface-raised px-3 py-3">
-                  <div className="text-[13px] font-medium text-white">Self vs supervisor correlation</div>
+                  {/* Correlate point-of-care IPSCC averages with weekly pre-supervision self-ratings. */}
+                  <div className="text-[13px] font-medium text-white">IPSCC vs self-assessment correlation</div>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     <MetricCard label="compared" value={String(selfAwarenessSummary.comparedCompetencyCount)} />
                     <MetricCard label="avg gap" value={selfAwarenessSummary.averageGap == null ? '--' : selfAwarenessSummary.averageGap.toFixed(2)} />
@@ -593,7 +605,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                     {selfAwarenessCorrelationRows.map((row) => (
                       <div key={row.key} className="atlas-surface-raised grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 px-3 py-2 text-[12px]">
                         <span className="text-white">{row.label}</span>
-                        <span style={{ color: '#9eacb9' }}>Supervisor {row.ipsccAverage?.toFixed(2) || '--'}</span>
+                        <span style={{ color: '#9eacb9' }}>IPSCC {row.ipsccAverage?.toFixed(2) || '--'}</span>
                         <span style={{ color: '#9eacb9' }}>Self {row.selfAverage?.toFixed(2) || '--'}</span>
                         <span style={{ color: '#d7e0e9' }}>Gap {row.gap?.toFixed(2) || '--'}</span>
                       </div>

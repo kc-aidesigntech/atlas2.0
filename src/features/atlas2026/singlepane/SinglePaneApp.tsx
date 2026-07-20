@@ -512,7 +512,8 @@ export default function SinglePaneApp() {
     },
     [nextSuggestedPhase, selectedEnrollee?.activeZCodeDetails, selectedLogs]
   )
-  // Selected enrollee's open weekly SVS / MH-SCA review, if any — used to block skip paths.
+  // Selected enrollee's open weekly Stress Vulnerability Scale (SVS) / Mental Health
+  // Self-Care Agency (MH-SCA) review, if any — used to block skip paths.
   const selectedEnrolleeOpenRegulationReview = React.useMemo(
     () =>
       regulationReviewDueItems.find(
@@ -574,7 +575,8 @@ export default function SinglePaneApp() {
         setIsRegulationTestsOpen(true)
         return
       }
-      // Weekly SVS / MH-SCA cadence remains enforced after regulation clearance.
+      // Weekly SVS / MH-SCA cadence remains enforced after regulation clearance —
+      // completing readiness does not waive the ongoing review requirement.
       enforceWeeklyRegulationReviewOrContinue(() => {
         setActiveMenu(menu)
         setIsRoutePlanningOpen(true)
@@ -669,14 +671,6 @@ export default function SinglePaneApp() {
     setActiveMenu('')
     openAssessmentOverlay(nextTestType)
   }
-
-  const selectedEnrolleeOpenRegulationReview = React.useMemo(
-    () =>
-      regulationReviewDueItems.find(
-        (item) => item.enrolleeId === selectedEnrolleeId && item.status === 'open'
-      ) || null,
-    [regulationReviewDueItems, selectedEnrolleeId]
-  )
 
   function enforceWeeklyRegulationReviewOrContinue(onContinue: () => void) {
     if (uiRole !== 'navigator' || !selectedEnrolleeOpenRegulationReview) {

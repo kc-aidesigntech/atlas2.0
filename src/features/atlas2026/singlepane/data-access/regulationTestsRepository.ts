@@ -86,15 +86,17 @@ function persistLocalState(records: RegulationTestSubmissionRecord[]) {
   window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(records))
 }
 
-// Forced weekly cadence tracks only SVS + MH-SCA. Renewal instruments never satisfy
-// the regulation review cycle even when they share the regulation-tests table.
+// Forced weekly cadence tracks only Stress Vulnerability Scale (SVS) and Mental Health
+// Self-Care Agency (MH-SCA). Renewal instruments never satisfy the regulation review
+// cycle even when they share the regulation-tests table.
 const REGULATION_CADENCE_TEST_TYPES: RegulationCadenceInstrument[] = ['mh_sca', 'svs']
 
 /**
  * Latest completed SVS and MH-SCA submission times per enrollee.
  *
  * Feeds the forced regulation review due computation: both instruments must have a
- * completed submission inside the cadence window before the cycle is considered satisfied.
+ * completed submission inside the cadence window before the cycle is considered satisfied
+ * (one instrument alone never clears the due item).
  */
 export async function loadLatestCompletedRegulationReviewTimes(
   enrolleeIds: string[]
