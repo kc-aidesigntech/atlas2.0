@@ -10,7 +10,6 @@ import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
 // in the repo for future reincorporation, but is un-wired from this entry
 // point in favor of the streamlined Z-code override panel below.
 import EnrolleeZCodeOverridePanel from './components/EnrolleeZCodeOverridePanel'
-import RadialLoadChart from './components/RadialLoadChart'
 import RoleMenus from './components/RoleMenus'
 import TopNav from './components/TopNav'
 import { SP_COLORS } from './theme'
@@ -28,6 +27,9 @@ const PartnerStripHistoryOverlay = React.lazy(() => import('./components/Partner
 const PartnerSpecialtyOverlay = React.lazy(() => import('./components/PartnerSpecialtyOverlay'))
 const PartnerStationProfilePanel = React.lazy(() => import('./components/PartnerStationProfilePanel'))
 const ProfilePanel = React.lazy(() => import('./components/ProfilePanel'))
+// Keep recharts out of the workspace chunk so bootstrap can finish while the
+// chart graph downloads in parallel with first paint.
+const RadialLoadChart = React.lazy(() => import('./components/RadialLoadChart'))
 const RadialLoadTableOverlay = React.lazy(() => import('./components/RadialLoadTableOverlay'))
 const RegulationTestsOverlay = React.lazy(() => import('./components/RegulationTestsOverlay'))
 const ResolvedZCodesOverlay = React.lazy(() => import('./components/ResolvedZCodesOverlay'))
@@ -974,7 +976,9 @@ export default function SinglePaneApp() {
                       onReplaceAvatar={remoteSession ? undefined : replaceAccountProfileImage}
                     />
                     <div className="flex w-full justify-center justify-self-center lg:w-auto lg:justify-self-end lg:justify-end md:-mr-1 lg:-mr-3 xl:-mr-6 2xl:-mr-10">
-                      <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} size="large" />
+                      <React.Suspense fallback={<div className="text-[13px] text-[#c7c7c7]">Loading load chart…</div>}>
+                        <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} size="large" />
+                      </React.Suspense>
                     </div>
                   </div>
                 ) : isNavigatorMyProfile ? (
@@ -1096,7 +1100,9 @@ export default function SinglePaneApp() {
                       />
                     </div>
                     <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
-                      <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
+                      <React.Suspense fallback={<div className="text-[13px] text-[#c7c7c7]">Loading load chart…</div>}>
+                        <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
+                      </React.Suspense>
                     </div>
                   </div>
                 )}

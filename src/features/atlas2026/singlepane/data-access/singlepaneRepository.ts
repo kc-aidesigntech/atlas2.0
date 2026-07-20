@@ -287,42 +287,75 @@ async function resolveSessionPersonIdFromMetadata() {
   return null
 }
 
-export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePaneBootstrapData> {
-  const logs = await loadLocalLogs()
-  const intakeOverrides = await loadEnrolleeIntakes()
-  const timelineOverrides = await loadTimelineConfigs()
+export type SinglePaneBootstrapLoadOptions = {
+  /**
+   * Critical path for first usable paint: skip local intake/timeline/log I/O so
+   * cold open waits only on remote role menus + enrollee domain reads. Full
+   * supplemental bootstrap re-runs with overrides after first paint.
+   */
+  criticalOnly?: boolean
+}
+
+export async function loadSinglePaneBootstrap(
+  role: AtlasRole,
+  options?: SinglePaneBootstrapLoadOptions
+): Promise<SinglePaneBootstrapData> {
+  const criticalOnly = options?.criticalOnly === true
+  // Parallelize local reads on the full path; critical path skips them entirely so
+  // first usable paint is not gated on IndexedDB/localStorage override hydration.
+  let logs: Awaited<ReturnType<typeof loadLocalLogs>> = []
+  let intakeOverrides: Awaited<ReturnType<typeof loadEnrolleeIntakes>> = {}
+  let timelineOverrides: Awaited<ReturnType<typeof loadTimelineConfigs>> = {}
+  if (!criticalOnly) {
+    ;[logs, intakeOverrides, timelineOverrides] = await Promise.all([
+      loadLocalLogs(),
+      loadEnrolleeIntakes(),
+      loadTimelineConfigs()
+    ])
+  }
 
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) {
     return createEmptyBootstrap(logs)
   }
 
-  const [roleNavigation, timelineDefaults] = await Promise.all([
+  const shouldLoadEnrolleeDomain = role !== 'partner'
+  // One concurrent batch: role chrome + timeline defaults + enrollee domain so
+  // critical open does not serialize menu fetch ahead of roster/load queries.
+  const [
+    roleNavigation,
+    timelineDefaults,
+    profiles,
+    loadRows,
+    breakdownRows,
+    navigatorAssignedEnrollees,
+    navigatorPersonId
+  ] = await Promise.all([
     withOptionalSupabaseFallback('singlepane.roleNavigation', () => fetchAppRoleNavigation(supabase, 'singlepane'), []),
     withOptionalSupabaseFallback(
       'singlepane.timelineDefaults',
       () => fetchSinglePaneTimelineConfig(supabase),
       createDefaultTimelineConfig()
-    )
-  ])
-
-  const shouldLoadEnrolleeDomain = role !== 'partner'
-  const [profiles, loadRows, breakdownRows, navigatorAssignedEnrollees, navigatorPersonId] = shouldLoadEnrolleeDomain
-    ? await Promise.all([
-        withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
-        withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), []),
-        withOptionalSupabaseFallback(
+    ),
+    shouldLoadEnrolleeDomain
+      ? withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), [])
+      : Promise.resolve([]),
+    shouldLoadEnrolleeDomain
+      ? withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), [])
+      : Promise.resolve([]),
+    shouldLoadEnrolleeDomain
+      ? withOptionalSupabaseFallback(
           'singlepane.enrolleeDomainLoadBreakdown',
           () => fetchSinglePaneEnrolleeDomainLoadBreakdown(supabase),
           []
-        ),
-        role === 'navigator'
-          ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
-          : Promise.resolve([]),
-        role === 'navigator'
-          ? withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
-          : Promise.resolve(null)
-      ])
-    : [[], [], [], [], null]
+        )
+      : Promise.resolve([]),
+    role === 'navigator'
+      ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
+      : Promise.resolve([]),
+    role === 'navigator'
+      ? withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
+      : Promise.resolve(null)
+  ])
 
   const navigatorEnrollmentIds =
     role === 'navigator'

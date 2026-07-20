@@ -1,11 +1,16 @@
 import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import PartnerReferralWorkflowPanel from '@/features/atlas2026/singlepane/components/PartnerReferralWorkflowPanel'
 import { enqueuePublicReferralQueueRecord, loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import type { NavigatorProgramState, PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/shared/contracts'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
+
+// Referral form is interaction-driven; keep it out of the public entry chunk so
+// `/app` cold open does not download the workflow panel graph up front.
+const PartnerReferralWorkflowPanel = React.lazy(
+  () => import('@/features/atlas2026/singlepane/components/PartnerReferralWorkflowPanel')
+)
 
 const EMPTY_PROGRAM_STATE: NavigatorProgramState = {
   pickupQueue: [],
@@ -96,13 +101,21 @@ export default function PublicAtlasLandingPage() {
         </section>
 
         <section>
-          <PartnerReferralWorkflowPanel
-            defaultReferrerName={session?.user.user_metadata?.full_name || ''}
-            defaultPartnerOrganizationName=""
-            recentReferrals={recentPublicReferrals}
-            onSubmit={submitPublicReferral}
-            accentColor="var(--atlas-signal-lucid-green)"
-          />
+          <React.Suspense
+            fallback={
+              <div className="atlas-surface-panel bg-[#0d0d0d] px-6 py-8 text-[14px] text-[#c9c9c9]">
+                Loading referral form…
+              </div>
+            }
+          >
+            <PartnerReferralWorkflowPanel
+              defaultReferrerName={session?.user.user_metadata?.full_name || ''}
+              defaultPartnerOrganizationName=""
+              recentReferrals={recentPublicReferrals}
+              onSubmit={submitPublicReferral}
+              accentColor="var(--atlas-signal-lucid-green)"
+            />
+          </React.Suspense>
         </section>
 
         <section className="atlas-surface-panel bg-[#0d0d0d] px-6 py-5">

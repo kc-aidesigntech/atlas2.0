@@ -72,6 +72,14 @@ Defines the canonical semantics for the navigator **my profile** surface so supe
   - users can expand it on demand
   - expanded rows still support assigning a navigator for someone already picked up by another navigator
 
+## Profile Rail Visibility
+
+- Only the three-prong supervision cards are active and visible on navigator My Profile:
+  1. **enrollee** (Section 1 — IPSCC ratings/reviews)
+  2. **self-reflection** (Section 2 — self-awareness)
+  3. **c.r.e.a.t.e** (Section 3 — workshop focus)
+- Later section cards (assignment board, z-code updates, competency, schedule, archive) remain defined in code for overlays/docs but stay off the profile rail until commissioned.
+
 ## Continuity Policy
 
-- Do not change section definitions, competency mappings, correlation intent, or pickup placement behavior without updating this document in the same work session.
+- Do not change section definitions, competency mappings, correlation intent, pickup placement behavior, or profile-rail visibility without updating this document in the same work session.

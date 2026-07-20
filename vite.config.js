@@ -15,6 +15,17 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     port: 5173
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Isolate the Supabase client so the tiny entry shell stays readable in
+        // build reports. Do not force-split recharts here — that made Vite attach
+        // it as a static entry dependency and modulepreload it on every route.
+        manualChunks(id) {
+          if (id.includes('node_modules/@supabase')) return 'supabase'
+        }
+      }
+    }
   }
 }))
-

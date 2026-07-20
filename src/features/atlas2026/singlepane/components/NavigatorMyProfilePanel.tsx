@@ -88,16 +88,21 @@ const CARD_DEFS: Array<{
   actionLabel: string
   variant: 'green' | 'blue'
   illustration: 'feedback' | 'reflection' | 'create'
+  // Only the three-prong supervision cards ship on My Profile for now;
+  // later sections stay defined for overlays/docs but stay off the rail.
+  isActiveOnProfileRail: boolean
 }> = [
-  { key: 'section_1_ipscc', title: 'Section 1: IPSCC ratings and reviews', cardTitle: 'enrollee feedback', cardSubtitle: 'ipscc', actionLabel: 'view feedback', variant: 'green', illustration: 'feedback' },
-  { key: 'section_2_awareness', title: 'Section 2: Self-awareness correlation', cardTitle: 'self-reflection', cardSubtitle: 'ips', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection' },
-  { key: 'section_3_create', title: 'Section 3: C.R.E.A.T.E. supervision form', cardTitle: 'c.r.e.a.t.e', cardSubtitle: 'create & share', actionLabel: 'create & share', variant: 'green', illustration: 'create' },
-  { key: 'section_4_assignments', title: 'Section 4: Enrollment assignment board', cardTitle: 'assignment board', cardSubtitle: 'enrollment', actionLabel: 'view board', variant: 'blue', illustration: 'feedback' },
-  { key: 'section_5_zcode_updates', title: 'Section 5: Enrollee z-code updates', cardTitle: 'z-code updates', cardSubtitle: 'enrollee', actionLabel: 'update z-codes', variant: 'green', illustration: 'reflection' },
-  { key: 'section_6_competency', title: 'Section 6: Navigator competency', cardTitle: 'competency', cardSubtitle: 'navigator', actionLabel: 'open competency', variant: 'blue', illustration: 'create' },
-  { key: 'section_7_schedule', title: 'Section 7: Scheduled assessments', cardTitle: 'schedule', cardSubtitle: 'assessments', actionLabel: 'view schedule', variant: 'green', illustration: 'feedback' },
-  { key: 'section_8_archive', title: 'Section 8: Supervision archive', cardTitle: 'archive', cardSubtitle: 'supervision', actionLabel: 'open archive', variant: 'blue', illustration: 'reflection' }
+  { key: 'section_1_ipscc', title: 'Section 1: IPSCC ratings and reviews', cardTitle: 'enrollee', cardSubtitle: 'ipscc', actionLabel: 'view feedback', variant: 'green', illustration: 'feedback', isActiveOnProfileRail: true },
+  { key: 'section_2_awareness', title: 'Section 2: Self-awareness correlation', cardTitle: 'self-reflection', cardSubtitle: 'ips', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection', isActiveOnProfileRail: true },
+  { key: 'section_3_create', title: 'Section 3: C.R.E.A.T.E. supervision form', cardTitle: 'c.r.e.a.t.e', cardSubtitle: 'create & share', actionLabel: 'create & share', variant: 'green', illustration: 'create', isActiveOnProfileRail: true },
+  { key: 'section_4_assignments', title: 'Section 4: Enrollment assignment board', cardTitle: 'assignment board', cardSubtitle: 'enrollment', actionLabel: 'view board', variant: 'blue', illustration: 'feedback', isActiveOnProfileRail: false },
+  { key: 'section_5_zcode_updates', title: 'Section 5: Enrollee z-code updates', cardTitle: 'z-code updates', cardSubtitle: 'enrollee', actionLabel: 'update z-codes', variant: 'green', illustration: 'reflection', isActiveOnProfileRail: false },
+  { key: 'section_6_competency', title: 'Section 6: Navigator competency', cardTitle: 'competency', cardSubtitle: 'navigator', actionLabel: 'open competency', variant: 'blue', illustration: 'create', isActiveOnProfileRail: false },
+  { key: 'section_7_schedule', title: 'Section 7: Scheduled assessments', cardTitle: 'schedule', cardSubtitle: 'assessments', actionLabel: 'view schedule', variant: 'green', illustration: 'feedback', isActiveOnProfileRail: false },
+  { key: 'section_8_archive', title: 'Section 8: Supervision archive', cardTitle: 'archive', cardSubtitle: 'supervision', actionLabel: 'open archive', variant: 'blue', illustration: 'reflection', isActiveOnProfileRail: false }
 ]
+
+const ACTIVE_PROFILE_RAIL_CARDS = CARD_DEFS.filter((card) => card.isActiveOnProfileRail)
 
 const IPS_COMPETENCY_OPTIONS: Array<{ key: IpsccCompetencyKey; label: string }> = [
   { key: 'competency_1_connection', label: '1. Connection' },
@@ -352,7 +357,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                   E: {accountSettings.email || 'not recorded'}
                 </small>
                 <small className="atlas-meta block text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
-                <small className="atlas-meta block text-white">Active sections: {CARD_DEFS.length}</small>
+                <small className="atlas-meta block text-white">Active sections: {ACTIVE_PROFILE_RAIL_CARDS.length}</small>
               </div>
             </div>
             {programError ? (
@@ -393,10 +398,12 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
           </section>
         </div>
         <div className="atlas-navigator-profile-rail">
-          {CARD_DEFS.map((card) => (
+          {/* Rail shows only enrollee / self-reflection / C.R.E.A.T.E. until later
+              supervision sections are commissioned for this surface. */}
+          {ACTIVE_PROFILE_RAIL_CARDS.map((card, index) => (
             <ProfileNavigationCard
               key={card.key}
-              sequenceNumber={Number(card.key.replace('section_', '').split('_')[0])}
+              sequenceNumber={index + 1}
               title={card.cardTitle}
               subtitle={card.cardSubtitle}
               actionLabel={card.actionLabel}

@@ -3,9 +3,6 @@ import { AtlasCloseButton, AtlasInsetCard, AtlasTextButton } from '@/features/at
 import ZCodeCircle from '@/features/atlas2026/components/ZCodeCircle'
 import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
-import PartnerReferralWorkflowPanel from '@/features/atlas2026/singlepane/components/PartnerReferralWorkflowPanel'
-import ProfilePanel from '@/features/atlas2026/singlepane/components/ProfilePanel'
-import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLoadChart'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import { enqueuePublicReferralQueueRecord, loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import type {
@@ -17,6 +14,14 @@ import type {
 } from '@/features/atlas2026/shared/contracts'
 import { useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
+
+// Demo modals pull recharts / profile / referral panels only when opened so the
+// shared entry graph for `/app` stays free of those heavy imports.
+const PartnerReferralWorkflowPanel = React.lazy(
+  () => import('@/features/atlas2026/singlepane/components/PartnerReferralWorkflowPanel')
+)
+const ProfilePanel = React.lazy(() => import('@/features/atlas2026/singlepane/components/ProfilePanel'))
+const RadialLoadChart = React.lazy(() => import('@/features/atlas2026/singlepane/components/RadialLoadChart'))
 
 const DEMO_PASSCODE_SESSION_KEY = 'atlas2026.public.demo-passcode-verified.v1'
 const DEMO_STEP_COLORS = [SP_COLORS.red, SP_COLORS.yellow, SP_COLORS.deepGreen] as const
@@ -385,13 +390,17 @@ export default function PublicAtlasDemoPage() {
           onClose={() => setActiveWorkspace(null)}
           scrollContent
         >
-          <PartnerReferralWorkflowPanel
-            defaultReferrerName={session?.user.user_metadata?.full_name || ''}
-            defaultPartnerOrganizationName=""
-            recentReferrals={recentPublicReferrals}
-            onSubmit={submitPublicReferral}
-            accentColor="var(--atlas-signal-lucid-green)"
-          />
+          <React.Suspense
+            fallback={<div className="px-4 py-8 text-[14px] text-[#c9c9c9]">Loading referral workspace…</div>}
+          >
+            <PartnerReferralWorkflowPanel
+              defaultReferrerName={session?.user.user_metadata?.full_name || ''}
+              defaultPartnerOrganizationName=""
+              recentReferrals={recentPublicReferrals}
+              onSubmit={submitPublicReferral}
+              accentColor="var(--atlas-signal-lucid-green)"
+            />
+          </React.Suspense>
         </LiveWorkspaceModal>
       ) : null}
 
@@ -439,13 +448,17 @@ function DemoEnrolleeProfileWorkspace() {
         <div className="min-w-0 flex-1 basis-[520px]">
           {/* Reuse the canonical enrollee ProfilePanel so demo step 2 mirrors production
               header, Z-code badges, and navigator attribution without auth-gated `/app`. */}
-          <ProfilePanel
-            enrollee={DEMO_SAMPLE_ENROLLEE}
-            enrollmentStartLabel="01/12/2026"
-          />
+          <React.Suspense fallback={<div className="text-[14px] text-[#c9c9c9]">Loading profile…</div>}>
+            <ProfilePanel
+              enrollee={DEMO_SAMPLE_ENROLLEE}
+              enrollmentStartLabel="01/12/2026"
+            />
+          </React.Suspense>
         </div>
         <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
-          <RadialLoadChart load={DEMO_SAMPLE_LOAD} />
+          <React.Suspense fallback={<div className="text-[14px] text-[#c9c9c9]">Loading chart…</div>}>
+            <RadialLoadChart load={DEMO_SAMPLE_LOAD} />
+          </React.Suspense>
         </div>
       </div>
       <small className="atlas-caption block text-[var(--foreground-secondary)]">

@@ -3,15 +3,25 @@
  * the authenticated single-pane application based on route + session state.
  */
 import React from 'react'
-import AtlasAuthScreen from '@/auth/AtlasAuthScreen'
 import { SupabaseAuthProvider, useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
-import PublicAtlasLandingPage from '@/features/atlas2026/public/PublicAtlasLandingPage'
-import PublicAtlasDemoPage from '@/features/atlas2026/public/PublicAtlasDemoPage'
-import StandaloneZCodeSurveysPage from '@/features/atlas2026/singlepane/StandaloneZCodeSurveysPage'
 import { workspaceLoadMetrics } from '@/features/atlas2026/singlepane/workspaceLoadMetrics'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 
-const SinglePaneApp = React.lazy(() => import('@/features/atlas2026/singlepane/SinglePaneApp'))
+// Shared import factory so auth-wait prefetch and React.lazy hit the same module cache.
+const loadSinglePaneApp = () => import('@/features/atlas2026/singlepane/SinglePaneApp')
+const SinglePaneApp = React.lazy(loadSinglePaneApp)
+const AtlasAuthScreen = React.lazy(() => import('@/auth/AtlasAuthScreen'))
+const PublicAtlasLandingPage = React.lazy(() => import('@/features/atlas2026/public/PublicAtlasLandingPage'))
+const PublicAtlasDemoPage = React.lazy(() => import('@/features/atlas2026/public/PublicAtlasDemoPage'))
+const StandaloneZCodeSurveysPage = React.lazy(() => import('@/features/atlas2026/singlepane/StandaloneZCodeSurveysPage'))
+
+function ShellFallback({ message }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-black text-[14px] text-[#c7c7c7]">
+      {message}
+    </div>
+  )
+}
 
 function normalizePathname(pathname) {
   if (!pathname) return '/'
@@ -71,6 +81,20 @@ function RootAppInner() {
     workspaceLoadMetrics.markRouteOpen(pathname)
   }, [pathname])
 
+  // Start the workspace chunk download as soon as `/app` is known so it overlaps
+  // with getSession instead of waiting behind the auth gate.
+  React.useEffect(() => {
+    if (!isWorkspaceRoute) return
+    void loadSinglePaneApp().then(() => {
+      workspaceLoadMetrics.markWorkspaceChunkReady()
+    })
+  }, [isWorkspaceRoute])
+
+  React.useEffect(() => {
+    if (!needsSupabaseSession || isLoading) return
+    workspaceLoadMetrics.markAuthReady(Boolean(session))
+  }, [needsSupabaseSession, isLoading, session])
+
   if (typeof window !== 'undefined' && (isLegacyServiceRoute || isLegacyDomainRoute)) {
     // Legacy survey URLs now converge on one page with explicit hash tabs so
     // shared links always land in the intended survey mode.
@@ -78,56 +102,59 @@ function RootAppInner() {
     const nextUrl = new URL('/z-code-surveys', window.location.origin)
     nextUrl.hash = nextHash
     window.location.replace(nextUrl.toString())
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-[14px] text-[#c7c7c7]">
-        Redirecting to z-code surveys…
-      </div>
-    )
+    return <ShellFallback message="Redirecting to z-code surveys…" />
   }
 
   if (isStandaloneZCodeSurveysRoute && needsSupabaseSession && isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-[14px] text-[#c7c7c7]">
-        Checking sign-in…
-      </div>
-    )
+    return <ShellFallback message="Checking sign-in…" />
   }
   if (isStandaloneZCodeSurveysRoute && needsSupabaseSession && !session) {
-    return <AtlasAuthScreen />
+    return (
+      <React.Suspense fallback={<ShellFallback message="Loading sign-in…" />}>
+        <AtlasAuthScreen />
+      </React.Suspense>
+    )
   }
   if (typeof window !== 'undefined' && isStandaloneZCodeSurveysPath(pathname)) {
-    return <StandaloneZCodeSurveysPage />
+    return (
+      <React.Suspense fallback={<ShellFallback message="Loading surveys…" />}>
+        <StandaloneZCodeSurveysPage />
+      </React.Suspense>
+    )
   }
 
   if (typeof window !== 'undefined' && isDemoPath(pathname)) {
-    return <PublicAtlasDemoPage />
-  }
-
-  if (!isWorkspaceRoute) {
-    return <PublicAtlasLandingPage />
-  }
-
-  if (needsSupabaseSession && isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black text-[14px] text-[#c7c7c7]">
-        Checking sign-in…
-      </div>
+      <React.Suspense fallback={<ShellFallback message="Loading demo…" />}>
+        <PublicAtlasDemoPage />
+      </React.Suspense>
     )
   }
 
+  if (!isWorkspaceRoute) {
+    return (
+      <React.Suspense fallback={<ShellFallback message="Loading…" />}>
+        <PublicAtlasLandingPage />
+      </React.Suspense>
+    )
+  }
+
+  if (needsSupabaseSession && isLoading) {
+    return <ShellFallback message="Checking sign-in…" />
+  }
+
   if (needsSupabaseSession && !session) {
-    return <AtlasAuthScreen />
+    return (
+      <React.Suspense fallback={<ShellFallback message="Loading sign-in…" />}>
+        <AtlasAuthScreen />
+      </React.Suspense>
+    )
   }
 
   // At this point either auth is not required or we have a valid session.
+  // The workspace chunk may already be warm from the prefetch effect above.
   return (
-    <React.Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-black text-[14px] text-[#c7c7c7]">
-          Loading workspace shell…
-        </div>
-      }
-    >
+    <React.Suspense fallback={<ShellFallback message="Loading workspace shell…" />}>
       <SinglePaneApp />
     </React.Suspense>
   )
@@ -140,4 +167,3 @@ export default function RootApp() {
     </SupabaseAuthProvider>
   )
 }
-
