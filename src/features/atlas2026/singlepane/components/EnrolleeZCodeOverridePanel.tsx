@@ -261,6 +261,9 @@ export default function EnrolleeZCodeOverridePanel({ enrollee, canEdit, onSave }
         <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
           major z-code categories
         </small>
+        <small className="atlas-caption mt-1 block" style={{ color: '#aab6c3' }}>
+          Open a category to checkbox the enrollee's active codes. This replaces the long Z-code survey.
+        </small>
         <div className="mt-3 flex flex-wrap gap-3">
           {catalog.map((entry) => {
             const fill = getZCodeParentColor(entry.parentCode) || SP_COLORS.yellow
@@ -272,10 +275,13 @@ export default function EnrolleeZCodeOverridePanel({ enrollee, canEdit, onSave }
                 type="button"
                 onClick={() => setOpenCategory((current) => (current === entry.parentCode ? null : entry.parentCode))}
                 title={entry.theme}
-                className="flex flex-col items-center gap-1 rounded-[16px] border px-3 py-2 transition-[border-color,box-shadow] duration-150 hover:border-white/50"
+                className="flex w-[112px] flex-col items-center gap-1 rounded-[16px] border px-2 py-2 transition-[border-color,box-shadow] duration-150 hover:border-white/50"
                 style={{ borderColor: isOpen ? SP_COLORS.white : '#ffffff22', backgroundColor: 'var(--surface-panel-soft)' }}
               >
                 <ZCodeBadge value={entry.parentCode} fill={fill} size="filter" stripLeadingZ checked={checkedCount > 0} />
+                <small className="line-clamp-2 text-center text-[10px] leading-[1.3]" style={{ color: '#c5ced8' }}>
+                  {entry.theme}
+                </small>
                 <small className="text-[11px]" style={{ color: checkedCount ? SP_COLORS.white : '#9ea8b4' }}>
                   {checkedCount} active
                 </small>
@@ -286,56 +292,71 @@ export default function EnrolleeZCodeOverridePanel({ enrollee, canEdit, onSave }
       </section>
 
       {activeCategory ? (
-        <section className="atlas-surface-panel px-4 py-4">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
-                {activeCategory.parentCode} category
-              </small>
-              <div className="mt-1 text-[18px] font-medium text-white">{activeCategory.theme}</div>
+        <div className="fixed inset-0 z-[105] flex items-center justify-center bg-black/72 px-4 py-6 backdrop-blur-[2px]">
+          <div
+            className="atlas-surface-shell flex max-h-[min(92vh,820px)] w-full max-w-[720px] flex-col overflow-hidden px-4 py-4"
+            style={{ borderColor: SP_COLORS.white, backgroundColor: 'var(--surface-panel-soft)' }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="zcode-category-overlay-title"
+          >
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <small className="atlas-overline block" style={{ color: SP_COLORS.muted }}>
+                  {activeCategory.parentCode} category
+                </small>
+                <div id="zcode-category-overlay-title" className="mt-1 text-[20px] font-medium text-white">
+                  {activeCategory.theme}
+                </div>
+                <small className="atlas-caption mt-1 block" style={{ color: '#b1bcc8' }}>
+                  Checkbox the codes that are active for this enrollee.
+                </small>
+              </div>
+              <AtlasTextButton onClick={() => setOpenCategory(null)} className="px-[14px] py-[7px] text-[14px]">
+                close overlay
+              </AtlasTextButton>
             </div>
-            <AtlasTextButton onClick={() => setOpenCategory(null)} className="px-[14px] py-[7px] text-[14px]">
-              back to categories
-            </AtlasTextButton>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="grid gap-3">
+                {activeCategory.codes.map((code) => {
+                  const fill = getZCodeParentColor(activeCategory.parentCode) || SP_COLORS.yellow
+                  const isChecked = checkedCodes.has(code.zCode)
+                  return (
+                    <button
+                      key={code.zCode}
+                      type="button"
+                      onClick={() => toggleCode(code.zCode)}
+                      disabled={!canEdit || isSaving}
+                      className="flex w-full items-start gap-3 rounded-[20px] border px-3 py-3 text-left transition-[border-color,box-shadow,opacity] duration-150 hover:border-white/50 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15)] disabled:opacity-60"
+                      style={{
+                        borderColor: isChecked ? `${SP_COLORS.deepGreen}88` : '#ffffff22',
+                        backgroundColor: isChecked ? 'rgba(111,207,151,0.08)' : 'var(--surface-panel-raised)'
+                      }}
+                    >
+                      <ZCodeBadge value={code.zCode} fill={fill} size="resolved" stripLeadingZ />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[16px] font-medium text-white">{code.zCode}</div>
+                        <small className="mt-1 block text-[13px] leading-[1.45]" style={{ color: '#b5c0cb' }}>
+                          {code.description || 'No description available for this Z-code.'}
+                        </small>
+                      </div>
+                      <span
+                        aria-hidden="true"
+                        className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border"
+                        style={{
+                          borderColor: isChecked ? SP_COLORS.deepGreen : '#ffffff35',
+                          color: isChecked ? SP_COLORS.deepGreen : '#ffffff55'
+                        }}
+                      >
+                        <Check size={17} strokeWidth={2.1} />
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
-          <div className="grid gap-3">
-            {activeCategory.codes.map((code) => {
-              const fill = getZCodeParentColor(activeCategory.parentCode) || SP_COLORS.yellow
-              const isChecked = checkedCodes.has(code.zCode)
-              return (
-                <button
-                  key={code.zCode}
-                  type="button"
-                  onClick={() => toggleCode(code.zCode)}
-                  disabled={!canEdit || isSaving}
-                  className="flex w-full items-start gap-3 rounded-[20px] border px-3 py-3 text-left transition-[border-color,box-shadow,opacity] duration-150 hover:border-white/50 hover:shadow-[0_0_0_1px_rgba(255,255,255,0.15)] disabled:opacity-60"
-                  style={{
-                    borderColor: isChecked ? `${SP_COLORS.deepGreen}88` : '#ffffff22',
-                    backgroundColor: isChecked ? 'rgba(111,207,151,0.08)' : 'var(--surface-panel-raised)'
-                  }}
-                >
-                  <ZCodeBadge value={code.zCode} fill={fill} size="resolved" stripLeadingZ />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[16px] font-medium text-white">{code.zCode}</div>
-                    <small className="mt-1 block text-[13px] leading-[1.45]" style={{ color: '#b5c0cb' }}>
-                      {code.description || 'No description available for this Z-code.'}
-                    </small>
-                  </div>
-                  <span
-                    aria-hidden="true"
-                    className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border"
-                    style={{
-                      borderColor: isChecked ? SP_COLORS.deepGreen : '#ffffff35',
-                      color: isChecked ? SP_COLORS.deepGreen : '#ffffff55'
-                    }}
-                  >
-                    <Check size={17} strokeWidth={2.1} />
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
+        </div>
       ) : null}
 
       {pendingUncheck ? (

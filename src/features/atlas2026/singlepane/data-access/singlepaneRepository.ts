@@ -146,6 +146,11 @@ interface NavigatorAssignmentProfileInput {
 // is ready; until then it is hidden across every role's navigation.
 const SHOW_COUNTY_COMMONS = false
 
+/** Phase 3 launch-guard smoke helper: County Commons stays hidden for first launch. */
+export function isCountyCommonsMenuEnabled() {
+  return SHOW_COUNTY_COMMONS
+}
+
 function normalizeNavigatorTopMenus(menus: string[]) {
   const normalized = hideDeferredCountyCommonsMenu(
     menus
@@ -821,6 +826,21 @@ function sanitizeFilename(value: string) {
     .replace(/^-|-$/g, '')
 }
 
+const PROFILE_IMAGE_ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
+function assertProfileImageFile(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please select an image file.')
+  }
+  if (!PROFILE_IMAGE_ALLOWED_MIME_TYPES.has(file.type)) {
+    throw new Error('Use a PNG, JPEG, or WebP image (max 5 MB).')
+  }
+  if (typeof file.size === 'number' && file.size > PROFILE_IMAGE_MAX_BYTES) {
+    throw new Error('Image must be 5 MB or smaller.')
+  }
+}
+
 export async function uploadEnrolleeProfileImage(
   enrolleeId: string,
   file: File
@@ -831,9 +851,7 @@ export async function uploadEnrolleeProfileImage(
   if (!hasSupabaseConfig || !supabase) {
     throw new Error('Supabase is required to upload profile images.')
   }
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Please select an image file.')
-  }
+  assertProfileImageFile(file)
 
   const safeFileName = sanitizeFilename(file.name || 'profile-image.jpeg') || 'profile-image.jpeg'
   const storagePath = `enrollees/${enrolleeId}/${Date.now()}-${safeFileName}`
@@ -886,6 +904,44 @@ export async function uploadEnrolleeProfileImage(
     if (profileImageInsertError) throw profileImageInsertError
   }
 
+  return {
+    avatarUrl: publicUrl,
+    storagePath
+  }
+}
+
+/**
+ * Upload a navigator/partner account avatar to Storage under accounts/{user_id}/.
+ * Persists only the public Uniform Resource Locator (URL) in account settings — never a data URL —
+ * so localStorage / app_config_documents stay under browser and document size limits.
+ */
+export async function uploadAccountProfileImage(
+  file: File
+): Promise<{ avatarUrl: string; storagePath: string }> {
+  if (!hasSupabaseConfig || !supabase) {
+    throw new Error('Supabase is required to upload profile images.')
+  }
+  assertProfileImageFile(file)
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+  const userId = sessionData.session?.user?.id?.trim()
+  if (!userId) {
+    throw new Error('Sign in is required to upload a profile image.')
+  }
+
+  const safeFileName = sanitizeFilename(file.name || 'profile-image.jpeg') || 'profile-image.jpeg'
+  const storagePath = `accounts/${userId}/${Date.now()}-${safeFileName}`
+  const bucket = supabase.storage.from('profile-images')
+  const { error: uploadError } = await bucket.upload(storagePath, file, {
+    cacheControl: '3600',
+    contentType: file.type,
+    upsert: false
+  })
+  if (uploadError) throw uploadError
+
+  const { data: publicData } = bucket.getPublicUrl(storagePath)
+  const publicUrl = publicData?.publicUrl || `/storage/v1/object/public/profile-images/${storagePath}`
   return {
     avatarUrl: publicUrl,
     storagePath

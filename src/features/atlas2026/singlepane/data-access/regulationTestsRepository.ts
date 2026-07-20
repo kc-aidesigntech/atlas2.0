@@ -7,6 +7,11 @@ import type {
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { computeAssessmentScoreSummary, isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
+import {
+  isRegulationCadenceInstrument,
+  type RegulationCadenceInstrument,
+  type RegulationInstrumentCompletionMap
+} from '@/features/atlas2026/singlepane/data/regulationCadence'
 
 /**
  * Regulation and renewal assessment repository.
@@ -81,45 +86,49 @@ function persistLocalState(records: RegulationTestSubmissionRecord[]) {
   window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(records))
 }
 
-// Regulation-stage instruments only (renewal-stage types are excluded); derived from the
-// catalog so a stage reclassification cannot silently desynchronize the due computation.
-const REGULATION_STAGE_TEST_TYPES = (['mh_sca', 'svs', 'ipf', 'b_ipf'] as RegulationTestType[]).filter(
-  (testType) => !isRenewalAssessmentType(testType)
-)
+// Forced weekly cadence tracks only SVS + MH-SCA. Renewal instruments never satisfy
+// the regulation review cycle even when they share the regulation-tests table.
+const REGULATION_CADENCE_TEST_TYPES: RegulationCadenceInstrument[] = ['mh_sca', 'svs']
 
 /**
- * Latest completed regulation-stage submission time per enrollee.
+ * Latest completed SVS and MH-SCA submission times per enrollee.
  *
- * Feeds the forced regulation review due computation: an enrollee with no completed
- * regulation test inside the cadence window is "due now".
+ * Feeds the forced regulation review due computation: both instruments must have a
+ * completed submission inside the cadence window before the cycle is considered satisfied.
  */
 export async function loadLatestCompletedRegulationReviewTimes(
   enrolleeIds: string[]
-): Promise<Record<string, string>> {
+): Promise<RegulationInstrumentCompletionMap> {
   const normalizedIds = Array.from(new Set(enrolleeIds.map((id) => id.trim()).filter(Boolean)))
   if (!normalizedIds.length) return {}
 
-  const reduceToLatest = (
-    rows: Array<{ enrolleeId: string; submittedAtIso: string }>
-  ): Record<string, string> =>
-    rows.reduce<Record<string, string>>((latest, row) => {
-      const existing = latest[row.enrolleeId]
+  const reduceToLatestByInstrument = (
+    rows: Array<{ enrolleeId: string; testType: RegulationCadenceInstrument; submittedAtIso: string }>
+  ): RegulationInstrumentCompletionMap =>
+    rows.reduce<RegulationInstrumentCompletionMap>((latest, row) => {
+      const current = latest[row.enrolleeId] || {}
+      const existing = current[row.testType]
       if (!existing || new Date(row.submittedAtIso).getTime() > new Date(existing).getTime()) {
-        latest[row.enrolleeId] = row.submittedAtIso
+        current[row.testType] = row.submittedAtIso
+        latest[row.enrolleeId] = current
       }
       return latest
     }, {})
 
   const reduceLocal = () =>
-    reduceToLatest(
+    reduceToLatestByInstrument(
       loadLocalState()
         .filter(
           (record) =>
             record.status === 'completed' &&
-            REGULATION_STAGE_TEST_TYPES.includes(record.testType) &&
+            isRegulationCadenceInstrument(record.testType) &&
             normalizedIds.includes(record.enrolleeId)
         )
-        .map((record) => ({ enrolleeId: record.enrolleeId, submittedAtIso: record.submittedAtIso }))
+        .map((record) => ({
+          enrolleeId: record.enrolleeId,
+          testType: record.testType as RegulationCadenceInstrument,
+          submittedAtIso: record.submittedAtIso
+        }))
     )
 
   if (!hasSupabaseConfig || !supabase) return reduceLocal()
@@ -127,19 +136,22 @@ export async function loadLatestCompletedRegulationReviewTimes(
   const { data, error } = await (supabase as any)
     .schema('atlas')
     .from('navigator_regulation_test_submissions')
-    .select('enrollee_id,submitted_at')
+    .select('enrollee_id,test_type,submitted_at')
     .in('enrollee_id', normalizedIds)
-    .in('test_type', REGULATION_STAGE_TEST_TYPES)
+    .in('test_type', REGULATION_CADENCE_TEST_TYPES)
     .eq('status', 'completed')
   if (error) {
     if (isOptionalSupabaseDataError(error)) return reduceLocal()
     throw error
   }
-  return reduceToLatest(
-    ((data || []) as Array<{ enrollee_id: string; submitted_at: string }>).map((row) => ({
-      enrolleeId: row.enrollee_id,
-      submittedAtIso: row.submitted_at
-    }))
+  return reduceToLatestByInstrument(
+    ((data || []) as Array<{ enrollee_id: string; test_type: string; submitted_at: string }>)
+      .filter((row) => isRegulationCadenceInstrument(row.test_type as RegulationTestType))
+      .map((row) => ({
+        enrolleeId: row.enrollee_id,
+        testType: row.test_type as RegulationCadenceInstrument,
+        submittedAtIso: row.submitted_at
+      }))
   )
 }
 

@@ -31,7 +31,21 @@ export function loadLocalStorageState<T>(
 
 export function persistLocalStorageState<T>(storageKey: string, payload: T) {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(storageKey, JSON.stringify(payload))
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(payload))
+  } catch (error) {
+    // Large data-URL avatars historically blew past browser quota; surface a clear
+    // recovery path instead of a raw DOMException.
+    const isQuotaError =
+      (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'QuotaExceededError') ||
+      (error instanceof Error && /quota/i.test(error.message))
+    if (isQuotaError) {
+      throw new Error(
+        'Browser storage is full. Use a smaller profile image, or sign in so the photo can upload to cloud storage.'
+      )
+    }
+    throw error
+  }
 }
 
 export async function loadLatestConfigPayload<T>(

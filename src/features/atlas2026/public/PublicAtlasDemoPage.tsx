@@ -1,12 +1,20 @@
 import React from 'react'
-import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasCloseButton, AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import ZCodeCircle from '@/features/atlas2026/components/ZCodeCircle'
 import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import PartnerReferralWorkflowPanel from '@/features/atlas2026/singlepane/components/PartnerReferralWorkflowPanel'
+import ProfilePanel from '@/features/atlas2026/singlepane/components/ProfilePanel'
+import RadialLoadChart from '@/features/atlas2026/singlepane/components/RadialLoadChart'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import { enqueuePublicReferralQueueRecord, loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
-import type { NavigatorProgramState, PartnerReferralSubmissionInput, UnassignedEnrolleePickupRecord } from '@/features/atlas2026/shared/contracts'
+import type {
+  DomainLoad,
+  EnrolleeProfile,
+  NavigatorProgramState,
+  PartnerReferralSubmissionInput,
+  UnassignedEnrolleePickupRecord
+} from '@/features/atlas2026/shared/contracts'
 import { useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
@@ -23,6 +31,66 @@ const EMPTY_PROGRAM_STATE: NavigatorProgramState = {
   updatedAtIso: new Date().toISOString()
 }
 type DemoWorkspace = 'referral' | 'profile' | 'station'
+
+// Curated sample profile for demo step 2 so reviewers see the narrative enrollee
+// without embedding `/app` (which requires an authenticated session and often
+// fails open as a blank assignment board or sign-in screen inside the modal).
+const DEMO_SAMPLE_ENROLLEE: EnrolleeProfile = {
+  id: 'demo-enrollee-morgan-r',
+  enrollmentId: 'demo-enrollment-morgan-r',
+  fullName: 'morgan r.',
+  dob: '04/22/1996',
+  caseId: 'DEMO-MR-02',
+  email: 'morgan.r@demo.atlas',
+  assignedNavigator: 'taylor h.',
+  zCodeTags: ['z59.0', 'z60.4', 'z56.0'],
+  activeZCodeDetails: [
+    {
+      enrolleeZCodeId: 'demo-zc-habitat',
+      parentCode: 'z59',
+      zCode: 'z59.0',
+      title: 'Homelessness',
+      description: 'Housing instability requiring stabilization support.',
+      isResolved: false,
+      resolutionAt: null,
+      codeReviewStatus: 'partially_resolved',
+      confidenceLevel: 'medium'
+    },
+    {
+      enrolleeZCodeId: 'demo-zc-social',
+      parentCode: 'z60',
+      zCode: 'z60.4',
+      title: 'Social exclusion and rejection',
+      description: 'Support network gaps that elevate frontline burden.',
+      isResolved: false,
+      resolutionAt: null,
+      codeReviewStatus: 'not_resolved',
+      confidenceLevel: 'high'
+    },
+    {
+      enrolleeZCodeId: 'demo-zc-work',
+      parentCode: 'z56',
+      zCode: 'z56.0',
+      title: 'Unemployment',
+      description: 'Work disruption addressed during readiness unburdening.',
+      isResolved: true,
+      resolutionAt: '2026-05-12T16:00:00.000Z',
+      codeReviewStatus: 'resolved',
+      confidenceLevel: 'medium',
+      resolutionPartnerName: 'east county resource hub',
+      resolutionNote: 'Stabilized schedule and reconnected to supported employment.'
+    }
+  ],
+  completedParentCodes: ['z56'],
+  currentPhase: 'readiness'
+}
+
+const DEMO_SAMPLE_LOAD: DomainLoad = {
+  enrolleeId: DEMO_SAMPLE_ENROLLEE.id,
+  habitat: 7,
+  work: 4,
+  socialNetworks: 6
+}
 
 function canUseLocalStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
@@ -119,11 +187,11 @@ export default function PublicAtlasDemoPage() {
   }
 
   function openWorkspace(workspace: DemoWorkspace) {
-    if (workspace === 'profile') {
-      setSinglePaneWorkspace('navigator', 'enrollees')
-    } else if (workspace === 'station') {
+    // Step 2 renders an in-page sample profile; only step 3 still primes `/app`
+    // session keys before launching the live partner station iframe.
+    if (workspace === 'station') {
       setSinglePaneWorkspace('partner', 'my station')
-    } else {
+    } else if (workspace === 'referral') {
       setSinglePaneRole('navigator')
     }
     setActiveWorkspace(workspace)
@@ -329,14 +397,11 @@ export default function PublicAtlasDemoPage() {
 
       {activeWorkspace === 'profile' ? (
         <LiveWorkspaceModal
-          title="step 2 · live navigator workspace"
+          title="step 2 · sample enrollee profile"
           onClose={() => setActiveWorkspace(null)}
+          scrollContent
         >
-          <iframe
-            title="atlas navigator workspace"
-            src="/app#enrollees"
-            className="h-full w-full rounded-[20px] border border-white/10"
-          />
+          <DemoEnrolleeProfileWorkspace />
         </LiveWorkspaceModal>
       ) : null}
 
@@ -353,6 +418,41 @@ export default function PublicAtlasDemoPage() {
         </LiveWorkspaceModal>
       ) : null}
     </div>
+  )
+}
+
+function DemoEnrolleeProfileWorkspace() {
+  return (
+    <AtlasInsetCard className="atlas-surface-panel space-y-4 border-white/20 bg-[#0c0c0c] px-5 py-5">
+      <div
+        className="rounded-2xl border px-3 py-2 text-[12px] text-[#d7d7d7]"
+        style={{ borderColor: DEMO_STEP_COLORS[1] }}
+      >
+        sample case: <strong>{DEMO_SAMPLE_ENROLLEE.fullName}</strong> • phase:{' '}
+        <strong>{DEMO_SAMPLE_ENROLLEE.currentPhase}</strong> • assigned navigator:{' '}
+        <strong>{DEMO_SAMPLE_ENROLLEE.assignedNavigator}</strong>
+      </div>
+      <div
+        className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px] lg:gap-x-8 xl:gap-x-12"
+        style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+      >
+        <div className="min-w-0 flex-1 basis-[520px]">
+          {/* Reuse the canonical enrollee ProfilePanel so demo step 2 mirrors production
+              header, Z-code badges, and navigator attribution without auth-gated `/app`. */}
+          <ProfilePanel
+            enrollee={DEMO_SAMPLE_ENROLLEE}
+            enrollmentStartLabel="01/12/2026"
+          />
+        </div>
+        <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
+          <RadialLoadChart load={DEMO_SAMPLE_LOAD} />
+        </div>
+      </div>
+      <small className="atlas-caption block text-[var(--foreground-secondary)]">
+        This preview is a passcode-gated sample for partner narrative review. Live navigator data remains behind
+        authenticated workspace sign-in.
+      </small>
+    </AtlasInsetCard>
   )
 }
 

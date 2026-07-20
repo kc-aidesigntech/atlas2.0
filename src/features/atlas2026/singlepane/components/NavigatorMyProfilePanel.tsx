@@ -8,6 +8,7 @@ import type {
   IntervalAssessmentDueItem,
   IpsCompetencySelfAssessmentRecord,
   IpsccCompetencyAggregate,
+  IpsccCompetencyKey,
   IpsccEncounterSubmissionRecord,
   IpsccSelfAwarenessCorrelationRow,
   IpsccSelfAwarenessSummary,
@@ -54,6 +55,9 @@ interface NavigatorMyProfilePanelProps {
   avatarUploadError?: string | null
   onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenEnrolleeSurvey?: (enrolleeId: string) => void
+  // Forced weekly SVS / MH-SCA review: open items must be actionable — selecting one
+  // jumps the navigator into that enrollee's regulation assessment flow.
+  onOpenRegulationReview?: (enrolleeId: string, missingInstruments?: Array<'mh_sca' | 'svs'>) => void
   onOpenAssignmentBoardReferral?: () => void
   onToggleEnrollmentAssignment: (enrollmentId: string, mode: 'accept' | 'archive' | 'assign' | 'unassign') => Promise<void> | void
   onSaveIpsSelfAssessment: (record: IpsCompetencySelfAssessmentRecord) => Promise<unknown> | unknown
@@ -71,6 +75,8 @@ type OverlayKey =
   | 'section_6_competency'
   | 'section_7_schedule'
   | 'section_8_archive'
+
+type OverlaySaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 const CARD_DEFS: Array<{
   key: OverlayKey
@@ -91,24 +97,90 @@ const CARD_DEFS: Array<{
   { key: 'section_8_archive', title: 'Section 8: Supervision archive', cardTitle: 'archive', cardSubtitle: 'supervision', actionLabel: 'open archive', variant: 'blue', illustration: 'reflection' }
 ]
 
-const IPS_KEYS = [
-  'competency_1_connection',
-  'competency_2_learning_together',
-  'competency_3_worldview_awareness',
-  'competency_4_relationship_focus',
-  'competency_5_mutuality',
-  'competency_6_hope_and_possibility',
-  'competency_7_moving_towards',
-  'competency_8_self_reflection',
-  'competency_9_feedback',
-  'competency_10_co_reflection'
+const IPS_COMPETENCY_OPTIONS: Array<{ key: IpsccCompetencyKey; label: string }> = [
+  { key: 'competency_1_connection', label: '1. Connection' },
+  { key: 'competency_2_learning_together', label: '2. Helping to learning together' },
+  { key: 'competency_3_worldview_awareness', label: '3. Worldview awareness' },
+  { key: 'competency_4_relationship_focus', label: '4. Individual to relationship' },
+  { key: 'competency_5_mutuality', label: '5. Mutuality' },
+  { key: 'competency_6_hope_and_possibility', label: '6. Fear to hope and possibility' },
+  { key: 'competency_7_moving_towards', label: '7. Moving towards' },
+  { key: 'competency_8_self_reflection', label: '8. Self-reflection' },
+  { key: 'competency_9_feedback', label: '9. Give and receive feedback' },
+  { key: 'competency_10_co_reflection', label: '10. Co-reflection' }
+]
+
+const IPSCC_ITEM_LABELS = [
+  'Item 1',
+  'Item 2',
+  'Item 3',
+  'Item 4',
+  'Item 5',
+  'Item 6',
+  'Item 7',
+  'Item 8',
+  'Item 9',
+  'Item 10'
 ] as const
+
+const LIKERT_OPTIONS = [
+  { value: 1, label: '1 · strongly disagree' },
+  { value: 2, label: '2 · disagree' },
+  { value: 3, label: '3 · unsure' },
+  { value: 4, label: '4 · agree' },
+  { value: 5, label: '5 · strongly agree' }
+] as const
+
+const CREATE_NOTE_FIELDS: Array<{
+  key: 'recognizeNotes' | 'encourageNotes' | 'acknowledgeNotes' | 'trainNotes' | 'empowerNotes' | 'createActionPlan' | 'superviseeSubmission' | 'supervisorSubmission'
+  label: string
+}> = [
+  { key: 'recognizeNotes', label: 'Recognize: success, achievements, etc.' },
+  { key: 'encourageNotes', label: 'Encourage: challenges, difficulties, etc.' },
+  { key: 'acknowledgeNotes', label: 'Acknowledge: initiative, leadership, advocacy, etc.' },
+  { key: 'trainNotes', label: 'Train: learning opportunities and support needed' },
+  { key: 'empowerNotes', label: 'Empower: time, tools, transportation, materials, etc.' },
+  { key: 'createActionPlan', label: 'C.R.E.A.T.E. action plan for implementation' },
+  { key: 'superviseeSubmission', label: 'Peer specialist submission' },
+  { key: 'supervisorSubmission', label: 'Supervisor submission' }
+]
+
+function createRecordId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`
+}
+
+function getWeekStartIso(date = new Date()) {
+  const next = new Date(date)
+  const day = next.getUTCDay()
+  const diff = (day + 6) % 7
+  next.setUTCDate(next.getUTCDate() - diff)
+  next.setUTCHours(0, 0, 0, 0)
+  return next.toISOString()
+}
 
 function formatDateLabel(value: string | null | undefined) {
   if (!value) return 'not recorded'
   const parsed = new Date(value)
   if (!Number.isFinite(parsed.getTime())) return value
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(parsed)
+}
+
+function PersistentField({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <label className="block">
+      <small className="atlas-overline block text-[#9eacb9]">{label}</small>
+      <div className="mt-1">{children}</div>
+    </label>
+  )
 }
 
 export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelProps) {
@@ -140,6 +212,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
     avatarUploadError = null,
     onReplaceAvatar,
     onOpenEnrolleeSurvey,
+    onOpenRegulationReview,
     onOpenAssignmentBoardReferral,
     onToggleEnrollmentAssignment,
     onSaveIpsSelfAssessment,
@@ -150,15 +223,17 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
 
   const [activeOverlay, setActiveOverlay] = React.useState<OverlayKey | null>(null)
   const assignmentBoardRef = React.useRef<HTMLElement | null>(null)
+  const [overlaySaveState, setOverlaySaveState] = React.useState<OverlaySaveState>('idle')
+  const [overlaySaveMessage, setOverlaySaveMessage] = React.useState<string | null>(null)
   const [selectedIpsccEnrolleeId, setSelectedIpsccEnrolleeId] = React.useState<string>('')
-  const [ipsccScoreDraft, setIpsccScoreDraft] = React.useState('4,4,4,4,4,4,4,4,4,4')
+  const [ipsccItemScores, setIpsccItemScores] = React.useState<number[]>(() => Array.from({ length: 10 }, () => 4))
   const [ipsccNoteDraft, setIpsccNoteDraft] = React.useState('')
   const [ipsSelfDraftScores, setIpsSelfDraftScores] = React.useState<Record<string, number>>(
-    () => Object.fromEntries(IPS_KEYS.map((key) => [key, 3]))
+    () => Object.fromEntries(IPS_COMPETENCY_OPTIONS.map((item) => [item.key, 3]))
   )
   const [ipsSelfDraftNote, setIpsSelfDraftNote] = React.useState('')
   const [createDraft, setCreateDraft] = React.useState({
-    supervisionMode: 'in_person' as const,
+    supervisionMode: 'in_person' as 'in_person' | 'online' | 'phone_call',
     sessionDurationMinutes: '50',
     connectFocusedListening: true,
     recognizeNotes: '',
@@ -179,12 +254,74 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
     }
   }, [assignedEnrollees, selectedIpsccEnrolleeId])
 
+  React.useEffect(() => {
+    setOverlaySaveState('idle')
+    setOverlaySaveMessage(null)
+  }, [activeOverlay])
+
   const navigatorDisplayName = currentNavigatorName.trim() || accountSettings.fullName.trim() || 'navigator'
   const fallbackAvatarSrc = React.useMemo(() => createFallbackAvatarDataUrl(navigatorDisplayName), [navigatorDisplayName])
   const avatarSrc = accountSettings.avatarUrl || fallbackAvatarSrc
+  // Open weekly regulation reviews are non-skippable action items: both SVS and MH-SCA
+  // must be completed for each listed enrollee before the cycle clears.
+  const openRegulationReviews = React.useMemo(
+    () => regulationReviewDueItems.filter((item) => item.status === 'open'),
+    [regulationReviewDueItems]
+  )
+
+  async function runOverlaySave(action: () => Promise<void>, successMessage: string) {
+    setOverlaySaveState('saving')
+    setOverlaySaveMessage(null)
+    try {
+      await action()
+      setOverlaySaveState('saved')
+      setOverlaySaveMessage(successMessage)
+    } catch (error) {
+      setOverlaySaveState('error')
+      setOverlaySaveMessage(error instanceof Error ? error.message : 'Unable to save this entry.')
+    }
+  }
 
   return (
     <div className="relative flex flex-col gap-4">
+      {openRegulationReviews.length ? (
+        <div
+          className="atlas-surface-panel px-4 py-3"
+          style={{ borderColor: `${SP_COLORS.red}80`, borderWidth: 1, borderStyle: 'solid' }}
+        >
+          <small className="atlas-overline block" style={{ color: SP_COLORS.red }}>
+            required weekly regulation review
+          </small>
+          <div className="mt-1 text-[15px] font-medium text-white">
+            {openRegulationReviews.length} enrollee{openRegulationReviews.length === 1 ? '' : 's'} need Stress
+            Vulnerability Scale (SVS) and Mental Health Self-Care Agency (MH-SCA) this cycle — cadence cannot be skipped.
+          </div>
+          <div className="mt-3 space-y-2">
+            {openRegulationReviews.map((item) => {
+              const missingLabel = (item.missingInstruments || ['mh_sca', 'svs'])
+                .map((instrument) => (instrument === 'mh_sca' ? 'MH-SCA' : 'SVS'))
+                .join(' + ')
+              return (
+                <div key={item.id} className="atlas-surface-raised flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+                  <div className="text-[13px] text-white">
+                    {item.enrolleeName}
+                    <span className="ml-2 text-[#9eacb9]">
+                      due {formatDateLabel(item.dueAtIso)} · missing {missingLabel}
+                    </span>
+                  </div>
+                  <AtlasTextButton
+                    onClick={() => onOpenRegulationReview?.(item.enrolleeId, item.missingInstruments)}
+                    className="px-3 py-1 text-[12px]"
+                    style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+                  >
+                    start review
+                  </AtlasTextButton>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
       <div className="atlas-navigator-profile-layout">
         <div className="atlas-navigator-profile-main space-y-4">
           <div className="atlas-surface-panel px-5 py-4">
@@ -274,41 +411,87 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
 
             {activeOverlay === 'section_1_ipscc' ? (
               <div className="space-y-3">
+                <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
+                  <div className="font-medium">Individual Placement and Support Core Competencies (IPSCC) encounter survey</div>
+                  <div className="mt-1 text-[#9eacb9]">
+                    Capture service-user ratings after each encounter (1 = strongly disagree … 5 = strongly agree).
+                  </div>
+                </div>
                 {ipsccCompetencyAverages.map((row) => (
                   <div key={row.key} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
                     <span className="text-white">{row.label}</span>
                     <span style={{ color: '#d7e0e9' }}>{row.averageScore == null ? '--' : row.averageScore.toFixed(2)} · n={row.sampleSize}</span>
                   </div>
                 ))}
-                <select className="atlas-select h-10 w-full bg-transparent text-white" value={selectedIpsccEnrolleeId} onChange={(event) => setSelectedIpsccEnrolleeId(event.target.value)}>
-                  {assignedEnrollees.map((enrollee) => (
-                    <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">{enrollee.fullName}</option>
+                <PersistentField label="Enrollee">
+                  <select
+                    className="atlas-select h-10 w-full bg-transparent text-white"
+                    value={selectedIpsccEnrolleeId}
+                    onChange={(event) => setSelectedIpsccEnrolleeId(event.target.value)}
+                    disabled={!assignedEnrollees.length}
+                  >
+                    {!assignedEnrollees.length ? (
+                      <option value="" className="bg-black text-white">No assigned enrollees</option>
+                    ) : null}
+                    {assignedEnrollees.map((enrollee) => (
+                      <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">{enrollee.fullName}</option>
+                    ))}
+                  </select>
+                </PersistentField>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  {IPSCC_ITEM_LABELS.map((label, index) => (
+                    <PersistentField key={label} label={label}>
+                      <select
+                        className="atlas-select h-10 w-full bg-transparent text-white"
+                        value={ipsccItemScores[index]}
+                        onChange={(event) => {
+                          const nextScore = Number(event.target.value)
+                          setIpsccItemScores((current) => current.map((score, scoreIndex) => (scoreIndex === index ? nextScore : score)))
+                        }}
+                      >
+                        {LIKERT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value} className="bg-black text-white">{option.label}</option>
+                        ))}
+                      </select>
+                    </PersistentField>
                   ))}
-                </select>
-                <input className="atlas-input h-10 w-full bg-transparent text-white" value={ipsccScoreDraft} onChange={(event) => setIpsccScoreDraft(event.target.value)} placeholder="4,4,4,4,4,4,4,4,4,4" />
-                <textarea className="atlas-textarea min-h-[90px] bg-transparent text-white" value={ipsccNoteDraft} onChange={(event) => setIpsccNoteDraft(event.target.value)} placeholder="service user note" />
-                <div className="flex justify-end">
+                </div>
+                <PersistentField label="Service user note">
+                  <textarea
+                    className="atlas-textarea min-h-[90px] bg-transparent text-white"
+                    value={ipsccNoteDraft}
+                    onChange={(event) => setIpsccNoteDraft(event.target.value)}
+                  />
+                </PersistentField>
+                <div className="flex items-center justify-between gap-3">
+                  {overlaySaveMessage ? (
+                    <small style={{ color: overlaySaveState === 'error' ? SP_COLORS.red : '#9eacb9' }}>{overlaySaveMessage}</small>
+                  ) : (
+                    <span />
+                  )}
                   <AtlasTextButton
-                    onClick={async () => {
-                      const enrollee = assignedEnrollees.find((item) => item.id === selectedIpsccEnrolleeId)
-                      if (!enrollee) return
-                      const itemScores = ipsccScoreDraft.split(',').map((value) => Math.max(1, Math.min(5, Math.round(Number(value.trim()) || 3)))).slice(0, 10)
-                      if (itemScores.length !== 10) return
-                      await onSaveIpsccEncounterSubmission({
-                        id: `ipscc-${Date.now()}`,
-                        navigatorName: currentNavigatorName,
-                        enrolleeId: enrollee.id,
-                        enrolleeName: enrollee.fullName,
-                        enrollmentId: enrollee.enrollmentId || null,
-                        submittedAtIso: new Date().toISOString(),
-                        submittedBy: 'service user',
-                        itemScores,
-                        note: ipsccNoteDraft
-                      })
-                    }}
+                    disabled={overlaySaveState === 'saving' || !assignedEnrollees.length}
+                    onClick={() =>
+                      void runOverlaySave(async () => {
+                        const enrollee = assignedEnrollees.find((item) => item.id === selectedIpsccEnrolleeId)
+                        if (!enrollee) throw new Error('Select an enrollee before saving IPSCC feedback.')
+                        await onSaveIpsccEncounterSubmission({
+                          id: createRecordId(),
+                          navigatorName: currentNavigatorName,
+                          enrolleeId: enrollee.id,
+                          enrolleeName: enrollee.fullName,
+                          enrollmentId: enrollee.enrollmentId || null,
+                          submittedAtIso: new Date().toISOString(),
+                          submittedBy: 'service user',
+                          itemScores: ipsccItemScores.map((score) => Math.max(1, Math.min(5, Math.round(score || 3)))),
+                          note: ipsccNoteDraft
+                        })
+                        setIpsccNoteDraft('')
+                      }, 'IPSCC encounter survey saved.')
+                    }
                     className="px-4 py-2 text-[12px]"
                   >
-                    save section 1 entry
+                    {overlaySaveState === 'saving' ? 'saving...' : 'save IPSCC survey'}
                   </AtlasTextButton>
                 </div>
               </div>
@@ -317,38 +500,58 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
             {activeOverlay === 'section_2_awareness' ? (
               <div className="space-y-3">
                 <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
-                  <div className="font-medium">Start a new IPS assessment</div>
+                  <div className="font-medium">Weekly Individual Placement and Support (IPS) self-assessment</div>
                   <div className="mt-1 text-[#9eacb9]">
                     Complete the weekly IPS self-assessment below. Historical results and correlation are shown beneath.
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  {IPS_KEYS.map((key) => (
-                    <label key={key} className="block">
-                      <small className="atlas-overline block text-[#9eacb9]">{key.replace('competency_', 'comp ').replaceAll('_', ' ')}</small>
-                      <select className="atlas-select h-10 w-full bg-transparent text-white" value={ipsSelfDraftScores[key]} onChange={(event) => setIpsSelfDraftScores((current) => ({ ...current, [key]: Number(event.target.value) }))}>
-                        {[1, 2, 3, 4, 5].map((option) => <option key={option} value={option} className="bg-black text-white">{option}</option>)}
+                  {IPS_COMPETENCY_OPTIONS.map((item) => (
+                    <PersistentField key={item.key} label={item.label}>
+                      <select
+                        className="atlas-select h-10 w-full bg-transparent text-white"
+                        value={ipsSelfDraftScores[item.key]}
+                        onChange={(event) => setIpsSelfDraftScores((current) => ({ ...current, [item.key]: Number(event.target.value) }))}
+                      >
+                        {LIKERT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value} className="bg-black text-white">{option.label}</option>
+                        ))}
                       </select>
-                    </label>
+                    </PersistentField>
                   ))}
                 </div>
-                <textarea className="atlas-textarea min-h-[90px] bg-transparent text-white" value={ipsSelfDraftNote} onChange={(event) => setIpsSelfDraftNote(event.target.value)} placeholder="weekly self-assessment note" />
-                <div className="flex justify-end">
+                <PersistentField label="Weekly self-assessment note">
+                  <textarea
+                    className="atlas-textarea min-h-[90px] bg-transparent text-white"
+                    value={ipsSelfDraftNote}
+                    onChange={(event) => setIpsSelfDraftNote(event.target.value)}
+                  />
+                </PersistentField>
+                <div className="flex items-center justify-between gap-3">
+                  {overlaySaveMessage ? (
+                    <small style={{ color: overlaySaveState === 'error' ? SP_COLORS.red : '#9eacb9' }}>{overlaySaveMessage}</small>
+                  ) : (
+                    <span />
+                  )}
                   <AtlasTextButton
-                    onClick={async () => {
-                      const now = new Date().toISOString()
-                      await onSaveIpsSelfAssessment({
-                        id: `ips-self-${Date.now()}`,
-                        navigatorName: currentNavigatorName,
-                        weekStartIso: now,
-                        submittedAtIso: now,
-                        competencyScores: ipsSelfDraftScores,
-                        note: ipsSelfDraftNote
-                      })
-                    }}
+                    disabled={overlaySaveState === 'saving'}
+                    onClick={() =>
+                      void runOverlaySave(async () => {
+                        const now = new Date().toISOString()
+                        await onSaveIpsSelfAssessment({
+                          id: createRecordId(),
+                          navigatorName: currentNavigatorName,
+                          weekStartIso: getWeekStartIso(new Date(now)),
+                          submittedAtIso: now,
+                          competencyScores: ipsSelfDraftScores,
+                          note: ipsSelfDraftNote
+                        })
+                        setIpsSelfDraftNote('')
+                      }, 'Weekly IPS self-assessment saved.')
+                    }
                     className="px-4 py-2 text-[12px]"
                   >
-                    save section 2 entry
+                    {overlaySaveState === 'saving' ? 'saving...' : 'save weekly IPS'}
                   </AtlasTextButton>
                 </div>
                 <div className="atlas-surface-raised px-3 py-3">
@@ -402,61 +605,111 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
 
             {activeOverlay === 'section_3_create' ? (
               <div className="space-y-3">
+                <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
+                  <div className="font-medium">Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) supervision notes</div>
+                  <div className="mt-1 text-[#9eacb9]">Field labels stay visible while typing so mid-session context is never lost.</div>
+                </div>
                 {createInsights.map((insight) => (
                   <div key={insight.pillar} className="atlas-surface-raised px-3 py-2 text-[12px] text-white">
                     <strong>{insight.label}:</strong> {insight.latestSummary}
                   </div>
                 ))}
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  <label className="block"><small className="atlas-overline block text-[#9eacb9]">Mode of supervision</small><select className="atlas-select h-10 w-full bg-transparent text-white" value={createDraft.supervisionMode} onChange={(event) => setCreateDraft((current) => ({ ...current, supervisionMode: event.target.value as 'in_person' | 'online' | 'phone_call' }))}><option value="in_person" className="bg-black text-white">In-person</option><option value="online" className="bg-black text-white">Online</option><option value="phone_call" className="bg-black text-white">Phone call</option></select></label>
-                  <label className="block"><small className="atlas-overline block text-[#9eacb9]">Duration (minutes)</small><input className="atlas-input h-10 w-full bg-transparent text-white" value={createDraft.sessionDurationMinutes} onChange={(event) => setCreateDraft((current) => ({ ...current, sessionDurationMinutes: event.target.value }))} /></label>
+                  <PersistentField label="Mode of supervision">
+                    <select
+                      className="atlas-select h-10 w-full bg-transparent text-white"
+                      value={createDraft.supervisionMode}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({
+                          ...current,
+                          supervisionMode: event.target.value as 'in_person' | 'online' | 'phone_call'
+                        }))
+                      }
+                    >
+                      <option value="in_person" className="bg-black text-white">In-person</option>
+                      <option value="online" className="bg-black text-white">Online</option>
+                      <option value="phone_call" className="bg-black text-white">Phone call</option>
+                    </select>
+                  </PersistentField>
+                  <PersistentField label="Duration (minutes)">
+                    <input
+                      className="atlas-input h-10 w-full bg-transparent text-white"
+                      value={createDraft.sessionDurationMinutes}
+                      onChange={(event) => setCreateDraft((current) => ({ ...current, sessionDurationMinutes: event.target.value }))}
+                    />
+                  </PersistentField>
                 </div>
-                <label className="inline-flex items-center gap-2 text-[12px] text-white"><input type="checkbox" checked={createDraft.connectFocusedListening} onChange={(event) => setCreateDraft((current) => ({ ...current, connectFocusedListening: event.target.checked }))} /> Connect: focused listening and minimized distractions</label>
-                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.recognizeNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, recognizeNotes: event.target.value }))} placeholder="Recognize: success, achievements, etc." />
-                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.encourageNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, encourageNotes: event.target.value }))} placeholder="Encourage: challenges, difficulties, etc." />
-                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.acknowledgeNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, acknowledgeNotes: event.target.value }))} placeholder="Acknowledge: initiative, leadership, advocacy, etc." />
-                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.trainNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, trainNotes: event.target.value }))} placeholder="Train: learning opportunities and support needed." />
-                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.empowerNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, empowerNotes: event.target.value }))} placeholder="Empower: time, tools, transportation, materials, etc." />
-                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.createActionPlan} onChange={(event) => setCreateDraft((current) => ({ ...current, createActionPlan: event.target.value }))} placeholder="C.R.E.A.T.E. action plan for implementation." />
-                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.superviseeSubmission} onChange={(event) => setCreateDraft((current) => ({ ...current, superviseeSubmission: event.target.value }))} placeholder="Peer specialist submission" />
-                <textarea className="atlas-textarea min-h-[72px] bg-transparent text-white" value={createDraft.supervisorSubmission} onChange={(event) => setCreateDraft((current) => ({ ...current, supervisorSubmission: event.target.value }))} placeholder="Supervisor submission" />
+                <label className="inline-flex items-center gap-2 text-[12px] text-white">
+                  <input
+                    type="checkbox"
+                    checked={createDraft.connectFocusedListening}
+                    onChange={(event) => setCreateDraft((current) => ({ ...current, connectFocusedListening: event.target.checked }))}
+                  />
+                  Connect: focused listening and minimized distractions
+                </label>
+                {CREATE_NOTE_FIELDS.map((field) => (
+                  <PersistentField key={field.key} label={field.label}>
+                    <textarea
+                      className="atlas-textarea min-h-[72px] bg-transparent text-white"
+                      value={createDraft[field.key]}
+                      onChange={(event) => setCreateDraft((current) => ({ ...current, [field.key]: event.target.value }))}
+                    />
+                  </PersistentField>
+                ))}
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  <label className="block"><small className="atlas-overline block text-[#9eacb9]">Peer specialist signature</small><input className="atlas-input h-10 w-full bg-transparent text-white" value={createDraft.peerSpecialistSignature} onChange={(event) => setCreateDraft((current) => ({ ...current, peerSpecialistSignature: event.target.value }))} /></label>
-                  <label className="block"><small className="atlas-overline block text-[#9eacb9]">Supervisor signature</small><input className="atlas-input h-10 w-full bg-transparent text-white" value={createDraft.supervisorSignature} onChange={(event) => setCreateDraft((current) => ({ ...current, supervisorSignature: event.target.value }))} /></label>
+                  <PersistentField label="Peer specialist signature">
+                    <input
+                      className="atlas-input h-10 w-full bg-transparent text-white"
+                      value={createDraft.peerSpecialistSignature}
+                      onChange={(event) => setCreateDraft((current) => ({ ...current, peerSpecialistSignature: event.target.value }))}
+                    />
+                  </PersistentField>
+                  <PersistentField label="Supervisor signature">
+                    <input
+                      className="atlas-input h-10 w-full bg-transparent text-white"
+                      value={createDraft.supervisorSignature}
+                      onChange={(event) => setCreateDraft((current) => ({ ...current, supervisorSignature: event.target.value }))}
+                    />
+                  </PersistentField>
                 </div>
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between gap-3">
+                  <small style={{ color: overlaySaveState === 'error' ? SP_COLORS.red : '#9eacb9' }}>
+                    {overlaySaveMessage || `${createSessions.length} C.R.E.A.T.E. sessions recorded`}
+                  </small>
                   <AtlasTextButton
-                    onClick={async () => {
-                      const now = new Date().toISOString()
-                      await onSaveCreateSession({
-                        id: `create-${Date.now()}`,
-                        navigatorName: currentNavigatorName,
-                        supervisorName: createDraft.supervisorSignature || 'supervisor',
-                        sessionAtIso: now,
-                        submittedAtIso: now,
-                        supervisionMode: createDraft.supervisionMode,
-                        sessionDurationMinutes: Number(createDraft.sessionDurationMinutes) || null,
-                        connectFocusedListening: createDraft.connectFocusedListening,
-                        recognizeNotes: createDraft.recognizeNotes,
-                        encourageNotes: createDraft.encourageNotes,
-                        acknowledgeNotes: createDraft.acknowledgeNotes,
-                        trainNotes: createDraft.trainNotes,
-                        empowerNotes: createDraft.empowerNotes,
-                        createActionPlan: createDraft.createActionPlan,
-                        supervisorSubmission: createDraft.supervisorSubmission,
-                        superviseeSubmission: createDraft.superviseeSubmission,
-                        peerSpecialistSignature: createDraft.peerSpecialistSignature,
-                        peerSpecialistSignedAtIso: now,
-                        supervisorSignature: createDraft.supervisorSignature,
-                        supervisorSignedAtIso: now
-                      })
-                    }}
+                    disabled={overlaySaveState === 'saving'}
+                    onClick={() =>
+                      void runOverlaySave(async () => {
+                        const now = new Date().toISOString()
+                        await onSaveCreateSession({
+                          id: createRecordId(),
+                          navigatorName: currentNavigatorName,
+                          supervisorName: createDraft.supervisorSignature || 'supervisor',
+                          sessionAtIso: now,
+                          submittedAtIso: now,
+                          supervisionMode: createDraft.supervisionMode,
+                          sessionDurationMinutes: Number(createDraft.sessionDurationMinutes) || null,
+                          connectFocusedListening: createDraft.connectFocusedListening,
+                          recognizeNotes: createDraft.recognizeNotes,
+                          encourageNotes: createDraft.encourageNotes,
+                          acknowledgeNotes: createDraft.acknowledgeNotes,
+                          trainNotes: createDraft.trainNotes,
+                          empowerNotes: createDraft.empowerNotes,
+                          createActionPlan: createDraft.createActionPlan,
+                          supervisorSubmission: createDraft.supervisorSubmission,
+                          superviseeSubmission: createDraft.superviseeSubmission,
+                          peerSpecialistSignature: createDraft.peerSpecialistSignature,
+                          peerSpecialistSignedAtIso: now,
+                          supervisorSignature: createDraft.supervisorSignature,
+                          supervisorSignedAtIso: now
+                        })
+                      }, 'C.R.E.A.T.E. supervision notes saved.')
+                    }
                     className="px-4 py-2 text-[12px]"
                   >
-                    save section 3 entry
+                    {overlaySaveState === 'saving' ? 'saving...' : 'save C.R.E.A.T.E. notes'}
                   </AtlasTextButton>
                 </div>
-                <small className="block text-[#9eacb9]">{createSessions.length} C.R.E.A.T.E. sessions recorded</small>
               </div>
             ) : null}
 
@@ -500,18 +753,39 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
 
             {activeOverlay === 'section_7_schedule' ? (
               <div className="space-y-2">
-                {[...dueItems, ...regulationReviewDueItems.map((item) => ({
-                  id: item.id,
-                  title: `regulation review · ${item.enrolleeName}`,
-                  dueAtIso: item.dueAtIso,
-                  cadence: item.cadence,
-                  status: item.status
-                }))].map((item) => (
+                {dueItems.map((item) => (
                   <div key={item.id} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
                     <span className="text-white">{item.title}</span>
                     <span style={{ color: '#9eacb9' }}>{formatDateLabel(item.dueAtIso)} · {item.status}</span>
                   </div>
                 ))}
+                {regulationReviewDueItems.map((item) => {
+                  const missingLabel = (item.missingInstruments || [])
+                    .map((instrument) => (instrument === 'mh_sca' ? 'MH-SCA' : 'SVS'))
+                    .join(' + ')
+                  return (
+                    <div key={item.id} className="atlas-surface-raised flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[12px]">
+                      <div>
+                        <span className="text-white">regulation review · {item.enrolleeName}</span>
+                        <span className="ml-2" style={{ color: '#9eacb9' }}>
+                          {formatDateLabel(item.dueAtIso)} · {item.status}
+                          {item.status === 'open' && missingLabel ? ` · missing ${missingLabel}` : ''}
+                        </span>
+                      </div>
+                      {item.status === 'open' ? (
+                        <AtlasTextButton
+                          onClick={() => {
+                            onOpenRegulationReview?.(item.enrolleeId, item.missingInstruments)
+                            setActiveOverlay(null)
+                          }}
+                          className="px-3 py-1 text-[12px]"
+                        >
+                          start review
+                        </AtlasTextButton>
+                      ) : null}
+                    </div>
+                  )
+                })}
               </div>
             ) : null}
 

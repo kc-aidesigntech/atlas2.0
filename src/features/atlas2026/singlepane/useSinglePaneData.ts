@@ -45,7 +45,6 @@ import type {
   NavigatorCompetencyAssessmentRecord,
   SupervisorNavigatorCompetencySummary,
   RoleMenuConfig,
-  RegulationReviewDueItem,
   RegulationReviewSettings,
   RegulationTestSubmissionInput,
   RegulationTestSubmissionRecord,
@@ -91,6 +90,7 @@ import {
   setZCodeDomainSurveyAnswerNullified,
   deleteAdminServiceCapacitySubmission as deleteAdminServiceCapacitySubmissionRecord,
   uploadEnrolleeProfileImage,
+  uploadAccountProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
   saveAccountSettings as persistAccountSettings,
   saveAccessMatrixEnrollmentNavigators as persistAccessMatrixEnrollmentNavigators,
@@ -141,6 +141,10 @@ import {
   selectCompletedPartnerSurveysNewestFirst,
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
+import {
+  applyPartnerMyStationDebutMenuGate,
+  evaluatePartnerMyStationDebut
+} from '@/features/atlas2026/singlepane/data-access/partnerMyStationDebut'
 import { isCapabilityAllowedForRole } from '@/features/atlas2026/shared/roleCapabilityPolicy'
 import {
   buildPartnerServiceCapacityDefaultHeader,
@@ -163,7 +167,6 @@ import {
   DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION,
   flattenSurveyPrompts
 } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
-import { isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import {
   enqueuePublicReferralQueueRecord,
@@ -172,6 +175,14 @@ import {
 } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { inferZCodesForReferral } from '@/services/atlas2026/demoInferenceService'
+import {
+  buildForcedRegulationReviewDueItems,
+  buildRegulationMilestoneRouteLog,
+  buildRegulationZ75StripMarker,
+  hasOpenRegulationMilestoneForStabilization,
+  isRegulationCadenceInstrument,
+  type RegulationInstrumentCompletionMap
+} from '@/features/atlas2026/singlepane/data/regulationCadence'
 
 const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'route planning': ['housing', 'work'],
@@ -868,19 +879,36 @@ function cadenceDays(cadence: IntervalAssessmentRule['cadence']) {
   return 90
 }
 
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result)
-        return
-      }
-      reject(new Error('Unable to read image file.'))
-    }
-    reader.onerror = () => reject(reader.error || new Error('Unable to read image file.'))
-    reader.readAsDataURL(file)
+function loadImageElement(objectUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Unable to process image file.'))
+    image.src = objectUrl
   })
+}
+
+/**
+ * Offline / unsigned-in fallback: shrink the photo before writing a data URL so
+ * account settings never exceed browser localStorage quota (QuotaExceededError).
+ */
+async function compressImageToDataUrl(file: File, maxEdge = 512, quality = 0.82) {
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const image = await loadImageElement(objectUrl)
+    const scale = Math.min(1, maxEdge / Math.max(image.width || 1, image.height || 1))
+    const width = Math.max(1, Math.round((image.width || 1) * scale))
+    const height = Math.max(1, Math.round((image.height || 1) * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Unable to process image file.')
+    context.drawImage(image, 0, 0, width, height)
+    return canvas.toDataURL('image/jpeg', quality)
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
 }
 
 function buildIntervalDueItems(
@@ -914,49 +942,6 @@ function buildIntervalDueItems(
         status: status ? 'completed' : 'open'
       } satisfies IntervalAssessmentDueItem
     })
-}
-
-const REGULATION_REVIEW_DAY_IN_MS = 24 * 60 * 60 * 1000
-
-/**
- * Forced regulation review due computation.
- *
- * One item per owned enrollee whose review is active. "Due now" means there is no
- * completed regulation-stage test submission inside the current cadence window; a
- * completed submission satisfies the cycle until the window elapses again.
- */
-function buildRegulationReviewDueItems(
-  settings: RegulationReviewSettings,
-  ownedEnrollees: EnrolleeProfile[],
-  latestCompletedByEnrolleeId: Record<string, string>
-): RegulationReviewDueItem[] {
-  const nowMs = Date.now()
-  return ownedEnrollees
-    .map((enrollee) => {
-      const override = settings.enrolleeSettings[enrollee.id] || null
-      // Default-active contract: enrollees without an explicit per-enrollee entry inherit
-      // the admin default so newly added enrollees are enforced without extra setup.
-      const isActive = override ? override.isActive : settings.isActiveForNewEnrollees
-      if (!isActive) return null
-      const cadence = override?.cadence || settings.defaultCadence
-      const windowMs = cadenceDays(cadence) * REGULATION_REVIEW_DAY_IN_MS
-      const lastCompletedAtIso = latestCompletedByEnrolleeId[enrollee.id] || null
-      const lastCompletedMs = lastCompletedAtIso ? new Date(lastCompletedAtIso).getTime() : null
-      const isSatisfied = lastCompletedMs !== null && nowMs - lastCompletedMs < windowMs
-      return {
-        id: `regulation-review-${enrollee.id}`,
-        enrolleeId: enrollee.id,
-        enrolleeName: enrollee.fullName,
-        navigatorName: enrollee.assignedNavigator || null,
-        cadence,
-        // Never-reviewed enrollees are due immediately; otherwise the next cycle boundary.
-        dueAtIso:
-          lastCompletedMs !== null ? new Date(lastCompletedMs + windowMs).toISOString() : new Date(nowMs).toISOString(),
-        lastCompletedAtIso,
-        status: isSatisfied ? 'completed' : 'open'
-      } satisfies RegulationReviewDueItem
-    })
-    .filter((item): item is RegulationReviewDueItem => Boolean(item))
 }
 
 function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
@@ -1189,12 +1174,11 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
   // Forced regulation review: admin cadence policy (null until the config document loads)
-  // plus the latest completed regulation-stage submission time per enrollee.
+  // plus latest completed SVS / MH-SCA submission times per enrollee (both required per cycle).
   const [regulationReviewSettings, setRegulationReviewSettings] = useState<RegulationReviewSettings | null>(null)
   const [regulationReviewError, setRegulationReviewError] = useState<string | null>(null)
-  const [latestRegulationReviewCompletionByEnrolleeId, setLatestRegulationReviewCompletionByEnrolleeId] = useState<
-    Record<string, string>
-  >({})
+  const [latestRegulationReviewCompletionByEnrolleeId, setLatestRegulationReviewCompletionByEnrolleeId] =
+    useState<RegulationInstrumentCompletionMap>({})
   const [isUploadingAccountProfileImage, setIsUploadingAccountProfileImage] = useState(false)
   const [accountProfileImageUploadError, setAccountProfileImageUploadError] = useState<string | null>(null)
   const [sessionEmail, setSessionEmail] = useState('')
@@ -1501,7 +1485,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [intakeFormsByEnrolleeId, selectedEnrollee]
   )
 
-  const selectedRoleConfig = useMemo(
+  // Base role menus before partner My Station debut commissioning is applied. Troubleshooting
+  // grants still constrain remote partner shells here; debut gating is applied after survey history loads.
+  const baseSelectedRoleConfig = useMemo(
     () => {
       const baseConfig =
         roleConfigs.find((item) => item.role === viewerRole) || roleConfigs[0] || { role: viewerRole, topMenus: [], actionMenus: [] }
@@ -1514,17 +1500,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     },
     [remoteSession?.partnerGrant?.allowedMenus, remoteSession?.targetRole, roleConfigs, viewerRole]
   )
-  const selectedRoleTopMenus = useMemo(
-    () => selectedRoleConfig.topMenus.filter((menu) => Boolean(menu && menu.trim())),
-    [selectedRoleConfig.topMenus]
-  )
-  const selectedRoleTopMenusKey = useMemo(() => selectedRoleTopMenus.join('||'), [selectedRoleTopMenus])
-
-  useEffect(() => {
-    const firstMenu = selectedRoleTopMenus[0]
-    if (!firstMenu) return
-    setActiveMenu((current) => (selectedRoleTopMenus.includes(current) ? current : firstMenu))
-  }, [selectedRoleTopMenus, selectedRoleTopMenusKey])
 
   useEffect(() => {
     if (!scopedEnrollees[0]?.id) return
@@ -1563,7 +1538,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [routeAssignmentsByEnrolleeId, selectedEnrollee]
   )
 
-  const resolvedZCodeStripMarkers = useMemo(
+  const resolvedZCodeStripMarkersFromActiveCodes = useMemo(
     () => buildResolvedZCodeStripMarkers(selectedEnrollee?.activeZCodeDetails || []),
     [selectedEnrollee?.activeZCodeDetails]
   )
@@ -1951,7 +1926,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [regulationReviewEnrolleeIdsKey])
   const regulationReviewDueItems = useMemo(
     () =>
-      buildRegulationReviewDueItems(
+      buildForcedRegulationReviewDueItems(
         effectiveRegulationReviewSettings,
         scopedEnrollees,
         latestRegulationReviewCompletionByEnrolleeId
@@ -2019,6 +1994,32 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setPartnerServiceCapacitySurveyHistory,
     setPartnerServiceCapacitySurveyError
   } = usePartnerServiceCapacityHistory(viewerRole, effectivePartnerOrganizationName)
+
+  // Partner My Station debut: hide the menu until capacity commissioning + specialization clarity.
+  // Administrator troubleshooting sessions keep grant-selected menus so ops can inspect early shells.
+  const partnerMyStationDebut = useMemo(
+    () =>
+      evaluatePartnerMyStationDebut({
+        stationProfile: effectivePartnerStationProfile,
+        surveyHistory: partnerServiceCapacitySurveyHistory
+      }),
+    [effectivePartnerStationProfile, partnerServiceCapacitySurveyHistory]
+  )
+  const selectedRoleConfig = useMemo(() => {
+    if (viewerRole !== 'partner' || remoteSession?.isActive) return baseSelectedRoleConfig
+    return applyPartnerMyStationDebutMenuGate(baseSelectedRoleConfig, partnerMyStationDebut.canDebut)
+  }, [baseSelectedRoleConfig, partnerMyStationDebut.canDebut, remoteSession?.isActive, viewerRole])
+  const selectedRoleTopMenus = useMemo(
+    () => selectedRoleConfig.topMenus.filter((menu) => Boolean(menu && menu.trim())),
+    [selectedRoleConfig.topMenus]
+  )
+  const selectedRoleTopMenusKey = useMemo(() => selectedRoleTopMenus.join('||'), [selectedRoleTopMenus])
+
+  useEffect(() => {
+    const firstMenu = selectedRoleTopMenus[0]
+    if (!firstMenu) return
+    setActiveMenu((current) => (selectedRoleTopMenus.includes(current) ? current : firstMenu))
+  }, [selectedRoleTopMenus, selectedRoleTopMenusKey])
 
   useEffect(() => {
     if (viewerRole !== 'administrator') {
@@ -2484,6 +2485,37 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   const isRegulationCleared = Boolean(latestCompletedMhSca?.passed && latestCompletedSvs?.passed)
 
+  const resolvedZCodeStripMarkers = useMemo(() => {
+    const fromActiveCodes = resolvedZCodeStripMarkersFromActiveCodes
+    // When SVS + MH-SCA are both currently passing, surface the Tacoma Z75 / Lucid
+    // regulation milestone as a resolved stop alongside ordinary Z-code resolutions.
+    if (!selectedEnrollee || !latestCompletedMhSca?.passed || !latestCompletedSvs?.passed) {
+      return fromActiveCodes
+    }
+    const stabilizedAtIso =
+      [latestCompletedMhSca.updatedAtIso, latestCompletedSvs.updatedAtIso]
+        .slice()
+        .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ||
+      latestCompletedSvs.updatedAtIso
+    const regulationMarker = buildRegulationZ75StripMarker({
+      enrolleeId: selectedEnrollee.id,
+      stabilizedAtIso
+    })
+    const withoutSynthetic = fromActiveCodes.filter(
+      (marker) => marker.id !== regulationMarker.id && marker.zCode !== regulationMarker.zCode
+    )
+    return [...withoutSynthetic, regulationMarker].sort(
+      (left, right) => new Date(left.resolvedAtIso).getTime() - new Date(right.resolvedAtIso).getTime()
+    )
+  }, [
+    latestCompletedMhSca?.passed,
+    latestCompletedMhSca?.updatedAtIso,
+    latestCompletedSvs?.passed,
+    latestCompletedSvs?.updatedAtIso,
+    resolvedZCodeStripMarkersFromActiveCodes,
+    selectedEnrollee
+  ])
+
   const regulationTestStripMarkers = useMemo<RegulationTestStripMarker[]>(
     () =>
       completedRegulationTests.map((record) => ({
@@ -2707,7 +2739,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }))
 
     try {
-      const avatarUrl = await readFileAsDataUrl(file)
+      // Prefer Storage (accounts/{user_id}/...) so account settings only store a short URL.
+      // Fall back to a compressed data URL only when cloud upload is unavailable.
+      let avatarUrl: string
+      try {
+        const uploaded = await uploadAccountProfileImage(file)
+        avatarUrl = uploaded.avatarUrl
+      } catch (storageError) {
+        const storageMessage = storageError instanceof Error ? storageError.message : ''
+        const canUseLocalFallback =
+          /sign in is required|supabase is required/i.test(storageMessage) ||
+          storageMessage.toLowerCase().includes('auth session missing')
+        if (!canUseLocalFallback) throw storageError
+        avatarUrl = await compressImageToDataUrl(file)
+      }
+
       const saved = await persistAccountSettings({
         ...accountSettings,
         avatarUrl
@@ -3701,15 +3747,70 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setRegulationTestError(null)
     try {
       const saved = await saveRegulationTestSubmission(input)
-      setRegulationTestHistory((current) => upsertRegulationTestHistory(current, saved))
-      if (saved.status === 'completed' && !isRenewalAssessmentType(saved.testType)) {
-        // A completed regulation-stage submission satisfies the forced regulation review
-        // cycle immediately, without waiting for the next remote fetch.
+      const nextHistory = upsertRegulationTestHistory(regulationTestHistory, saved)
+      setRegulationTestHistory(nextHistory)
+      if (saved.status === 'completed' && isRegulationCadenceInstrument(saved.testType)) {
+        // Persist per-instrument completion so one of SVS / MH-SCA alone never clears the
+        // forced weekly review cycle.
         setLatestRegulationReviewCompletionByEnrolleeId((current) => {
-          const existing = current[saved.enrolleeId]
-          if (existing && new Date(existing).getTime() >= new Date(saved.submittedAtIso).getTime()) return current
-          return { ...current, [saved.enrolleeId]: saved.submittedAtIso }
+          const existingForEnrollee = current[saved.enrolleeId] || {}
+          const existingForType = existingForEnrollee[saved.testType]
+          if (
+            existingForType &&
+            new Date(existingForType).getTime() >= new Date(saved.submittedAtIso).getTime()
+          ) {
+            return current
+          }
+          return {
+            ...current,
+            [saved.enrolleeId]: {
+              ...existingForEnrollee,
+              [saved.testType]: saved.submittedAtIso
+            }
+          }
         })
+      }
+
+      // Stable SVS + MH-SCA is also a Tacoma Z75 / Lucid stop: log once when both latest
+      // completed instruments for this enrollee are currently passing.
+      if (saved.status === 'completed' && isRegulationCadenceInstrument(saved.testType) && saved.passed) {
+        const completedForEnrollee = nextHistory
+          .filter(
+            (record) =>
+              record.enrolleeId === saved.enrolleeId &&
+              record.status === 'completed' &&
+              record.passed !== null &&
+              isRegulationCadenceInstrument(record.testType)
+          )
+          .slice()
+          .sort((left, right) => new Date(left.updatedAtIso).getTime() - new Date(right.updatedAtIso).getTime())
+        const latestMhSca = [...completedForEnrollee].reverse().find((record) => record.testType === 'mh_sca')
+        const latestSvs = [...completedForEnrollee].reverse().find((record) => record.testType === 'svs')
+        if (latestMhSca?.passed && latestSvs?.passed) {
+          const stabilizedAtIso =
+            [latestMhSca.updatedAtIso, latestSvs.updatedAtIso]
+              .slice()
+              .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ||
+            saved.submittedAtIso
+          if (!hasOpenRegulationMilestoneForStabilization(logs, saved.enrolleeId, stabilizedAtIso)) {
+            const milestoneLog = buildRegulationMilestoneRouteLog({
+              enrolleeId: saved.enrolleeId,
+              stabilizedAtIso
+            })
+            try {
+              const finalLogs = await appendRouteLogRecord(logs, milestoneLog)
+              setLogs(finalLogs)
+            } catch (milestoneError) {
+              // Surface the milestone persistence failure without rolling back the assessment save.
+              setNavigatorProgramError(
+                toSupabaseErrorMessage(
+                  milestoneError,
+                  'Unable to log the Z75 / Lucid regulation milestone stop.'
+                )
+              )
+            }
+          }
+        }
       }
       return saved
     } catch (error) {
@@ -3781,6 +3882,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     selectedLoadBreakdown: effectiveSelectedLoadBreakdown,
     selectedLogs,
     selectedRoleConfig,
+    partnerMyStationDebut,
     timelineConfig: selectedTimelineConfig,
     enrollmentRequests,
     routeCandidates,

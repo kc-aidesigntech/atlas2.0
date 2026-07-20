@@ -84,7 +84,7 @@ export default function ProfilePanel({
   onSelectZCode,
   enrollmentStartLabel,
   onOpenBurdenSurvey,
-  burdenSurveyLabel = 'open burden survey',
+  burdenSurveyLabel = 'update z-codes',
   onOpenReferralPortal,
   referralLabel = 'refer'
 }: ProfilePanelProps) {

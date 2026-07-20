@@ -50,6 +50,14 @@ function getDefaultAccountSettings(): AccountSettings {
   }
 }
 
+function normalizeAccountAvatarUrl(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null
+  const trimmed = value.trim()
+  // Drop oversized data-URL avatars that previously exhausted localStorage quota.
+  if (trimmed.startsWith('data:image/') && trimmed.length > 180_000) return null
+  return trimmed
+}
+
 function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | null | undefined, fallback: AccountSettings = getDefaultAccountSettings()) {
   const enabledRoles = Array.isArray(payload?.enabledRoles)
     ? payload!.enabledRoles.filter((role): role is AtlasRole => ['navigator', 'partner', 'supervisor', 'administrator'].includes(String(role)))
@@ -58,7 +66,7 @@ function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | nul
     fullName: payload?.fullName || fallback.fullName,
     email: payload?.email || fallback.email,
     organization: payload?.organization || fallback.organization,
-    avatarUrl: typeof payload?.avatarUrl === 'string' ? payload.avatarUrl : null,
+    avatarUrl: normalizeAccountAvatarUrl(payload?.avatarUrl),
     enabledRoles: enabledRoles.length ? enabledRoles : fallback.enabledRoles
   } satisfies AccountSettings
 }

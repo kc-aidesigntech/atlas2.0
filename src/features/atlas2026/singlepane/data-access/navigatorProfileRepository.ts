@@ -8,6 +8,11 @@ import type {
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 
+// Postgres uuid columns reject seed-style ids like `ipscc-...`; only persist real UUIDs.
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
+}
+
 function normalizeItemScores(value: unknown): number[] {
   if (!Array.isArray(value)) return []
   return value
@@ -65,8 +70,9 @@ export async function saveNavigatorIpsccEncounterSubmission(
       itemScores: normalizeItemScores(record.itemScores)
     }
   }
+  const hasPersistedId = isUuid(record.id)
   const payload = {
-    id: record.id,
+    ...(hasPersistedId ? { id: record.id } : {}),
     navigator_name: record.navigatorName,
     enrollee_id: record.enrolleeId,
     enrollee_name: record.enrolleeName,
@@ -76,12 +82,11 @@ export async function saveNavigatorIpsccEncounterSubmission(
     item_scores: normalizeItemScores(record.itemScores),
     note: record.note
   }
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('navigator_ipscc_encounter_submissions')
-    .upsert(payload)
-    .select('*')
-    .single()
+  // Insert when the client id is not a UUID so Postgres can allocate one; upsert only for real ids.
+  const writer = hasPersistedId
+    ? supabase.schema('atlas').from('navigator_ipscc_encounter_submissions').upsert(payload)
+    : supabase.schema('atlas').from('navigator_ipscc_encounter_submissions').insert(payload)
+  const { data, error } = await writer.select('*').single()
   if (error) throw error
   return {
     id: String(data.id),
@@ -151,20 +156,19 @@ export async function saveNavigatorIpsSelfAssessment(
       competencyScores: normalizeCompetencyScores(record.competencyScores)
     }
   }
+  const hasPersistedId = isUuid(record.id)
   const payload = {
-    id: record.id,
+    ...(hasPersistedId ? { id: record.id } : {}),
     navigator_name: record.navigatorName,
     week_start_iso: record.weekStartIso,
     submitted_at: record.submittedAtIso,
     competency_scores: normalizeCompetencyScores(record.competencyScores),
     note: record.note
   }
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('navigator_ips_self_assessments')
-    .upsert(payload)
-    .select('*')
-    .single()
+  const writer = hasPersistedId
+    ? supabase.schema('atlas').from('navigator_ips_self_assessments').upsert(payload)
+    : supabase.schema('atlas').from('navigator_ips_self_assessments').insert(payload)
+  const { data, error } = await writer.select('*').single()
   if (error) throw error
   return {
     id: String(data.id),
@@ -185,8 +189,9 @@ export async function saveSupervisorIpsAssessment(
       competencyScores: normalizeCompetencyScores(record.competencyScores)
     }
   }
+  const hasPersistedId = isUuid(record.id)
   const payload = {
-    id: record.id,
+    ...(hasPersistedId ? { id: record.id } : {}),
     supervisor_name: record.supervisorName,
     navigator_name: record.navigatorName,
     week_start_iso: record.weekStartIso,
@@ -194,12 +199,10 @@ export async function saveSupervisorIpsAssessment(
     competency_scores: normalizeCompetencyScores(record.competencyScores),
     note: record.note
   }
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('supervisor_ips_assessments')
-    .upsert(payload)
-    .select('*')
-    .single()
+  const writer = hasPersistedId
+    ? supabase.schema('atlas').from('supervisor_ips_assessments').upsert(payload)
+    : supabase.schema('atlas').from('supervisor_ips_assessments').insert(payload)
+  const { data, error } = await writer.select('*').single()
   if (error) throw error
   return {
     id: String(data.id),
@@ -256,8 +259,9 @@ export async function saveNavigatorCreateSession(record: CreateSessionRecord): P
   if (!hasSupabaseConfig || !supabase) {
     return record
   }
+  const hasPersistedId = isUuid(record.id)
   const payload = {
-    id: record.id,
+    ...(hasPersistedId ? { id: record.id } : {}),
     navigator_name: record.navigatorName,
     supervisor_name: record.supervisorName,
     session_at: record.sessionAtIso,
@@ -278,12 +282,10 @@ export async function saveNavigatorCreateSession(record: CreateSessionRecord): P
     supervisor_signature: record.supervisorSignature,
     supervisor_signed_at: record.supervisorSignedAtIso
   }
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('navigator_create_sessions')
-    .upsert(payload)
-    .select('*')
-    .single()
+  const writer = hasPersistedId
+    ? supabase.schema('atlas').from('navigator_create_sessions').upsert(payload)
+    : supabase.schema('atlas').from('navigator_create_sessions').insert(payload)
+  const { data, error } = await writer.select('*').single()
   if (error) throw error
   return {
     id: String(data.id),

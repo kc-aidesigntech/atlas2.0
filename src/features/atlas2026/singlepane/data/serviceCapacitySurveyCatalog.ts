@@ -208,6 +208,17 @@ export const DEFAULT_SERVICE_CAPACITY_SECTIONS: ZCodeSurveySection[] = [
       { id: 'z65-5', parentCode: 'Z65', parentTheme: 'Problems related to other psychosocial circumstances', zCode: 'Z65.5', normalizedZCode: 'Z65.5', title: 'Z65.5', description: 'Exposure to disaster, war, or other hostilities' },
       { id: 'z65-8', parentCode: 'Z65', parentTheme: 'Problems related to other psychosocial circumstances', zCode: 'Z65.8', normalizedZCode: 'Z65.8', title: 'Z65.8', description: 'Other specified problems related to psychosocial circumstances' }
     ]
+  },
+  {
+    // Z75 is the Tacoma regulation-provider parent: stable SVS + MH-SCA milestones log under
+    // Lucid as Z75 stops. Keep these codes in the navigator override catalog so navigators
+    // can also assign/resolve them explicitly on the enrollee profile.
+    parentCode: 'Z75',
+    theme: 'Problems related to medical facilities and other health care',
+    prompts: [
+      { id: 'z75-3', parentCode: 'Z75', parentTheme: 'Problems related to medical facilities and other health care', zCode: 'Z75.3', normalizedZCode: 'Z75.3', title: 'Z75.3', description: 'Unavailability and inaccessibility of health care facilities' },
+      { id: 'z75-4', parentCode: 'Z75', parentTheme: 'Problems related to medical facilities and other health care', zCode: 'Z75.4', normalizedZCode: 'Z75.4', title: 'Z75.4', description: 'Unavailability and inaccessibility of other helping agencies' }
+    ]
   }
 ]
 

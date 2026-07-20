@@ -222,8 +222,16 @@ export default function PartnerReferralWorkflowPanel({
     <AtlasInsetCard className="atlas-surface-panel space-y-4 border-white/20 bg-[#0c0c0c] px-5 py-5">
       <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
         <div className="mx-auto flex w-[150px] shrink-0 flex-col items-start sm:mx-0">
-          {/* Referral portal uses one canonical logo mark here; unlike profile panels this surface does not support per-user logo uploads. */}
-          <div className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border bg-transparent" style={{ borderColor: SP_COLORS.white, borderWidth: '2.5px' }}>
+          {/* Referral portal uses one canonical logo mark here; unlike profile panels this surface does not support per-user logo uploads.
+              Field-adjacent soft grey (not pure black) keeps the brand mark readable next to atlas-admin-input fills. */}
+          <div
+            className="h-[150px] w-[150px] overflow-hidden rounded-[38px] border"
+            style={{
+              borderColor: SP_COLORS.white,
+              borderWidth: '2.5px',
+              backgroundColor: 'var(--surface-panel-soft)'
+            }}
+          >
             <img src={atlasLogoSrc} alt="atlas logo" className="h-full w-full object-contain" />
           </div>
         </div>

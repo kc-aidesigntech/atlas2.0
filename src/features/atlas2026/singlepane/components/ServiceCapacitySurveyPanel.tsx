@@ -35,6 +35,7 @@ import {
 import { usePartnerServiceCapacityDraftResolver } from '../hooks/usePartnerServiceCapacityDraftResolver'
 import { useServiceCapacitySurveyCatalog } from '../hooks/useServiceCapacitySurveyCatalog'
 import { toSupabaseErrorMessage } from '../data-access/supabaseOptionalData'
+import type { PartnerMyStationDebutRequirement } from '../data-access/partnerMyStationDebut'
 import type {
   PartnerIdentifierRecord,
   PartnerServiceCapacityAnswer,
@@ -63,6 +64,9 @@ interface ServiceCapacitySurveyPanelProps {
   onSubmit: (payload: PartnerServiceCapacitySubmissionInput) => Promise<PartnerServiceCapacitySubmissionRecord | void> | PartnerServiceCapacitySubmissionRecord | void
   onDeleteDraft: (submissionId: string) => Promise<{ id: string; draftKey: string } | void> | { id: string; draftKey: string } | void
   surveyVariant?: 'burden' | 'domainSpectrum'
+  /** Optional My Station commissioning checklist shown on the burden history surface. */
+  myStationDebutRequirements?: PartnerMyStationDebutRequirement[] | null
+  canDebutMyStation?: boolean
 }
 
 interface SurveyCardConfig {
@@ -256,7 +260,9 @@ export default function ServiceCapacitySurveyPanel({
   onEnsurePartnerIdentifier,
   onSubmit,
   onDeleteDraft,
-  surveyVariant = 'burden'
+  surveyVariant = 'burden',
+  myStationDebutRequirements = null,
+  canDebutMyStation = true
 }: ServiceCapacitySurveyPanelProps) {
   const { scale, sections, isLoading: isLoadingCatalog } = useServiceCapacitySurveyCatalog()
   const surveyConfig = surveyVariant === 'domainSpectrum' ? DOMAIN_SPECTRUM_SURVEY_CONFIG : BURDEN_SURVEY_CONFIG
@@ -388,6 +394,8 @@ export default function ServiceCapacitySurveyPanel({
       hasPersistedDraft={Boolean(persistedDraft)}
       isResolvingResumeDraft={isResolvingResumeDraft}
       resumeDraftError={resumeDraftError}
+      myStationDebutRequirements={surveyVariant === 'burden' ? myStationDebutRequirements : null}
+      canDebutMyStation={canDebutMyStation}
       onBackToWorkspace={onBackToWorkspace}
       onCheckoutNewRecord={handleCheckoutNewRecord}
       onResumeDraft={handleResumeDraft}

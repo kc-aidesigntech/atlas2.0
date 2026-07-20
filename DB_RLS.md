@@ -119,6 +119,7 @@ This is the currently observed policy set in `atlas`:
 - `people`: `people_admin_all (ALL, public)`, `people_directory_select (SELECT, authenticated)`
 - `people_role_assignments`: `people_role_assignments_authenticated_select (SELECT, authenticated)`
 - `profile_images`: admin-all plus authenticated CRUD-scoped policies (5 total)
+- Storage `profile-images` public read: `enrollees/%` (enrollee portraits) and `accounts/%` (navigator/partner My Profile avatars); authenticated users retain full-bucket read/write policies for staff upload flows.
 - `public_referral_intake_events`: `public_referral_intake_events_insert_public (INSERT, anon+authenticated)`, `public_referral_intake_events_select_staff (SELECT, authenticated)`
 - `supervisor_navigator_assignments`: `supervisor_navigator_assignments_select_scoped (SELECT, authenticated)`
 - `z_code_headers`: `z_code_headers_public_select (SELECT, public)`

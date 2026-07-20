@@ -213,8 +213,9 @@ export default function AdminAssessmentsSection({
           <div>
             <div className="text-[22px] font-medium text-white">Forced regulation review</div>
             <small className="block text-[13px] text-[var(--foreground-secondary)]">
-              Active by default for new enrollees. Edit the review frequency or disable the review per enrollee; the owning
-              navigator sees an action item in their profile each cycle until a regulation test is completed.
+              Active by default for new enrollees. Weekly Stress Vulnerability Scale (SVS) and Mental Health Self-Care
+              Agency (MH-SCA) cadence cannot be skipped — both instruments must be completed each cycle. Edit frequency or
+              disable per enrollee; the owning navigator keeps an open action item until both are done.
             </small>
           </div>
           <AtlasTextButton

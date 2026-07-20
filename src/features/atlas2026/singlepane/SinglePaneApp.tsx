@@ -512,6 +512,14 @@ export default function SinglePaneApp() {
     },
     [nextSuggestedPhase, selectedEnrollee?.activeZCodeDetails, selectedLogs]
   )
+  // Selected enrollee's open weekly SVS / MH-SCA review, if any — used to block skip paths.
+  const selectedEnrolleeOpenRegulationReview = React.useMemo(
+    () =>
+      regulationReviewDueItems.find(
+        (item) => item.enrolleeId === selectedEnrolleeId && item.status === 'open'
+      ) || null,
+    [regulationReviewDueItems, selectedEnrolleeId]
+  )
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
     : selectedRouteAssignment?.stationName || null
@@ -566,8 +574,11 @@ export default function SinglePaneApp() {
         setIsRegulationTestsOpen(true)
         return
       }
-      setActiveMenu(menu)
-      setIsRoutePlanningOpen(true)
+      // Weekly SVS / MH-SCA cadence remains enforced after regulation clearance.
+      enforceWeeklyRegulationReviewOrContinue(() => {
+        setActiveMenu(menu)
+        setIsRoutePlanningOpen(true)
+      })
       return
     }
     setActiveMenu(menu)
@@ -583,8 +594,10 @@ export default function SinglePaneApp() {
         setIsRegulationTestsOpen(true)
         return
       }
-      setActiveMenu('route planning')
-      setIsRoutePlanningOpen(true)
+      enforceWeeklyRegulationReviewOrContinue(() => {
+        setActiveMenu('route planning')
+        setIsRoutePlanningOpen(true)
+      })
       return
     }
     if (uiRole === 'supervisor' && label.trim().toLowerCase() === 'record navigator assessment') {
@@ -620,15 +633,60 @@ export default function SinglePaneApp() {
   }
 
   function handleDoneCandidate(candidate: RouteCandidateRecord) {
+    // Scope the resolve overlay to the route match so follow-up notes stay
+    // contextual to the service line that was just assigned/completed.
+    const filterChildCodes = Array.from(
+      new Set(
+        candidate.matchedParentSummaries
+          .flatMap((summary) => summary.matchedChildZCodes || [])
+          .map((code) => code.trim().toUpperCase())
+          .filter(Boolean)
+      )
+    )
     setResolutionOverlayState({
       source: 'route-board',
-      candidate
+      candidate,
+      filterChildCodes: filterChildCodes.length ? filterChildCodes : undefined
     })
   }
 
   function openAssessmentOverlay(testType: 'mh_sca' | 'svs' | 'ipf' | 'b_ipf') {
     setAssessmentInitialTestType(testType)
     setIsRegulationTestsOpen(true)
+  }
+
+  function openForcedRegulationReview(enrolleeId: string, missingInstruments?: Array<'mh_sca' | 'svs'>) {
+    // Jump into the first missing instrument so navigators cannot dismiss the weekly
+    // SVS / MH-SCA cadence without completing both sides of the cycle.
+    const nextTestType = missingInstruments?.includes('mh_sca')
+      ? 'mh_sca'
+      : missingInstruments?.includes('svs')
+        ? 'svs'
+        : 'mh_sca'
+    if (enrolleeId && enrolleeId !== selectedEnrolleeId) {
+      setSelectedEnrolleeId(enrolleeId)
+    }
+    setActiveMenu('')
+    openAssessmentOverlay(nextTestType)
+  }
+
+  const selectedEnrolleeOpenRegulationReview = React.useMemo(
+    () =>
+      regulationReviewDueItems.find(
+        (item) => item.enrolleeId === selectedEnrolleeId && item.status === 'open'
+      ) || null,
+    [regulationReviewDueItems, selectedEnrolleeId]
+  )
+
+  function enforceWeeklyRegulationReviewOrContinue(onContinue: () => void) {
+    if (uiRole !== 'navigator' || !selectedEnrolleeOpenRegulationReview) {
+      onContinue()
+      return
+    }
+    openForcedRegulationReview(
+      selectedEnrolleeOpenRegulationReview.enrolleeId,
+      selectedEnrolleeOpenRegulationReview.missingInstruments
+    )
   }
 
   function closeResolvedZCodesOverlay() {
@@ -956,6 +1014,7 @@ export default function SinglePaneApp() {
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
                     onOpenEnrolleeSurvey={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
+                    onOpenRegulationReview={openForcedRegulationReview}
                     onOpenAssignmentBoardReferral={() => setIsNavigatorAssignmentReferralOpen(true)}
                     onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
                     onSaveIpsSelfAssessment={saveNavigatorIpsSelfAssessment}

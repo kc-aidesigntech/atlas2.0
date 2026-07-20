@@ -772,7 +772,9 @@ export interface RegulationReviewSettings {
 }
 
 // Computed (not persisted) due item: one per owned enrollee whose regulation review is
-// active and governed by the cadence window since the last completed regulation test.
+// active. A cycle is open until both Stress Vulnerability Scale (SVS) and Mental Health
+// Self-Care Agency (MH-SCA) submissions land inside the cadence window — one instrument
+// alone never clears the due item.
 export interface RegulationReviewDueItem {
   id: string
   enrolleeId: string
@@ -782,6 +784,8 @@ export interface RegulationReviewDueItem {
   dueAtIso: string
   lastCompletedAtIso: string | null
   status: 'open' | 'completed'
+  // Instruments still missing inside the current cadence window (subset of mh_sca / svs).
+  missingInstruments?: Array<'mh_sca' | 'svs'>
 }
 
 export type RegulationTestType = 'mh_sca' | 'svs' | 'ipf' | 'b_ipf'

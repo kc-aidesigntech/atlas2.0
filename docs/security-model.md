@@ -124,7 +124,9 @@ declared `STABLE` so the planner can cache argument-free calls
 ## Known remaining hardening (follow-up)
 
 These are tracked improvements; the app is functional and the high-severity PHI
-exposures above are closed.
+exposures above are closed. Production go-live reviews this section explicitly —
+see [production-go-live-hard-gates.md](./production-go-live-hard-gates.md) gate 3
+and the inventory query in `verification/prod_commission_verify.sql` section F.
 
 1. **Remaining `SECURITY DEFINER` reporting/ranking views** (13) — e.g.
    `v_navigator_route_candidates`, `v_county_z_code_heatmap`, `v_admin_data_quality`,
@@ -140,5 +142,6 @@ exposures above are closed.
    defense-in-depth: revoke `EXECUTE` from `PUBLIC`, re-grant only to
    `authenticated` for the functions it needs (taking care to preserve grants for
    functions referenced inside RLS policy `USING` clauses).
-3. **Supabase auth/storage toggles** — enable leaked-password protection; tighten
-   the `profile-images` public bucket listing policy.
+3. **Supabase auth/storage toggles** — enable leaked-password protection; keep
+   `profile-images` public listing limited to `enrollees/%` and `accounts/%`
+   object prefixes (account avatars require the `accounts/%` read path).
