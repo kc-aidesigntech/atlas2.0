@@ -1,41 +1,101 @@
 /**
  * Compact competency dashboard for navigator My Profile.
- * Sits beneath the profile chrome divider (photo + assignment board) so
- * supervision signals stay visible without opening section overlays.
- *
- * Exactly three sections:
- * 1) Enrollee IPSCC averages (privacy-gated)
- * 2) Self-awareness: enrollee IPSCC vs weekly self-assessment
- * 3) Qualitative C.R.E.A.T.E. supervisor reflection
+ * Section 1: horizontal Intentional Peer Support Core Competencies (IPSCC)
+ * thermometer gauges for enrollee weighted averages (privacy-gated).
+ * Section 2 (self-awareness list) is hidden — dual radar on the rail covers strain.
+ * Section 3 (C.R.E.A.T.E. reflection) renders above the assignment board.
  */
 import React from 'react'
 import type {
   IpsccCompetencyAggregate,
-  IpsccEnrolleeFeedbackPrivacy,
-  IpsccSelfAwarenessCorrelationRow,
-  IpsccSelfAwarenessSummary,
-  NavigatorCreateReflectionRecord
+  IpsccEnrolleeFeedbackPrivacy
 } from '@/features/atlas2026/shared/contracts'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+
+/** IPSCC Likert scale bounds used to map averages onto thermometer fill height. */
+const IPSCC_SCORE_MIN = 1
+const IPSCC_SCORE_MAX = 5
 
 interface NavigatorCompetencyDashboardProps {
   ipsccCompetencyAverages: IpsccCompetencyAggregate[]
   ipsccEnrolleeFeedbackPrivacy: IpsccEnrolleeFeedbackPrivacy
-  selfAwarenessCorrelationRows: IpsccSelfAwarenessCorrelationRow[]
-  selfAwarenessSummary: IpsccSelfAwarenessSummary
-  createReflection: NavigatorCreateReflectionRecord | null
   onOpenSection?: (section: 'section_1_ipscc' | 'section_2_awareness' | 'section_3_create') => void
 }
 
 function formatScore(value: number | null | undefined) {
-  return value == null ? '—' : value.toFixed(2)
+  return value == null ? '—' : value.toFixed(1)
 }
 
-function DashboardMetric({ label, value }: { label: string; value: string }) {
+/** Map 1–5 average into a bottom-up fill fraction for the thermometer tube. */
+function scoreToFillRatio(score: number | null): number {
+  if (score == null || !Number.isFinite(score)) return 0
+  const clamped = Math.min(IPSCC_SCORE_MAX, Math.max(IPSCC_SCORE_MIN, score))
+  return (clamped - IPSCC_SCORE_MIN) / (IPSCC_SCORE_MAX - IPSCC_SCORE_MIN)
+}
+
+/** Warmth rises with score so low averages read cool/caution and highs read healthy. */
+function scoreToFillColor(score: number | null): string {
+  if (score == null) return 'transparent'
+  if (score < 2.5) return SP_COLORS.red
+  if (score < 3.5) return SP_COLORS.yellow
+  return SP_COLORS.green
+}
+
+function IpsccThermometerGauge({
+  label,
+  score,
+  sampleSize,
+  locked
+}: {
+  label: string
+  score: number | null
+  sampleSize: number
+  locked: boolean
+}) {
+  const fillRatio = locked ? 0 : scoreToFillRatio(score)
+  const fillColor = locked ? 'transparent' : scoreToFillColor(score)
+  const displayScore = locked ? '·' : formatScore(score)
+
   return (
-    <div className="atlas-surface-raised px-3 py-2">
-      <small className="atlas-overline block text-[#9eacb9]">{label}</small>
-      <div className="mt-0.5 text-[16px] font-medium text-white">{value}</div>
+    <div
+      className="flex min-w-0 flex-1 flex-col items-center"
+      title={`${label}${locked ? ' (locked until privacy threshold)' : ` · avg ${formatScore(score)} · n=${sampleSize}`}`}
+    >
+      {/* Fixed tube band so every gauge shares one baseline regardless of label wrap. */}
+      <div className="flex h-[96px] w-full flex-col items-center justify-end pb-1">
+        <div
+          className="relative flex h-[88px] w-[14px] flex-col justify-end overflow-hidden rounded-full border border-white/20 bg-black/35"
+          role="img"
+          aria-label={
+            locked
+              ? `${label}: average locked`
+              : `${label}: enrollee average ${formatScore(score)} of ${IPSCC_SCORE_MAX}`
+          }
+        >
+          {/* Bulb at the base keeps the classic thermometer silhouette without a new motif system. */}
+          <div
+            className="absolute bottom-0 left-1/2 z-[1] h-[16px] w-[16px] -translate-x-1/2 translate-y-[2px] rounded-full border border-white/25"
+            style={{ background: fillRatio > 0.02 ? fillColor : 'rgba(0,0,0,0.35)' }}
+          />
+          <div
+            className="w-full rounded-full transition-[height] duration-300 ease-out"
+            style={{
+              height: `${Math.max(fillRatio * 100, fillRatio > 0 ? 8 : 0)}%`,
+              background: fillColor,
+              minHeight: fillRatio > 0 ? 10 : 0
+            }}
+          />
+        </div>
+      </div>
+      <div className="flex h-[18px] items-center tabular-nums text-[11px] font-medium text-white">
+        {displayScore}
+      </div>
+      <div className="mt-1 flex h-[28px] w-full items-start justify-center px-0.5">
+        <div className="line-clamp-2 max-w-[4.5rem] text-center text-[9px] leading-[14px] text-[#9eacb9]">
+          {label}
+        </div>
+      </div>
     </div>
   )
 }
@@ -43,160 +103,62 @@ function DashboardMetric({ label, value }: { label: string; value: string }) {
 export default function NavigatorCompetencyDashboard({
   ipsccCompetencyAverages,
   ipsccEnrolleeFeedbackPrivacy,
-  selfAwarenessCorrelationRows,
-  selfAwarenessSummary,
-  createReflection,
   onOpenSection
 }: NavigatorCompetencyDashboardProps) {
-  const ratedCompetencies = ipsccCompetencyAverages.filter((row) => row.averageScore != null)
-  const overallIpsccAverage = ratedCompetencies.length
-    ? Number(
-        (
-          ratedCompetencies.reduce((sum, row) => sum + (row.averageScore || 0), 0) / ratedCompetencies.length
-        ).toFixed(2)
-      )
-    : null
   const totalIpsccSamples = ipsccEnrolleeFeedbackPrivacy.totalEncounterSubmissions
-  // Surface the largest absolute strain first so coaching focus is obvious in a compact column.
-  const topCorrelationRows = selfAwarenessCorrelationRows
-    .filter((row) => row.strain != null)
-    .slice()
-    .sort((left, right) => (right.strain || 0) - (left.strain || 0))
-    .slice(0, 4)
   const averagesRevealed = ipsccEnrolleeFeedbackPrivacy.averagesRevealed
-  const reflectionSessionCount = createReflection?.sourceSessionIds?.length || 0
-  const reflectionText = createReflection?.reflectionText?.trim() || ''
 
   return (
     <section className="atlas-surface-panel space-y-3 p-4" aria-label="Competency dashboard">
-      <div>
-        <small className="atlas-overline block text-[#9eacb9]">competency dashboard</small>
-        <div className="text-[18px] font-medium text-white">supervision signals</div>
-        <small className="atlas-meta mt-1 block text-[#9eacb9]">
-          Intentional Peer Support Core Competencies (IPSCC) enrollee feedback, self-awareness strain, and
-          Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) supervision reflection
-        </small>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <small className="atlas-overline block text-[#9eacb9]">section 1 · ratings / reviews</small>
+          <div className="text-[18px] font-medium text-white">Enrollee IPSCC averages</div>
+          <small className="atlas-meta mt-1 block text-[#9eacb9]">
+            Intentional Peer Support Core Competencies (IPSCC) weighted averages across all ten
+            competencies · scale {IPSCC_SCORE_MIN}–{IPSCC_SCORE_MAX}
+          </small>
+        </div>
+        {onOpenSection ? (
+          <AtlasTextButton onClick={() => onOpenSection('section_1_ipscc')} className="px-3 py-1 text-[12px]">
+            pass tablet survey
+          </AtlasTextButton>
+        ) : null}
       </div>
 
-      {/* Section 1 — enrollee IPSCC averages per competency (never individual submissions) */}
-      <div className="atlas-surface-raised space-y-2 px-3 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <small className="atlas-overline block text-[#9eacb9]">section 1 · ratings / reviews</small>
-            <div className="text-[14px] font-medium text-white">Enrollee IPSCC averages by competency</div>
+      {!averagesRevealed ? (
+        <div className="space-y-2">
+          <div className="flex w-full items-start justify-between gap-1">
+            {ipsccCompetencyAverages.map((row) => (
+              <IpsccThermometerGauge
+                key={row.key}
+                label={row.label}
+                score={null}
+                sampleSize={row.sampleSize}
+                locked
+              />
+            ))}
           </div>
-          {onOpenSection ? (
-            <AtlasTextButton onClick={() => onOpenSection('section_1_ipscc')} className="px-3 py-1 text-[12px]">
-              pass tablet survey
-            </AtlasTextButton>
-          ) : null}
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <DashboardMetric
-            label="overall avg"
-            value={averagesRevealed ? formatScore(overallIpsccAverage) : 'locked'}
-          />
-          <DashboardMetric label="competencies rated" value={String(ratedCompetencies.length)} />
-          <DashboardMetric label="encounters" value={String(totalIpsccSamples)} />
-        </div>
-        {!averagesRevealed ? (
           <div className="text-[12px] text-[#9eacb9]">
             Averages unlock after {ipsccEnrolleeFeedbackPrivacy.minEntriesToRevealAverages} enrollee encounter
             submissions ({totalIpsccSamples} so far). Individual enrollee responses are never shown to navigators.
           </div>
-        ) : ipsccCompetencyAverages.length ? (
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            {ipsccCompetencyAverages.map((row) => (
-              <div
-                key={row.key}
-                className="flex items-center justify-between gap-2 rounded-[10px] border border-white/10 px-2.5 py-1.5 text-[12px]"
-              >
-                <span className="truncate text-white">{row.label}</span>
-                <span className="shrink-0 tabular-nums text-[#d7e0e9]">
-                  {formatScore(row.averageScore)}
-                  <span className="ml-1 text-[#9eacb9]">n={row.sampleSize}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[12px] text-[#9eacb9]">No point-of-care IPSCC ratings from enrollees yet.</div>
-        )}
-      </div>
-
-      {/* Section 2 — correlation between enrollee IPSCC and weekly pre-supervision self-assessments */}
-      <div className="atlas-surface-raised space-y-2 px-3 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <small className="atlas-overline block text-[#9eacb9]">section 2 · level of self-awareness</small>
-            <div className="text-[14px] font-medium text-white">Enrollee IPSCC vs weekly self-assessment</div>
-          </div>
-          {onOpenSection ? (
-            <AtlasTextButton onClick={() => onOpenSection('section_2_awareness')} className="px-3 py-1 text-[12px]">
-              open reflection
-            </AtlasTextButton>
-          ) : null}
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          <DashboardMetric label="compared" value={String(selfAwarenessSummary.comparedCompetencyCount)} />
-          <DashboardMetric label="avg strain" value={formatScore(selfAwarenessSummary.averageStrain)} />
-          <DashboardMetric
-            label="alignment"
-            value={formatScore(selfAwarenessSummary.overallAlignmentScore)}
-          />
+      ) : ipsccCompetencyAverages.length ? (
+        <div className="flex w-full items-start justify-between gap-1 overflow-x-auto pb-1">
+          {ipsccCompetencyAverages.map((row) => (
+            <IpsccThermometerGauge
+              key={row.key}
+              label={row.label}
+              score={row.averageScore}
+              sampleSize={row.sampleSize}
+              locked={false}
+            />
+          ))}
         </div>
-        {topCorrelationRows.length ? (
-          <div className="space-y-1.5">
-            {topCorrelationRows.map((row) => (
-              <div
-                key={row.key}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-[10px] border border-white/10 px-2.5 py-1.5 text-[12px]"
-              >
-                <span className="truncate text-white">{row.label}</span>
-                <span className="tabular-nums text-[#d7e0e9]">
-                  strain {formatScore(row.strain)}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[12px] text-[#9eacb9]">
-            Strain appears once enrollee IPSCC averages unlock and a weekly Intentional Peer Support Core
-            Competencies (IPSCC) self-assessment exists for the same competencies. Dual radar on the right
-            encodes tip risk.
-          </div>
-        )}
-      </div>
-
-      {/* Section 3 — one supervisor→navigator C.R.E.A.T.E. reflection (not raw pillar dumps) */}
-      <div className="atlas-surface-raised space-y-2 px-3 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <small className="atlas-overline block text-[#9eacb9]">section 3 · what is being workshopped</small>
-            <div className="text-[14px] font-medium text-white">C.R.E.A.T.E. supervision reflection</div>
-          </div>
-          {onOpenSection ? (
-            <AtlasTextButton onClick={() => onOpenSection('section_3_create')} className="px-3 py-1 text-[12px]">
-              open C.R.E.A.T.E.
-            </AtlasTextButton>
-          ) : null}
-        </div>
-        {reflectionText ? (
-          <div className="rounded-[10px] border border-white/10 px-2.5 py-2 text-[12px]">
-            <p className="whitespace-pre-wrap leading-relaxed text-[#d7e0e9]">{reflectionText}</p>
-            <small className="atlas-meta mt-2 block text-[#9eacb9]">
-              Updated after latest C.R.E.A.T.E. · based on last {reflectionSessionCount || 1} session
-              {reflectionSessionCount === 1 ? '' : 's'}
-              {createReflection?.usedFallback ? ' · offline summary' : ''}
-            </small>
-          </div>
-        ) : (
-          <div className="text-[12px] text-[#9eacb9]">
-            No C.R.E.A.T.E. reflection yet. A 3–4 sentence supervisor reflection appears here after the first
-            saved supervision session on this navigator profile.
-          </div>
-        )}
-      </div>
+      ) : (
+        <div className="text-[12px] text-[#9eacb9]">No point-of-care IPSCC ratings from enrollees yet.</div>
+      )}
     </section>
   )
 }

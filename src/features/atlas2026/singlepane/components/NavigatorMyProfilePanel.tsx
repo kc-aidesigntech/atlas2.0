@@ -350,6 +350,40 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                   {programError}
                 </div>
               ) : null}
+              {/* C.R.E.A.T.E. reflection sits just above the assignment board so
+                  workshop focus is visible before claim/triage work. */}
+              <section className="atlas-surface-raised mt-4 space-y-2 px-3 py-3" aria-label="C.R.E.A.T.E. supervision reflection">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <small className="atlas-overline block text-[#9eacb9]">section 3 · what is being workshopped</small>
+                    <div className="text-[14px] font-medium text-white">C.R.E.A.T.E. supervision reflection</div>
+                  </div>
+                  <AtlasTextButton
+                    onClick={() => setActiveOverlay('section_3_create')}
+                    className="px-3 py-1 text-[12px]"
+                  >
+                    open C.R.E.A.T.E.
+                  </AtlasTextButton>
+                </div>
+                {createReflection?.reflectionText?.trim() ? (
+                  <div className="rounded-[10px] border border-white/10 px-2.5 py-2 text-[12px]">
+                    <p className="whitespace-pre-wrap leading-relaxed text-[#d7e0e9]">
+                      {createReflection.reflectionText.trim()}
+                    </p>
+                    <small className="atlas-meta mt-2 block text-[#9eacb9]">
+                      Updated after latest C.R.E.A.T.E. · based on last{' '}
+                      {createReflection.sourceSessionIds?.length || 1} session
+                      {(createReflection.sourceSessionIds?.length || 1) === 1 ? '' : 's'}
+                      {createReflection.usedFallback ? ' · offline summary' : ''}
+                    </small>
+                  </div>
+                ) : (
+                  <div className="text-[12px] text-[#9eacb9]">
+                    No C.R.E.A.T.E. reflection yet. A 3–4 sentence supervisor reflection appears here after the
+                    first saved supervision session on this navigator profile.
+                  </div>
+                )}
+              </section>
               {/* Keep assignment controls tucked under the photo and above the
                   first profile chrome divider so claim/triage stays in identity context. */}
               <section ref={assignmentBoardRef} className="mt-4">
@@ -374,13 +408,11 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
             </div>
           </div>
           {/* Competency dashboard stays below the first divider so IPSCC /
-              self-awareness / C.R.E.A.T.E. signals remain glanceable afterward. */}
+              thermometer averages remain glanceable afterward. Section 2 is
+              covered by the dual radar; Section 3 sits above the assignment board. */}
           <NavigatorCompetencyDashboard
             ipsccCompetencyAverages={ipsccCompetencyAverages}
             ipsccEnrolleeFeedbackPrivacy={ipsccEnrolleeFeedbackPrivacy}
-            selfAwarenessCorrelationRows={selfAwarenessCorrelationRows}
-            selfAwarenessSummary={selfAwarenessSummary}
-            createReflection={createReflection}
             onOpenSection={(section) => setActiveOverlay(section)}
           />
         </div>
@@ -458,22 +490,6 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                             after about {ipsccEnrolleeFeedbackPrivacy.minEntriesToRevealAverages} entries.
                           </div>
                         </div>
-                        {ipsccEnrolleeFeedbackPrivacy.averagesRevealed ? (
-                          ipsccCompetencyAverages.map((row) => (
-                            <div key={row.key} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
-                              <span className="text-white">{row.label}</span>
-                              <span style={{ color: '#d7e0e9' }}>
-                                {row.averageScore == null ? '—' : row.averageScore.toFixed(2)} · n={row.sampleSize}
-                              </span>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="atlas-surface-raised px-3 py-2 text-[12px] text-[#9eacb9]">
-                            Enrollee averages locked for anonymity (
-                            {ipsccEnrolleeFeedbackPrivacy.totalEncounterSubmissions} of{' '}
-                            {ipsccEnrolleeFeedbackPrivacy.minEntriesToRevealAverages} encounter submissions).
-                          </div>
-                        )}
                         <PersistentField label="Enrollee">
                           <select
                             className="atlas-select h-10 w-full bg-transparent text-white"
