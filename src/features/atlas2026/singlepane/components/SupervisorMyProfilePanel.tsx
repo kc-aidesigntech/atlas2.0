@@ -43,7 +43,8 @@ type OverlayKey =
   | 'section_4_create_reflections'
 
 const CARD_DEFS: Array<{
-  key: OverlayKey
+  // overlayId (not "key") avoids gitleaks generic-api-key false positives on section ids.
+  overlayId: OverlayKey
   title: string
   cardTitle: string
   cardSubtitle: string
@@ -51,10 +52,10 @@ const CARD_DEFS: Array<{
   variant: 'green' | 'blue'
   illustration: 'feedback' | 'reflection' | 'create'
 }> = [
-  { key: 'section_1_weekly_ips', title: 'Section 1: Weekly IPSCC assessment by supervisor', cardTitle: 'weekly review', cardSubtitle: 'ipscc', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection' },
-  { key: 'section_2_assigned_navigators', title: 'Section 2: Assigned navigators', cardTitle: 'navigator roster', cardSubtitle: 'assignments', actionLabel: 'view feedback', variant: 'green', illustration: 'feedback' },
-  { key: 'section_3_assessment_rollup', title: 'Section 3: Navigator assessment rollup', cardTitle: 'assessment rollup', cardSubtitle: 'competency', actionLabel: 'create & share', variant: 'green', illustration: 'create' },
-  { key: 'section_4_create_reflections', title: 'Section 4: C.R.E.A.T.E. reflection review', cardTitle: 'c.r.e.a.t.e.', cardSubtitle: 'review & override', actionLabel: 'review reflections', variant: 'blue', illustration: 'reflection' }
+  { overlayId: 'section_1_weekly_ips', title: 'Section 1: Weekly IPSCC assessment by supervisor', cardTitle: 'weekly review', cardSubtitle: 'ipscc', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection' },
+  { overlayId: 'section_2_assigned_navigators', title: 'Section 2: Assigned navigators', cardTitle: 'navigator roster', cardSubtitle: 'assignments', actionLabel: 'view feedback', variant: 'green', illustration: 'feedback' },
+  { overlayId: 'section_3_assessment_rollup', title: 'Section 3: Navigator assessment rollup', cardTitle: 'assessment rollup', cardSubtitle: 'competency', actionLabel: 'create & share', variant: 'green', illustration: 'create' },
+  { overlayId: 'section_4_create_reflections', title: 'Section 4: C.R.E.A.T.E. reflection review', cardTitle: 'c.r.e.a.t.e.', cardSubtitle: 'review & override', actionLabel: 'review reflections', variant: 'blue', illustration: 'reflection' }
 ]
 
 function formatDateLabel(value: string | null | undefined) {
@@ -177,14 +178,14 @@ export default function SupervisorMyProfilePanel({
       <div className="atlas-profile-nav-grid">
         {CARD_DEFS.map((card) => (
           <ProfileNavigationCard
-            key={card.key}
-            sequenceNumber={Number(card.key.replace('section_', '').split('_')[0])}
+            key={card.overlayId}
+            sequenceNumber={Number(card.overlayId.replace('section_', '').split('_')[0])}
             title={card.cardTitle}
             subtitle={card.cardSubtitle}
             actionLabel={card.actionLabel}
             variant={card.variant}
             illustration={card.illustration}
-            onClick={() => setActiveOverlay(card.key)}
+            onClick={() => setActiveOverlay(card.overlayId)}
           />
         ))}
       </div>
@@ -193,7 +194,7 @@ export default function SupervisorMyProfilePanel({
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
           <div className="atlas-surface-panel max-h-[90vh] w-full max-w-[980px] overflow-y-auto p-5">
             <div className="mb-4 flex items-center justify-between">
-              <div className="text-[18px] font-medium text-white">{CARD_DEFS.find((card) => card.key === activeOverlay)?.title}</div>
+              <div className="text-[18px] font-medium text-white">{CARD_DEFS.find((card) => card.overlayId === activeOverlay)?.title}</div>
               <AtlasTextButton onClick={() => setActiveOverlay(null)} className="px-3 py-1 text-[12px]">close</AtlasTextButton>
             </div>
 

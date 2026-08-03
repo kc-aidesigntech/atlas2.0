@@ -1,0 +1,14 @@
+# Atlas gitleaks config — extends defaults and documents known false positives.
+title = "Atlas gitleaks config"
+
+[extend]
+# Keep the stock rule set; only allowlist documented false positives below.
+useDefault = true
+
+[allowlist]
+description = "Profile overlay section identifiers (section_N_*) are UI ids, not Application Programming Interface (API) secrets"
+# Matches secrets reported from `{ key: 'section_...' }` object literals in profile panels.
+# Required because pull request scans include historical commits that still use the old `key` field name.
+regexes = [
+  '''(?i)^section_[0-9]+_[a-z0-9_]+$'''
+]
