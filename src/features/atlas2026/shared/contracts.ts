@@ -650,12 +650,27 @@ export interface IpsccCompetencyAggregate {
   latestSubmittedAtIso: string | null
 }
 
+/**
+ * Enrollee Intentional Peer Support Core Competencies (IPSCC) averages stay
+ * hidden from navigators until enough independent encounter submissions exist
+ * so individual enrollee responses cannot be inferred.
+ */
+export const IPSCC_ENROLLEE_FEEDBACK_PRIVACY_MIN_ENTRIES = 10
+
+export interface IpsccEnrolleeFeedbackPrivacy {
+  totalEncounterSubmissions: number
+  minEntriesToRevealAverages: number
+  averagesRevealed: boolean
+}
+
 export interface IpsccSelfAwarenessCorrelationRow {
   key: IpsccCompetencyKey
   label: string
   ipsccAverage: number | null
   selfAverage: number | null
   gap: number | null
+  /** Absolute perception gap — higher means more care-disruption risk on that competency. */
+  strain: number | null
   alignmentScore: number | null
 }
 
@@ -663,6 +678,8 @@ export interface IpsccSelfAwarenessSummary {
   comparedCompetencyCount: number
   averageGap: number | null
   overallAlignmentScore: number | null
+  /** Mean absolute strain across comparable competencies. */
+  averageStrain: number | null
 }
 
 export interface CreateSessionRecord {
@@ -693,6 +710,26 @@ export interface CreateInsightRow {
   label: string
   latestSummary: string
   sessionCount: number
+}
+
+/**
+ * Current Connect, Recognize, Encourage, Acknowledge, Train, and Empower
+ * (C.R.E.A.T.E.) reflection for a navigator — one narrative regenerated after
+ * each supervision session save from the latest entry plus prior history.
+ */
+export interface NavigatorCreateReflectionRecord {
+  id: string
+  navigatorName: string
+  reflectionText: string
+  /** Last auto-generated narrative, kept when a supervisor overrides display text. */
+  generatedReflectionText: string
+  sourceSessionIds: string[]
+  sourceLatestSessionId: string
+  model: string
+  generatedAtIso: string
+  usedFallback: boolean
+  supervisorOverriddenAtIso: string | null
+  supervisorOverriddenBy: string
 }
 
 export type SupervisionSessionStatus = 'scheduled' | 'completed'
@@ -772,7 +809,9 @@ export interface RegulationReviewSettings {
 }
 
 // Computed (not persisted) due item: one per owned enrollee whose regulation review is
-// active and governed by the cadence window since the last completed regulation test.
+// active. A cycle is open until both Stress Vulnerability Scale (SVS) and Mental Health
+// Self-Care Agency (MH-SCA) submissions land inside the cadence window — one instrument
+// alone never clears the due item.
 export interface RegulationReviewDueItem {
   id: string
   enrolleeId: string
@@ -782,6 +821,8 @@ export interface RegulationReviewDueItem {
   dueAtIso: string
   lastCompletedAtIso: string | null
   status: 'open' | 'completed'
+  // Instruments still missing inside the current cadence window (subset of mh_sca / svs).
+  missingInstruments?: Array<'mh_sca' | 'svs'>
 }
 
 export type RegulationTestType = 'mh_sca' | 'svs' | 'ipf' | 'b_ipf'

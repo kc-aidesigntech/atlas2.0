@@ -216,6 +216,7 @@ Verify:
 - survey history loads
 - draft save/resume works
 - completed records are read-only
+- **My Station** stays hidden until service-capacity commissioning (scored capacity entries + specialty clarity); see `docs/PARTNER_MY_STATION_DEBUT.md`
 
 ## Navigator
 
@@ -223,7 +224,7 @@ Verify:
 
 - assigned enrollees populate
 - route planning opens
-- county commons loads
+- county commons stays hidden for MVP (`SHOW_COUNTY_COMMONS = false`)
 - requests to enroll load if commissioned
 
 ## Supervisor
@@ -308,3 +309,13 @@ Until the full runtime shell is fully commissioned:
 - treat the root shell as incomplete
 
 That gives you a working production-grade survey workflow sooner, without blocking on the entire operational runtime cutover.
+
+## 12. Production Go-Live Hard Gates
+
+Before first live partner traffic, complete the engineering gates in:
+
+- [production-go-live-hard-gates.md](./production-go-live-hard-gates.md) — pilot ban, migrations/RLS, security residuals, regulation instrument waiver, role smoke
+- [partner-go-live-checklist.md](./partner-go-live-checklist.md) — per-site org → capacity → specializations → My Station → first referrals
+- `verification/prod_commission_verify.sql` — non-destructive production pre-flight (do **not** run `verification/pilot_setup.sql` on production)
+
+Pilot accounts (`@atlas.test`) are for staging only; see [../PILOT.md](../PILOT.md).

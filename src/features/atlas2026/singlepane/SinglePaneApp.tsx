@@ -10,7 +10,6 @@ import MobileRouteBoardPanel from './components/MobileRouteBoardPanel'
 // in the repo for future reincorporation, but is un-wired from this entry
 // point in favor of the streamlined Z-code override panel below.
 import EnrolleeZCodeOverridePanel from './components/EnrolleeZCodeOverridePanel'
-import RadialLoadChart from './components/RadialLoadChart'
 import RoleMenus from './components/RoleMenus'
 import TopNav from './components/TopNav'
 import { SP_COLORS } from './theme'
@@ -28,6 +27,9 @@ const PartnerStripHistoryOverlay = React.lazy(() => import('./components/Partner
 const PartnerSpecialtyOverlay = React.lazy(() => import('./components/PartnerSpecialtyOverlay'))
 const PartnerStationProfilePanel = React.lazy(() => import('./components/PartnerStationProfilePanel'))
 const ProfilePanel = React.lazy(() => import('./components/ProfilePanel'))
+// Keep recharts out of the workspace chunk so bootstrap can finish while the
+// chart graph downloads in parallel with first paint.
+const RadialLoadChart = React.lazy(() => import('./components/RadialLoadChart'))
 const RadialLoadTableOverlay = React.lazy(() => import('./components/RadialLoadTableOverlay'))
 const RegulationTestsOverlay = React.lazy(() => import('./components/RegulationTestsOverlay'))
 const ResolvedZCodesOverlay = React.lazy(() => import('./components/ResolvedZCodesOverlay'))
@@ -107,13 +109,15 @@ export default function SinglePaneApp() {
     pendingAssignmentEnrollees,
     pickupQueue,
     navigatorIpsccCompetencyAggregates,
+    navigatorIpsccEnrolleeFeedbackPrivacy,
     navigatorIpsSelfAssessments,
     navigatorSupervisorIpsAssessments,
     allSupervisorIpsAssessments,
     navigatorSelfAwarenessCorrelationRows,
     navigatorSelfAwarenessSummary,
     navigatorCreateSessions,
-    navigatorCreateInsights,
+    navigatorCreateReflection,
+    supervisorManagedCreateReflections,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,
@@ -169,7 +173,8 @@ export default function SinglePaneApp() {
     saveNavigatorIpsSelfAssessment,
     saveSupervisorIpsAssessment,
     saveNavigatorIpsccEncounterSubmission,
-    saveNavigatorCreateSession,
+    saveSupervisorCreateReflectionOverride,
+    restoreSupervisorCreateReflectionGenerated,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,
@@ -512,6 +517,15 @@ export default function SinglePaneApp() {
     },
     [nextSuggestedPhase, selectedEnrollee?.activeZCodeDetails, selectedLogs]
   )
+  // Selected enrollee's open weekly Stress Vulnerability Scale (SVS) / Mental Health
+  // Self-Care Agency (MH-SCA) review, if any — used to block skip paths.
+  const selectedEnrolleeOpenRegulationReview = React.useMemo(
+    () =>
+      regulationReviewDueItems.find(
+        (item) => item.enrolleeId === selectedEnrolleeId && item.status === 'open'
+      ) || null,
+    [regulationReviewDueItems, selectedEnrolleeId]
+  )
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
     : selectedRouteAssignment?.stationName || null
@@ -566,8 +580,12 @@ export default function SinglePaneApp() {
         setIsRegulationTestsOpen(true)
         return
       }
-      setActiveMenu(menu)
-      setIsRoutePlanningOpen(true)
+      // Weekly SVS / MH-SCA cadence remains enforced after regulation clearance —
+      // completing readiness does not waive the ongoing review requirement.
+      enforceWeeklyRegulationReviewOrContinue(() => {
+        setActiveMenu(menu)
+        setIsRoutePlanningOpen(true)
+      })
       return
     }
     setActiveMenu(menu)
@@ -583,8 +601,10 @@ export default function SinglePaneApp() {
         setIsRegulationTestsOpen(true)
         return
       }
-      setActiveMenu('route planning')
-      setIsRoutePlanningOpen(true)
+      enforceWeeklyRegulationReviewOrContinue(() => {
+        setActiveMenu('route planning')
+        setIsRoutePlanningOpen(true)
+      })
       return
     }
     if (uiRole === 'supervisor' && label.trim().toLowerCase() === 'record navigator assessment') {
@@ -620,15 +640,52 @@ export default function SinglePaneApp() {
   }
 
   function handleDoneCandidate(candidate: RouteCandidateRecord) {
+    // Scope the resolve overlay to the route match so follow-up notes stay
+    // contextual to the service line that was just assigned/completed.
+    const filterChildCodes = Array.from(
+      new Set(
+        candidate.matchedParentSummaries
+          .flatMap((summary) => summary.matchedChildZCodes || [])
+          .map((code) => code.trim().toUpperCase())
+          .filter(Boolean)
+      )
+    )
     setResolutionOverlayState({
       source: 'route-board',
-      candidate
+      candidate,
+      filterChildCodes: filterChildCodes.length ? filterChildCodes : undefined
     })
   }
 
   function openAssessmentOverlay(testType: 'mh_sca' | 'svs' | 'ipf' | 'b_ipf') {
     setAssessmentInitialTestType(testType)
     setIsRegulationTestsOpen(true)
+  }
+
+  function openForcedRegulationReview(enrolleeId: string, missingInstruments?: Array<'mh_sca' | 'svs'>) {
+    // Jump into the first missing instrument so navigators cannot dismiss the weekly
+    // SVS / MH-SCA cadence without completing both sides of the cycle.
+    const nextTestType = missingInstruments?.includes('mh_sca')
+      ? 'mh_sca'
+      : missingInstruments?.includes('svs')
+        ? 'svs'
+        : 'mh_sca'
+    if (enrolleeId && enrolleeId !== selectedEnrolleeId) {
+      setSelectedEnrolleeId(enrolleeId)
+    }
+    setActiveMenu('')
+    openAssessmentOverlay(nextTestType)
+  }
+
+  function enforceWeeklyRegulationReviewOrContinue(onContinue: () => void) {
+    if (uiRole !== 'navigator' || !selectedEnrolleeOpenRegulationReview) {
+      onContinue()
+      return
+    }
+    openForcedRegulationReview(
+      selectedEnrolleeOpenRegulationReview.enrolleeId,
+      selectedEnrolleeOpenRegulationReview.missingInstruments
+    )
   }
 
   function closeResolvedZCodesOverlay() {
@@ -922,7 +979,9 @@ export default function SinglePaneApp() {
                       onReplaceAvatar={remoteSession ? undefined : replaceAccountProfileImage}
                     />
                     <div className="flex w-full justify-center justify-self-center lg:w-auto lg:justify-self-end lg:justify-end md:-mr-1 lg:-mr-3 xl:-mr-6 2xl:-mr-10">
-                      <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} size="large" />
+                      <React.Suspense fallback={<div className="text-[13px] text-[#c7c7c7]">Loading load chart…</div>}>
+                        <RadialLoadChart load={displayLoad} onClick={() => setIsLoadTableOpen(true)} size="large" />
+                      </React.Suspense>
                     </div>
                   </div>
                 ) : isNavigatorMyProfile ? (
@@ -941,12 +1000,13 @@ export default function SinglePaneApp() {
                     canOpenAssignmentBoardReferral={canOpenNavigatorAssignmentReferral}
                     competencySummary={navigatorAssignedCompetencySummary}
                     ipsccCompetencyAverages={navigatorIpsccCompetencyAggregates}
+                    ipsccEnrolleeFeedbackPrivacy={navigatorIpsccEnrolleeFeedbackPrivacy}
                     selfAwarenessCorrelationRows={navigatorSelfAwarenessCorrelationRows}
                     selfAwarenessSummary={navigatorSelfAwarenessSummary}
                     ipsSelfAssessments={navigatorIpsSelfAssessments}
                     navigatorSupervisorIpsAssessments={navigatorSupervisorIpsAssessments}
-                    createInsights={navigatorCreateInsights}
                     createSessions={navigatorCreateSessions}
+                    createReflection={navigatorCreateReflection}
                     supervisionSessions={navigatorSupervisionSessions}
                     dueItems={navigatorIntervalDueItems}
                     regulationReviewDueItems={regulationReviewDueItems}
@@ -956,12 +1016,12 @@ export default function SinglePaneApp() {
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
                     onOpenEnrolleeSurvey={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
+                    onOpenRegulationReview={openForcedRegulationReview}
                     onOpenAssignmentBoardReferral={() => setIsNavigatorAssignmentReferralOpen(true)}
                     onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
                     onSaveIpsSelfAssessment={saveNavigatorIpsSelfAssessment}
                     onSaveIpsccEncounterSubmission={saveNavigatorIpsccEncounterSubmission}
                     onSaveSupervisionSession={saveSupervisionSession}
-                    onSaveCreateSession={saveNavigatorCreateSession}
                   />
                 ) : isSupervisorMyProfileView ? (
                   <div
@@ -974,9 +1034,12 @@ export default function SinglePaneApp() {
                         navigatorDirectory={supervisorNavigatorDirectory}
                         competencyByNavigator={supervisorNavigatorCompetency}
                         allSupervisorIpsAssessments={allSupervisorIpsAssessments}
+                        managedCreateReflections={supervisorManagedCreateReflections}
                         onToggleManagedNavigator={toggleSupervisorManagedNavigator}
                         isSavingAssignments={isSavingAccessMatrix}
                         onSaveSupervisorIpsAssessment={saveSupervisorIpsAssessment}
+                        onSaveCreateReflectionOverride={saveSupervisorCreateReflectionOverride}
+                        onRestoreCreateReflectionGenerated={restoreSupervisorCreateReflectionGenerated}
                       />
                     </div>
                   </div>
@@ -1043,7 +1106,9 @@ export default function SinglePaneApp() {
                       />
                     </div>
                     <div className="flex w-full justify-center md:ml-auto md:w-auto md:flex-none md:justify-end md:pr-5 md:pl-2 lg:pr-8">
-                      <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
+                      <React.Suspense fallback={<div className="text-[13px] text-[#c7c7c7]">Loading load chart…</div>}>
+                        <RadialLoadChart load={selectedLoad} onClick={() => setIsLoadTableOpen(true)} />
+                      </React.Suspense>
                     </div>
                   </div>
                 )}

@@ -108,18 +108,41 @@ const bootstrapPayloadInFlight = new Map<AtlasRole, Promise<SinglePaneBootstrapP
 async function loadCriticalBootstrapPayload(role: AtlasRole): Promise<SinglePaneBootstrapPayload> {
   // Critical payload only: enough to paint and interact with the first role screen.
   // Supplemental datasets load after first usable paint in a follow-up refresh.
+  // Wave 1: remote critical bootstrap + account/station identity (no local override I/O).
   const [data, nextAccountSettings, navigatorStationContext] = await Promise.all([
-    loadSinglePaneBootstrap(role),
+    loadSinglePaneBootstrap(role, { criticalOnly: true }),
     loadAccountSettings(),
     role === 'navigator' ? loadNavigatorStationContext() : Promise.resolve(null)
   ])
   const stationOrganizationName =
     (role === 'navigator' ? navigatorStationContext?.organizationName : nextAccountSettings.organization)?.trim() ||
     nextAccountSettings.organization
-  const stationProfile = await loadPartnerStationProfile(stationOrganizationName, {
-    fullName: nextAccountSettings.fullName,
-    email: nextAccountSettings.email
-  })
+  // Wave 2: station profile + (for partner) My Station radial from survey history,
+  // in parallel now that organization identity is known.
+  const needsPartnerStationLoad = role === 'partner'
+  const [stationProfile, partnerSurveyHistory] = await Promise.all([
+    loadPartnerStationProfile(stationOrganizationName, {
+      fullName: nextAccountSettings.fullName,
+      email: nextAccountSettings.email
+    }),
+    needsPartnerStationLoad
+      ? loadPartnerServiceCapacitySurveyHistory(stationOrganizationName)
+      : Promise.resolve([])
+  ])
+  const completedPartnerSurveyHistory = needsPartnerStationLoad
+    ? selectCompletedPartnerSurveysNewestFirst(partnerSurveyHistory)
+    : []
+  const latestCompletedPartnerSurvey = completedPartnerSurveyHistory[0] || null
+  const partnerStationSpecialties = needsPartnerStationLoad
+    ? derivePartnerStationSpecialtyGroups(latestCompletedPartnerSurvey)
+    : []
+  const partnerViewLoadBreakdown = needsPartnerStationLoad
+    ? buildPartnerBurdenBreakdownFromHistory(completedPartnerSurveyHistory, {
+        subjectId: latestCompletedPartnerSurvey?.partnerId || nextAccountSettings.organization,
+        subjectLabel: latestCompletedPartnerSurvey?.header.organizationName || nextAccountSettings.organization
+      })
+    : null
+  const partnerViewLoad = partnerViewLoadBreakdown ? toNormalizedRadialDomainLoad(partnerViewLoadBreakdown) : null
   return {
     enrollees: data.enrollees || [],
     loads: data.loads || [],
@@ -131,9 +154,9 @@ async function loadCriticalBootstrapPayload(role: AtlasRole): Promise<SinglePane
     enrollmentRequests: [],
     countyHeatmap: [],
     adminMetrics: [],
-    partnerLoad: null,
-    partnerLoadBreakdown: null,
-    partnerStationSpecialties: [],
+    partnerLoad: partnerViewLoad,
+    partnerLoadBreakdown: partnerViewLoadBreakdown,
+    partnerStationSpecialties,
     accountSettings: nextAccountSettings,
     partnerStationProfile: stationProfile,
     intakeFormsByEnrolleeId: {},
@@ -388,13 +411,15 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
       typeof window === 'undefined'
         ? null
         : window.setTimeout(() => {
-            for (const candidateRole of ROLE_PREFETCH_ORDER) {
-              if (candidateRole === role) continue
-              // Fire-and-forget prefetch for alternate role shells so switching role
-              // reuses warmed payloads instead of replaying full bootstrap waits.
-              void loadBootstrapPayload(candidateRole).catch(() => null)
-            }
-          }, 280)
+            // Stagger alternate-role prefetch so concurrent roster/bootstrap storms
+            // cannot reintroduce statement_timeout 500s right after first paint.
+            ROLE_PREFETCH_ORDER.forEach((candidateRole, index) => {
+              if (candidateRole === role) return
+              window.setTimeout(() => {
+                void loadBootstrapPayload(candidateRole).catch(() => null)
+              }, index * 400)
+            })
+          }, 1200)
 
     return () => {
       isMounted = false

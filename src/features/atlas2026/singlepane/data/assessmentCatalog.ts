@@ -167,6 +167,8 @@ function bipfPrompt(id: string, label: string, description: string, sectionId: s
 export const ASSESSMENT_DEFINITIONS: AssessmentDefinition[] = [
   // Regulation instruments are currently placeholder-compatible and intentionally
   // minimal, while renewal instruments preserve richer official scoring semantics.
+  // Production go-live requires either approved MH-SCA/SVS content or an explicit
+  // client placeholder waiver — see docs/production-go-live-hard-gates.md (gate 4).
   {
     type: 'mh_sca',
     stage: 'regulation',

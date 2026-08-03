@@ -89,9 +89,15 @@ declared `STABLE` so the planner can cache argument-free calls
     exceeded the `authenticated` role's 8s `statement_timeout` (PostgREST returned
     HTTP 500, Postgres `57014`). The helper now short-circuits administrators via a
     `CASE` branch — semantics-preserving, since admins already have full staff
-    access. Measured admin roster runtime fell from ~2223ms to ~33ms; all four
+    access.     Measured admin roster runtime fell from ~2223ms to ~33ms; all four
     pilot roles complete within 8s with correct scope (admin 4 / navigator 2 /
     supervisor 4 / partner 0).
+  - **Roster set-scope definer** (`20260720034500`): nested invoker RLS on
+    `v_active_enrollment_roster` still timed out for authenticated bootstrap
+    (HTTP 500 / `57014`) even after the admin CASE short-circuit. The view now
+    wraps `fn_list_active_enrollment_roster()` (SECURITY DEFINER, set-based staff
+    scope). Verified ~26ms for admin (11 rows), scoped navigator/supervisor rows,
+    and 0 partner rows.
   - **Station-context contract** (`20260530131000`): the single-pane bootstrap
     calls `fn_get_my_navigator_station_context()`, which (with its backing
     `navigator_partner_assignments` table) had never reached this project — the RPC
@@ -124,7 +130,9 @@ declared `STABLE` so the planner can cache argument-free calls
 ## Known remaining hardening (follow-up)
 
 These are tracked improvements; the app is functional and the high-severity PHI
-exposures above are closed.
+exposures above are closed. Production go-live reviews this section explicitly —
+see [production-go-live-hard-gates.md](./production-go-live-hard-gates.md) gate 3
+and the inventory query in `verification/prod_commission_verify.sql` section F.
 
 1. **Remaining `SECURITY DEFINER` reporting/ranking views** (13) — e.g.
    `v_navigator_route_candidates`, `v_county_z_code_heatmap`, `v_admin_data_quality`,
@@ -140,5 +148,20 @@ exposures above are closed.
    defense-in-depth: revoke `EXECUTE` from `PUBLIC`, re-grant only to
    `authenticated` for the functions it needs (taking care to preserve grants for
    functions referenced inside RLS policy `USING` clauses).
-3. **Supabase auth/storage toggles** — enable leaked-password protection; tighten
-   the `profile-images` public bucket listing policy.
+3. **Supabase auth/storage toggles** — enable leaked-password protection; keep
+   `profile-images` public listing limited to `enrollees/%` and `accounts/%`
+   object prefixes (account avatars require the `accounts/%` read path).
+4. **Navigator My Profile workflow grants** — tables
+   `navigator_ipscc_encounter_submissions`, `navigator_ips_self_assessments`,
+   `supervisor_ips_assessments`, and `navigator_create_sessions` require both
+   Row-Level Security (RLS) policies **and** `GRANT` to `authenticated`. Missing
+   grants surface as HTTP 403 / Postgres `42501` in the browser before RLS runs
+   (fixed by `20260720010808_navigator_profile_workflow_authenticated_grants.sql`).
+5. **Enrollment roster view timeouts** — `v_active_enrollment_roster` previously
+   timed out under nested invoker Row-Level Security (RLS) (HTTP 500 / Postgres
+   `57014`). Fixed by `20260720034500_perf_roster_security_definer_setscope.sql`:
+   the view now wraps `atlas.fn_list_active_enrollment_roster()`, a STABLE
+   SECURITY DEFINER function that applies administrator / navigator / supervisor
+   scope set-based once instead of re-evaluating `fn_can_access_enrollment_as_staff`
+   per joined row. Dependent assignment/load views may still need the same pattern
+   if they show the same timeout signature.

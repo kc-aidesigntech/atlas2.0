@@ -1,6 +1,6 @@
 # Database Row-Level Security (RLS) Inventory
 
-Last updated: 2026-06-28  
+Last updated: 2026-07-19  
 Source of truth: live metadata queries against Postgres system catalogs (`pg_class`, `pg_namespace`, `pg_policies`)
 
 ## Executive Snapshot
@@ -47,6 +47,9 @@ Source of truth: live metadata queries against Postgres system catalogs (`pg_cla
 | `navigator_partner_assignments` | enabled | 1 |
 | `navigator_regulation_test_answers` | enabled | 1 |
 | `navigator_regulation_test_submissions` | enabled | 1 |
+| `navigator_ipscc_encounter_submissions` | enabled | 2 |
+| `navigator_ips_self_assessments` | enabled | 2 |
+| `navigator_create_sessions` | enabled | 2 |
 | `partner_service_capacity_answers` | enabled | 4 |
 | `partner_service_capacity_deletion_log` | enabled | 1 |
 | `partner_service_capacity_submissions` | enabled | 4 |
@@ -68,6 +71,7 @@ Source of truth: live metadata queries against Postgres system catalogs (`pg_cla
 | `states` | disabled | 0 |
 | `station_metric_snapshots` | disabled | 0 |
 | `supervisor_navigator_assignments` | enabled | 1 |
+| `supervisor_ips_assessments` | enabled | 2 |
 | `timeline_settings` | disabled | 0 |
 | `user_permission_exceptions` | disabled | 0 |
 | `z_code_categories` | disabled | 0 |
@@ -109,6 +113,9 @@ This is the currently observed policy set in `atlas`:
 - `navigator_partner_assignments`: `navigator_partner_assignments_select_scoped (SELECT, authenticated)`
 - `navigator_regulation_test_answers`: `navigator_regulation_test_answers_select_scoped (SELECT, authenticated)`
 - `navigator_regulation_test_submissions`: `navigator_regulation_test_submissions_select_scoped (SELECT, authenticated)`
+- `navigator_ipscc_encounter_submissions`: `navigator ipscc authenticated read (SELECT, authenticated)`, `navigator ipscc authenticated write (ALL, authenticated)` — table GRANTs to `authenticated` required (see `20260720010808_navigator_profile_workflow_authenticated_grants.sql`)
+- `navigator_ips_self_assessments`: `navigator ips self authenticated read (SELECT, authenticated)`, `navigator ips self authenticated write (ALL, authenticated)` — same GRANT requirement
+- `navigator_create_sessions`: `navigator create authenticated read (SELECT, authenticated)`, `navigator create authenticated write (ALL, authenticated)` — same GRANT requirement
 - `partner_service_capacity_answers`: select/insert/update/delete scoped policies (4 total)
 - `partner_service_capacity_deletion_log`: `partner_service_capacity_deletion_log_admin_select (SELECT, authenticated)`
 - `partner_service_capacity_submissions`: select/insert/update/delete scoped policies (4 total)
@@ -119,8 +126,10 @@ This is the currently observed policy set in `atlas`:
 - `people`: `people_admin_all (ALL, public)`, `people_directory_select (SELECT, authenticated)`
 - `people_role_assignments`: `people_role_assignments_authenticated_select (SELECT, authenticated)`
 - `profile_images`: admin-all plus authenticated CRUD-scoped policies (5 total)
+- Storage `profile-images` public read: `enrollees/%` (enrollee portraits) and `accounts/%` (navigator/partner My Profile avatars); authenticated users retain full-bucket read/write policies for staff upload flows.
 - `public_referral_intake_events`: `public_referral_intake_events_insert_public (INSERT, anon+authenticated)`, `public_referral_intake_events_select_staff (SELECT, authenticated)`
 - `supervisor_navigator_assignments`: `supervisor_navigator_assignments_select_scoped (SELECT, authenticated)`
+- `supervisor_ips_assessments`: `supervisor ips authenticated read (SELECT, authenticated)`, `supervisor ips authenticated write (ALL, authenticated)` — table GRANTs to `authenticated` required (see `20260720010808_navigator_profile_workflow_authenticated_grants.sql`)
 - `z_code_headers`: `z_code_headers_public_select (SELECT, public)`
 - `z_code_timeline_labels`: `z_code_timeline_labels_public_select (SELECT, public)`
 - `z_codes`: `z_codes_public_select (SELECT, anon+authenticated)`

@@ -4,13 +4,16 @@ This guide explains how Atlas consumes the deployed `atlas-mcp-server` stack whe
 
 ## System Topology
 
-1. Atlas web frontend calls MCP endpoint:
-   - `POST /infer-zcodes`
+1. Atlas web frontend (Heroku) calls MCP endpoints on the MCP Heroku app:
+   - `POST /infer-zcodes` (referral Z-code inference)
+   - `POST /summarize-create-session` (C.R.E.A.T.E. supervisor reflection)
 2. MCP service runs on Heroku.
 3. MCP service calls Ollama through:
-   - `OLLAMA_BASE_URL=https://ollama.<your-domain>`
-4. Caddy reverse-proxies `https://ollama.<your-domain>` to `127.0.0.1:11434` on the RunPod VM.
-5. Ollama serves `qwen2.5:3b-instruct`.
+   - `OLLAMA_BASE_URL=https://ollama.<your-domain-or-runpod-proxy>`
+4. Caddy reverse-proxies public Ollama HTTPS to `127.0.0.1:11434` on the RunPod VM (or use RunPod's HTTP proxy for port 11434).
+5. Ollama serves `qwen2.5:3b-instruct` (text-only; no vision/VLM model for these routes).
+
+Atlas and MCP are both Heroku apps. RunPod is GPU-only.
 
 ## Known-good RunPod profile
 
@@ -65,9 +68,27 @@ Current pricing snapshot from the active pod:
 Set in the Atlas deployment environment:
 
 - `VITE_ATLAS_DEMO_INFERENCE_URL=https://<mcp-heroku-app>.herokuapp.com/infer-zcodes`
+- `VITE_ATLAS_CREATE_REFLECTION_URL=https://<mcp-heroku-app>.herokuapp.com/summarize-create-session`
 - `VITE_ATLAS_DEMO_INFERENCE_BEARER=<shared-long-random-token>`
 
-The bearer token must match `ATLAS_MCP_BEARER_TOKEN` in MCP Heroku config.
+The bearer token must match `ATLAS_MCP_BEARER_TOKEN` in MCP Heroku config. Both Z-code inference and C.R.E.A.T.E. reflection reuse the same bearer.
+
+### C.R.E.A.T.E. reflection contract (`POST /summarize-create-session`)
+
+Owned by `atlas-mcp-server` (not implemented in this repo). Atlas sends:
+
+- `navigatorName`, `supervisorName`
+- `sessions`: chronological array (oldest → newest), length ≤ 10, with pillar notes, connect flag, action plan, and submissions from each C.R.E.A.T.E. row
+
+Expected response:
+
+```json
+{ "reflectionText": "3–4 sentence supervisor-to-navigator reflection…", "model": "qwen2.5:3b-instruct" }
+```
+
+Prompt constraints on the MCP side: peer-support tone; no “patient”; emphasize the latest session; briefly acknowledge prior trajectory; invent no facts beyond supplied notes; low temperature / short `num_predict` against `qwen2.5:3b-instruct`.
+
+If MCP/Ollama is unreachable, Atlas falls back to a deterministic local paragraph stitched from the latest session notes (`createReflectionService.ts`).
 
 ## Atlas smoke test after MCP deploy
 
@@ -79,15 +100,16 @@ The bearer token must match `ATLAS_MCP_BEARER_TOKEN` in MCP Heroku config.
 
 ## Failure triage
 
-If Atlas inference does not appear:
+If Atlas inference or C.R.E.A.T.E. reflection does not appear:
 
-1. Check browser network call to `VITE_ATLAS_DEMO_INFERENCE_URL`.
+1. Check browser network call to `VITE_ATLAS_DEMO_INFERENCE_URL` or `VITE_ATLAS_CREATE_REFLECTION_URL`.
 2. Check MCP Heroku logs:
    - request received
    - Ollama upstream response status
 3. Check RunPod Caddy endpoint:
    - `curl https://ollama.<your-domain>/api/tags`
 4. Confirm bearer token parity between Atlas and MCP.
+5. For C.R.E.A.T.E.: after a session save, Section 3 should still show an offline summary if MCP failed; confirm `atlas.navigator_create_reflections` received a row.
 
 ## Security posture
 

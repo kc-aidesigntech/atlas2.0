@@ -7,8 +7,8 @@ Defines the canonical semantics for the navigator **my profile** surface so supe
 ## Supervision Tracking Model
 
 - Navigator supervision tracking is a three-prong model:
-  1. **Individual Placement and Support Core Competencies (IPSCC)** service-user surveys captured at point of care after each encounter.
-  2. **Individual Placement and Support (IPS) self-assessments** completed weekly before supervision sessions.
+  1. **Intentional Peer Support Core Competencies (IPSCC)** service-user surveys captured at point of care after each encounter.
+  2. **IPSCC self-assessments** completed weekly before supervision sessions (same ten competencies and rating scales as the IPSCC tool).
   3. **Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.)** supervision notes submitted by both supervisor and supervisee for each session.
 - The profile compiles quantitative and qualitative signals over time to depict:
   - competency development
@@ -20,29 +20,26 @@ Defines the canonical semantics for the navigator **my profile** surface so supe
 ### Section 1 — Ratings/Reviews
 
 - Displays IPSCC averages per competency, derived from service-user responses collected at point of care.
-- IPSCC response scale (Likert):
-  - 1 = strongly disagree
-  - 2 = disagree
-  - 3 = unsure
-  - 4 = agree
-  - 5 = strongly agree
-- Competency mapping is canonical and must not drift without explicit policy change:
-  - Competency 1 (Connection): items 1, 2, 3, 4, 9, 10
-  - Competency 2 (Shifting focus from helping to learning together): item 3
-  - Competency 3 (Worldview awareness): item 5
-  - Competency 4 (Shift from individual to relationship): items 2, 4, 9
-  - Competency 5 (Mutuality): items 4, 5, 7, 9
-  - Competency 6 (Shift from fear to hope and possibility): items 4, 10
-  - Competency 7 (Moving towards versus moving away from): items 6, 8, 10
-  - Competency 8 (Self-reflection): items 1, 2
-  - Competency 9 (Give and receive feedback): items 3, 7
-  - Competency 10 (Co-reflection): items 9, 10
+- Source instrument: `references/IPS_self_assessment.pdf` (Intentional Peer Support Core Competencies self-assessment tool, 1-4-17).
+- Response model: **one score per competency (1–5)**. The wording under each number is competency-specific — not a generic Likert agree/disagree scale.
+- Survey presentation mirrors the Z-code burden survey: one competency card at a time, score buttons 1–5, selected scale text shown under the score, with the worked example for that level.
+- Competency catalog (canonical order):
+  1. Connection
+  2. Shifting the focus from Helping to Learning Together
+  3. Worldview: Awareness of Own and Other's Worldview
+  4. Shifting the focus from the Individual to the Relationship
+  5. Mutuality
+  6. Shifting the focus from fear to hope and possibility
+  7. Moving Towards versus Moving Away From
+  8. Self-Reflection
+  9. Able to Give and Receive Feedback
+  10. Co-Reflection
 
 ### Section 2 — Self-Awareness
 
 - Depicts the correlations between:
   - point-of-care IPSCC competency averages from service users, and
-  - weekly IPS self-assessment competency averages completed before supervision.
+  - weekly IPSCC self-assessment competency scores completed before supervision.
 - Correlation output must remain interpretable by competency and in aggregate.
 - Primary interpretation objective: assess how strongly navigators' self-perception matches how service users experience care delivery.
 
@@ -72,6 +69,17 @@ Defines the canonical semantics for the navigator **my profile** surface so supe
   - users can expand it on demand
   - expanded rows still support assigning a navigator for someone already picked up by another navigator
 
-## Continuity Policy
+## Profile Layout Order
 
-- Do not change section definitions, competency mappings, correlation intent, or pickup placement behavior without updating this document in the same work session.
+- Navigator My Profile main-column order is:
+  1. Profile photo / identity chrome
+  2. Enrollment assignment board (tucked under the photo)
+  3. First divider (profile chrome bottom border)
+  4. Competency dashboard (IPSCC / self-awareness / C.R.E.A.T.E. signals)
+  5. Remaining profile sections / overlays
+
+## Profile Navigation Cards
+
+Active rail cards:
+  1. **enrollee** (Section 1 — IPSCC ratings/reviews)
+  2. Additional cards follow `NavigatorMyProfilePanel` `CARD_DEFS` with `isActiveOnProfileRail`.

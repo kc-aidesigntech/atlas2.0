@@ -59,10 +59,13 @@ import {
   saveNavigatorCompetencyAssessment
 } from '@/features/atlas2026/singlepane/data-access/navigatorAssessmentRepository'
 import {
+  loadNavigatorCreateReflection,
+  loadNavigatorCreateReflections,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,
   loadSupervisorIpsAssessments,
+  saveNavigatorCreateReflection,
   saveNavigatorCreateSession,
   saveNavigatorIpsSelfAssessment,
   saveNavigatorIpsccEncounterSubmission,
@@ -145,6 +148,11 @@ interface NavigatorAssignmentProfileInput {
 // true to restore the menu (and its heat-map screen) everywhere once the feature
 // is ready; until then it is hidden across every role's navigation.
 const SHOW_COUNTY_COMMONS = false
+
+/** Phase 3 launch-guard smoke helper: County Commons stays hidden for first launch. */
+export function isCountyCommonsMenuEnabled() {
+  return SHOW_COUNTY_COMMONS
+}
 
 function normalizeNavigatorTopMenus(menus: string[]) {
   const normalized = hideDeferredCountyCommonsMenu(
@@ -282,42 +290,75 @@ async function resolveSessionPersonIdFromMetadata() {
   return null
 }
 
-export async function loadSinglePaneBootstrap(role: AtlasRole): Promise<SinglePaneBootstrapData> {
-  const logs = await loadLocalLogs()
-  const intakeOverrides = await loadEnrolleeIntakes()
-  const timelineOverrides = await loadTimelineConfigs()
+export type SinglePaneBootstrapLoadOptions = {
+  /**
+   * Critical path for first usable paint: skip local intake/timeline/log I/O so
+   * cold open waits only on remote role menus + enrollee domain reads. Full
+   * supplemental bootstrap re-runs with overrides after first paint.
+   */
+  criticalOnly?: boolean
+}
+
+export async function loadSinglePaneBootstrap(
+  role: AtlasRole,
+  options?: SinglePaneBootstrapLoadOptions
+): Promise<SinglePaneBootstrapData> {
+  const criticalOnly = options?.criticalOnly === true
+  // Parallelize local reads on the full path; critical path skips them entirely so
+  // first usable paint is not gated on IndexedDB/localStorage override hydration.
+  let logs: Awaited<ReturnType<typeof loadLocalLogs>> = []
+  let intakeOverrides: Awaited<ReturnType<typeof loadEnrolleeIntakes>> = {}
+  let timelineOverrides: Awaited<ReturnType<typeof loadTimelineConfigs>> = {}
+  if (!criticalOnly) {
+    ;[logs, intakeOverrides, timelineOverrides] = await Promise.all([
+      loadLocalLogs(),
+      loadEnrolleeIntakes(),
+      loadTimelineConfigs()
+    ])
+  }
 
   if (!hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) {
     return createEmptyBootstrap(logs)
   }
 
-  const [roleNavigation, timelineDefaults] = await Promise.all([
+  const shouldLoadEnrolleeDomain = role !== 'partner'
+  // One concurrent batch: role chrome + timeline defaults + enrollee domain so
+  // critical open does not serialize menu fetch ahead of roster/load queries.
+  const [
+    roleNavigation,
+    timelineDefaults,
+    profiles,
+    loadRows,
+    breakdownRows,
+    navigatorAssignedEnrollees,
+    navigatorPersonId
+  ] = await Promise.all([
     withOptionalSupabaseFallback('singlepane.roleNavigation', () => fetchAppRoleNavigation(supabase, 'singlepane'), []),
     withOptionalSupabaseFallback(
       'singlepane.timelineDefaults',
       () => fetchSinglePaneTimelineConfig(supabase),
       createDefaultTimelineConfig()
-    )
-  ])
-
-  const shouldLoadEnrolleeDomain = role !== 'partner'
-  const [profiles, loadRows, breakdownRows, navigatorAssignedEnrollees, navigatorPersonId] = shouldLoadEnrolleeDomain
-    ? await Promise.all([
-        withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), []),
-        withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), []),
-        withOptionalSupabaseFallback(
+    ),
+    shouldLoadEnrolleeDomain
+      ? withOptionalSupabaseFallback('singlepane.enrolleeProfiles', () => fetchSinglePaneEnrolleeProfiles(supabase), [])
+      : Promise.resolve([]),
+    shouldLoadEnrolleeDomain
+      ? withOptionalSupabaseFallback('singlepane.enrolleeDomainLoads', () => fetchSinglePaneEnrolleeDomainLoads(supabase), [])
+      : Promise.resolve([]),
+    shouldLoadEnrolleeDomain
+      ? withOptionalSupabaseFallback(
           'singlepane.enrolleeDomainLoadBreakdown',
           () => fetchSinglePaneEnrolleeDomainLoadBreakdown(supabase),
           []
-        ),
-        role === 'navigator'
-          ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
-          : Promise.resolve([]),
-        role === 'navigator'
-          ? withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
-          : Promise.resolve(null)
-      ])
-    : [[], [], [], [], null]
+        )
+      : Promise.resolve([]),
+    role === 'navigator'
+      ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
+      : Promise.resolve([]),
+    role === 'navigator'
+      ? withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
+      : Promise.resolve(null)
+  ])
 
   const navigatorEnrollmentIds =
     role === 'navigator'
@@ -821,6 +862,21 @@ function sanitizeFilename(value: string) {
     .replace(/^-|-$/g, '')
 }
 
+const PROFILE_IMAGE_ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
+function assertProfileImageFile(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please select an image file.')
+  }
+  if (!PROFILE_IMAGE_ALLOWED_MIME_TYPES.has(file.type)) {
+    throw new Error('Use a PNG, JPEG, or WebP image (max 5 MB).')
+  }
+  if (typeof file.size === 'number' && file.size > PROFILE_IMAGE_MAX_BYTES) {
+    throw new Error('Image must be 5 MB or smaller.')
+  }
+}
+
 export async function uploadEnrolleeProfileImage(
   enrolleeId: string,
   file: File
@@ -831,9 +887,7 @@ export async function uploadEnrolleeProfileImage(
   if (!hasSupabaseConfig || !supabase) {
     throw new Error('Supabase is required to upload profile images.')
   }
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Please select an image file.')
-  }
+  assertProfileImageFile(file)
 
   const safeFileName = sanitizeFilename(file.name || 'profile-image.jpeg') || 'profile-image.jpeg'
   const storagePath = `enrollees/${enrolleeId}/${Date.now()}-${safeFileName}`
@@ -886,6 +940,44 @@ export async function uploadEnrolleeProfileImage(
     if (profileImageInsertError) throw profileImageInsertError
   }
 
+  return {
+    avatarUrl: publicUrl,
+    storagePath
+  }
+}
+
+/**
+ * Upload a navigator/partner account avatar to Storage under accounts/{user_id}/.
+ * Persists only the public Uniform Resource Locator (URL) in account settings — never a data URL —
+ * so localStorage / app_config_documents stay under browser and document size limits.
+ */
+export async function uploadAccountProfileImage(
+  file: File
+): Promise<{ avatarUrl: string; storagePath: string }> {
+  if (!hasSupabaseConfig || !supabase) {
+    throw new Error('Supabase is required to upload profile images.')
+  }
+  assertProfileImageFile(file)
+
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) throw sessionError
+  const userId = sessionData.session?.user?.id?.trim()
+  if (!userId) {
+    throw new Error('Sign in is required to upload a profile image.')
+  }
+
+  const safeFileName = sanitizeFilename(file.name || 'profile-image.jpeg') || 'profile-image.jpeg'
+  const storagePath = `accounts/${userId}/${Date.now()}-${safeFileName}`
+  const bucket = supabase.storage.from('profile-images')
+  const { error: uploadError } = await bucket.upload(storagePath, file, {
+    cacheControl: '3600',
+    contentType: file.type,
+    upsert: false
+  })
+  if (uploadError) throw uploadError
+
+  const { data: publicData } = bucket.getPublicUrl(storagePath)
+  const publicUrl = publicData?.publicUrl || `/storage/v1/object/public/profile-images/${storagePath}`
   return {
     avatarUrl: publicUrl,
     storagePath
@@ -1110,6 +1202,8 @@ export {
   loadPartnerTroubleshootingGrants,
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
+  loadNavigatorCreateReflection,
+  loadNavigatorCreateReflections,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,
@@ -1126,6 +1220,7 @@ export {
   savePartnerTroubleshootingGrant,
   saveEnrolleeIntake,
   saveNavigatorCompetencyAssessment,
+  saveNavigatorCreateReflection,
   saveNavigatorCreateSession,
   saveNavigatorIpsSelfAssessment,
   saveNavigatorIpsccEncounterSubmission,

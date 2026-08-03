@@ -324,16 +324,54 @@ Goal: prevent quality regressions caused by scale, latency, or repeated workflow
 
 Tests:
 
-- Measure cold load performance after Supabase integration.
+- Measure authenticated `/app` cold and warm open with the built-in workspace load marks (see recipe below).
 - Measure role switch, enrollee switch, and route refresh behavior for duplicate fetches or UI stalls.
 - Run survey ingestion on realistic file sizes.
 - Measure ranking query latency on representative data volumes.
 - Validate visualization performance for heatmap and radial views with larger datasets.
 
+#### `/app` workspace-open measurement recipe
+
+Instrumentation lives in `src/features/atlas2026/singlepane/workspaceLoadMetrics.ts` and always records browser Performance marks/measures.
+
+1. Open a private window (cold) or refresh the same tab (warm) on `/app` while signed in.
+2. Optionally enable console summaries: `window.__ATLAS_DEBUG_WORKSPACE_LOAD__ = true` then reload.
+3. After the role screen is usable, read:
+
+```js
+performance.getEntriesByType('measure')
+  .filter((entry) => entry.name.startsWith('workspace-open:'))
+  .map(({ name, duration }) => ({ name, duration: Math.round(duration) }))
+```
+
+Primary gates:
+
+- `workspace-open:time-to-first-usable` — route open → role screen usable
+- `workspace-open:bootstrap-duration` — critical bootstrap only
+
+Attribution helpers:
+
+- `workspace-open:time-to-auth-ready` — session resolve
+- `workspace-open:time-to-workspace-chunk` — SinglePaneApp JS ready (may overlap auth)
+
+Repeat cold ×3 and warm ×3; compare **medians**, not single runs. Also record `npm run build` entry-chunk gzip size when changing the JS graph.
+
+Bundle baseline from the first-open speedup work (`npm run build`):
+
+| Chunk | Before (min / gzip) | After (min / gzip) |
+| --- | --- | --- |
+| Entry `index-*.js` | ~1058 KB / **294 KB** | ~153 KB / **49 KB** |
+| `@supabase` vendor (modulepreload) | (in entry) | ~197 KB / 52 KB |
+| `SinglePaneApp` | ~85 KB / 22 KB | ~86 KB / 22 KB |
+| `RadialLoadChart` (+ recharts) | (in entry) | ~330 KB / 90 KB (lazy; not in entry preload) |
+
+First HTML script graph is entry + supabase only (~101 KB gzip combined vs ~294 KB previously). Re-check entry gzip after any RootApp or public-route import changes.
+
 Exit criteria:
 
 - No major UI stalls during normal operator workflows.
 - No unacceptable query or ingestion bottlenecks for expected volume.
+- Cold `/app` medians for `time-to-first-usable` stay improved vs the pre-split baseline when the same environment and role are compared.
 
 ## Security And Privacy Controls
 

@@ -4,6 +4,7 @@ import { AtlasIconButton, AtlasInsetCard, AtlasPanel, AtlasPlusButton, AtlasStat
 import AtlasArrowIcon from '../../../components/AtlasArrowIcon'
 import { SP_COLORS } from '../../theme'
 import type { PartnerServiceCapacitySubmissionRecord } from '../../types'
+import type { PartnerMyStationDebutRequirement } from '../../data-access/partnerMyStationDebut'
 import { formatDateTimeLabel } from './draft'
 
 export function RecordManagementView({
@@ -18,6 +19,8 @@ export function RecordManagementView({
   hasPersistedDraft,
   isResolvingResumeDraft,
   resumeDraftError,
+  myStationDebutRequirements = null,
+  canDebutMyStation = true,
   onBackToWorkspace,
   onCheckoutNewRecord,
   onResumeDraft,
@@ -35,6 +38,9 @@ export function RecordManagementView({
   hasPersistedDraft: boolean
   isResolvingResumeDraft: boolean
   resumeDraftError: string | null
+  /** When provided, shows the My Station commissioning checklist above history. */
+  myStationDebutRequirements?: PartnerMyStationDebutRequirement[] | null
+  canDebutMyStation?: boolean
   onBackToWorkspace?: () => void
   onCheckoutNewRecord: () => void
   onResumeDraft: () => void
@@ -94,6 +100,34 @@ export function RecordManagementView({
       }
     >
       <div className="space-y-3">
+        {myStationDebutRequirements?.length ? (
+          <AtlasInsetCard className="rounded-[16px] border-white/15 bg-[var(--surface-panel-raised)] px-4 py-4 md:px-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <small className="atlas-overline text-[#bcbcbc]">my station debut</small>
+              <AtlasStatusPill color={canDebutMyStation ? SP_COLORS.deepGreen : SP_COLORS.yellow}>
+                {canDebutMyStation ? 'ready' : 'commissioning required'}
+              </AtlasStatusPill>
+            </div>
+            <p className="mt-2 text-[14px] text-[#d2d2d2] md:text-[15px]">
+              {canDebutMyStation
+                ? 'Service-capacity commissioning is complete. My Station is available in the partner workspace.'
+                : 'Complete capacity entries with clear specialization (burden scores above 6) before My Station debuts in the partner menu.'}
+            </p>
+            <ul className="mt-3 space-y-2">
+              {myStationDebutRequirements.map((requirement) => (
+                <li key={requirement.key} className="flex flex-wrap items-start justify-between gap-2 border-t border-white/10 pt-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[14px] font-medium text-white md:text-[15px]">{requirement.label}</div>
+                    <small className="atlas-meta block text-[#b3b3b3]">{requirement.detail}</small>
+                  </div>
+                  <AtlasStatusPill color={requirement.met ? SP_COLORS.deepGreen : '#9a9a9a'}>
+                    {requirement.met ? 'met' : 'needed'}
+                  </AtlasStatusPill>
+                </li>
+              ))}
+            </ul>
+          </AtlasInsetCard>
+        ) : null}
         {records.length ? (
           records.map((record) => {
             const updatedLabel = formatDateTimeLabel(record.updatedAtIso || record.submittedAtIso)

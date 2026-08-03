@@ -20,6 +20,7 @@ export default function StandaloneServiceCapacitySurveyPage() {
     partnerServiceCapacityDefaultHeader,
     isSavingPartnerServiceCapacitySurvey,
     partnerServiceCapacitySurveyError,
+    partnerMyStationDebut,
     searchPartnerIdentifierMatches,
     ensurePartnerIdentifier,
     savePartnerServiceCapacitySurvey,
@@ -50,6 +51,17 @@ export default function StandaloneServiceCapacitySurveyPage() {
       document.title = previousTitle
     }
   }, [])
+
+  const previousCanDebutRef = React.useRef<boolean | null>(null)
+  // When commissioning flips from locked → ready, send partners back to My Station on exit.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    const previous = previousCanDebutRef.current
+    previousCanDebutRef.current = partnerMyStationDebut.canDebut
+    if (previous === false && partnerMyStationDebut.canDebut) {
+      window.sessionStorage.setItem(SURVEY_RETURN_MENU_KEY, 'my station')
+    }
+  }, [partnerMyStationDebut.canDebut])
 
   function backToWorkspace() {
     if (typeof window === 'undefined') return
@@ -88,6 +100,8 @@ export default function StandaloneServiceCapacitySurveyPage() {
           onEnsurePartnerIdentifier={ensurePartnerIdentifier}
           onSubmit={savePartnerServiceCapacitySurvey}
           onDeleteDraft={deletePartnerServiceCapacityDraft}
+          myStationDebutRequirements={partnerMyStationDebut.requirements}
+          canDebutMyStation={partnerMyStationDebut.canDebut}
         />
       </main>
     </div>

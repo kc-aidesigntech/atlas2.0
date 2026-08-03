@@ -45,6 +45,29 @@ export const workspaceLoadMetrics = {
       console.info('[workspace-load]', 'route-open', pathname)
     }
   },
+  // Auth session resolved (signed in or not). Compare against chunk-ready to see
+  // whether cold open is waiting on getSession vs downloading SinglePaneApp.
+  markAuthReady(hasSession: boolean) {
+    mark('workspace-open:auth-ready')
+    measure('workspace-open:time-to-auth-ready', START_KEY, 'workspace-open:auth-ready')
+    if (DEBUG_WORKSPACE_LOAD_METRICS) {
+      console.info('[workspace-load]', 'auth-ready', {
+        hasSession,
+        timeToAuthReadyMs: readMeasureDuration('workspace-open:time-to-auth-ready')
+      })
+    }
+  },
+  // Workspace JS chunk finished loading (prefetch or Suspense). Useful when
+  // overlapping download with the auth gate.
+  markWorkspaceChunkReady() {
+    mark('workspace-open:workspace-chunk-ready')
+    measure('workspace-open:time-to-workspace-chunk', START_KEY, 'workspace-open:workspace-chunk-ready')
+    if (DEBUG_WORKSPACE_LOAD_METRICS) {
+      console.info('[workspace-load]', 'workspace-chunk-ready', {
+        timeToWorkspaceChunkMs: readMeasureDuration('workspace-open:time-to-workspace-chunk')
+      })
+    }
+  },
   markBootstrapStart(role: string) {
     mark('workspace-open:bootstrap-start')
     if (DEBUG_WORKSPACE_LOAD_METRICS) {
@@ -64,9 +87,13 @@ export const workspaceLoadMetrics = {
     if (!DEBUG_WORKSPACE_LOAD_METRICS) return
     const bootstrap = readMeasureDuration('workspace-open:bootstrap-duration')
     const firstUsable = readMeasureDuration('workspace-open:time-to-first-usable')
+    const authReady = readMeasureDuration('workspace-open:time-to-auth-ready')
+    const workspaceChunk = readMeasureDuration('workspace-open:time-to-workspace-chunk')
     console.info('[workspace-load]', 'first-usable', role, {
       bootstrapMs: bootstrap,
-      timeToFirstUsableMs: firstUsable
+      timeToFirstUsableMs: firstUsable,
+      timeToAuthReadyMs: authReady,
+      timeToWorkspaceChunkMs: workspaceChunk
     })
   }
 }

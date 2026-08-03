@@ -63,6 +63,8 @@ The rollup view computes supervisor-side navigator competency trend using weight
 ## profile images
 
 - Supabase Storage bucket: `profile-images`
-- Metadata table: `atlas.profile_images`
+- Metadata table: `atlas.profile_images` (enrollee images only)
 - App-facing resolved Uniform Resource Locator (URL) remains on `atlas.enrollees.avatar_url`
 - The trigger in `20260413030101_profile_images.sql` keeps `avatar_url` synced to the current primary ready image for each enrollee.
+- Account (navigator/partner) avatars upload to `accounts/{user_id}/...` and store only the public URL in account settings (never a full data URL).
+- Public read policies: `enrollees/%` and `accounts/%` under the `profile-images` bucket.

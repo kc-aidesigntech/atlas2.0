@@ -12,6 +12,7 @@ import type {
 } from '@/features/atlas2026/shared/contracts'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { toSupabaseErrorMessage } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { buildRouteResolveFollowUpContext } from '@/features/atlas2026/singlepane/data/zCodeResolveFollowUp'
 import { getZCodeParentColor } from '@atlas/shared'
 
 // Readiness criteria selectors rendered per Z-code: the code review tri-state
@@ -78,15 +79,30 @@ export default function ResolvedZCodesOverlay({
   )
   const normalizedFilterParentCode = React.useMemo(() => normalizeCode(filterParentCode), [filterParentCode])
   const isRouteBoardLaunch = launchSource === 'route-board' && Boolean(candidate)
+  const routeFollowUp = React.useMemo(
+    () => (isRouteBoardLaunch && candidate ? buildRouteResolveFollowUpContext(candidate) : null),
+    [candidate, isRouteBoardLaunch]
+  )
+  const routeMatchedParentCodes = React.useMemo(
+    () => new Set(routeFollowUp?.matchedParentCodes || []),
+    [routeFollowUp]
+  )
   const trimmedNote = resolutionNote.trim()
   const detailsToRender = React.useMemo(() => {
-    if (!normalizedFilterParentCode && !selectedChildCodes.size) return details
     return details.filter((detail) => {
-      const matchesParent = normalizedFilterParentCode ? normalizeCode(detail.parentCode) === normalizedFilterParentCode : true
+      const matchesParent = normalizedFilterParentCode
+        ? normalizeCode(detail.parentCode) === normalizedFilterParentCode
+        : true
       const matchesChild = selectedChildCodes.size ? selectedChildCodes.has(normalizeCode(detail.zCode)) : true
-      return matchesParent && matchesChild
+      // When Done is pressed on a route candidate without child-code detail,
+      // fall back to parent-domain scoping so unrelated Z-codes stay hidden.
+      const matchesRouteParent =
+        isRouteBoardLaunch && routeMatchedParentCodes.size && !selectedChildCodes.size
+          ? routeMatchedParentCodes.has(normalizeCode(detail.parentCode))
+          : true
+      return matchesParent && matchesChild && matchesRouteParent
     })
-  }, [details, normalizedFilterParentCode, selectedChildCodes])
+  }, [details, isRouteBoardLaunch, normalizedFilterParentCode, routeMatchedParentCodes, selectedChildCodes])
   const selectedPartnerLabel = React.useMemo(
     () => partnerOptions.find((option) => option.partnerId === selectedPartnerId)?.label || '',
     [partnerOptions, selectedPartnerId]
@@ -125,6 +141,12 @@ export default function ResolvedZCodesOverlay({
     // Already-resolved rows keep their stored attribution when only confidence changes.
     if (isResolved && !wasResolved && !isRouteBoardLaunch && !selectedPartnerId && !trimmedNote) {
       setValidationMessage('Select a partner station or add a note before marking a Z-code resolved.')
+      return
+    }
+    // Route-board resolutions already know the partner; still require a
+    // service-line follow-up note so the resolution record stays actionable.
+    if (isResolved && !wasResolved && isRouteBoardLaunch && !trimmedNote) {
+      setValidationMessage('Add a follow-up note for this service line before marking a Z-code resolved.')
       return
     }
     setValidationMessage(null)
@@ -166,6 +188,16 @@ export default function ResolvedZCodesOverlay({
     }
   }
 
+  function appendFollowUpChip(chip: string) {
+    setValidationMessage(null)
+    setResolutionNote((current) => {
+      const trimmed = current.trim()
+      if (!trimmed) return `${chip}. `
+      if (trimmed.toLowerCase().includes(chip.toLowerCase())) return current
+      return `${trimmed}${trimmed.endsWith('.') || trimmed.endsWith('!') ? ' ' : '. '}${chip}. `
+    })
+  }
+
   return (
     <div className="absolute inset-0 z-40 flex items-start justify-center bg-black/72 px-5 py-6 backdrop-blur-[2px]">
       <div className="atlas-surface-shell max-h-[calc(100vh-72px)] w-full max-w-[920px] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5" style={{ borderColor: SP_COLORS.white, backgroundColor: 'var(--surface-panel-soft)' }}>
@@ -177,7 +209,7 @@ export default function ResolvedZCodesOverlay({
             <h3 className="atlas-h3 text-[30px] font-medium text-white">which zcodes were resolved?</h3>
             <small className="atlas-caption mt-2 block leading-[1.45]" style={{ color: '#b1bcc8' }}>
               {isRouteBoardLaunch
-                ? `${candidate?.stationName || 'selected station'} assigned`
+                ? `${candidate?.stationName || 'selected station'} · follow-up notes required`
                 : normalizedFilterParentCode
                   ? `${normalizedFilterParentCode} selected for ${enrollee.fullName}`
                   : enrollee.fullName}
@@ -189,9 +221,61 @@ export default function ResolvedZCodesOverlay({
           />
         </div>
 
-        {isRouteBoardLaunch ? (
-          <div className="atlas-surface-raised mb-4 px-4 py-3 text-[12px]" style={{ color: '#d3dbe4' }}>
-            Partner attribution will be saved to <span className="font-medium text-white">{candidate?.stationName}</span>.
+        {isRouteBoardLaunch && routeFollowUp ? (
+          <div className="atlas-surface-panel mb-4 grid gap-3 px-4 py-4">
+            <div>
+              <small className="atlas-overline block" style={{ color: '#9ea8b4' }}>
+                service-line follow-up
+              </small>
+              <div className="mt-1 text-[16px] font-medium text-white">{routeFollowUp.headline}</div>
+              <small className="atlas-caption mt-1 block leading-[1.45]" style={{ color: '#b1bcc8' }}>
+                Partner attribution saves to <span className="text-white">{routeFollowUp.stationName}</span>
+                {routeFollowUp.matchedParentCodes.length
+                  ? ` · matched domains ${routeFollowUp.matchedParentCodes.join(', ')}`
+                  : ''}
+                .
+              </small>
+            </div>
+            {routeFollowUp.promptChips.length ? (
+              <div className="flex flex-wrap gap-2">
+                {routeFollowUp.promptChips.map((chip) => (
+                  <AtlasTextButton
+                    key={chip}
+                    onClick={() => appendFollowUpChip(chip)}
+                    className="px-[10px] py-[4px] text-[12px] md:text-[13px]"
+                    style={
+                      {
+                        ['--button-border-color' as const]: '#ffffff22',
+                        backgroundColor: 'var(--surface-button-strong)',
+                        color: SP_COLORS.white
+                      } as React.CSSProperties
+                    }
+                  >
+                    {chip}
+                  </AtlasTextButton>
+                ))}
+              </div>
+            ) : null}
+            <div className="grid gap-1">
+              <label className="atlas-overline" style={{ color: '#9ea8b4' }} htmlFor="route-resolution-note">
+                follow-up note
+              </label>
+              <textarea
+                id="route-resolution-note"
+                value={resolutionNote}
+                onChange={(event) => {
+                  setValidationMessage(null)
+                  setResolutionNote(event.target.value)
+                }}
+                rows={3}
+                placeholder={routeFollowUp.placeholder}
+                className="atlas-textarea resize-none bg-[rgba(255,255,255,0.02)] text-[14px] text-white outline-none placeholder:text-[#94a0ad]"
+              />
+            </div>
+            <small className="text-[12px] leading-[1.45]" style={{ color: validationMessage ? '#ff9a9a' : '#b5c0cb' }}>
+              {validationMessage ||
+                'Add a follow-up note describing what was confirmed with this service line before marking a Z-code resolved.'}
+            </small>
           </div>
         ) : (
           <div className="atlas-surface-panel mb-4 grid gap-3 px-4 py-4">
@@ -339,7 +423,9 @@ export default function ResolvedZCodesOverlay({
             <div className="atlas-empty-state px-4 py-5 text-[13px]" style={{ color: '#c7d0d9' }}>
               {normalizedFilterParentCode
                 ? `No active ${normalizedFilterParentCode} Z-codes are available for this enrollee.`
-                : 'No active Z-codes are available for this enrollee.'}
+                : isRouteBoardLaunch
+                  ? 'No active Z-codes match this routed service line for this enrollee.'
+                  : 'No active Z-codes are available for this enrollee.'}
             </div>
           )}
         </div>

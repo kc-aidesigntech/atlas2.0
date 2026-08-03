@@ -147,3 +147,10 @@ create policy "supervisor ips authenticated write"
   to authenticated
   using (true)
   with check (true);
+
+-- Policies alone are not enough: PostgREST requires table privileges for
+-- `authenticated` or reads fail with permission-denied (42501) before RLS.
+grant select, insert, update, delete on table atlas.navigator_ipscc_encounter_submissions to authenticated;
+grant select, insert, update, delete on table atlas.navigator_ips_self_assessments to authenticated;
+grant select, insert, update, delete on table atlas.supervisor_ips_assessments to authenticated;
+grant select, insert, update, delete on table atlas.navigator_create_sessions to authenticated;

@@ -90,7 +90,9 @@ ok / row-count / error table. Use it to confirm scoping after any data change.
 ## 6. Notes / known follow-ups
 
 - These logins use the non-deliverable `@atlas.test` domain with email
-  pre-confirmed; they are for piloting only and should not exist in production.
+  pre-confirmed; they are for piloting only and must not exist in production.
+  See [production-go-live-hard-gates.md](./production-go-live-hard-gates.md) and
+  `verification/prod_commission_verify.sql` before any production cutover.
 - A few reporting/aggregate `SECURITY DEFINER` views (county heatmap, data
   quality, route candidates) and three command RPCs remain executable beyond the
   strictly necessary role; see `docs/security-model.md` "Known remaining

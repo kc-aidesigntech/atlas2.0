@@ -25,6 +25,7 @@ import type {
   IpsccCompetencyAggregate,
   IpsccCompetencyKey,
   IpsccEncounterSubmissionRecord,
+  IpsccEnrolleeFeedbackPrivacy,
   IpsccSelfAwarenessCorrelationRow,
   IpsccSelfAwarenessSummary,
   JourneyStationMarker,
@@ -45,7 +46,6 @@ import type {
   NavigatorCompetencyAssessmentRecord,
   SupervisorNavigatorCompetencySummary,
   RoleMenuConfig,
-  RegulationReviewDueItem,
   RegulationReviewSettings,
   RegulationTestSubmissionInput,
   RegulationTestSubmissionRecord,
@@ -59,12 +59,14 @@ import type {
   SupervisionSessionRecord,
   CreateInsightRow,
   CreateSessionRecord,
+  NavigatorCreateReflectionRecord,
   TroubleshootingSessionState,
   TimelineConfig,
   UnassignedEnrolleePickupRecord,
   ZCodeDomainSurveyHistorySummary,
   ZDomain
 } from '@/features/atlas2026/shared/contracts'
+import { IPSCC_ENROLLEE_FEEDBACK_PRIVACY_MIN_ENTRIES } from '@/features/atlas2026/shared/contracts'
 import {
   appendRouteLog as appendRouteLogRecord,
   deleteEnrolleeBurdenSurveyDraftRecord,
@@ -91,6 +93,7 @@ import {
   setZCodeDomainSurveyAnswerNullified,
   deleteAdminServiceCapacitySubmission as deleteAdminServiceCapacitySubmissionRecord,
   uploadEnrolleeProfileImage,
+  uploadAccountProfileImage,
   saveAdminPortalRegistry as persistAdminPortalRegistry,
   saveAccountSettings as persistAccountSettings,
   saveAccessMatrixEnrollmentNavigators as persistAccessMatrixEnrollmentNavigators,
@@ -109,6 +112,7 @@ import {
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake,
   saveNavigatorCreateSession as persistNavigatorCreateSession,
+  saveNavigatorCreateReflection as persistNavigatorCreateReflection,
   saveNavigatorIpsSelfAssessment as persistNavigatorIpsSelfAssessment,
   saveNavigatorIpsccEncounterSubmission as persistNavigatorIpsccEncounterSubmission,
   assignNavigatorEnrollmentToSelf as persistAssignNavigatorEnrollmentToSelf,
@@ -116,6 +120,8 @@ import {
   materializeClaimedReferralIntoEnrollment,
   upsertEnrollmentInferredZCodes,
   loadAccessMatrixDataset,
+  loadNavigatorCreateReflection,
+  loadNavigatorCreateReflections,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,
@@ -141,7 +147,15 @@ import {
   selectCompletedPartnerSurveysNewestFirst,
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
+import {
+  applyPartnerMyStationDebutMenuGate,
+  evaluatePartnerMyStationDebut
+} from '@/features/atlas2026/singlepane/data-access/partnerMyStationDebut'
 import { isCapabilityAllowedForRole } from '@/features/atlas2026/shared/roleCapabilityPolicy'
+import {
+  CREATE_REFLECTION_SESSION_LIMIT,
+  generateCreateReflection
+} from '@/services/atlas2026/createReflectionService'
 import {
   buildPartnerServiceCapacityDefaultHeader,
   buildSupervisorNavigatorCompetencySummaries,
@@ -163,7 +177,6 @@ import {
   DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION,
   flattenSurveyPrompts
 } from '@/features/atlas2026/singlepane/data/serviceCapacitySurveyCatalog'
-import { isRenewalAssessmentType } from '@/features/atlas2026/singlepane/data/assessmentCatalog'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import {
   enqueuePublicReferralQueueRecord,
@@ -172,6 +185,15 @@ import {
 } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { inferZCodesForReferral } from '@/services/atlas2026/demoInferenceService'
+import {
+  buildForcedRegulationReviewDueItems,
+  buildRegulationMilestoneRouteLog,
+  buildRegulationZ75StripMarker,
+  hasOpenRegulationMilestoneForStabilization,
+  isRegulationCadenceInstrument,
+  type RegulationInstrumentCompletionMap
+} from '@/features/atlas2026/singlepane/data/regulationCadence'
+import { IPSCC_COMPETENCY_DEFINITIONS } from '@/features/atlas2026/singlepane/data/intentionalPeerSupportCatalog'
 
 const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'route planning': ['housing', 'work'],
@@ -250,6 +272,7 @@ function nextPhase(current?: StabilizationPhase): StabilizationPhase {
 }
 
 function getRegulationTestLabel(testType: RegulationTestSubmissionRecord['testType']) {
+  // Short labels for timeline markers; full instrument names live in assessmentCatalog.
   if (testType === 'mh_sca') return 'MH-SCA'
   if (testType === 'svs') return 'SVS'
   if (testType === 'ipf') return 'IPF'
@@ -285,26 +308,22 @@ function buildResolvedZCodeStripMarkers(activeZCodeDetails: EnrolleeActiveZCode[
     })) satisfies ResolvedZCodeStripMarker[]
 }
 
-const IPSCC_COMPETENCY_DEFINITIONS: Array<{ key: IpsccCompetencyKey; label: string; itemIndexes: number[] }> = [
-  { key: 'competency_1_connection', label: 'Connection', itemIndexes: [1, 2, 3, 4, 9, 10] },
-  { key: 'competency_2_learning_together', label: 'Helping to learning together', itemIndexes: [3] },
-  { key: 'competency_3_worldview_awareness', label: 'Worldview awareness', itemIndexes: [5] },
-  { key: 'competency_4_relationship_focus', label: 'Individual to relationship', itemIndexes: [2, 4, 9] },
-  { key: 'competency_5_mutuality', label: 'Mutuality', itemIndexes: [4, 5, 7, 9] },
-  { key: 'competency_6_hope_and_possibility', label: 'Fear to hope and possibility', itemIndexes: [4, 10] },
-  { key: 'competency_7_moving_towards', label: 'Moving towards', itemIndexes: [6, 8, 10] },
-  { key: 'competency_8_self_reflection', label: 'Self-reflection', itemIndexes: [1, 2] },
-  { key: 'competency_9_feedback', label: 'Give and receive feedback', itemIndexes: [3, 7] },
-  { key: 'competency_10_co_reflection', label: 'Co-reflection', itemIndexes: [9, 10] }
-]
-
 const IPSCC_ITEM_COUNT = 10
+/** Legacy two-row seed ids — replaced by the pilot 10-submission improving series. */
+const IPSCC_LEGACY_ENCOUNTER_SEED_PREFIX = 'ipscc-seed-'
+/** Stable pilot seed ids so merge can refresh the series without wiping live submissions. */
+const IPSCC_PILOT_ENCOUNTER_SEED_PREFIX = 'ipscc-pilot-seed-'
 
 function clampLikertScore(value: number) {
   if (!Number.isFinite(value)) return 3
   return Math.max(1, Math.min(5, Math.round(value)))
 }
 
+/**
+ * Encounter submissions store one score per Intentional Peer Support Core Competencies
+ * (IPSCC) competency in catalog order (index 0 = competency 1). Older rows that used a
+ * guessed multi-item mapping still reduce to one score per competency via itemIndexes.
+ */
 function mapItemScoresToCompetencyScores(itemScores: number[]): Partial<Record<IpsccCompetencyKey, number>> {
   const normalized = Array.from({ length: IPSCC_ITEM_COUNT }, (_, index) => clampLikertScore(itemScores[index] ?? 3))
   return Object.fromEntries(
@@ -316,27 +335,67 @@ function mapItemScoresToCompetencyScores(itemScores: number[]): Partial<Record<I
   ) as Partial<Record<IpsccCompetencyKey, number>>
 }
 
+/**
+ * Ten encounter submissions from a single enrollee for the pilot navigator.
+ * Scores rise over ~9 weeks so admin and privacy-unlocked averages show improving
+ * enrollee opinion of the navigator (also unlocks the ~10-entry anonymity floor).
+ */
 function buildSeedIpsccEncounterSubmissions(
   navigatorName: string,
   enrollees: EnrolleeProfile[]
 ): IpsccEncounterSubmissionRecord[] {
+  const enrollee = enrollees[0]
+  if (!enrollee) return []
   const now = new Date()
-  return enrollees.slice(0, 2).map((enrollee, index) => {
+  return Array.from({ length: 10 }, (_, index) => {
+    // index 0 = oldest / lowest opinion; index 9 = most recent / highest opinion
     const submittedAt = new Date(now)
-    submittedAt.setUTCDate(submittedAt.getUTCDate() - index * 3)
-    const itemScores = Array.from({ length: IPSCC_ITEM_COUNT }, (_, scoreIndex) => clampLikertScore(4 - ((index + scoreIndex) % 2)))
+    submittedAt.setUTCDate(submittedAt.getUTCDate() - (9 - index) * 7)
+    // Climb from roughly 2.1 toward 4.7 across the series with light per-competency variance.
+    const progress = index / 9
+    const center = 2.1 + progress * 2.6
+    const itemScores = Array.from({ length: IPSCC_ITEM_COUNT }, (_, scoreIndex) => {
+      const wobble = ((scoreIndex + index) % 3) - 1
+      return clampLikertScore(center + wobble * 0.35)
+    })
     return {
-      id: `ipscc-seed-${index + 1}`,
+      id: `${IPSCC_PILOT_ENCOUNTER_SEED_PREFIX}${index + 1}`,
       navigatorName,
       enrolleeId: enrollee.id,
       enrolleeName: enrollee.fullName,
       enrollmentId: enrollee.enrollmentId || null,
       submittedAtIso: submittedAt.toISOString(),
-      submittedBy: 'service user',
+      submittedBy: 'enrollee',
       itemScores,
-      note: 'Seeded point-of-care feedback for competency trend continuity.'
+      note:
+        index === 0
+          ? 'Pilot enrollee early encounter — cautious ratings.'
+          : index === 9
+            ? 'Pilot enrollee latest encounter — clear improvement in opinion of navigator.'
+            : `Pilot enrollee encounter ${index + 1} of 10 — opinion trending upward.`
     }
   })
+}
+
+/**
+ * Keep live (non-seed) IPSCC rows, and always refresh the pilot 10-submission
+ * improving series so demos unlock privacy averages and show opinion lift.
+ */
+function mergeIpsccEncounterSubmissions(
+  existing: IpsccEncounterSubmissionRecord[],
+  navigatorName: string,
+  enrollees: EnrolleeProfile[]
+): IpsccEncounterSubmissionRecord[] {
+  const liveRows = existing.filter(
+    (record) =>
+      !record.id.startsWith(IPSCC_LEGACY_ENCOUNTER_SEED_PREFIX) &&
+      !record.id.startsWith(IPSCC_PILOT_ENCOUNTER_SEED_PREFIX)
+  )
+  const pilotSeries = buildSeedIpsccEncounterSubmissions(navigatorName, enrollees)
+  if (!pilotSeries.length) return liveRows.length ? liveRows : existing
+  return [...liveRows, ...pilotSeries].sort(
+    (left, right) => new Date(left.submittedAtIso).getTime() - new Date(right.submittedAtIso).getTime()
+  )
 }
 
 function buildSeedIpsSelfAssessments(navigatorName: string): IpsCompetencySelfAssessmentRecord[] {
@@ -723,8 +782,11 @@ function mergeNavigatorProgramState(
       base.supervisorIpsAssessments.length
         ? base.supervisorIpsAssessments
         : buildSeedSupervisorIpsAssessments(navigatorName, supervisorName),
-    ipsccEncounterSubmissions:
-      base.ipsccEncounterSubmissions.length ? base.ipsccEncounterSubmissions : buildSeedIpsccEncounterSubmissions(navigatorName, enrollees),
+    ipsccEncounterSubmissions: mergeIpsccEncounterSubmissions(
+      base.ipsccEncounterSubmissions,
+      navigatorName,
+      enrollees
+    ),
     createSessions: base.createSessions.length ? base.createSessions : buildSeedCreateSessions(navigatorName),
     supervisionSessions: base.supervisionSessions.length ? base.supervisionSessions : buildSeedSupervisionSessions(navigatorName),
     intervalAssessmentRules: base.intervalAssessmentRules.length ? base.intervalAssessmentRules : buildSeedIntervalRules(navigatorName),
@@ -790,6 +852,22 @@ function buildIpsccCompetencyAggregates(records: IpsccEncounterSubmissionRecord[
   })
 }
 
+/**
+ * Strip enrollee IPSCC averages until the anonymity threshold is met.
+ * Sample sizes remain visible so navigators can see progress toward unlock.
+ */
+function gateIpsccAggregatesForNavigatorPrivacy(
+  aggregates: IpsccCompetencyAggregate[],
+  totalEncounterSubmissions: number,
+  minEntries: number
+): IpsccCompetencyAggregate[] {
+  if (totalEncounterSubmissions >= minEntries) return aggregates
+  return aggregates.map((row) => ({
+    ...row,
+    averageScore: null
+  }))
+}
+
 function buildIpsSelfAssessmentAverages(records: IpsCompetencySelfAssessmentRecord[]): Record<IpsccCompetencyKey, number | null> {
   return Object.fromEntries(
     IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
@@ -802,23 +880,35 @@ function buildIpsSelfAssessmentAverages(records: IpsCompetencySelfAssessmentReco
   ) as Record<IpsccCompetencyKey, number | null>
 }
 
-function buildSelfVsSupervisorAwarenessCorrelation(
-  selfAverages: Record<IpsccCompetencyKey, number | null>,
-  supervisorAverages: Record<IpsccCompetencyKey, number | null>
+/**
+ * Self-awareness = alignment between enrollee Intentional Peer Support Core
+ * Competencies (IPSCC) point-of-care averages and the navigator's weekly IPSCC
+ * self-assessment averages (completed before supervision).
+ * Positive gap means the navigator self-rates higher than enrollees report.
+ * Strain is absolute gap — larger strain extends care-disruption risk on that competency.
+ */
+function buildIpsccVsSelfAwarenessCorrelation(
+  ipsccAggregates: IpsccCompetencyAggregate[],
+  selfAverages: Record<IpsccCompetencyKey, number | null>
 ): { rows: IpsccSelfAwarenessCorrelationRow[]; summary: IpsccSelfAwarenessSummary } {
+  const ipsccByKey = Object.fromEntries(
+    ipsccAggregates.map((row) => [row.key, row.averageScore])
+  ) as Record<IpsccCompetencyKey, number | null>
   const rows = IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
     const selfAverage = selfAverages[definition.key] ?? null
-    const supervisorAverage = supervisorAverages[definition.key] ?? null
-    const hasPair = typeof supervisorAverage === 'number' && typeof selfAverage === 'number'
-    const gap = hasPair ? Number((selfAverage - supervisorAverage).toFixed(2)) : null
+    const ipsccAverage = ipsccByKey[definition.key] ?? null
+    const hasPair = typeof ipsccAverage === 'number' && typeof selfAverage === 'number'
+    const gap = hasPair ? Number((selfAverage - ipsccAverage).toFixed(2)) : null
+    const strain = hasPair ? Number(Math.abs(gap || 0).toFixed(2)) : null
     // Alignment compresses absolute gap into 0..1 where 1 means exact agreement.
     const alignmentScore = hasPair ? Number((Math.max(0, 1 - Math.abs(gap || 0) / 4)).toFixed(2)) : null
     return {
       key: definition.key,
       label: definition.label,
-      ipsccAverage: supervisorAverage,
+      ipsccAverage,
       selfAverage,
       gap,
+      strain,
       alignmentScore
     }
   })
@@ -826,6 +916,7 @@ function buildSelfVsSupervisorAwarenessCorrelation(
   const averageGap = comparableRows.length
     ? Number((comparableRows.reduce((sum, row) => sum + Math.abs(row.gap || 0), 0) / comparableRows.length).toFixed(2))
     : null
+  const averageStrain = averageGap
   const overallAlignmentScore = comparableRows.length
     ? Number((comparableRows.reduce((sum, row) => sum + (row.alignmentScore || 0), 0) / comparableRows.length).toFixed(2))
     : null
@@ -834,7 +925,8 @@ function buildSelfVsSupervisorAwarenessCorrelation(
     summary: {
       comparedCompetencyCount: comparableRows.length,
       averageGap,
-      overallAlignmentScore
+      overallAlignmentScore,
+      averageStrain
     }
   }
 }
@@ -868,19 +960,36 @@ function cadenceDays(cadence: IntervalAssessmentRule['cadence']) {
   return 90
 }
 
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result)
-        return
-      }
-      reject(new Error('Unable to read image file.'))
-    }
-    reader.onerror = () => reject(reader.error || new Error('Unable to read image file.'))
-    reader.readAsDataURL(file)
+function loadImageElement(objectUrl: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Unable to process image file.'))
+    image.src = objectUrl
   })
+}
+
+/**
+ * Offline / unsigned-in fallback: shrink the photo before writing a data URL so
+ * account settings never exceed browser localStorage quota (QuotaExceededError).
+ */
+async function compressImageToDataUrl(file: File, maxEdge = 512, quality = 0.82) {
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const image = await loadImageElement(objectUrl)
+    const scale = Math.min(1, maxEdge / Math.max(image.width || 1, image.height || 1))
+    const width = Math.max(1, Math.round((image.width || 1) * scale))
+    const height = Math.max(1, Math.round((image.height || 1) * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Unable to process image file.')
+    context.drawImage(image, 0, 0, width, height)
+    return canvas.toDataURL('image/jpeg', quality)
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
 }
 
 function buildIntervalDueItems(
@@ -914,49 +1023,6 @@ function buildIntervalDueItems(
         status: status ? 'completed' : 'open'
       } satisfies IntervalAssessmentDueItem
     })
-}
-
-const REGULATION_REVIEW_DAY_IN_MS = 24 * 60 * 60 * 1000
-
-/**
- * Forced regulation review due computation.
- *
- * One item per owned enrollee whose review is active. "Due now" means there is no
- * completed regulation-stage test submission inside the current cadence window; a
- * completed submission satisfies the cycle until the window elapses again.
- */
-function buildRegulationReviewDueItems(
-  settings: RegulationReviewSettings,
-  ownedEnrollees: EnrolleeProfile[],
-  latestCompletedByEnrolleeId: Record<string, string>
-): RegulationReviewDueItem[] {
-  const nowMs = Date.now()
-  return ownedEnrollees
-    .map((enrollee) => {
-      const override = settings.enrolleeSettings[enrollee.id] || null
-      // Default-active contract: enrollees without an explicit per-enrollee entry inherit
-      // the admin default so newly added enrollees are enforced without extra setup.
-      const isActive = override ? override.isActive : settings.isActiveForNewEnrollees
-      if (!isActive) return null
-      const cadence = override?.cadence || settings.defaultCadence
-      const windowMs = cadenceDays(cadence) * REGULATION_REVIEW_DAY_IN_MS
-      const lastCompletedAtIso = latestCompletedByEnrolleeId[enrollee.id] || null
-      const lastCompletedMs = lastCompletedAtIso ? new Date(lastCompletedAtIso).getTime() : null
-      const isSatisfied = lastCompletedMs !== null && nowMs - lastCompletedMs < windowMs
-      return {
-        id: `regulation-review-${enrollee.id}`,
-        enrolleeId: enrollee.id,
-        enrolleeName: enrollee.fullName,
-        navigatorName: enrollee.assignedNavigator || null,
-        cadence,
-        // Never-reviewed enrollees are due immediately; otherwise the next cycle boundary.
-        dueAtIso:
-          lastCompletedMs !== null ? new Date(lastCompletedMs + windowMs).toISOString() : new Date(nowMs).toISOString(),
-        lastCompletedAtIso,
-        status: isSatisfied ? 'completed' : 'open'
-      } satisfies RegulationReviewDueItem
-    })
-    .filter((item): item is RegulationReviewDueItem => Boolean(item))
 }
 
 function deriveNavigatorLoad(loads: DomainLoad[]): DomainLoad | null {
@@ -1180,6 +1246,13 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [adminPortalRegistryError, setAdminPortalRegistryError] = useState<string | null>(null)
   const [accessMatrixError, setAccessMatrixError] = useState<string | null>(null)
   const [navigatorProgramError, setNavigatorProgramError] = useState<string | null>(null)
+  // One current C.R.E.A.T.E. reflection per navigator (separate table from session rows).
+  const [navigatorCreateReflection, setNavigatorCreateReflection] =
+    useState<NavigatorCreateReflectionRecord | null>(null)
+  // Supervisor review surface: reflections for navigators this supervisor manages.
+  const [supervisorManagedCreateReflections, setSupervisorManagedCreateReflections] = useState<
+    NavigatorCreateReflectionRecord[]
+  >([])
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [isSavingEnrolleeBurdenSurvey, setIsSavingEnrolleeBurdenSurvey] = useState(false)
   const [enrolleeBurdenSurveyError, setEnrolleeBurdenSurveyError] = useState<string | null>(null)
@@ -1189,12 +1262,12 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [isUploadingProfileImage, setIsUploadingProfileImage] = useState(false)
   const [profileImageUploadError, setProfileImageUploadError] = useState<string | null>(null)
   // Forced regulation review: admin cadence policy (null until the config document loads)
-  // plus the latest completed regulation-stage submission time per enrollee.
+  // plus latest completed Stress Vulnerability Scale (SVS) / Mental Health Self-Care Agency
+  // (MH-SCA) submission times per enrollee (both required per cycle).
   const [regulationReviewSettings, setRegulationReviewSettings] = useState<RegulationReviewSettings | null>(null)
   const [regulationReviewError, setRegulationReviewError] = useState<string | null>(null)
-  const [latestRegulationReviewCompletionByEnrolleeId, setLatestRegulationReviewCompletionByEnrolleeId] = useState<
-    Record<string, string>
-  >({})
+  const [latestRegulationReviewCompletionByEnrolleeId, setLatestRegulationReviewCompletionByEnrolleeId] =
+    useState<RegulationInstrumentCompletionMap>({})
   const [isUploadingAccountProfileImage, setIsUploadingAccountProfileImage] = useState(false)
   const [accountProfileImageUploadError, setAccountProfileImageUploadError] = useState<string | null>(null)
   const [sessionEmail, setSessionEmail] = useState('')
@@ -1501,7 +1574,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [intakeFormsByEnrolleeId, selectedEnrollee]
   )
 
-  const selectedRoleConfig = useMemo(
+  // Base role menus before partner My Station debut commissioning is applied. Troubleshooting
+  // grants still constrain remote partner shells here; debut gating is applied after survey history loads.
+  const baseSelectedRoleConfig = useMemo(
     () => {
       const baseConfig =
         roleConfigs.find((item) => item.role === viewerRole) || roleConfigs[0] || { role: viewerRole, topMenus: [], actionMenus: [] }
@@ -1514,17 +1589,6 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     },
     [remoteSession?.partnerGrant?.allowedMenus, remoteSession?.targetRole, roleConfigs, viewerRole]
   )
-  const selectedRoleTopMenus = useMemo(
-    () => selectedRoleConfig.topMenus.filter((menu) => Boolean(menu && menu.trim())),
-    [selectedRoleConfig.topMenus]
-  )
-  const selectedRoleTopMenusKey = useMemo(() => selectedRoleTopMenus.join('||'), [selectedRoleTopMenus])
-
-  useEffect(() => {
-    const firstMenu = selectedRoleTopMenus[0]
-    if (!firstMenu) return
-    setActiveMenu((current) => (selectedRoleTopMenus.includes(current) ? current : firstMenu))
-  }, [selectedRoleTopMenus, selectedRoleTopMenusKey])
 
   useEffect(() => {
     if (!scopedEnrollees[0]?.id) return
@@ -1563,7 +1627,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     [routeAssignmentsByEnrolleeId, selectedEnrollee]
   )
 
-  const resolvedZCodeStripMarkers = useMemo(
+  const resolvedZCodeStripMarkersFromActiveCodes = useMemo(
     () => buildResolvedZCodeStripMarkers(selectedEnrollee?.activeZCodeDetails || []),
     [selectedEnrollee?.activeZCodeDetails]
   )
@@ -1868,21 +1932,35 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         .sort((left, right) => new Date(right.sessionAtIso).getTime() - new Date(left.sessionAtIso).getTime()),
     [currentNavigatorName, mergedNavigatorProgramState.createSessions]
   )
-  const navigatorIpsccCompetencyAggregates = useMemo(
+  const navigatorIpsccCompetencyAggregatesRaw = useMemo(
     () => buildIpsccCompetencyAggregates(navigatorIpsccEncounterSubmissions),
     [navigatorIpsccEncounterSubmissions]
+  )
+  const navigatorIpsccEnrolleeFeedbackPrivacy = useMemo((): IpsccEnrolleeFeedbackPrivacy => {
+    const totalEncounterSubmissions = navigatorIpsccEncounterSubmissions.length
+    return {
+      totalEncounterSubmissions,
+      minEntriesToRevealAverages: IPSCC_ENROLLEE_FEEDBACK_PRIVACY_MIN_ENTRIES,
+      averagesRevealed: totalEncounterSubmissions >= IPSCC_ENROLLEE_FEEDBACK_PRIVACY_MIN_ENTRIES
+    }
+  }, [navigatorIpsccEncounterSubmissions])
+  // Navigator-facing aggregates never expose enrollee means below the privacy floor.
+  const navigatorIpsccCompetencyAggregates = useMemo(
+    () =>
+      gateIpsccAggregatesForNavigatorPrivacy(
+        navigatorIpsccCompetencyAggregatesRaw,
+        navigatorIpsccEnrolleeFeedbackPrivacy.totalEncounterSubmissions,
+        navigatorIpsccEnrolleeFeedbackPrivacy.minEntriesToRevealAverages
+      ),
+    [navigatorIpsccCompetencyAggregatesRaw, navigatorIpsccEnrolleeFeedbackPrivacy]
   )
   const navigatorIpsSelfAverages = useMemo(
     () => buildIpsSelfAssessmentAverages(navigatorIpsSelfAssessments),
     [navigatorIpsSelfAssessments]
   )
-  const navigatorSupervisorIpsAverages = useMemo(
-    () => buildIpsSelfAssessmentAverages(navigatorSupervisorIpsAssessments),
-    [navigatorSupervisorIpsAssessments]
-  )
   const navigatorSelfAwarenessCorrelation = useMemo(
-    () => buildSelfVsSupervisorAwarenessCorrelation(navigatorIpsSelfAverages, navigatorSupervisorIpsAverages),
-    [navigatorIpsSelfAverages, navigatorSupervisorIpsAverages]
+    () => buildIpsccVsSelfAwarenessCorrelation(navigatorIpsccCompetencyAggregates, navigatorIpsSelfAverages),
+    [navigatorIpsccCompetencyAggregates, navigatorIpsSelfAverages]
   )
   const navigatorCreateInsights = useMemo(
     () => buildCreateInsights(navigatorCreateSessions),
@@ -1951,7 +2029,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   }, [regulationReviewEnrolleeIdsKey])
   const regulationReviewDueItems = useMemo(
     () =>
-      buildRegulationReviewDueItems(
+      buildForcedRegulationReviewDueItems(
         effectiveRegulationReviewSettings,
         scopedEnrollees,
         latestRegulationReviewCompletionByEnrolleeId
@@ -2019,6 +2097,32 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setPartnerServiceCapacitySurveyHistory,
     setPartnerServiceCapacitySurveyError
   } = usePartnerServiceCapacityHistory(viewerRole, effectivePartnerOrganizationName)
+
+  // Partner My Station debut: hide the menu until capacity commissioning + specialization clarity.
+  // Administrator troubleshooting sessions keep grant-selected menus so ops can inspect early shells.
+  const partnerMyStationDebut = useMemo(
+    () =>
+      evaluatePartnerMyStationDebut({
+        stationProfile: effectivePartnerStationProfile,
+        surveyHistory: partnerServiceCapacitySurveyHistory
+      }),
+    [effectivePartnerStationProfile, partnerServiceCapacitySurveyHistory]
+  )
+  const selectedRoleConfig = useMemo(() => {
+    if (viewerRole !== 'partner' || remoteSession?.isActive) return baseSelectedRoleConfig
+    return applyPartnerMyStationDebutMenuGate(baseSelectedRoleConfig, partnerMyStationDebut.canDebut)
+  }, [baseSelectedRoleConfig, partnerMyStationDebut.canDebut, remoteSession?.isActive, viewerRole])
+  const selectedRoleTopMenus = useMemo(
+    () => selectedRoleConfig.topMenus.filter((menu) => Boolean(menu && menu.trim())),
+    [selectedRoleConfig.topMenus]
+  )
+  const selectedRoleTopMenusKey = useMemo(() => selectedRoleTopMenus.join('||'), [selectedRoleTopMenus])
+
+  useEffect(() => {
+    const firstMenu = selectedRoleTopMenus[0]
+    if (!firstMenu) return
+    setActiveMenu((current) => (selectedRoleTopMenus.includes(current) ? current : firstMenu))
+  }, [selectedRoleTopMenus, selectedRoleTopMenusKey])
 
   useEffect(() => {
     if (viewerRole !== 'administrator') {
@@ -2158,26 +2262,38 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   useEffect(() => {
     let isMounted = true
+    // Clear prior navigator reflection while the next profile's row loads.
+    setNavigatorCreateReflection(null)
     Promise.all([
       loadNavigatorIpsccEncounterSubmissions(currentNavigatorName),
       loadNavigatorIpsSelfAssessments(currentNavigatorName),
       loadNavigatorCreateSessions(currentNavigatorName),
-      loadSupervisorIpsAssessments()
+      loadSupervisorIpsAssessments(),
+      loadNavigatorCreateReflection(currentNavigatorName)
     ])
-      .then(([ipsccEncounterSubmissions, ipsSelfAssessments, createSessions, supervisorIpsAssessments]) => {
-        if (!isMounted) return
-        setNavigatorProgramState((current) => ({
-          ...current,
-          ipsccEncounterSubmissions: ipsccEncounterSubmissions.length
-            ? ipsccEncounterSubmissions
-            : current.ipsccEncounterSubmissions,
-          ipsSelfAssessments: ipsSelfAssessments.length ? ipsSelfAssessments : current.ipsSelfAssessments,
-          createSessions: createSessions.length ? createSessions : current.createSessions,
-          supervisorIpsAssessments: supervisorIpsAssessments.length
-            ? supervisorIpsAssessments
-            : current.supervisorIpsAssessments
-        }))
-      })
+      .then(
+        ([
+          ipsccEncounterSubmissions,
+          ipsSelfAssessments,
+          createSessions,
+          supervisorIpsAssessments,
+          createReflection
+        ]) => {
+          if (!isMounted) return
+          setNavigatorProgramState((current) => ({
+            ...current,
+            ipsccEncounterSubmissions: ipsccEncounterSubmissions.length
+              ? ipsccEncounterSubmissions
+              : current.ipsccEncounterSubmissions,
+            ipsSelfAssessments: ipsSelfAssessments.length ? ipsSelfAssessments : current.ipsSelfAssessments,
+            createSessions: createSessions.length ? createSessions : current.createSessions,
+            supervisorIpsAssessments: supervisorIpsAssessments.length
+              ? supervisorIpsAssessments
+              : current.supervisorIpsAssessments
+          }))
+          setNavigatorCreateReflection(createReflection)
+        }
+      )
       .catch((error) => {
         if (!isMounted) return
         setNavigatorProgramError(
@@ -2188,6 +2304,30 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       isMounted = false
     }
   }, [currentNavigatorName])
+
+  useEffect(() => {
+    // Supervisor profile needs reflections for managed navigators so overrides can be edited.
+    const managedNames = supervisorNavigatorDirectory
+      .filter((row) => row.isManagedByCurrentSupervisor)
+      .map((row) => row.navigatorName)
+    if (!managedNames.length) {
+      setSupervisorManagedCreateReflections([])
+      return
+    }
+    let isMounted = true
+    loadNavigatorCreateReflections(managedNames)
+      .then((rows) => {
+        if (!isMounted) return
+        setSupervisorManagedCreateReflections(rows)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        console.warn('Unable to load managed navigator C.R.E.A.T.E. reflections.', error)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [supervisorNavigatorDirectory])
 
   useEffect(() => {
     // Load the forced regulation review policy once at startup; it persists in the same
@@ -2484,6 +2624,37 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   const isRegulationCleared = Boolean(latestCompletedMhSca?.passed && latestCompletedSvs?.passed)
 
+  const resolvedZCodeStripMarkers = useMemo(() => {
+    const fromActiveCodes = resolvedZCodeStripMarkersFromActiveCodes
+    // When SVS + MH-SCA are both currently passing, surface the Tacoma Z75 / Lucid
+    // regulation milestone as a resolved stop alongside ordinary Z-code resolutions.
+    if (!selectedEnrollee || !latestCompletedMhSca?.passed || !latestCompletedSvs?.passed) {
+      return fromActiveCodes
+    }
+    const stabilizedAtIso =
+      [latestCompletedMhSca.updatedAtIso, latestCompletedSvs.updatedAtIso]
+        .slice()
+        .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ||
+      latestCompletedSvs.updatedAtIso
+    const regulationMarker = buildRegulationZ75StripMarker({
+      enrolleeId: selectedEnrollee.id,
+      stabilizedAtIso
+    })
+    const withoutSynthetic = fromActiveCodes.filter(
+      (marker) => marker.id !== regulationMarker.id && marker.zCode !== regulationMarker.zCode
+    )
+    return [...withoutSynthetic, regulationMarker].sort(
+      (left, right) => new Date(left.resolvedAtIso).getTime() - new Date(right.resolvedAtIso).getTime()
+    )
+  }, [
+    latestCompletedMhSca?.passed,
+    latestCompletedMhSca?.updatedAtIso,
+    latestCompletedSvs?.passed,
+    latestCompletedSvs?.updatedAtIso,
+    resolvedZCodeStripMarkersFromActiveCodes,
+    selectedEnrollee
+  ])
+
   const regulationTestStripMarkers = useMemo<RegulationTestStripMarker[]>(
     () =>
       completedRegulationTests.map((record) => ({
@@ -2707,7 +2878,21 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     }))
 
     try {
-      const avatarUrl = await readFileAsDataUrl(file)
+      // Prefer Storage (accounts/{user_id}/...) so account settings only store a short URL.
+      // Fall back to a compressed data URL only when cloud upload is unavailable.
+      let avatarUrl: string
+      try {
+        const uploaded = await uploadAccountProfileImage(file)
+        avatarUrl = uploaded.avatarUrl
+      } catch (storageError) {
+        const storageMessage = storageError instanceof Error ? storageError.message : ''
+        const canUseLocalFallback =
+          /sign in is required|supabase is required/i.test(storageMessage) ||
+          storageMessage.toLowerCase().includes('auth session missing')
+        if (!canUseLocalFallback) throw storageError
+        avatarUrl = await compressImageToDataUrl(file)
+      }
+
       const saved = await persistAccountSettings({
         ...accountSettings,
         avatarUrl
@@ -3615,14 +3800,139 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   async function saveNavigatorCreateSession(record: CreateSessionRecord) {
     ensureWriteAllowed('navigatorProgram.write', 'save C.R.E.A.T.E. supervision sessions')
     const savedRecord = await persistNavigatorCreateSession(record)
+    const nextCreateSessions = [
+      savedRecord,
+      ...mergedNavigatorProgramState.createSessions.filter((item) => item.id !== savedRecord.id)
+    ]
     const nextState = {
       ...mergedNavigatorProgramState,
-      createSessions: [
-        savedRecord,
-        ...mergedNavigatorProgramState.createSessions.filter((item) => item.id !== savedRecord.id)
-      ]
+      createSessions: nextCreateSessions
     }
-    return saveNavigatorProgramState(nextState)
+    const savedProgramState = await saveNavigatorProgramState(nextState)
+
+    // Regenerate Section 3 reflection from the latest session plus prior history (≤10 total).
+    const sessionsForReflection = nextCreateSessions
+      .filter((item) => item.navigatorName.trim().toLowerCase() === savedRecord.navigatorName.trim().toLowerCase())
+      .slice()
+      .sort((left, right) => new Date(left.sessionAtIso).getTime() - new Date(right.sessionAtIso).getTime())
+      .slice(-CREATE_REFLECTION_SESSION_LIMIT)
+
+    try {
+      const generated = await generateCreateReflection({
+        navigatorName: savedRecord.navigatorName,
+        supervisorName: savedRecord.supervisorName,
+        sessions: sessionsForReflection
+      })
+      const reflection = await persistNavigatorCreateReflection({
+        navigatorName: savedRecord.navigatorName,
+        reflectionText: generated.reflectionText,
+        // Fresh generation replaces any prior supervisor edit of the display narrative.
+        generatedReflectionText: generated.reflectionText,
+        sourceSessionIds: sessionsForReflection.map((session) => session.id),
+        sourceLatestSessionId: savedRecord.id,
+        model: generated.model,
+        generatedAtIso: new Date().toISOString(),
+        usedFallback: generated.usedFallback,
+        supervisorOverriddenAtIso: null,
+        supervisorOverriddenBy: ''
+      })
+      setNavigatorCreateReflection(reflection)
+      setSupervisorManagedCreateReflections((current) => {
+        const without = current.filter(
+          (item) => item.navigatorName.trim().toLowerCase() !== reflection.navigatorName.trim().toLowerCase()
+        )
+        return [reflection, ...without]
+      })
+    } catch (error) {
+      // Session save already succeeded; keep that result even if reflection persistence fails.
+      console.warn('Unable to persist C.R.E.A.T.E. reflection after session save.', error)
+    }
+
+    return savedProgramState
+  }
+
+  async function saveSupervisorCreateReflectionOverride(input: {
+    navigatorName: string
+    reflectionText: string
+  }) {
+    ensureWriteAllowed('navigatorProgram.write', 'override C.R.E.A.T.E. reflection')
+    const navigatorName = input.navigatorName.trim()
+    const reflectionText = input.reflectionText.trim()
+    if (!navigatorName) throw new Error('Select a navigator before overriding the reflection.')
+    if (!reflectionText) throw new Error('Reflection text cannot be empty.')
+
+    const existing =
+      supervisorManagedCreateReflections.find(
+        (row) => row.navigatorName.trim().toLowerCase() === navigatorName.toLowerCase()
+      ) ||
+      (await loadNavigatorCreateReflection(navigatorName))
+
+    const nowIso = new Date().toISOString()
+    // Preserve the last auto-generated copy so supervisors can restore it later if needed.
+    const generatedReflectionText =
+      existing?.generatedReflectionText?.trim() ||
+      existing?.reflectionText?.trim() ||
+      reflectionText
+
+    const saved = await persistNavigatorCreateReflection({
+      id: existing?.id,
+      navigatorName,
+      reflectionText,
+      generatedReflectionText,
+      sourceSessionIds: existing?.sourceSessionIds || [],
+      sourceLatestSessionId: existing?.sourceLatestSessionId || '',
+      model: existing?.model || 'supervisor-override',
+      generatedAtIso: existing?.generatedAtIso || nowIso,
+      usedFallback: existing?.usedFallback || false,
+      supervisorOverriddenAtIso: nowIso,
+      supervisorOverriddenBy: currentSupervisorName.trim() || 'supervisor'
+    })
+
+    setSupervisorManagedCreateReflections((current) => {
+      const without = current.filter(
+        (item) => item.navigatorName.trim().toLowerCase() !== saved.navigatorName.trim().toLowerCase()
+      )
+      return [saved, ...without]
+    })
+    if (saved.navigatorName.trim().toLowerCase() === currentNavigatorName.trim().toLowerCase()) {
+      setNavigatorCreateReflection(saved)
+    }
+    return saved
+  }
+
+  async function restoreSupervisorCreateReflectionGenerated(navigatorNameInput: string) {
+    ensureWriteAllowed('navigatorProgram.write', 'restore generated C.R.E.A.T.E. reflection')
+    const navigatorName = navigatorNameInput.trim()
+    if (!navigatorName) throw new Error('Select a navigator before restoring the generated reflection.')
+
+    const existing =
+      supervisorManagedCreateReflections.find(
+        (row) => row.navigatorName.trim().toLowerCase() === navigatorName.toLowerCase()
+      ) ||
+      (await loadNavigatorCreateReflection(navigatorName))
+    if (!existing) throw new Error('No C.R.E.A.T.E. reflection exists for this navigator yet.')
+
+    const restoredText = existing.generatedReflectionText.trim() || existing.reflectionText.trim()
+    if (!restoredText) throw new Error('No generated reflection is available to restore.')
+
+    const saved = await persistNavigatorCreateReflection({
+      ...existing,
+      reflectionText: restoredText,
+      generatedReflectionText: restoredText,
+      supervisorOverriddenAtIso: null,
+      supervisorOverriddenBy: ''
+    })
+
+    setSupervisorManagedCreateReflections((current) => {
+      const without = current.filter(
+        (item) => item.navigatorName.trim().toLowerCase() !== saved.navigatorName.trim().toLowerCase()
+      )
+      return [saved, ...without]
+    })
+    if (saved.navigatorName.trim().toLowerCase() === currentNavigatorName.trim().toLowerCase()) {
+      setNavigatorCreateReflection(saved)
+    }
+    return saved
   }
 
   async function saveIntervalAssessmentRule(rule: IntervalAssessmentRule) {
@@ -3701,15 +4011,70 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     setRegulationTestError(null)
     try {
       const saved = await saveRegulationTestSubmission(input)
-      setRegulationTestHistory((current) => upsertRegulationTestHistory(current, saved))
-      if (saved.status === 'completed' && !isRenewalAssessmentType(saved.testType)) {
-        // A completed regulation-stage submission satisfies the forced regulation review
-        // cycle immediately, without waiting for the next remote fetch.
+      const nextHistory = upsertRegulationTestHistory(regulationTestHistory, saved)
+      setRegulationTestHistory(nextHistory)
+      if (saved.status === 'completed' && isRegulationCadenceInstrument(saved.testType)) {
+        // Persist per-instrument completion so one of SVS / MH-SCA alone never clears the
+        // forced weekly review cycle.
         setLatestRegulationReviewCompletionByEnrolleeId((current) => {
-          const existing = current[saved.enrolleeId]
-          if (existing && new Date(existing).getTime() >= new Date(saved.submittedAtIso).getTime()) return current
-          return { ...current, [saved.enrolleeId]: saved.submittedAtIso }
+          const existingForEnrollee = current[saved.enrolleeId] || {}
+          const existingForType = existingForEnrollee[saved.testType]
+          if (
+            existingForType &&
+            new Date(existingForType).getTime() >= new Date(saved.submittedAtIso).getTime()
+          ) {
+            return current
+          }
+          return {
+            ...current,
+            [saved.enrolleeId]: {
+              ...existingForEnrollee,
+              [saved.testType]: saved.submittedAtIso
+            }
+          }
         })
+      }
+
+      // Stable SVS + MH-SCA is also a Tacoma Z75 / Lucid stop: log once when both latest
+      // completed instruments for this enrollee are currently passing.
+      if (saved.status === 'completed' && isRegulationCadenceInstrument(saved.testType) && saved.passed) {
+        const completedForEnrollee = nextHistory
+          .filter(
+            (record) =>
+              record.enrolleeId === saved.enrolleeId &&
+              record.status === 'completed' &&
+              record.passed !== null &&
+              isRegulationCadenceInstrument(record.testType)
+          )
+          .slice()
+          .sort((left, right) => new Date(left.updatedAtIso).getTime() - new Date(right.updatedAtIso).getTime())
+        const latestMhSca = [...completedForEnrollee].reverse().find((record) => record.testType === 'mh_sca')
+        const latestSvs = [...completedForEnrollee].reverse().find((record) => record.testType === 'svs')
+        if (latestMhSca?.passed && latestSvs?.passed) {
+          const stabilizedAtIso =
+            [latestMhSca.updatedAtIso, latestSvs.updatedAtIso]
+              .slice()
+              .sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] ||
+            saved.submittedAtIso
+          if (!hasOpenRegulationMilestoneForStabilization(logs, saved.enrolleeId, stabilizedAtIso)) {
+            const milestoneLog = buildRegulationMilestoneRouteLog({
+              enrolleeId: saved.enrolleeId,
+              stabilizedAtIso
+            })
+            try {
+              const finalLogs = await appendRouteLogRecord(logs, milestoneLog)
+              setLogs(finalLogs)
+            } catch (milestoneError) {
+              // Surface the milestone persistence failure without rolling back the assessment save.
+              setNavigatorProgramError(
+                toSupabaseErrorMessage(
+                  milestoneError,
+                  'Unable to log the Z75 / Lucid regulation milestone stop.'
+                )
+              )
+            }
+          }
+        }
       }
       return saved
     } catch (error) {
@@ -3781,6 +4146,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     selectedLoadBreakdown: effectiveSelectedLoadBreakdown,
     selectedLogs,
     selectedRoleConfig,
+    partnerMyStationDebut,
     timelineConfig: selectedTimelineConfig,
     enrollmentRequests,
     routeCandidates,
@@ -3836,6 +4202,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     pickupQueue,
     navigatorIpsccEncounterSubmissions,
     navigatorIpsccCompetencyAggregates,
+    navigatorIpsccEnrolleeFeedbackPrivacy,
     navigatorIpsSelfAssessments,
     navigatorSupervisorIpsAssessments,
     allSupervisorIpsAssessments,
@@ -3843,6 +4210,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     navigatorSelfAwarenessSummary: navigatorSelfAwarenessCorrelation.summary,
     navigatorCreateSessions,
     navigatorCreateInsights,
+    navigatorCreateReflection,
+    supervisorManagedCreateReflections,
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
     navigatorEnrollmentAssignments: navigatorAssignmentBoardRows,
@@ -3902,6 +4271,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     saveSupervisorIpsAssessment,
     saveNavigatorIpsccEncounterSubmission,
     saveNavigatorCreateSession,
+    saveSupervisorCreateReflectionOverride,
+    restoreSupervisorCreateReflectionGenerated,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,

@@ -1,4 +1,5 @@
 import React from 'react'
+import { ChevronDown } from 'lucide-react'
 import { getZCodeParentColor } from '@atlas/shared'
 import { AtlasPlusButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import ZCodeBadge from '@/features/atlas2026/components/ZCodeBadge'
@@ -20,6 +21,43 @@ interface NavigatorEnrollmentAssignmentsPanelProps {
   ) => Promise<void> | void
 }
 
+/** Shared collapse header so assigned / picked-up lists read as expandable sections. */
+function CollapsibleAssignmentSectionHeader({
+  title,
+  count,
+  isExpanded,
+  onToggle
+}: {
+  title: string
+  count: number
+  isExpanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className="flex w-full items-center justify-between gap-3 rounded-[12px] border border-white/10 px-3 py-2 text-left"
+      onClick={onToggle}
+      aria-expanded={isExpanded}
+    >
+      <div className="min-w-0">
+        <small className="atlas-overline block text-[#cfcfcf]">
+          {title}
+          <span className="ml-2 text-[#9ea8b4]">({count})</span>
+        </small>
+        <small className="atlas-caption mt-0.5 block text-[#9ea8b4]">
+          {isExpanded ? 'click to collapse' : 'click to expand'}
+        </small>
+      </div>
+      <ChevronDown
+        size={16}
+        className={`shrink-0 text-[#cfcfcf] transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''}`}
+        aria-hidden
+      />
+    </button>
+  )
+}
+
 export default function NavigatorEnrollmentAssignmentsPanel({
   rows,
   isLoading,
@@ -32,7 +70,9 @@ export default function NavigatorEnrollmentAssignmentsPanel({
   onToggleAssignment
 }: NavigatorEnrollmentAssignmentsPanelProps) {
   const [expandedEnrollmentIds, setExpandedEnrollmentIds] = React.useState<string[]>([])
+  // Follow-up and assigned lists stay collapsed by default so pickup work stays primary.
   const [isPickedUpSectionExpanded, setIsPickedUpSectionExpanded] = React.useState(false)
+  const [isAssignedSectionExpanded, setIsAssignedSectionExpanded] = React.useState(false)
 
   function toggleExpandedEnrollment(enrollmentId: string) {
     setExpandedEnrollmentIds((current) =>
@@ -235,21 +275,27 @@ export default function NavigatorEnrollmentAssignmentsPanel({
               <small className="atlas-overline block text-[#cfcfcf]">enrollees needing pickup</small>
               {pickupAvailableRows.map((row) => renderAssignmentRow(row))}
             </div>
-          ) : pickupFollowupRows.length ? (
+          ) : null}
+          {pickupFollowupRows.length ? (
             <div className="space-y-2">
-              <button
-                type="button"
-                className="atlas-overline inline-flex items-center gap-2 text-[#cfcfcf]"
-                onClick={() => setIsPickedUpSectionExpanded((current) => !current)}
-              >
-                {isPickedUpSectionExpanded ? 'hide picked-up enrollees' : 'show picked-up enrollees'}
-              </button>
+              <CollapsibleAssignmentSectionHeader
+                title={isPickedUpSectionExpanded ? 'picked-up enrollees' : 'show picked-up enrollees'}
+                count={pickupFollowupRows.length}
+                isExpanded={isPickedUpSectionExpanded}
+                onToggle={() => setIsPickedUpSectionExpanded((current) => !current)}
+              />
               {isPickedUpSectionExpanded ? pickupFollowupRows.map((row) => renderAssignmentRow(row)) : null}
             </div>
           ) : null}
           {standardRows.length ? (
             <div className="space-y-2">
-              {standardRows.map((row) => renderAssignmentRow(row))}
+              <CollapsibleAssignmentSectionHeader
+                title="assigned"
+                count={standardRows.length}
+                isExpanded={isAssignedSectionExpanded}
+                onToggle={() => setIsAssignedSectionExpanded((current) => !current)}
+              />
+              {isAssignedSectionExpanded ? standardRows.map((row) => renderAssignmentRow(row)) : null}
             </div>
           ) : null}
         </div>

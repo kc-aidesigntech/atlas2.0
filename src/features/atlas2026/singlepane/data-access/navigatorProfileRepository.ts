@@ -3,10 +3,16 @@ import type {
   IpsCompetencySelfAssessmentRecord,
   IpsccCompetencyKey,
   IpsccEncounterSubmissionRecord,
+  NavigatorCreateReflectionRecord,
   SupervisorIpsAssessmentRecord
 } from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+
+// Postgres uuid columns reject seed-style ids like `ipscc-...`; only persist real UUIDs.
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
+}
 
 function normalizeItemScores(value: unknown): number[] {
   if (!Array.isArray(value)) return []
@@ -65,8 +71,9 @@ export async function saveNavigatorIpsccEncounterSubmission(
       itemScores: normalizeItemScores(record.itemScores)
     }
   }
+  const hasPersistedId = isUuid(record.id)
   const payload = {
-    id: record.id,
+    ...(hasPersistedId ? { id: record.id } : {}),
     navigator_name: record.navigatorName,
     enrollee_id: record.enrolleeId,
     enrollee_name: record.enrolleeName,
@@ -76,12 +83,11 @@ export async function saveNavigatorIpsccEncounterSubmission(
     item_scores: normalizeItemScores(record.itemScores),
     note: record.note
   }
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('navigator_ipscc_encounter_submissions')
-    .upsert(payload)
-    .select('*')
-    .single()
+  // Insert when the client id is not a UUID so Postgres can allocate one; upsert only for real ids.
+  const writer = hasPersistedId
+    ? supabase.schema('atlas').from('navigator_ipscc_encounter_submissions').upsert(payload)
+    : supabase.schema('atlas').from('navigator_ipscc_encounter_submissions').insert(payload)
+  const { data, error } = await writer.select('*').single()
   if (error) throw error
   return {
     id: String(data.id),
@@ -151,20 +157,19 @@ export async function saveNavigatorIpsSelfAssessment(
       competencyScores: normalizeCompetencyScores(record.competencyScores)
     }
   }
+  const hasPersistedId = isUuid(record.id)
   const payload = {
-    id: record.id,
+    ...(hasPersistedId ? { id: record.id } : {}),
     navigator_name: record.navigatorName,
     week_start_iso: record.weekStartIso,
     submitted_at: record.submittedAtIso,
     competency_scores: normalizeCompetencyScores(record.competencyScores),
     note: record.note
   }
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('navigator_ips_self_assessments')
-    .upsert(payload)
-    .select('*')
-    .single()
+  const writer = hasPersistedId
+    ? supabase.schema('atlas').from('navigator_ips_self_assessments').upsert(payload)
+    : supabase.schema('atlas').from('navigator_ips_self_assessments').insert(payload)
+  const { data, error } = await writer.select('*').single()
   if (error) throw error
   return {
     id: String(data.id),
@@ -185,8 +190,9 @@ export async function saveSupervisorIpsAssessment(
       competencyScores: normalizeCompetencyScores(record.competencyScores)
     }
   }
+  const hasPersistedId = isUuid(record.id)
   const payload = {
-    id: record.id,
+    ...(hasPersistedId ? { id: record.id } : {}),
     supervisor_name: record.supervisorName,
     navigator_name: record.navigatorName,
     week_start_iso: record.weekStartIso,
@@ -194,12 +200,10 @@ export async function saveSupervisorIpsAssessment(
     competency_scores: normalizeCompetencyScores(record.competencyScores),
     note: record.note
   }
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('supervisor_ips_assessments')
-    .upsert(payload)
-    .select('*')
-    .single()
+  const writer = hasPersistedId
+    ? supabase.schema('atlas').from('supervisor_ips_assessments').upsert(payload)
+    : supabase.schema('atlas').from('supervisor_ips_assessments').insert(payload)
+  const { data, error } = await writer.select('*').single()
   if (error) throw error
   return {
     id: String(data.id),
@@ -256,8 +260,9 @@ export async function saveNavigatorCreateSession(record: CreateSessionRecord): P
   if (!hasSupabaseConfig || !supabase) {
     return record
   }
+  const hasPersistedId = isUuid(record.id)
   const payload = {
-    id: record.id,
+    ...(hasPersistedId ? { id: record.id } : {}),
     navigator_name: record.navigatorName,
     supervisor_name: record.supervisorName,
     session_at: record.sessionAtIso,
@@ -278,12 +283,10 @@ export async function saveNavigatorCreateSession(record: CreateSessionRecord): P
     supervisor_signature: record.supervisorSignature,
     supervisor_signed_at: record.supervisorSignedAtIso
   }
-  const { data, error } = await supabase
-    .schema('atlas')
-    .from('navigator_create_sessions')
-    .upsert(payload)
-    .select('*')
-    .single()
+  const writer = hasPersistedId
+    ? supabase.schema('atlas').from('navigator_create_sessions').upsert(payload)
+    : supabase.schema('atlas').from('navigator_create_sessions').insert(payload)
+  const { data, error } = await writer.select('*').single()
   if (error) throw error
   return {
     id: String(data.id),
@@ -308,4 +311,113 @@ export async function saveNavigatorCreateSession(record: CreateSessionRecord): P
     supervisorSignature: String(data.supervisor_signature || ''),
     supervisorSignedAtIso: data.supervisor_signed_at ? String(data.supervisor_signed_at) : null
   }
+}
+
+function mapCreateReflectionRow(row: Record<string, unknown>): NavigatorCreateReflectionRecord {
+  const sourceIds = Array.isArray(row.source_session_ids)
+    ? row.source_session_ids.map((value) => String(value || '').trim()).filter(Boolean)
+    : []
+  const reflectionText = String(row.reflection_text || '').trim()
+  const generatedReflectionText =
+    String(row.generated_reflection_text || '').trim() || reflectionText
+  const model = String(row.model || '').trim()
+  const supervisorOverriddenAtIso = row.supervisor_overridden_at
+    ? String(row.supervisor_overridden_at)
+    : null
+  return {
+    id: String(row.id || ''),
+    navigatorName: String(row.navigator_name || '').trim(),
+    reflectionText,
+    generatedReflectionText,
+    sourceSessionIds: sourceIds,
+    sourceLatestSessionId: String(row.source_latest_session_id || '').trim(),
+    model,
+    generatedAtIso: String(row.generated_at || row.updated_at || row.created_at || new Date().toISOString()),
+    usedFallback: model.toLowerCase().includes('fallback'),
+    supervisorOverriddenAtIso,
+    supervisorOverriddenBy: String(row.supervisor_overridden_by || '').trim()
+  }
+}
+
+export async function loadNavigatorCreateReflection(
+  navigatorName: string
+): Promise<NavigatorCreateReflectionRecord | null> {
+  if (!hasSupabaseConfig || !supabase) return null
+  const normalizedNavigatorName = navigatorName.trim().toLowerCase()
+  if (!normalizedNavigatorName) return null
+  return withOptionalSupabaseFallback('singlepane.navigatorCreateReflection', async () => {
+    const { data, error } = await supabase
+      .schema('atlas')
+      .from('navigator_create_reflections')
+      .select('*')
+      .order('generated_at', { ascending: false })
+    if (error) throw error
+    const match = (data || []).find(
+      (row) => String(row.navigator_name || '').trim().toLowerCase() === normalizedNavigatorName
+    )
+    return match ? mapCreateReflectionRow(match as Record<string, unknown>) : null
+  }, null)
+}
+
+/** Load current reflections for a set of navigators (supervisor review surface). */
+export async function loadNavigatorCreateReflections(
+  navigatorNames: string[]
+): Promise<NavigatorCreateReflectionRecord[]> {
+  if (!hasSupabaseConfig || !supabase) return []
+  const normalized = Array.from(
+    new Set(navigatorNames.map((name) => name.trim().toLowerCase()).filter(Boolean))
+  )
+  if (!normalized.length) return []
+  return withOptionalSupabaseFallback('singlepane.navigatorCreateReflections', async () => {
+    const { data, error } = await supabase
+      .schema('atlas')
+      .from('navigator_create_reflections')
+      .select('*')
+      .order('generated_at', { ascending: false })
+    if (error) throw error
+    return (data || [])
+      .map((row) => mapCreateReflectionRow(row as Record<string, unknown>))
+      .filter((row) => normalized.includes(row.navigatorName.trim().toLowerCase()))
+  }, [])
+}
+
+export async function saveNavigatorCreateReflection(
+  record: Omit<NavigatorCreateReflectionRecord, 'id'> & { id?: string }
+): Promise<NavigatorCreateReflectionRecord> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      id: record.id || `local-create-reflection-${Date.now()}`,
+      navigatorName: record.navigatorName,
+      reflectionText: record.reflectionText,
+      generatedReflectionText: record.generatedReflectionText,
+      sourceSessionIds: record.sourceSessionIds,
+      sourceLatestSessionId: record.sourceLatestSessionId,
+      model: record.model,
+      generatedAtIso: record.generatedAtIso,
+      usedFallback: record.usedFallback,
+      supervisorOverriddenAtIso: record.supervisorOverriddenAtIso,
+      supervisorOverriddenBy: record.supervisorOverriddenBy
+    }
+  }
+  const payload = {
+    navigator_name: record.navigatorName,
+    reflection_text: record.reflectionText,
+    generated_reflection_text: record.generatedReflectionText,
+    source_session_ids: record.sourceSessionIds,
+    source_latest_session_id: record.sourceLatestSessionId,
+    model: record.model,
+    generated_at: record.generatedAtIso,
+    supervisor_overridden_at: record.supervisorOverriddenAtIso,
+    supervisor_overridden_by: record.supervisorOverriddenBy,
+    updated_at: new Date().toISOString()
+  }
+  // Upsert on navigator_name so each navigator keeps one current reflection row.
+  const { data, error } = await supabase
+    .schema('atlas')
+    .from('navigator_create_reflections')
+    .upsert(payload, { onConflict: 'navigator_name' })
+    .select('*')
+    .single()
+  if (error) throw error
+  return mapCreateReflectionRow(data as Record<string, unknown>)
 }

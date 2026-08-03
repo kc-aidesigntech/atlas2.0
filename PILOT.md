@@ -145,11 +145,14 @@ expected result. Writes always flow through validated `SECURITY DEFINER` RPCs.
 2. **Service capacity (Z-code) survey**
    - **service capacity** → complete the Z-code capacity survey → Submit.
    - RPC: `fn_save_partner_service_capacity(payload)`. Expect: submission saved for "Atlas Pilot Partner Org".
+   - Confirm the My Station debut checklist on the survey history surface; **my station** stays hidden until scored capacity entries and at least one specialty (burden score above 6) are present. See `docs/PARTNER_MY_STATION_DEBUT.md`.
 3. **Ensure a partner identifier record**
    - Triggered during capacity flow. RPC: `fn_ensure_partner_identifier(first, last, org, email)`.
 4. **Nullify a survey answer**
    - Capacity history → nullify an answer with a reason.
    - RPC: `fn_set_partner_survey_answer_nullification(p_answer_id, p_is_nullified, p_nullified_by_email, p_nullified_reason)`.
+5. **My Station debut**
+   - After commissioning requirements are met, return to `/app` as partner and confirm **my station** appears in the top menu.
 
 ### 4.5 Public / anonymous (no login)
 
@@ -212,7 +215,10 @@ partner enrollee PHI = 0; anon only `z_codes` / `z_code_headers`.
 ## 8. Known limitations
 
 - These `@atlas.test` logins are pilot-only (email pre-confirmed, non-deliverable
-  domain) and must not exist in production.
+  domain) and must not exist in production. **Production hard gate:** do not run
+  `verification/pilot_setup.sql` or `verification/demo_partner_setup.sql` against
+  a production project; pre-flight with `verification/prod_commission_verify.sql`
+  (section A) and complete [docs/production-go-live-hard-gates.md](docs/production-go-live-hard-gates.md).
 - A few reporting/aggregate `SECURITY DEFINER` views (county heatmap, data
   quality, route candidates) and three command RPCs remain executable beyond the
   strictly necessary role. They expose no direct enrollee PHI and self-deny
