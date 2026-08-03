@@ -8,10 +8,11 @@ import type {
   IntervalAssessmentDueItem,
   IpsCompetencySelfAssessmentRecord,
   IpsccCompetencyAggregate,
-  IpsccCompetencyKey,
   IpsccEncounterSubmissionRecord,
+  IpsccEnrolleeFeedbackPrivacy,
   IpsccSelfAwarenessCorrelationRow,
   IpsccSelfAwarenessSummary,
+  NavigatorCreateReflectionRecord,
   NavigatorEnrollmentAssignmentRecord,
   RegulationReviewDueItem,
   SupervisorIpsAssessmentRecord,
@@ -22,6 +23,13 @@ import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import NavigatorEnrollmentAssignmentsPanel from './NavigatorEnrollmentAssignmentsPanel'
 import NavigatorCompetencyDashboard from './NavigatorCompetencyDashboard'
+import IpsccStrainRadarChart from './IpsccStrainRadarChart'
+import IpsCompetencySurvey, {
+  isIpsCompetencySurveyComplete,
+  scoresMapToCompetencyRecord,
+  scoresMapToItemArray,
+  type IpsCompetencyScoreMap
+} from './IpsCompetencySurvey'
 import ProfileNavigationCard from './ProfileNavigationCard'
 import AtlasImageUploadTile from '@/features/atlas2026/components/AtlasImageUploadTile'
 import { createFallbackAvatarDataUrl } from '@/features/atlas2026/components/avatarFallback'
@@ -41,12 +49,14 @@ interface NavigatorMyProfilePanelProps {
   canOpenAssignmentBoardReferral: boolean
   competencySummary: SupervisorNavigatorCompetencySummary | null
   ipsccCompetencyAverages: IpsccCompetencyAggregate[]
+  ipsccEnrolleeFeedbackPrivacy: IpsccEnrolleeFeedbackPrivacy
   selfAwarenessCorrelationRows: IpsccSelfAwarenessCorrelationRow[]
   selfAwarenessSummary: IpsccSelfAwarenessSummary
   ipsSelfAssessments: IpsCompetencySelfAssessmentRecord[]
   navigatorSupervisorIpsAssessments: SupervisorIpsAssessmentRecord[]
   createInsights: CreateInsightRow[]
   createSessions: CreateSessionRecord[]
+  createReflection: NavigatorCreateReflectionRecord | null
   supervisionSessions: SupervisionSessionRecord[]
   dueItems: IntervalAssessmentDueItem[]
   regulationReviewDueItems?: RegulationReviewDueItem[]
@@ -103,40 +113,6 @@ const CARD_DEFS: Array<{
 ]
 
 const ACTIVE_PROFILE_RAIL_CARDS = CARD_DEFS.filter((card) => card.isActiveOnProfileRail)
-
-const IPS_COMPETENCY_OPTIONS: Array<{ key: IpsccCompetencyKey; label: string }> = [
-  { key: 'competency_1_connection', label: '1. Connection' },
-  { key: 'competency_2_learning_together', label: '2. Helping to learning together' },
-  { key: 'competency_3_worldview_awareness', label: '3. Worldview awareness' },
-  { key: 'competency_4_relationship_focus', label: '4. Individual to relationship' },
-  { key: 'competency_5_mutuality', label: '5. Mutuality' },
-  { key: 'competency_6_hope_and_possibility', label: '6. Fear to hope and possibility' },
-  { key: 'competency_7_moving_towards', label: '7. Moving towards' },
-  { key: 'competency_8_self_reflection', label: '8. Self-reflection' },
-  { key: 'competency_9_feedback', label: '9. Give and receive feedback' },
-  { key: 'competency_10_co_reflection', label: '10. Co-reflection' }
-]
-
-const IPSCC_ITEM_LABELS = [
-  'Item 1',
-  'Item 2',
-  'Item 3',
-  'Item 4',
-  'Item 5',
-  'Item 6',
-  'Item 7',
-  'Item 8',
-  'Item 9',
-  'Item 10'
-] as const
-
-const LIKERT_OPTIONS = [
-  { value: 1, label: '1 · strongly disagree' },
-  { value: 2, label: '2 · disagree' },
-  { value: 3, label: '3 · unsure' },
-  { value: 4, label: '4 · agree' },
-  { value: 5, label: '5 · strongly agree' }
-] as const
 
 const CREATE_NOTE_FIELDS: Array<{
   key: 'recognizeNotes' | 'encourageNotes' | 'acknowledgeNotes' | 'trainNotes' | 'empowerNotes' | 'createActionPlan' | 'superviseeSubmission' | 'supervisorSubmission'
@@ -205,12 +181,14 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
     canOpenAssignmentBoardReferral,
     competencySummary,
     ipsccCompetencyAverages,
+    ipsccEnrolleeFeedbackPrivacy,
     selfAwarenessCorrelationRows,
     selfAwarenessSummary,
     ipsSelfAssessments,
     navigatorSupervisorIpsAssessments,
     createInsights,
     createSessions,
+    createReflection,
     supervisionSessions,
     dueItems,
     regulationReviewDueItems = [],
@@ -233,11 +211,12 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
   const [overlaySaveState, setOverlaySaveState] = React.useState<OverlaySaveState>('idle')
   const [overlaySaveMessage, setOverlaySaveMessage] = React.useState<string | null>(null)
   const [selectedIpsccEnrolleeId, setSelectedIpsccEnrolleeId] = React.useState<string>('')
-  const [ipsccItemScores, setIpsccItemScores] = React.useState<number[]>(() => Array.from({ length: 10 }, () => 4))
+  // Pass-the-tablet mode: enrollee completes Likert items without seeing averages or navigator chrome.
+  const [ipsccTabletHandoffActive, setIpsccTabletHandoffActive] = React.useState(false)
+  // Scores stay null until rated so the BurdenCard-style survey does not pretend a default Likert answer.
+  const [ipsccDraftScores, setIpsccDraftScores] = React.useState<IpsCompetencyScoreMap>({})
   const [ipsccNoteDraft, setIpsccNoteDraft] = React.useState('')
-  const [ipsSelfDraftScores, setIpsSelfDraftScores] = React.useState<Record<string, number>>(
-    () => Object.fromEntries(IPS_COMPETENCY_OPTIONS.map((item) => [item.key, 3]))
-  )
+  const [ipsSelfDraftScores, setIpsSelfDraftScores] = React.useState<IpsCompetencyScoreMap>({})
   const [ipsSelfDraftNote, setIpsSelfDraftNote] = React.useState('')
   const [createDraft, setCreateDraft] = React.useState({
     supervisionMode: 'in_person' as 'in_person' | 'online' | 'phone_call',
@@ -331,73 +310,88 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
       ) : null}
       <div className="atlas-navigator-profile-layout">
         <div className="atlas-navigator-profile-main space-y-4">
-          <div className="atlas-surface-panel px-5 py-4">
-            <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
-              <AtlasImageUploadTile
-                imageSrc={avatarSrc}
-                alt={`${navigatorDisplayName} profile`}
-                onSelectFile={onReplaceAvatar}
-                disabled={!onReplaceAvatar}
-                buttonTitle={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
-                statusText={isUploadingAvatar ? 'uploading image...' : null}
-                errorText={avatarUploadError}
-                onImageError={(event) => {
-                  if (event.currentTarget.src !== fallbackAvatarSrc) {
-                    event.currentTarget.src = fallbackAvatarSrc
-                  }
-                }}
-              />
-              <div className="min-w-[220px] flex-1 space-y-0.5 pt-[2px] text-white" style={{ textTransform: 'none' }}>
-                <h2 className="atlas-h3 text-[34px] font-medium leading-[1.1]" style={{ textTransform: 'none' }}>
-                  {navigatorDisplayName}
-                </h2>
-                <small className="atlas-meta block text-white">Role: navigator</small>
-                <small className="atlas-meta block text-white">Org: {accountSettings.organization || 'not recorded'}</small>
-                <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
-                  E: {accountSettings.email || 'not recorded'}
-                </small>
-                <small className="atlas-meta block text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
-                <small className="atlas-meta block text-white">Active sections: {ACTIVE_PROFILE_RAIL_CARDS.length}</small>
+          {/* Profile chrome: photo + assignment board sit above the first divider so
+              claim/triage stays immediately under identity before supervision signals. */}
+          <div
+            className="border-b pb-4"
+            style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+          >
+            <div className="atlas-surface-panel px-5 py-4">
+              <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
+                <AtlasImageUploadTile
+                  imageSrc={avatarSrc}
+                  alt={`${navigatorDisplayName} profile`}
+                  onSelectFile={onReplaceAvatar}
+                  disabled={!onReplaceAvatar}
+                  buttonTitle={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
+                  statusText={isUploadingAvatar ? 'uploading image...' : null}
+                  errorText={avatarUploadError}
+                  onImageError={(event) => {
+                    if (event.currentTarget.src !== fallbackAvatarSrc) {
+                      event.currentTarget.src = fallbackAvatarSrc
+                    }
+                  }}
+                />
+                <div className="min-w-[220px] flex-1 space-y-0.5 pt-[2px] text-white" style={{ textTransform: 'none' }}>
+                  <h2 className="atlas-h3 text-[34px] font-medium leading-[1.1]" style={{ textTransform: 'none' }}>
+                    {navigatorDisplayName}
+                  </h2>
+                  <small className="atlas-meta block text-white">Role: navigator</small>
+                  <small className="atlas-meta block text-white">Org: {accountSettings.organization || 'not recorded'}</small>
+                  <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
+                    E: {accountSettings.email || 'not recorded'}
+                  </small>
+                  <small className="atlas-meta block text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
+                  <small className="atlas-meta block text-white">Active sections: {ACTIVE_PROFILE_RAIL_CARDS.length}</small>
+                </div>
               </div>
+              {programError ? (
+                <div className="mt-3 rounded-[14px] border px-3 py-2 text-[12px]" style={{ borderColor: `${SP_COLORS.red}80`, color: SP_COLORS.red }}>
+                  {programError}
+                </div>
+              ) : null}
+              {/* Keep assignment controls tucked under the photo and above the
+                  first profile chrome divider so claim/triage stays in identity context. */}
+              <section ref={assignmentBoardRef} className="mt-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <small className="atlas-overline block text-[#9eacb9]">navigator workflow</small>
+                    <div className="text-[18px] font-medium text-white">enrollment assignment board</div>
+                  </div>
+                </div>
+                <NavigatorEnrollmentAssignmentsPanel
+                  rows={navigatorEnrollmentAssignments}
+                  isLoading={isLoadingNavigatorEnrollmentAssignments}
+                  error={navigatorEnrollmentAssignmentsError}
+                  assigningEnrollmentId={assigningEnrollmentId}
+                  canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
+                  canToggleAssignments={canToggleAssignmentActions}
+                  canOpenReferralComposer={canOpenAssignmentBoardReferral}
+                  onOpenReferralComposer={onOpenAssignmentBoardReferral}
+                  onToggleAssignment={onToggleEnrollmentAssignment}
+                />
+              </section>
             </div>
-            {programError ? (
-              <div className="mt-3 rounded-[14px] border px-3 py-2 text-[12px]" style={{ borderColor: `${SP_COLORS.red}80`, color: SP_COLORS.red }}>
-                {programError}
-              </div>
-            ) : null}
           </div>
-          {/* Competency dashboard sits under the profile picture and above the assignment
-              strip so IPSCC / self-awareness / C.R.E.A.T.E. signals stay glanceable. */}
+          {/* Competency dashboard stays below the first divider so IPSCC /
+              self-awareness / C.R.E.A.T.E. signals remain glanceable afterward. */}
           <NavigatorCompetencyDashboard
             ipsccCompetencyAverages={ipsccCompetencyAverages}
+            ipsccEnrolleeFeedbackPrivacy={ipsccEnrolleeFeedbackPrivacy}
             selfAwarenessCorrelationRows={selfAwarenessCorrelationRows}
             selfAwarenessSummary={selfAwarenessSummary}
-            createInsights={createInsights}
+            createReflection={createReflection}
             onOpenSection={(section) => setActiveOverlay(section)}
           />
-          {/* Keep assignment controls always visible so navigators can claim/triage work
-              without switching context through a card overlay. */}
-          <section ref={assignmentBoardRef} className="atlas-surface-panel p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <small className="atlas-overline block text-[#9eacb9]">navigator workflow</small>
-                <div className="text-[18px] font-medium text-white">enrollment assignment board</div>
-              </div>
-            </div>
-            <NavigatorEnrollmentAssignmentsPanel
-              rows={navigatorEnrollmentAssignments}
-              isLoading={isLoadingNavigatorEnrollmentAssignments}
-              error={navigatorEnrollmentAssignmentsError}
-              assigningEnrollmentId={assigningEnrollmentId}
-              canViewNavigatorAssignmentNames={canViewNavigatorAssignmentNames}
-              canToggleAssignments={canToggleAssignmentActions}
-              canOpenReferralComposer={canOpenAssignmentBoardReferral}
-              onOpenReferralComposer={onOpenAssignmentBoardReferral}
-              onToggleAssignment={onToggleEnrollmentAssignment}
-            />
-          </section>
         </div>
         <div className="atlas-navigator-profile-rail">
+          {/* Dual radar sits above the three supervision cards so strain is visible
+              before opening enrollee / self-reflection / C.R.E.A.T.E. overlays. */}
+          <IpsccStrainRadarChart
+            correlationRows={selfAwarenessCorrelationRows}
+            enrolleeFeedbackPrivacy={ipsccEnrolleeFeedbackPrivacy}
+            onOpenAwareness={() => setActiveOverlay('section_2_awareness')}
+          />
           {/* Rail shows only enrollee / self-reflection / C.R.E.A.T.E. until later
               supervision sections are commissioned for this surface. */}
           {ACTIVE_PROFILE_RAIL_CARDS.map((card, index) => (
@@ -422,158 +416,224 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
               <div className="text-[18px] font-medium text-white">
                 {CARD_DEFS.find((card) => card.key === activeOverlay)?.title || 'section'}
               </div>
-              <AtlasTextButton onClick={() => setActiveOverlay(null)} className="px-3 py-1 text-[12px]">
+              <AtlasTextButton
+                onClick={() => {
+                  setIpsccTabletHandoffActive(false)
+                  setActiveOverlay(null)
+                }}
+                className="px-3 py-1 text-[12px]"
+              >
                 close
               </AtlasTextButton>
             </div>
 
             {activeOverlay === 'section_1_ipscc' ? (
-              <div className="space-y-3">
-                <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
-                  <div className="font-medium">Individual Placement and Support Core Competencies (IPSCC) encounter survey</div>
-                  <div className="mt-1 text-[#9eacb9]">
-                    Capture service-user ratings after each encounter (1 = strongly disagree … 5 = strongly agree).
+              <IpsCompetencySurvey
+                scores={ipsccDraftScores}
+                onChangeScore={(key, score) => setIpsccDraftScores((current) => ({ ...current, [key]: score }))}
+                assignmentLabel={
+                  ipsccTabletHandoffActive
+                    ? 'how did this encounter show the competency?'
+                    : 'rate how this encounter showed the competency'
+                }
+                accentColor={SP_COLORS.green}
+                headerSlot={
+                  <div className="space-y-3">
+                    {ipsccTabletHandoffActive ? (
+                      <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
+                        <div className="font-medium">Enrollee feedback — Intentional Peer Support Core Competencies (IPSCC)</div>
+                        <div className="mt-1 text-[#9eacb9]">
+                          Tap a number for each competency. When finished, submit and hand the tablet back to your
+                          navigator. Your answers stay anonymous in group averages.
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
+                          <div className="font-medium">Pass-the-tablet IPSCC encounter survey</div>
+                          <div className="mt-1 text-[#9eacb9]">
+                            Select an enrollee, start handoff, then pass the tablet. The enrollee rates the encounter
+                            on the 1–5 Intentional Peer Support Core Competencies (IPSCC) scale and returns the
+                            device. Navigators never see individual enrollee submissions — only accumulated averages
+                            after about {ipsccEnrolleeFeedbackPrivacy.minEntriesToRevealAverages} entries.
+                          </div>
+                        </div>
+                        {ipsccEnrolleeFeedbackPrivacy.averagesRevealed ? (
+                          ipsccCompetencyAverages.map((row) => (
+                            <div key={row.key} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
+                              <span className="text-white">{row.label}</span>
+                              <span style={{ color: '#d7e0e9' }}>
+                                {row.averageScore == null ? '—' : row.averageScore.toFixed(2)} · n={row.sampleSize}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="atlas-surface-raised px-3 py-2 text-[12px] text-[#9eacb9]">
+                            Enrollee averages locked for anonymity (
+                            {ipsccEnrolleeFeedbackPrivacy.totalEncounterSubmissions} of{' '}
+                            {ipsccEnrolleeFeedbackPrivacy.minEntriesToRevealAverages} encounter submissions).
+                          </div>
+                        )}
+                        <PersistentField label="Enrollee">
+                          <select
+                            className="atlas-select h-10 w-full bg-transparent text-white"
+                            value={selectedIpsccEnrolleeId}
+                            onChange={(event) => setSelectedIpsccEnrolleeId(event.target.value)}
+                            disabled={!assignedEnrollees.length}
+                          >
+                            {!assignedEnrollees.length ? (
+                              <option value="" className="bg-black text-white">No assigned enrollees</option>
+                            ) : null}
+                            {assignedEnrollees.map((enrollee) => (
+                              <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">
+                                {enrollee.fullName}
+                              </option>
+                            ))}
+                          </select>
+                        </PersistentField>
+                        <AtlasTextButton
+                          disabled={!selectedIpsccEnrolleeId}
+                          onClick={() => setIpsccTabletHandoffActive(true)}
+                          className="px-4 py-2 text-[12px]"
+                        >
+                          hand tablet to enrollee
+                        </AtlasTextButton>
+                      </>
+                    )}
                   </div>
-                </div>
-                {ipsccCompetencyAverages.map((row) => (
-                  <div key={row.key} className="atlas-surface-raised flex items-center justify-between px-3 py-2 text-[12px]">
-                    <span className="text-white">{row.label}</span>
-                    <span style={{ color: '#d7e0e9' }}>{row.averageScore == null ? '--' : row.averageScore.toFixed(2)} · n={row.sampleSize}</span>
-                  </div>
-                ))}
-                <PersistentField label="Enrollee">
-                  <select
-                    className="atlas-select h-10 w-full bg-transparent text-white"
-                    value={selectedIpsccEnrolleeId}
-                    onChange={(event) => setSelectedIpsccEnrolleeId(event.target.value)}
-                    disabled={!assignedEnrollees.length}
-                  >
-                    {!assignedEnrollees.length ? (
-                      <option value="" className="bg-black text-white">No assigned enrollees</option>
+                }
+                footerSlot={
+                  <div className="space-y-3">
+                    {!ipsccTabletHandoffActive ? (
+                      <PersistentField label="Service user note (navigator only)">
+                        <textarea
+                          className="atlas-textarea min-h-[90px] bg-transparent text-white"
+                          value={ipsccNoteDraft}
+                          onChange={(event) => setIpsccNoteDraft(event.target.value)}
+                        />
+                      </PersistentField>
                     ) : null}
-                    {assignedEnrollees.map((enrollee) => (
-                      <option key={enrollee.id} value={enrollee.id} className="bg-black text-white">{enrollee.fullName}</option>
-                    ))}
-                  </select>
-                </PersistentField>
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  {IPSCC_ITEM_LABELS.map((label, index) => (
-                    <PersistentField key={label} label={label}>
-                      <select
-                        className="atlas-select h-10 w-full bg-transparent text-white"
-                        value={ipsccItemScores[index]}
-                        onChange={(event) => {
-                          const nextScore = Number(event.target.value)
-                          setIpsccItemScores((current) => current.map((score, scoreIndex) => (scoreIndex === index ? nextScore : score)))
-                        }}
-                      >
-                        {LIKERT_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value} className="bg-black text-white">{option.label}</option>
-                        ))}
-                      </select>
-                    </PersistentField>
-                  ))}
-                </div>
-                <PersistentField label="Service user note">
-                  <textarea
-                    className="atlas-textarea min-h-[90px] bg-transparent text-white"
-                    value={ipsccNoteDraft}
-                    onChange={(event) => setIpsccNoteDraft(event.target.value)}
-                  />
-                </PersistentField>
-                <div className="flex items-center justify-between gap-3">
-                  {overlaySaveMessage ? (
-                    <small style={{ color: overlaySaveState === 'error' ? SP_COLORS.red : '#9eacb9' }}>{overlaySaveMessage}</small>
-                  ) : (
-                    <span />
-                  )}
-                  <AtlasTextButton
-                    disabled={overlaySaveState === 'saving' || !assignedEnrollees.length}
-                    onClick={() =>
-                      void runOverlaySave(async () => {
-                        const enrollee = assignedEnrollees.find((item) => item.id === selectedIpsccEnrolleeId)
-                        if (!enrollee) throw new Error('Select an enrollee before saving IPSCC feedback.')
-                        await onSaveIpsccEncounterSubmission({
-                          id: createRecordId(),
-                          navigatorName: currentNavigatorName,
-                          enrolleeId: enrollee.id,
-                          enrolleeName: enrollee.fullName,
-                          enrollmentId: enrollee.enrollmentId || null,
-                          submittedAtIso: new Date().toISOString(),
-                          submittedBy: 'service user',
-                          itemScores: ipsccItemScores.map((score) => Math.max(1, Math.min(5, Math.round(score || 3)))),
-                          note: ipsccNoteDraft
-                        })
-                        setIpsccNoteDraft('')
-                      }, 'IPSCC encounter survey saved.')
-                    }
-                    className="px-4 py-2 text-[12px]"
-                  >
-                    {overlaySaveState === 'saving' ? 'saving...' : 'save IPSCC survey'}
-                  </AtlasTextButton>
-                </div>
-              </div>
+                    <div className="flex items-center justify-between gap-3">
+                      {overlaySaveMessage ? (
+                        <small style={{ color: overlaySaveState === 'error' ? SP_COLORS.red : '#9eacb9' }}>
+                          {overlaySaveMessage}
+                        </small>
+                      ) : (
+                        <span />
+                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {ipsccTabletHandoffActive ? (
+                          <AtlasTextButton
+                            onClick={() => setIpsccTabletHandoffActive(false)}
+                            className="px-4 py-2 text-[12px]"
+                          >
+                            cancel handoff
+                          </AtlasTextButton>
+                        ) : null}
+                        <AtlasTextButton
+                          disabled={
+                            overlaySaveState === 'saving' ||
+                            !assignedEnrollees.length ||
+                            !isIpsCompetencySurveyComplete(ipsccDraftScores) ||
+                            (ipsccTabletHandoffActive ? false : !selectedIpsccEnrolleeId)
+                          }
+                          onClick={() =>
+                            void runOverlaySave(async () => {
+                              const enrollee = assignedEnrollees.find((item) => item.id === selectedIpsccEnrolleeId)
+                              if (!enrollee) throw new Error('Select an enrollee before saving IPSCC feedback.')
+                              await onSaveIpsccEncounterSubmission({
+                                id: createRecordId(),
+                                navigatorName: currentNavigatorName,
+                                enrolleeId: enrollee.id,
+                                enrolleeName: enrollee.fullName,
+                                enrollmentId: enrollee.enrollmentId || null,
+                                submittedAtIso: new Date().toISOString(),
+                                submittedBy: 'enrollee',
+                                itemScores: scoresMapToItemArray(ipsccDraftScores),
+                                note: ipsccTabletHandoffActive ? '' : ipsccNoteDraft
+                              })
+                              setIpsccDraftScores({})
+                              setIpsccNoteDraft('')
+                              setIpsccTabletHandoffActive(false)
+                            }, ipsccTabletHandoffActive
+                              ? 'Thank you. Please hand the tablet back to your navigator.'
+                              : 'IPSCC encounter survey saved.')
+                          }
+                          className="px-4 py-2 text-[12px]"
+                        >
+                          {overlaySaveState === 'saving'
+                            ? 'saving...'
+                            : ipsccTabletHandoffActive
+                              ? 'submit feedback'
+                              : 'save IPSCC survey'}
+                        </AtlasTextButton>
+                      </div>
+                    </div>
+                  </div>
+                }
+              />
             ) : null}
 
             {activeOverlay === 'section_2_awareness' ? (
               <div className="space-y-3">
-                <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
-                  <div className="font-medium">Weekly Individual Placement and Support (IPS) self-assessment</div>
-                  <div className="mt-1 text-[#9eacb9]">
-                    Complete the weekly IPS self-assessment below. Historical results and IPSCC-vs-self correlation are shown beneath.
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  {IPS_COMPETENCY_OPTIONS.map((item) => (
-                    <PersistentField key={item.key} label={item.label}>
-                      <select
-                        className="atlas-select h-10 w-full bg-transparent text-white"
-                        value={ipsSelfDraftScores[item.key]}
-                        onChange={(event) => setIpsSelfDraftScores((current) => ({ ...current, [item.key]: Number(event.target.value) }))}
-                      >
-                        {LIKERT_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value} className="bg-black text-white">{option.label}</option>
-                        ))}
-                      </select>
-                    </PersistentField>
-                  ))}
-                </div>
-                <PersistentField label="Weekly self-assessment note">
-                  <textarea
-                    className="atlas-textarea min-h-[90px] bg-transparent text-white"
-                    value={ipsSelfDraftNote}
-                    onChange={(event) => setIpsSelfDraftNote(event.target.value)}
-                  />
-                </PersistentField>
-                <div className="flex items-center justify-between gap-3">
-                  {overlaySaveMessage ? (
-                    <small style={{ color: overlaySaveState === 'error' ? SP_COLORS.red : '#9eacb9' }}>{overlaySaveMessage}</small>
-                  ) : (
-                    <span />
-                  )}
-                  <AtlasTextButton
-                    disabled={overlaySaveState === 'saving'}
-                    onClick={() =>
-                      void runOverlaySave(async () => {
-                        const now = new Date().toISOString()
-                        await onSaveIpsSelfAssessment({
-                          id: createRecordId(),
-                          navigatorName: currentNavigatorName,
-                          weekStartIso: getWeekStartIso(new Date(now)),
-                          submittedAtIso: now,
-                          competencyScores: ipsSelfDraftScores,
-                          note: ipsSelfDraftNote
-                        })
-                        setIpsSelfDraftNote('')
-                      }, 'Weekly IPS self-assessment saved.')
-                    }
-                    className="px-4 py-2 text-[12px]"
-                  >
-                    {overlaySaveState === 'saving' ? 'saving...' : 'save weekly IPS'}
-                  </AtlasTextButton>
-                </div>
+                <IpsCompetencySurvey
+                  scores={ipsSelfDraftScores}
+                  onChangeScore={(key, score) => setIpsSelfDraftScores((current) => ({ ...current, [key]: score }))}
+                  assignmentLabel="rate your practice on this competency"
+                  accentColor={SP_COLORS.yellow}
+                  headerSlot={
+                    <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
+                      <div className="font-medium">Weekly Intentional Peer Support Core Competencies (IPSCC) self-assessment</div>
+                      <div className="mt-1 text-[#9eacb9]">
+                        Complete all ten competencies using the rating-scale text under each number from the IPSCC
+                        tool. Correlation with point-of-care ratings appears beneath after save.
+                      </div>
+                    </div>
+                  }
+                  footerSlot={
+                    <div className="space-y-3">
+                      <PersistentField label="Weekly self-assessment note">
+                        <textarea
+                          className="atlas-textarea min-h-[90px] bg-transparent text-white"
+                          value={ipsSelfDraftNote}
+                          onChange={(event) => setIpsSelfDraftNote(event.target.value)}
+                        />
+                      </PersistentField>
+                      <div className="flex items-center justify-between gap-3">
+                        {overlaySaveMessage ? (
+                          <small style={{ color: overlaySaveState === 'error' ? SP_COLORS.red : '#9eacb9' }}>
+                            {overlaySaveMessage}
+                          </small>
+                        ) : (
+                          <span />
+                        )}
+                        <AtlasTextButton
+                          disabled={overlaySaveState === 'saving' || !isIpsCompetencySurveyComplete(ipsSelfDraftScores)}
+                          onClick={() =>
+                            void runOverlaySave(async () => {
+                              const now = new Date().toISOString()
+                              await onSaveIpsSelfAssessment({
+                                id: createRecordId(),
+                                navigatorName: currentNavigatorName,
+                                weekStartIso: getWeekStartIso(new Date(now)),
+                                submittedAtIso: now,
+                                competencyScores: scoresMapToCompetencyRecord(ipsSelfDraftScores),
+                                note: ipsSelfDraftNote
+                              })
+                              setIpsSelfDraftScores({})
+                              setIpsSelfDraftNote('')
+                            }, 'Weekly IPSCC self-assessment saved.')
+                          }
+                          className="px-4 py-2 text-[12px]"
+                        >
+                          {overlaySaveState === 'saving' ? 'saving...' : 'save weekly IPSCC'}
+                        </AtlasTextButton>
+                      </div>
+                    </div>
+                  }
+                />
                 <div className="atlas-surface-raised px-3 py-3">
-                  <div className="text-[13px] font-medium text-white">Historical IPS results</div>
+                  <div className="text-[13px] font-medium text-white">Historical IPSCC results</div>
                   <div className="mt-2 space-y-2">
                     {[
                       ...ipsSelfAssessments.map((record) => ({
@@ -601,23 +661,45 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                   </div>
                 </div>
                 <div className="atlas-surface-raised px-3 py-3">
-                  {/* Correlate point-of-care IPSCC averages with weekly pre-supervision self-ratings. */}
-                  <div className="text-[13px] font-medium text-white">IPSCC vs self-assessment correlation</div>
+                  {/* Correlate enrollee IPSCC averages with weekly pre-supervision self-ratings. */}
+                  <div className="text-[13px] font-medium text-white">Enrollee IPSCC vs self-assessment strain</div>
                   <div className="mt-2 grid grid-cols-3 gap-2">
                     <MetricCard label="compared" value={String(selfAwarenessSummary.comparedCompetencyCount)} />
-                    <MetricCard label="avg gap" value={selfAwarenessSummary.averageGap == null ? '--' : selfAwarenessSummary.averageGap.toFixed(2)} />
-                    <MetricCard label="alignment" value={selfAwarenessSummary.overallAlignmentScore == null ? '--' : selfAwarenessSummary.overallAlignmentScore.toFixed(2)} />
+                    <MetricCard
+                      label="avg strain"
+                      value={selfAwarenessSummary.averageStrain == null ? '—' : selfAwarenessSummary.averageStrain.toFixed(2)}
+                    />
+                    <MetricCard
+                      label="alignment"
+                      value={
+                        selfAwarenessSummary.overallAlignmentScore == null
+                          ? '—'
+                          : selfAwarenessSummary.overallAlignmentScore.toFixed(2)
+                      }
+                    />
                   </div>
-                  <div className="mt-2 space-y-2">
-                    {selfAwarenessCorrelationRows.map((row) => (
-                      <div key={row.key} className="atlas-surface-raised grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 px-3 py-2 text-[12px]">
-                        <span className="text-white">{row.label}</span>
-                        <span style={{ color: '#9eacb9' }}>IPSCC {row.ipsccAverage?.toFixed(2) || '--'}</span>
-                        <span style={{ color: '#9eacb9' }}>Self {row.selfAverage?.toFixed(2) || '--'}</span>
-                        <span style={{ color: '#d7e0e9' }}>Gap {row.gap?.toFixed(2) || '--'}</span>
-                      </div>
-                    ))}
-                  </div>
+                  {!ipsccEnrolleeFeedbackPrivacy.averagesRevealed ? (
+                    <div className="mt-2 text-[12px] text-[#9eacb9]">
+                      Enrollee averages remain locked until {ipsccEnrolleeFeedbackPrivacy.minEntriesToRevealAverages}{' '}
+                      encounter submissions protect anonymity. Individual enrollee responses are never listed here.
+                    </div>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {selfAwarenessCorrelationRows.map((row) => (
+                        <div
+                          key={row.key}
+                          className="atlas-surface-raised grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 px-3 py-2 text-[12px]"
+                        >
+                          <span className="text-white">{row.label}</span>
+                          <span style={{ color: SP_COLORS.red }}>
+                            Enrollee {row.ipsccAverage?.toFixed(2) || '—'}
+                          </span>
+                          <span style={{ color: SP_COLORS.blue }}>Self {row.selfAverage?.toFixed(2) || '—'}</span>
+                          <span style={{ color: '#d7e0e9' }}>Strain {row.strain?.toFixed(2) || '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ) : null}
@@ -626,7 +708,10 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
               <div className="space-y-3">
                 <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
                   <div className="font-medium">Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) supervision notes</div>
-                  <div className="mt-1 text-[#9eacb9]">Field labels stay visible while typing so mid-session context is never lost.</div>
+                  <div className="mt-1 text-[#9eacb9]">
+                    This form is attributed to the navigator profile. Field labels stay visible while typing so
+                    mid-session context is never lost.
+                  </div>
                 </div>
                 {createInsights.map((insight) => (
                   <div key={insight.pillar} className="atlas-surface-raised px-3 py-2 text-[12px] text-white">
@@ -735,7 +820,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
             {activeOverlay === 'section_4_assignments' ? (
               <div className="atlas-surface-raised space-y-3 px-3 py-3 text-white">
                 <div className="text-[13px]">
-                  assignment board is pinned to the left column so you can pick up enrollees without opening a card.
+                  assignment board is tucked under the profile photo (above the first divider) so you can pick up enrollees without opening a card.
                 </div>
                 <div className="flex justify-end">
                   <AtlasTextButton

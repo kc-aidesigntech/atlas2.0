@@ -1,6 +1,12 @@
 import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type { SupervisorIpsAssessmentRecord, SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/shared/contracts'
+import IpsCompetencySurvey, {
+  isIpsCompetencySurveyComplete,
+  scoresMapToCompetencyRecord,
+  type IpsCompetencyScoreMap
+} from './IpsCompetencySurvey'
 import ProfileNavigationCard from './ProfileNavigationCard'
 
 interface SupervisorNavigatorDirectoryEntry {
@@ -31,23 +37,10 @@ const CARD_DEFS: Array<{
   variant: 'green' | 'blue'
   illustration: 'feedback' | 'reflection' | 'create'
 }> = [
-  { key: 'section_1_weekly_ips', title: 'Section 1: Weekly IPS assessment by supervisor', cardTitle: 'weekly review', cardSubtitle: 'ips', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection' },
+  { key: 'section_1_weekly_ips', title: 'Section 1: Weekly IPSCC assessment by supervisor', cardTitle: 'weekly review', cardSubtitle: 'ipscc', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection' },
   { key: 'section_2_assigned_navigators', title: 'Section 2: Assigned navigators', cardTitle: 'navigator roster', cardSubtitle: 'assignments', actionLabel: 'view feedback', variant: 'green', illustration: 'feedback' },
   { key: 'section_3_assessment_rollup', title: 'Section 3: Navigator assessment rollup', cardTitle: 'assessment rollup', cardSubtitle: 'competency', actionLabel: 'create & share', variant: 'green', illustration: 'create' }
 ]
-
-const IPS_KEYS = [
-  'competency_1_connection',
-  'competency_2_learning_together',
-  'competency_3_worldview_awareness',
-  'competency_4_relationship_focus',
-  'competency_5_mutuality',
-  'competency_6_hope_and_possibility',
-  'competency_7_moving_towards',
-  'competency_8_self_reflection',
-  'competency_9_feedback',
-  'competency_10_co_reflection'
-] as const
 
 function formatDateLabel(value: string | null | undefined) {
   if (!value) return 'not recorded'
@@ -68,9 +61,7 @@ export default function SupervisorMyProfilePanel({
   const [activeOverlay, setActiveOverlay] = React.useState<OverlayKey | null>(null)
   const [selectedNavigatorName, setSelectedNavigatorName] = React.useState('')
   const [assessmentNote, setAssessmentNote] = React.useState('')
-  const [draftScores, setDraftScores] = React.useState<Record<string, number>>(
-    () => Object.fromEntries(IPS_KEYS.map((key) => [key, 3]))
-  )
+  const [draftScores, setDraftScores] = React.useState<IpsCompetencyScoreMap>({})
 
   React.useEffect(() => {
     if (!selectedNavigatorName && navigatorDirectory.length) {
@@ -109,58 +100,61 @@ export default function SupervisorMyProfilePanel({
 
             {activeOverlay === 'section_1_weekly_ips' ? (
               <div className="space-y-3">
-                <label className="block">
-                  <small className="atlas-overline block text-[#9eacb9]">Navigator being assessed</small>
-                  <select
-                    className="atlas-select h-10 w-full bg-transparent text-white"
-                    value={selectedNavigatorName}
-                    onChange={(event) => setSelectedNavigatorName(event.target.value)}
-                  >
-                    {navigatorDirectory.map((row) => (
-                      <option key={row.navigatorPersonId} value={row.navigatorName} className="bg-black text-white">{row.navigatorName}</option>
-                    ))}
-                  </select>
-                </label>
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  {IPS_KEYS.map((key) => (
-                    <label key={key} className="block">
-                      <small className="atlas-overline block text-[#9eacb9]">{key.replace('competency_', 'comp ').replaceAll('_', ' ')}</small>
+                <IpsCompetencySurvey
+                  scores={draftScores}
+                  onChangeScore={(key, score) => setDraftScores((current) => ({ ...current, [key]: score }))}
+                  assignmentLabel="rate this navigator on the competency"
+                  accentColor={SP_COLORS.blue}
+                  headerSlot={
+                    <label className="block">
+                      <small className="atlas-overline block text-[#9eacb9]">Navigator being assessed</small>
                       <select
-                        className="atlas-select h-10 w-full bg-transparent text-white"
-                        value={draftScores[key]}
-                        onChange={(event) => setDraftScores((current) => ({ ...current, [key]: Number(event.target.value) }))}
+                        className="atlas-select mt-1 h-10 w-full bg-transparent text-white"
+                        value={selectedNavigatorName}
+                        onChange={(event) => setSelectedNavigatorName(event.target.value)}
                       >
-                        {[1, 2, 3, 4, 5].map((option) => <option key={option} value={option} className="bg-black text-white">{option}</option>)}
+                        {navigatorDirectory.map((row) => (
+                          <option key={row.navigatorPersonId} value={row.navigatorName} className="bg-black text-white">
+                            {row.navigatorName}
+                          </option>
+                        ))}
                       </select>
                     </label>
-                  ))}
-                </div>
-                <textarea
-                  className="atlas-textarea min-h-[90px] bg-transparent text-white"
-                  value={assessmentNote}
-                  onChange={(event) => setAssessmentNote(event.target.value)}
-                  placeholder="Weekly supervisor IPS assessment note..."
+                  }
+                  footerSlot={
+                    <div className="space-y-3">
+                      <textarea
+                        className="atlas-textarea min-h-[90px] bg-transparent text-white"
+                        value={assessmentNote}
+                        onChange={(event) => setAssessmentNote(event.target.value)}
+                        placeholder="Weekly supervisor IPSCC assessment note..."
+                      />
+                      <div className="flex justify-end">
+                        <AtlasTextButton
+                          disabled={!selectedNavigatorName.trim() || !isIpsCompetencySurveyComplete(draftScores)}
+                          onClick={async () => {
+                            if (!selectedNavigatorName.trim()) return
+                            const now = new Date().toISOString()
+                            await onSaveSupervisorIpsAssessment({
+                              id: `supervisor-ips-${Date.now()}`,
+                              supervisorName: currentSupervisorName,
+                              navigatorName: selectedNavigatorName,
+                              weekStartIso: now,
+                              submittedAtIso: now,
+                              competencyScores: scoresMapToCompetencyRecord(draftScores),
+                              note: assessmentNote
+                            })
+                            setDraftScores({})
+                            setAssessmentNote('')
+                          }}
+                          className="px-4 py-2 text-[12px]"
+                        >
+                          save section 1 entry
+                        </AtlasTextButton>
+                      </div>
+                    </div>
+                  }
                 />
-                <div className="flex justify-end">
-                  <AtlasTextButton
-                    onClick={async () => {
-                      if (!selectedNavigatorName.trim()) return
-                      const now = new Date().toISOString()
-                      await onSaveSupervisorIpsAssessment({
-                        id: `supervisor-ips-${Date.now()}`,
-                        supervisorName: currentSupervisorName,
-                        navigatorName: selectedNavigatorName,
-                        weekStartIso: now,
-                        submittedAtIso: now,
-                        competencyScores: draftScores,
-                        note: assessmentNote
-                      })
-                    }}
-                    className="px-4 py-2 text-[12px]"
-                  >
-                    save section 1 entry
-                  </AtlasTextButton>
-                </div>
                 <div className="atlas-surface-raised px-3 py-3">
                   <div className="text-[13px] font-medium text-white">Historical supervisor assessments</div>
                   <div className="mt-2 space-y-2">

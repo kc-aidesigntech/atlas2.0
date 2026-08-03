@@ -37,7 +37,13 @@ export function BurdenCard({
   describeScore,
   assignmentLabel,
   unansweredHint,
-  inputControl = 'slider'
+  inputControl = 'slider',
+  // Intentional Peer Support Core Competencies (IPSCC) and similar instruments have no
+  // "not encountered" path — hide the Z-code burden toggle while keeping BurdenCard chrome.
+  showNotEncountered = true,
+  showResume = true,
+  // Optional content under the prompt header (e.g. IPSCC bullet grid) before scoring controls.
+  promptExtras = null
 }: {
   promptItem: ZCodeSurveyPrompt
   scale: PartnerServiceCapacityScaleOption[]
@@ -61,6 +67,9 @@ export function BurdenCard({
   assignmentLabel?: string
   unansweredHint?: string
   inputControl?: 'slider' | 'knob'
+  showNotEncountered?: boolean
+  showResume?: boolean
+  promptExtras?: React.ReactNode
 }) {
   const numericInputRef = useRef<HTMLInputElement | null>(null)
   const previousScoreRef = useRef<number | null>(score)
@@ -212,6 +221,8 @@ export function BurdenCard({
         </div>
       </div>
 
+      {promptExtras ? <div className={compact ? 'mt-3' : 'mt-4'}>{promptExtras}</div> : null}
+
       <div className={`atlas-surface-panel ${
         compact && !isKnobInput
           ? 'mt-3 flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[14px] px-3 py-3 pr-2.5 md:px-3.5 md:py-3.5 md:pr-3'
@@ -221,26 +232,28 @@ export function BurdenCard({
           <small className="atlas-overline md:text-[13px]" style={{ color: SP_COLORS.muted }}>
             {assignmentLabel || 'assign a burden score'}
           </small>
-          <AtlasTextButton
-            onClick={() => {
-              const nextValue = !notEncountered
-              onNotEncounteredChange(nextValue)
-              if (!nextValue) {
-                requestAnimationFrame(() => numericInputRef.current?.focus())
-              }
-            }}
-            className={`transition-[border-color,background-color,color,box-shadow] duration-150 ease-out ${
-              compact ? 'px-3 py-1.5 text-[13px] md:text-[14px]' : 'px-[14px] py-[7px] text-[14px] md:text-[16px]'
-            }`}
-            style={{
-              ['--button-border-color' as const]: notEncountered ? SP_COLORS.green : '#ffffff2c',
-              backgroundColor: notEncountered ? `${SP_COLORS.green}20` : 'transparent',
-              color: notEncountered ? SP_COLORS.green : SP_COLORS.muted,
-              boxShadow: notEncountered ? `0 0 0 1px ${SP_COLORS.green}55, 0 0 18px ${SP_COLORS.green}30` : 'none'
-            } as React.CSSProperties}
-          >
-            not encountered in our work
-          </AtlasTextButton>
+          {showNotEncountered ? (
+            <AtlasTextButton
+              onClick={() => {
+                const nextValue = !notEncountered
+                onNotEncounteredChange(nextValue)
+                if (!nextValue) {
+                  requestAnimationFrame(() => numericInputRef.current?.focus())
+                }
+              }}
+              className={`transition-[border-color,background-color,color,box-shadow] duration-150 ease-out ${
+                compact ? 'px-3 py-1.5 text-[13px] md:text-[14px]' : 'px-[14px] py-[7px] text-[14px] md:text-[16px]'
+              }`}
+              style={{
+                ['--button-border-color' as const]: notEncountered ? SP_COLORS.green : '#ffffff2c',
+                backgroundColor: notEncountered ? `${SP_COLORS.green}20` : 'transparent',
+                color: notEncountered ? SP_COLORS.green : SP_COLORS.muted,
+                boxShadow: notEncountered ? `0 0 0 1px ${SP_COLORS.green}55, 0 0 18px ${SP_COLORS.green}30` : 'none'
+              } as React.CSSProperties}
+            >
+              not encountered in our work
+            </AtlasTextButton>
+          ) : null}
         </div>
 
         <div className={`${compact ? 'mt-3.5' : 'mt-4'} ${notEncountered ? 'opacity-45' : ''}`}>
@@ -355,20 +368,22 @@ export function BurdenCard({
         </AtlasTextButton>
         {hasNext ? (
           <div className="flex items-center gap-2">
-            <AtlasTextButton
-              onClick={onResumeNavigate}
-              disabled={!canResume}
-              className={`inline-flex items-center gap-2 font-medium ${
-                compact ? 'px-4 py-[7px] text-[14px] md:text-[16px]' : 'px-[19px] py-[10px] text-[16px] md:text-[17px]'
-              }`}
-              style={{
-                ['--button-border-color' as const]: '#ffffff24',
-                color: SP_COLORS.white,
-                opacity: canResume ? 1 : 0.4
-              } as React.CSSProperties}
-            >
-              <span>resume</span>
-            </AtlasTextButton>
+            {showResume ? (
+              <AtlasTextButton
+                onClick={onResumeNavigate}
+                disabled={!canResume}
+                className={`inline-flex items-center gap-2 font-medium ${
+                  compact ? 'px-4 py-[7px] text-[14px] md:text-[16px]' : 'px-[19px] py-[10px] text-[16px] md:text-[17px]'
+                }`}
+                style={{
+                  ['--button-border-color' as const]: '#ffffff24',
+                  color: SP_COLORS.white,
+                  opacity: canResume ? 1 : 0.4
+                } as React.CSSProperties}
+              >
+                <span>resume</span>
+              </AtlasTextButton>
+            ) : null}
             <AtlasTextButton
               onClick={advanceToNextPrompt}
               disabled={!canAdvance}

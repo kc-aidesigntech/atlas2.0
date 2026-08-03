@@ -59,10 +59,12 @@ import {
   saveNavigatorCompetencyAssessment
 } from '@/features/atlas2026/singlepane/data-access/navigatorAssessmentRepository'
 import {
+  loadNavigatorCreateReflection,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,
   loadSupervisorIpsAssessments,
+  saveNavigatorCreateReflection,
   saveNavigatorCreateSession,
   saveNavigatorIpsSelfAssessment,
   saveNavigatorIpsccEncounterSubmission,
@@ -1199,6 +1201,7 @@ export {
   loadPartnerTroubleshootingGrants,
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
+  loadNavigatorCreateReflection,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,
@@ -1215,6 +1218,7 @@ export {
   savePartnerTroubleshootingGrant,
   saveEnrolleeIntake,
   saveNavigatorCompetencyAssessment,
+  saveNavigatorCreateReflection,
   saveNavigatorCreateSession,
   saveNavigatorIpsSelfAssessment,
   saveNavigatorIpsccEncounterSubmission,

@@ -650,12 +650,27 @@ export interface IpsccCompetencyAggregate {
   latestSubmittedAtIso: string | null
 }
 
+/**
+ * Enrollee Intentional Peer Support Core Competencies (IPSCC) averages stay
+ * hidden from navigators until enough independent encounter submissions exist
+ * so individual enrollee responses cannot be inferred.
+ */
+export const IPSCC_ENROLLEE_FEEDBACK_PRIVACY_MIN_ENTRIES = 10
+
+export interface IpsccEnrolleeFeedbackPrivacy {
+  totalEncounterSubmissions: number
+  minEntriesToRevealAverages: number
+  averagesRevealed: boolean
+}
+
 export interface IpsccSelfAwarenessCorrelationRow {
   key: IpsccCompetencyKey
   label: string
   ipsccAverage: number | null
   selfAverage: number | null
   gap: number | null
+  /** Absolute perception gap — higher means more care-disruption risk on that competency. */
+  strain: number | null
   alignmentScore: number | null
 }
 
@@ -663,6 +678,8 @@ export interface IpsccSelfAwarenessSummary {
   comparedCompetencyCount: number
   averageGap: number | null
   overallAlignmentScore: number | null
+  /** Mean absolute strain across comparable competencies. */
+  averageStrain: number | null
 }
 
 export interface CreateSessionRecord {
@@ -693,6 +710,22 @@ export interface CreateInsightRow {
   label: string
   latestSummary: string
   sessionCount: number
+}
+
+/**
+ * Current Connect, Recognize, Encourage, Acknowledge, Train, and Empower
+ * (C.R.E.A.T.E.) reflection for a navigator — one narrative regenerated after
+ * each supervision session save from the latest entry plus prior history.
+ */
+export interface NavigatorCreateReflectionRecord {
+  id: string
+  navigatorName: string
+  reflectionText: string
+  sourceSessionIds: string[]
+  sourceLatestSessionId: string
+  model: string
+  generatedAtIso: string
+  usedFallback: boolean
 }
 
 export type SupervisionSessionStatus = 'scheduled' | 'completed'

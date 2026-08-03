@@ -1,6 +1,9 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasMetricPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AdminRegulationReviewCalendar from '@/features/atlas2026/admin/components/AdminRegulationReviewCalendar'
+import AdminIpsccEncounterLedger from '@/features/atlas2026/admin/components/AdminIpsccEncounterLedger'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import type { IntervalAssessmentType, IntervalCadence } from '@/features/atlas2026/shared/contracts'
 import type {
   AdminAssessmentsSectionDataProps,
   FieldComponentType,
@@ -34,6 +37,7 @@ export default function AdminAssessmentsSection({
   FieldComponent
 }: AdminAssessmentsSectionProps) {
   return (
+    <div className="space-y-4">
     <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
       <AtlasInsetCard className="rounded-[22px] px-5 py-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -94,7 +98,7 @@ export default function AdminAssessmentsSection({
                   onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
                     setIntervalRuleDraft({
                       ...intervalRuleDraft,
-                      assessmentType: event.target.value
+                      assessmentType: event.target.value as IntervalAssessmentType
                     })
                   }
                   className="atlas-admin-input"
@@ -110,7 +114,7 @@ export default function AdminAssessmentsSection({
                   onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
                     setIntervalRuleDraft({
                       ...intervalRuleDraft,
-                      cadence: event.target.value
+                      cadence: event.target.value as IntervalCadence
                     })
                   }
                   className="atlas-admin-input"
@@ -126,7 +130,7 @@ export default function AdminAssessmentsSection({
                   onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
                     setIntervalRuleDraft({
                       ...intervalRuleDraft,
-                      assigneeRole: event.target.value
+                      assigneeRole: event.target.value as 'navigator' | 'supervisor'
                     })
                   }
                   className="atlas-admin-input"
@@ -242,7 +246,7 @@ export default function AdminAssessmentsSection({
               onChange={(event: React.ChangeEvent<HTMLSelectElement>) =>
                 setRegulationReviewDraft({
                   ...effectiveRegulationReview,
-                  defaultCadence: event.target.value
+                  defaultCadence: event.target.value as IntervalCadence
                 })
               }
               className="atlas-admin-input"
@@ -285,7 +289,7 @@ export default function AdminAssessmentsSection({
                       value={entry?.cadence || ''}
                       onChange={(event) =>
                         updateRegulationReviewEnrolleeSetting(row.enrolleeId, row.enrolleeName, {
-                          cadence: event.target.value ? event.target.value : null
+                          cadence: event.target.value ? (event.target.value as IntervalCadence) : null
                         })
                       }
                       className="atlas-admin-input"
@@ -319,6 +323,11 @@ export default function AdminAssessmentsSection({
           ) : null}
         </div>
       </AtlasInsetCard>
+
+      <AdminRegulationReviewCalendar
+        regulationReviewDueItems={regulationReviewDueItems}
+        formatDateLabel={formatDateLabel}
+      />
 
       <AtlasInsetCard className="rounded-[22px] px-5 py-5 xl:col-span-2">
         <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">
@@ -373,15 +382,27 @@ export default function AdminAssessmentsSection({
             <AtlasInsetCard className="rounded-[18px] px-4 py-4">
               <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">submission watch</small>
               <div className="mt-1 text-[22px] font-medium text-white">Navigator signal volume</div>
-              <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <AtlasMetricPill label="self assessments" value={navigatorProgramState.selfAssessments.length} accentColor={SP_COLORS.yellow} className="rounded-[16px]" />
                 <AtlasMetricPill label="supervision notes" value={navigatorProgramState.supervisionSessions.length} accentColor={SP_COLORS.blue} className="rounded-[16px]" />
                 <AtlasMetricPill label="competency reviews" value={supervisorNavigatorCompetency.reduce((sum, item) => sum + item.assessmentCount, 0)} accentColor={SP_COLORS.deepGreen} className="rounded-[16px]" />
+                <AtlasMetricPill
+                  label="enrollee IPSCC"
+                  value={navigatorProgramState.ipsccEncounterSubmissions.length}
+                  accentColor={SP_COLORS.green}
+                  className="rounded-[16px]"
+                />
               </div>
             </AtlasInsetCard>
           </div>
         </div>
       </AtlasInsetCard>
+    </div>
+
+      <AdminIpsccEncounterLedger
+        submissions={navigatorProgramState.ipsccEncounterSubmissions}
+        formatDateLabel={formatDateLabel}
+      />
     </div>
   )
 }

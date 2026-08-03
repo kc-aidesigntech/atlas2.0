@@ -25,6 +25,7 @@ import type {
   IpsccCompetencyAggregate,
   IpsccCompetencyKey,
   IpsccEncounterSubmissionRecord,
+  IpsccEnrolleeFeedbackPrivacy,
   IpsccSelfAwarenessCorrelationRow,
   IpsccSelfAwarenessSummary,
   JourneyStationMarker,
@@ -58,12 +59,14 @@ import type {
   SupervisionSessionRecord,
   CreateInsightRow,
   CreateSessionRecord,
+  NavigatorCreateReflectionRecord,
   TroubleshootingSessionState,
   TimelineConfig,
   UnassignedEnrolleePickupRecord,
   ZCodeDomainSurveyHistorySummary,
   ZDomain
 } from '@/features/atlas2026/shared/contracts'
+import { IPSCC_ENROLLEE_FEEDBACK_PRIVACY_MIN_ENTRIES } from '@/features/atlas2026/shared/contracts'
 import {
   appendRouteLog as appendRouteLogRecord,
   deleteEnrolleeBurdenSurveyDraftRecord,
@@ -109,6 +112,7 @@ import {
   saveRouteLogs as persistRouteLogs,
   saveEnrolleeIntake as persistEnrolleeIntake,
   saveNavigatorCreateSession as persistNavigatorCreateSession,
+  saveNavigatorCreateReflection as persistNavigatorCreateReflection,
   saveNavigatorIpsSelfAssessment as persistNavigatorIpsSelfAssessment,
   saveNavigatorIpsccEncounterSubmission as persistNavigatorIpsccEncounterSubmission,
   assignNavigatorEnrollmentToSelf as persistAssignNavigatorEnrollmentToSelf,
@@ -116,6 +120,7 @@ import {
   materializeClaimedReferralIntoEnrollment,
   upsertEnrollmentInferredZCodes,
   loadAccessMatrixDataset,
+  loadNavigatorCreateReflection,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,
@@ -146,6 +151,10 @@ import {
   evaluatePartnerMyStationDebut
 } from '@/features/atlas2026/singlepane/data-access/partnerMyStationDebut'
 import { isCapabilityAllowedForRole } from '@/features/atlas2026/shared/roleCapabilityPolicy'
+import {
+  CREATE_REFLECTION_SESSION_LIMIT,
+  generateCreateReflection
+} from '@/services/atlas2026/createReflectionService'
 import {
   buildPartnerServiceCapacityDefaultHeader,
   buildSupervisorNavigatorCompetencySummaries,
@@ -183,6 +192,7 @@ import {
   isRegulationCadenceInstrument,
   type RegulationInstrumentCompletionMap
 } from '@/features/atlas2026/singlepane/data/regulationCadence'
+import { IPSCC_COMPETENCY_DEFINITIONS } from '@/features/atlas2026/singlepane/data/intentionalPeerSupportCatalog'
 
 const DOMAIN_BY_ACTION: Record<string, ZDomain[]> = {
   'route planning': ['housing', 'work'],
@@ -297,26 +307,22 @@ function buildResolvedZCodeStripMarkers(activeZCodeDetails: EnrolleeActiveZCode[
     })) satisfies ResolvedZCodeStripMarker[]
 }
 
-const IPSCC_COMPETENCY_DEFINITIONS: Array<{ key: IpsccCompetencyKey; label: string; itemIndexes: number[] }> = [
-  { key: 'competency_1_connection', label: 'Connection', itemIndexes: [1, 2, 3, 4, 9, 10] },
-  { key: 'competency_2_learning_together', label: 'Helping to learning together', itemIndexes: [3] },
-  { key: 'competency_3_worldview_awareness', label: 'Worldview awareness', itemIndexes: [5] },
-  { key: 'competency_4_relationship_focus', label: 'Individual to relationship', itemIndexes: [2, 4, 9] },
-  { key: 'competency_5_mutuality', label: 'Mutuality', itemIndexes: [4, 5, 7, 9] },
-  { key: 'competency_6_hope_and_possibility', label: 'Fear to hope and possibility', itemIndexes: [4, 10] },
-  { key: 'competency_7_moving_towards', label: 'Moving towards', itemIndexes: [6, 8, 10] },
-  { key: 'competency_8_self_reflection', label: 'Self-reflection', itemIndexes: [1, 2] },
-  { key: 'competency_9_feedback', label: 'Give and receive feedback', itemIndexes: [3, 7] },
-  { key: 'competency_10_co_reflection', label: 'Co-reflection', itemIndexes: [9, 10] }
-]
-
 const IPSCC_ITEM_COUNT = 10
+/** Legacy two-row seed ids — replaced by the pilot 10-submission improving series. */
+const IPSCC_LEGACY_ENCOUNTER_SEED_PREFIX = 'ipscc-seed-'
+/** Stable pilot seed ids so merge can refresh the series without wiping live submissions. */
+const IPSCC_PILOT_ENCOUNTER_SEED_PREFIX = 'ipscc-pilot-seed-'
 
 function clampLikertScore(value: number) {
   if (!Number.isFinite(value)) return 3
   return Math.max(1, Math.min(5, Math.round(value)))
 }
 
+/**
+ * Encounter submissions store one score per Intentional Peer Support Core Competencies
+ * (IPSCC) competency in catalog order (index 0 = competency 1). Older rows that used a
+ * guessed multi-item mapping still reduce to one score per competency via itemIndexes.
+ */
 function mapItemScoresToCompetencyScores(itemScores: number[]): Partial<Record<IpsccCompetencyKey, number>> {
   const normalized = Array.from({ length: IPSCC_ITEM_COUNT }, (_, index) => clampLikertScore(itemScores[index] ?? 3))
   return Object.fromEntries(
@@ -328,27 +334,67 @@ function mapItemScoresToCompetencyScores(itemScores: number[]): Partial<Record<I
   ) as Partial<Record<IpsccCompetencyKey, number>>
 }
 
+/**
+ * Ten encounter submissions from a single enrollee for the pilot navigator.
+ * Scores rise over ~9 weeks so admin and privacy-unlocked averages show improving
+ * enrollee opinion of the navigator (also unlocks the ~10-entry anonymity floor).
+ */
 function buildSeedIpsccEncounterSubmissions(
   navigatorName: string,
   enrollees: EnrolleeProfile[]
 ): IpsccEncounterSubmissionRecord[] {
+  const enrollee = enrollees[0]
+  if (!enrollee) return []
   const now = new Date()
-  return enrollees.slice(0, 2).map((enrollee, index) => {
+  return Array.from({ length: 10 }, (_, index) => {
+    // index 0 = oldest / lowest opinion; index 9 = most recent / highest opinion
     const submittedAt = new Date(now)
-    submittedAt.setUTCDate(submittedAt.getUTCDate() - index * 3)
-    const itemScores = Array.from({ length: IPSCC_ITEM_COUNT }, (_, scoreIndex) => clampLikertScore(4 - ((index + scoreIndex) % 2)))
+    submittedAt.setUTCDate(submittedAt.getUTCDate() - (9 - index) * 7)
+    // Climb from roughly 2.1 toward 4.7 across the series with light per-competency variance.
+    const progress = index / 9
+    const center = 2.1 + progress * 2.6
+    const itemScores = Array.from({ length: IPSCC_ITEM_COUNT }, (_, scoreIndex) => {
+      const wobble = ((scoreIndex + index) % 3) - 1
+      return clampLikertScore(center + wobble * 0.35)
+    })
     return {
-      id: `ipscc-seed-${index + 1}`,
+      id: `${IPSCC_PILOT_ENCOUNTER_SEED_PREFIX}${index + 1}`,
       navigatorName,
       enrolleeId: enrollee.id,
       enrolleeName: enrollee.fullName,
       enrollmentId: enrollee.enrollmentId || null,
       submittedAtIso: submittedAt.toISOString(),
-      submittedBy: 'service user',
+      submittedBy: 'enrollee',
       itemScores,
-      note: 'Seeded point-of-care feedback for competency trend continuity.'
+      note:
+        index === 0
+          ? 'Pilot enrollee early encounter — cautious ratings.'
+          : index === 9
+            ? 'Pilot enrollee latest encounter — clear improvement in opinion of navigator.'
+            : `Pilot enrollee encounter ${index + 1} of 10 — opinion trending upward.`
     }
   })
+}
+
+/**
+ * Keep live (non-seed) IPSCC rows, and always refresh the pilot 10-submission
+ * improving series so demos unlock privacy averages and show opinion lift.
+ */
+function mergeIpsccEncounterSubmissions(
+  existing: IpsccEncounterSubmissionRecord[],
+  navigatorName: string,
+  enrollees: EnrolleeProfile[]
+): IpsccEncounterSubmissionRecord[] {
+  const liveRows = existing.filter(
+    (record) =>
+      !record.id.startsWith(IPSCC_LEGACY_ENCOUNTER_SEED_PREFIX) &&
+      !record.id.startsWith(IPSCC_PILOT_ENCOUNTER_SEED_PREFIX)
+  )
+  const pilotSeries = buildSeedIpsccEncounterSubmissions(navigatorName, enrollees)
+  if (!pilotSeries.length) return liveRows.length ? liveRows : existing
+  return [...liveRows, ...pilotSeries].sort(
+    (left, right) => new Date(left.submittedAtIso).getTime() - new Date(right.submittedAtIso).getTime()
+  )
 }
 
 function buildSeedIpsSelfAssessments(navigatorName: string): IpsCompetencySelfAssessmentRecord[] {
@@ -735,8 +781,11 @@ function mergeNavigatorProgramState(
       base.supervisorIpsAssessments.length
         ? base.supervisorIpsAssessments
         : buildSeedSupervisorIpsAssessments(navigatorName, supervisorName),
-    ipsccEncounterSubmissions:
-      base.ipsccEncounterSubmissions.length ? base.ipsccEncounterSubmissions : buildSeedIpsccEncounterSubmissions(navigatorName, enrollees),
+    ipsccEncounterSubmissions: mergeIpsccEncounterSubmissions(
+      base.ipsccEncounterSubmissions,
+      navigatorName,
+      enrollees
+    ),
     createSessions: base.createSessions.length ? base.createSessions : buildSeedCreateSessions(navigatorName),
     supervisionSessions: base.supervisionSessions.length ? base.supervisionSessions : buildSeedSupervisionSessions(navigatorName),
     intervalAssessmentRules: base.intervalAssessmentRules.length ? base.intervalAssessmentRules : buildSeedIntervalRules(navigatorName),
@@ -802,6 +851,22 @@ function buildIpsccCompetencyAggregates(records: IpsccEncounterSubmissionRecord[
   })
 }
 
+/**
+ * Strip enrollee IPSCC averages until the anonymity threshold is met.
+ * Sample sizes remain visible so navigators can see progress toward unlock.
+ */
+function gateIpsccAggregatesForNavigatorPrivacy(
+  aggregates: IpsccCompetencyAggregate[],
+  totalEncounterSubmissions: number,
+  minEntries: number
+): IpsccCompetencyAggregate[] {
+  if (totalEncounterSubmissions >= minEntries) return aggregates
+  return aggregates.map((row) => ({
+    ...row,
+    averageScore: null
+  }))
+}
+
 function buildIpsSelfAssessmentAverages(records: IpsCompetencySelfAssessmentRecord[]): Record<IpsccCompetencyKey, number | null> {
   return Object.fromEntries(
     IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
@@ -815,10 +880,11 @@ function buildIpsSelfAssessmentAverages(records: IpsCompetencySelfAssessmentReco
 }
 
 /**
- * Self-awareness = alignment between service-user Individual Placement and Support Core
- * Competencies (IPSCC) point-of-care averages and the navigator's weekly Individual Placement
- * and Support (IPS) self-assessment averages (completed before supervision).
- * Positive gap means the navigator self-rates higher than service users report.
+ * Self-awareness = alignment between enrollee Intentional Peer Support Core
+ * Competencies (IPSCC) point-of-care averages and the navigator's weekly IPSCC
+ * self-assessment averages (completed before supervision).
+ * Positive gap means the navigator self-rates higher than enrollees report.
+ * Strain is absolute gap — larger strain extends care-disruption risk on that competency.
  */
 function buildIpsccVsSelfAwarenessCorrelation(
   ipsccAggregates: IpsccCompetencyAggregate[],
@@ -832,6 +898,7 @@ function buildIpsccVsSelfAwarenessCorrelation(
     const ipsccAverage = ipsccByKey[definition.key] ?? null
     const hasPair = typeof ipsccAverage === 'number' && typeof selfAverage === 'number'
     const gap = hasPair ? Number((selfAverage - ipsccAverage).toFixed(2)) : null
+    const strain = hasPair ? Number(Math.abs(gap || 0).toFixed(2)) : null
     // Alignment compresses absolute gap into 0..1 where 1 means exact agreement.
     const alignmentScore = hasPair ? Number((Math.max(0, 1 - Math.abs(gap || 0) / 4)).toFixed(2)) : null
     return {
@@ -840,6 +907,7 @@ function buildIpsccVsSelfAwarenessCorrelation(
       ipsccAverage,
       selfAverage,
       gap,
+      strain,
       alignmentScore
     }
   })
@@ -847,6 +915,7 @@ function buildIpsccVsSelfAwarenessCorrelation(
   const averageGap = comparableRows.length
     ? Number((comparableRows.reduce((sum, row) => sum + Math.abs(row.gap || 0), 0) / comparableRows.length).toFixed(2))
     : null
+  const averageStrain = averageGap
   const overallAlignmentScore = comparableRows.length
     ? Number((comparableRows.reduce((sum, row) => sum + (row.alignmentScore || 0), 0) / comparableRows.length).toFixed(2))
     : null
@@ -855,7 +924,8 @@ function buildIpsccVsSelfAwarenessCorrelation(
     summary: {
       comparedCompetencyCount: comparableRows.length,
       averageGap,
-      overallAlignmentScore
+      overallAlignmentScore,
+      averageStrain
     }
   }
 }
@@ -1175,6 +1245,9 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   const [adminPortalRegistryError, setAdminPortalRegistryError] = useState<string | null>(null)
   const [accessMatrixError, setAccessMatrixError] = useState<string | null>(null)
   const [navigatorProgramError, setNavigatorProgramError] = useState<string | null>(null)
+  // One current C.R.E.A.T.E. reflection per navigator (separate table from session rows).
+  const [navigatorCreateReflection, setNavigatorCreateReflection] =
+    useState<NavigatorCreateReflectionRecord | null>(null)
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [isSavingEnrolleeBurdenSurvey, setIsSavingEnrolleeBurdenSurvey] = useState(false)
   const [enrolleeBurdenSurveyError, setEnrolleeBurdenSurveyError] = useState<string | null>(null)
@@ -1854,9 +1927,27 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
         .sort((left, right) => new Date(right.sessionAtIso).getTime() - new Date(left.sessionAtIso).getTime()),
     [currentNavigatorName, mergedNavigatorProgramState.createSessions]
   )
-  const navigatorIpsccCompetencyAggregates = useMemo(
+  const navigatorIpsccCompetencyAggregatesRaw = useMemo(
     () => buildIpsccCompetencyAggregates(navigatorIpsccEncounterSubmissions),
     [navigatorIpsccEncounterSubmissions]
+  )
+  const navigatorIpsccEnrolleeFeedbackPrivacy = useMemo((): IpsccEnrolleeFeedbackPrivacy => {
+    const totalEncounterSubmissions = navigatorIpsccEncounterSubmissions.length
+    return {
+      totalEncounterSubmissions,
+      minEntriesToRevealAverages: IPSCC_ENROLLEE_FEEDBACK_PRIVACY_MIN_ENTRIES,
+      averagesRevealed: totalEncounterSubmissions >= IPSCC_ENROLLEE_FEEDBACK_PRIVACY_MIN_ENTRIES
+    }
+  }, [navigatorIpsccEncounterSubmissions])
+  // Navigator-facing aggregates never expose enrollee means below the privacy floor.
+  const navigatorIpsccCompetencyAggregates = useMemo(
+    () =>
+      gateIpsccAggregatesForNavigatorPrivacy(
+        navigatorIpsccCompetencyAggregatesRaw,
+        navigatorIpsccEnrolleeFeedbackPrivacy.totalEncounterSubmissions,
+        navigatorIpsccEnrolleeFeedbackPrivacy.minEntriesToRevealAverages
+      ),
+    [navigatorIpsccCompetencyAggregatesRaw, navigatorIpsccEnrolleeFeedbackPrivacy]
   )
   const navigatorIpsSelfAverages = useMemo(
     () => buildIpsSelfAssessmentAverages(navigatorIpsSelfAssessments),
@@ -2166,26 +2257,38 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
 
   useEffect(() => {
     let isMounted = true
+    // Clear prior navigator reflection while the next profile's row loads.
+    setNavigatorCreateReflection(null)
     Promise.all([
       loadNavigatorIpsccEncounterSubmissions(currentNavigatorName),
       loadNavigatorIpsSelfAssessments(currentNavigatorName),
       loadNavigatorCreateSessions(currentNavigatorName),
-      loadSupervisorIpsAssessments()
+      loadSupervisorIpsAssessments(),
+      loadNavigatorCreateReflection(currentNavigatorName)
     ])
-      .then(([ipsccEncounterSubmissions, ipsSelfAssessments, createSessions, supervisorIpsAssessments]) => {
-        if (!isMounted) return
-        setNavigatorProgramState((current) => ({
-          ...current,
-          ipsccEncounterSubmissions: ipsccEncounterSubmissions.length
-            ? ipsccEncounterSubmissions
-            : current.ipsccEncounterSubmissions,
-          ipsSelfAssessments: ipsSelfAssessments.length ? ipsSelfAssessments : current.ipsSelfAssessments,
-          createSessions: createSessions.length ? createSessions : current.createSessions,
-          supervisorIpsAssessments: supervisorIpsAssessments.length
-            ? supervisorIpsAssessments
-            : current.supervisorIpsAssessments
-        }))
-      })
+      .then(
+        ([
+          ipsccEncounterSubmissions,
+          ipsSelfAssessments,
+          createSessions,
+          supervisorIpsAssessments,
+          createReflection
+        ]) => {
+          if (!isMounted) return
+          setNavigatorProgramState((current) => ({
+            ...current,
+            ipsccEncounterSubmissions: ipsccEncounterSubmissions.length
+              ? ipsccEncounterSubmissions
+              : current.ipsccEncounterSubmissions,
+            ipsSelfAssessments: ipsSelfAssessments.length ? ipsSelfAssessments : current.ipsSelfAssessments,
+            createSessions: createSessions.length ? createSessions : current.createSessions,
+            supervisorIpsAssessments: supervisorIpsAssessments.length
+              ? supervisorIpsAssessments
+              : current.supervisorIpsAssessments
+          }))
+          setNavigatorCreateReflection(createReflection)
+        }
+      )
       .catch((error) => {
         if (!isMounted) return
         setNavigatorProgramError(
@@ -3668,14 +3771,45 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   async function saveNavigatorCreateSession(record: CreateSessionRecord) {
     ensureWriteAllowed('navigatorProgram.write', 'save C.R.E.A.T.E. supervision sessions')
     const savedRecord = await persistNavigatorCreateSession(record)
+    const nextCreateSessions = [
+      savedRecord,
+      ...mergedNavigatorProgramState.createSessions.filter((item) => item.id !== savedRecord.id)
+    ]
     const nextState = {
       ...mergedNavigatorProgramState,
-      createSessions: [
-        savedRecord,
-        ...mergedNavigatorProgramState.createSessions.filter((item) => item.id !== savedRecord.id)
-      ]
+      createSessions: nextCreateSessions
     }
-    return saveNavigatorProgramState(nextState)
+    const savedProgramState = await saveNavigatorProgramState(nextState)
+
+    // Regenerate Section 3 reflection from the latest session plus prior history (≤10 total).
+    const sessionsForReflection = nextCreateSessions
+      .filter((item) => item.navigatorName.trim().toLowerCase() === savedRecord.navigatorName.trim().toLowerCase())
+      .slice()
+      .sort((left, right) => new Date(left.sessionAtIso).getTime() - new Date(right.sessionAtIso).getTime())
+      .slice(-CREATE_REFLECTION_SESSION_LIMIT)
+
+    try {
+      const generated = await generateCreateReflection({
+        navigatorName: savedRecord.navigatorName,
+        supervisorName: savedRecord.supervisorName,
+        sessions: sessionsForReflection
+      })
+      const reflection = await persistNavigatorCreateReflection({
+        navigatorName: savedRecord.navigatorName,
+        reflectionText: generated.reflectionText,
+        sourceSessionIds: sessionsForReflection.map((session) => session.id),
+        sourceLatestSessionId: savedRecord.id,
+        model: generated.model,
+        generatedAtIso: new Date().toISOString(),
+        usedFallback: generated.usedFallback
+      })
+      setNavigatorCreateReflection(reflection)
+    } catch (error) {
+      // Session save already succeeded; keep that result even if reflection persistence fails.
+      console.warn('Unable to persist C.R.E.A.T.E. reflection after session save.', error)
+    }
+
+    return savedProgramState
   }
 
   async function saveIntervalAssessmentRule(rule: IntervalAssessmentRule) {
@@ -3945,6 +4079,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     pickupQueue,
     navigatorIpsccEncounterSubmissions,
     navigatorIpsccCompetencyAggregates,
+    navigatorIpsccEnrolleeFeedbackPrivacy,
     navigatorIpsSelfAssessments,
     navigatorSupervisorIpsAssessments,
     allSupervisorIpsAssessments,
@@ -3952,6 +4087,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     navigatorSelfAwarenessSummary: navigatorSelfAwarenessCorrelation.summary,
     navigatorCreateSessions,
     navigatorCreateInsights,
+    navigatorCreateReflection,
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
     navigatorEnrollmentAssignments: navigatorAssignmentBoardRows,

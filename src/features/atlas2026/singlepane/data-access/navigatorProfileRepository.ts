@@ -3,6 +3,7 @@ import type {
   IpsCompetencySelfAssessmentRecord,
   IpsccCompetencyKey,
   IpsccEncounterSubmissionRecord,
+  NavigatorCreateReflectionRecord,
   SupervisorIpsAssessmentRecord
 } from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
@@ -310,4 +311,75 @@ export async function saveNavigatorCreateSession(record: CreateSessionRecord): P
     supervisorSignature: String(data.supervisor_signature || ''),
     supervisorSignedAtIso: data.supervisor_signed_at ? String(data.supervisor_signed_at) : null
   }
+}
+
+function mapCreateReflectionRow(row: Record<string, unknown>): NavigatorCreateReflectionRecord {
+  const sourceIds = Array.isArray(row.source_session_ids)
+    ? row.source_session_ids.map((value) => String(value || '').trim()).filter(Boolean)
+    : []
+  return {
+    id: String(row.id || ''),
+    navigatorName: String(row.navigator_name || '').trim(),
+    reflectionText: String(row.reflection_text || '').trim(),
+    sourceSessionIds: sourceIds,
+    sourceLatestSessionId: String(row.source_latest_session_id || '').trim(),
+    model: String(row.model || '').trim(),
+    generatedAtIso: String(row.generated_at || row.updated_at || row.created_at || new Date().toISOString()),
+    usedFallback: String(row.model || '').toLowerCase().includes('fallback')
+  }
+}
+
+export async function loadNavigatorCreateReflection(
+  navigatorName: string
+): Promise<NavigatorCreateReflectionRecord | null> {
+  if (!hasSupabaseConfig || !supabase) return null
+  const normalizedNavigatorName = navigatorName.trim().toLowerCase()
+  if (!normalizedNavigatorName) return null
+  return withOptionalSupabaseFallback('singlepane.navigatorCreateReflection', async () => {
+    const { data, error } = await supabase
+      .schema('atlas')
+      .from('navigator_create_reflections')
+      .select('*')
+      .order('generated_at', { ascending: false })
+    if (error) throw error
+    const match = (data || []).find(
+      (row) => String(row.navigator_name || '').trim().toLowerCase() === normalizedNavigatorName
+    )
+    return match ? mapCreateReflectionRow(match as Record<string, unknown>) : null
+  }, null)
+}
+
+export async function saveNavigatorCreateReflection(
+  record: Omit<NavigatorCreateReflectionRecord, 'id'> & { id?: string }
+): Promise<NavigatorCreateReflectionRecord> {
+  if (!hasSupabaseConfig || !supabase) {
+    return {
+      id: record.id || `local-create-reflection-${Date.now()}`,
+      navigatorName: record.navigatorName,
+      reflectionText: record.reflectionText,
+      sourceSessionIds: record.sourceSessionIds,
+      sourceLatestSessionId: record.sourceLatestSessionId,
+      model: record.model,
+      generatedAtIso: record.generatedAtIso,
+      usedFallback: record.usedFallback
+    }
+  }
+  const payload = {
+    navigator_name: record.navigatorName,
+    reflection_text: record.reflectionText,
+    source_session_ids: record.sourceSessionIds,
+    source_latest_session_id: record.sourceLatestSessionId,
+    model: record.model,
+    generated_at: record.generatedAtIso,
+    updated_at: new Date().toISOString()
+  }
+  // Upsert on navigator_name so each navigator keeps one current reflection row.
+  const { data, error } = await supabase
+    .schema('atlas')
+    .from('navigator_create_reflections')
+    .upsert(payload, { onConflict: 'navigator_name' })
+    .select('*')
+    .single()
+  if (error) throw error
+  return mapCreateReflectionRow(data as Record<string, unknown>)
 }

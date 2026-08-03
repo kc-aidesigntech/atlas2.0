@@ -109,6 +109,7 @@ export default function SinglePaneApp() {
     pendingAssignmentEnrollees,
     pickupQueue,
     navigatorIpsccCompetencyAggregates,
+    navigatorIpsccEnrolleeFeedbackPrivacy,
     navigatorIpsSelfAssessments,
     navigatorSupervisorIpsAssessments,
     allSupervisorIpsAssessments,
@@ -116,6 +117,7 @@ export default function SinglePaneApp() {
     navigatorSelfAwarenessSummary,
     navigatorCreateSessions,
     navigatorCreateInsights,
+    navigatorCreateReflection,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,
@@ -997,12 +999,14 @@ export default function SinglePaneApp() {
                     canOpenAssignmentBoardReferral={canOpenNavigatorAssignmentReferral}
                     competencySummary={navigatorAssignedCompetencySummary}
                     ipsccCompetencyAverages={navigatorIpsccCompetencyAggregates}
+                    ipsccEnrolleeFeedbackPrivacy={navigatorIpsccEnrolleeFeedbackPrivacy}
                     selfAwarenessCorrelationRows={navigatorSelfAwarenessCorrelationRows}
                     selfAwarenessSummary={navigatorSelfAwarenessSummary}
                     ipsSelfAssessments={navigatorIpsSelfAssessments}
                     navigatorSupervisorIpsAssessments={navigatorSupervisorIpsAssessments}
                     createInsights={navigatorCreateInsights}
                     createSessions={navigatorCreateSessions}
+                    createReflection={navigatorCreateReflection}
                     supervisionSessions={navigatorSupervisionSessions}
                     dueItems={navigatorIntervalDueItems}
                     regulationReviewDueItems={regulationReviewDueItems}
