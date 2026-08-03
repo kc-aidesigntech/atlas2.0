@@ -1,22 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { usesLightTextOnZCodeColor } from '@atlas/shared'
-import CircularSlider from '@fseehawer/react-circular-slider'
 import { getScaleOption } from '../../data/serviceCapacitySurveyCatalog'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type { PartnerServiceCapacityScaleOption, ZCodeSurveyPrompt } from '../../types'
 import AtlasArrowIcon from '../../../components/AtlasArrowIcon'
 import { AtlasTextButton, AtlasTextLink } from '../../../components/AtlasPrimitives'
-
-// Explicit >400-line exception: this pre-existing shared survey chrome module serves
-// multiple instruments. Its controls should be split in a dedicated follow-up to avoid
-// coupling the behavior-preserving service-capacity decomposition to unrelated surveys.
-export interface SurveySectionProgressItem {
-  parentCode: string
-  total: number
-  completed: number
-  accentColor: string
-  isCurrent: boolean
-}
+import DomainSpectrumKnob from './DomainSpectrumKnob'
+export { default as SurveyProgressHeader } from './SurveyProgressHeader'
+export type { SurveySectionProgressItem } from './SurveyProgressHeader'
 
 export function BurdenCard({
   promptItem,
@@ -86,7 +76,7 @@ export function BurdenCard({
     typeof score === 'number' &&
     score >= effectiveRangeMin &&
     score <= effectiveRangeMax
-  /** Range inputs require a numeric value, so unanswered prompts rest on a visible midpoint cue until the respondent chooses a score. */
+  // Unanswered range controls rest on a midpoint cue until the respondent chooses.
   const rangeInputValue = hasAnsweredScore ? score : midpoint
   const scaleState = hasAnsweredScore
     ? (describeScore?.(score) || getScaleOption(scale, score))
@@ -129,7 +119,6 @@ export function BurdenCard({
       return
     }
 
-    // Prefer keyboard re-focus on pointer-fine devices to support rapid score entry without extra taps.
     const shouldAutoFocus =
       shouldRefocusInputRef.current ||
       (typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches)
@@ -172,7 +161,6 @@ export function BurdenCard({
 
   function handleNumericInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (!hasNext || !canAdvance) return
-    // Space/Enter/Tab all advance to mimic spreadsheet-style data entry for survey operators.
     if (event.key === 'Enter' || event.key === 'Tab' || event.key === ' ' || event.key === 'Spacebar') {
       event.preventDefault()
       advanceToNextPrompt()
@@ -409,325 +397,6 @@ export function BurdenCard({
             final question
           </small>
         )}
-      </div>
-    </div>
-  )
-}
-
-function DomainSpectrumKnob({
-  value,
-  min,
-  max,
-  disabled,
-  onChange
-}: {
-  value: number
-  min: number
-  max: number
-  disabled: boolean
-  onChange: (value: number) => void
-}) {
-  const knobRootRef = useRef<HTMLDivElement | null>(null)
-  const span = Math.max(1, max - min)
-  const toPercent = (value: number) => ((value - min) / span) * 100
-  const habitatColor = '#ff9a3c'
-  const socialNetworksColor = '#4ea5ff'
-  const workColor = '#f6cb3f'
-  const habitatAtMin = toPercent(1)
-  const socialAt = toPercent(33)
-  const workAt = toPercent(66)
-  const habitatAtMax = toPercent(99)
-  const domainSpectrumBackground = `conic-gradient(from -103deg, ${habitatColor} ${habitatAtMin.toFixed(3)}%, ${socialNetworksColor} ${socialAt.toFixed(3)}%, ${workColor} ${workAt.toFixed(3)}%, ${habitatColor} ${habitatAtMax.toFixed(3)}%)`
-  const majorLabels = ['habitat', 'social networks', 'work']
-  const majorTicks = majorLabels.map((label, index) => ({
-    angle: 0 + index * 120,
-    label,
-    value: index === 0 ? 0 : index === 1 ? 33 : 66
-  }))
-  const minorTicks = majorTicks.flatMap((current, index) => {
-    const nextAngle = 0 + ((index + 1) % majorTicks.length) * 120
-    const segmentEnd = nextAngle <= current.angle ? nextAngle + 360 : nextAngle
-    // Six in-between graduations split each 120-degree segment into seven equal parts.
-    return [1, 2, 3, 4, 5, 6].map((step) => ({
-      angle: current.angle + ((segmentEnd - current.angle) * step) / 7
-    }))
-  })
-
-  function getScoreFromRingPointer(clientX: number, clientY: number) {
-    const node = knobRootRef.current
-    if (!node) return null
-    const bounds = node.getBoundingClientRect()
-    const centerX = bounds.left + bounds.width / 2
-    const centerY = bounds.top + bounds.height / 2
-    const dx = clientX - centerX
-    const dy = clientY - centerY
-    const radius = Math.hypot(dx, dy)
-    // Treat clicks within the visible knob band as direct value intent; ignore center
-    // taps and far-outside taps so label/button interactions remain predictable.
-    if (radius < 78 || radius > 124) return null
-    const angleFromTopClockwise = (Math.atan2(dy, dx) * (180 / Math.PI) + 450) % 360
-    const normalizedRatio = angleFromTopClockwise / 360
-    const inferredValue = min + normalizedRatio * (max - min)
-    return Math.max(min, Math.min(max, Math.round(inferredValue)))
-  }
-
-  function handleRingPointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (disabled) return
-    const target = event.target as HTMLElement
-    if (target.closest('button,input,a')) return
-    const inferredScore = getScoreFromRingPointer(event.clientX, event.clientY)
-    if (inferredScore == null) return
-    onChange(inferredScore)
-  }
-
-  return (
-    <div
-      ref={knobRootRef}
-      className={`relative h-[280px] w-[280px] ${disabled ? 'opacity-60' : ''}`}
-      style={{ filter: disabled ? 'grayscale(0.35)' : 'none' }}
-      onPointerDown={handleRingPointerDown}
-    >
-      {majorTicks.map((tick) => (
-        <TickMark key={`major-${tick.angle}`} angle={tick.angle} radius={132} length={14} thickness={2} color="#ffffffb5" />
-      ))}
-      {minorTicks.map((tick) => (
-        <TickMark key={`minor-${tick.angle}`} angle={tick.angle} radius={132} length={8} thickness={1.5} color="#ffffff60" />
-      ))}
-      {majorTicks.map((tick) => (
-        <DomainLabelButton
-          key={`label-${tick.angle}`}
-          angle={tick.angle}
-          radius={164}
-          label={tick.label}
-          emphasized
-          disabled={disabled}
-          onClick={() => onChange(Math.max(min, Math.min(max, tick.value)))}
-        />
-      ))}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div
-          className="h-[210px] w-[210px] rounded-full"
-          style={{
-            background: domainSpectrumBackground,
-            WebkitMask: 'radial-gradient(circle, transparent 0 90px, #000 91px)',
-            mask: 'radial-gradient(circle, transparent 0 90px, #000 91px)'
-          }}
-        />
-      </div>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <CircularSlider
-          width={210}
-          min={min}
-          max={max}
-          data={Array.from({ length: max - min + 1 }, (_, idx) => min + idx)}
-          dataIndex={Math.max(0, Math.min(max - min, value - min))}
-          knobPosition="top"
-          knobSize={34}
-          knobColor="#111111"
-          progressSize={14}
-          trackSize={14}
-          label=""
-          hideLabelValue
-          progressLineCap="round"
-          progressColorFrom="rgba(0,0,0,0)"
-          progressColorTo="rgba(0,0,0,0)"
-          trackColor="rgba(0,0,0,0)"
-          onChange={(nextValue) => {
-            if (disabled) return
-            const parsed = typeof nextValue === 'number' ? nextValue : Number(nextValue)
-            if (!Number.isFinite(parsed)) return
-            onChange(Math.max(min, Math.min(max, Math.round(parsed))))
-          }}
-        />
-      </div>
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="h-[92px] w-[92px] rounded-full border border-white/15 bg-[#070707]/95 shadow-[inset_0_2px_10px_rgba(255,255,255,0.06),0_8px_20px_rgba(0,0,0,0.45)]" />
-      </div>
-    </div>
-  )
-}
-
-function TickMark({
-  angle,
-  radius,
-  length,
-  thickness,
-  color
-}: {
-  angle: number
-  radius: number
-  length: number
-  thickness: number
-  color: string
-}) {
-  return (
-    <div
-      className="pointer-events-none absolute left-1/2 top-1/2 origin-center"
-      style={{ transform: `translate(-50%, -50%) rotate(${angle}deg)` }}
-      aria-hidden="true"
-    >
-      <div
-        style={{
-          transform: `translateY(-${radius}px)`,
-          width: `${thickness}px`,
-          height: `${length}px`,
-          borderRadius: '999px',
-          backgroundColor: color
-        }}
-      />
-    </div>
-  )
-}
-
-function DomainLabelButton({
-  angle,
-  radius,
-  label,
-  emphasized,
-  disabled,
-  onClick
-}: {
-  angle: number
-  radius: number
-  label: string
-  emphasized: boolean
-  disabled: boolean
-  onClick: () => void
-}) {
-  return (
-    <div
-      className="absolute left-1/2 top-1/2 origin-center"
-      style={{ transform: `translate(-50%, -50%) rotate(${angle}deg)` }}
-    >
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onClick}
-        style={{ transform: `translateY(-${radius}px) rotate(${-angle}deg)` }}
-        className={`rounded-full border px-2 py-[2px] text-center text-[10px] uppercase tracking-[0.08em] transition-colors duration-150 ${
-          emphasized ? 'border-white/45 text-white hover:border-white/70 hover:bg-white/10' : 'border-white/20 text-[#c6c6c6]'
-        }`}
-      >
-        {label}
-      </button>
-    </div>
-  )
-}
-
-export function SurveyProgressHeader({
-  currentIndex,
-  totalCount,
-  completedCount,
-  parentCode,
-  parentTheme,
-  accentColor,
-  sectionProgress,
-  pinToViewport = true,
-  className = ''
-}: {
-  currentIndex: number
-  totalCount: number
-  completedCount: number
-  parentCode: string
-  parentTheme: string
-  accentColor: string
-  sectionProgress: SurveySectionProgressItem[]
-  pinToViewport?: boolean
-  className?: string
-}) {
-  const ratio = totalCount ? completedCount / totalCount : 0
-  const useLightText = usesLightTextOnZCodeColor(accentColor)
-
-  return (
-    <div className={`atlas-surface-panel ${pinToViewport ? 'sticky top-0 z-30' : 'relative'} mt-5 bg-[color:var(--surface-panel-soft)] px-4 py-3 backdrop-blur-sm transition-[padding,border-radius,background-color] duration-500 ease-out md:px-5 ${className}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <small className="atlas-overline block md:text-[13px]" style={{ color: SP_COLORS.muted }}>
-            survey progress
-          </small>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span
-              className="rounded-[10px] px-2.5 py-1 text-[12px] font-semibold md:text-[13px]"
-              style={{
-                backgroundColor: accentColor,
-                color: useLightText ? SP_COLORS.white : SP_COLORS.bg
-              }}
-            >
-              {parentCode}
-            </span>
-            <small className="text-[12px] text-[#d5d5d5] md:text-[13px]">{parentTheme}</small>
-          </div>
-        </div>
-        <small className="text-[12px] md:text-[13px]" style={{ color: SP_COLORS.muted }}>
-          {Math.min(currentIndex + 1, totalCount)} of {totalCount} viewed | {completedCount} completed
-        </small>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-        <div
-          className="h-full rounded-full transition-[width] duration-200 ease-out"
-          style={{ width: `${Math.max(0, Math.min(100, ratio * 100))}%`, backgroundColor: accentColor }}
-        />
-      </div>
-      <div
-        className="mt-4 grid items-start justify-items-center gap-1.5 sm:gap-2"
-        style={{ gridTemplateColumns: `repeat(${sectionProgress.length}, minmax(0, 1fr))` }}
-      >
-        {sectionProgress.map((item) => {
-          const sectionRatio = item.total ? item.completed / item.total : 0
-          const circleSize = 40
-          const radius = 17
-          const circumference = 2 * Math.PI * radius
-          const dashOffset = circumference * (1 - Math.max(0, Math.min(1, sectionRatio)))
-          const itemUsesLightText = usesLightTextOnZCodeColor(item.accentColor)
-          const isComplete = item.total > 0 && item.completed === item.total
-
-          return (
-            <div
-              key={item.parentCode}
-              className={`flex w-full min-w-0 flex-col items-center gap-1 rounded-[11px] px-1 py-1.5 transition-[background-color,border-color] duration-200 ease-out ${
-                item.isCurrent ? 'border bg-white/6' : 'border border-transparent bg-transparent'
-              }`}
-              style={item.isCurrent ? { borderColor: '#ffffff14' } : undefined}
-            >
-              <div className="relative h-[clamp(26px,7vw,40px)] w-[clamp(26px,7vw,40px)]">
-                <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox={`0 0 ${circleSize} ${circleSize}`} aria-hidden="true">
-                  <circle
-                    cx={circleSize / 2}
-                    cy={circleSize / 2}
-                    r={radius}
-                    fill="none"
-                    stroke="rgba(255,255,255,0.18)"
-                    strokeWidth="3"
-                  />
-                  <circle
-                    cx={circleSize / 2}
-                    cy={circleSize / 2}
-                    r={radius}
-                    fill="none"
-                    stroke={item.accentColor}
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={dashOffset}
-                  />
-                </svg>
-                <div
-                  className="absolute left-1/2 top-1/2 flex h-[calc(100%-8px)] w-[calc(100%-8px)] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-[clamp(10px,2.5vw,14px)] font-bold leading-none"
-                  style={{
-                    backgroundColor: isComplete ? item.accentColor : 'var(--surface-panel-raised)',
-                    color: isComplete ? (itemUsesLightText ? SP_COLORS.white : SP_COLORS.bg) : item.accentColor,
-                    border: `1px solid ${isComplete ? item.accentColor : '#ffffff1f'}`
-                  }}
-                >
-                  {item.parentCode.replace(/^Z/i, '')}
-                </div>
-              </div>
-              <small className="text-[clamp(8px,1.8vw,12px)] font-medium leading-none" style={{ color: SP_COLORS.muted }}>
-                {item.completed}/{item.total}
-              </small>
-            </div>
-          )
-        })}
       </div>
     </div>
   )
