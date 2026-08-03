@@ -4,7 +4,7 @@ import { AtlasIconButton } from '../../components/AtlasPrimitives'
 import AtlasArrowIcon from '../../components/AtlasArrowIcon'
 import ZCodeBadge from '../../components/ZCodeBadge'
 import type { RouteCandidateParentSummary, RouteCandidateRecord } from '../types'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { getZCodeParentColor } from '@atlas/shared'
 
 function cn(...parts: Array<string | false | null | undefined>) {

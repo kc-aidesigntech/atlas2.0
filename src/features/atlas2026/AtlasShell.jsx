@@ -312,7 +312,7 @@ export default function AtlasShell() {
               <small className="text-slate-400">
                 source:{' '}
                 <span className={isLiveData ? 'text-emerald-300' : 'text-amber-300'}>
-                  {loadingLiveData ? 'connecting...' : isLiveData ? 'live firestore atlas2026' : 'demo fallback'}
+                  {loadingLiveData ? 'connecting...' : isLiveData ? 'live supabase atlas2026' : 'demo fallback'}
                 </span>
               </small>
             </div>

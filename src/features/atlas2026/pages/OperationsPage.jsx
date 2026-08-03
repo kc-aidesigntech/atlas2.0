@@ -1,7 +1,7 @@
 import React from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { downloadCsv } from '@/services/atlas2026/export-service'
+import { downloadCsv } from '@/services/atlas2026/exportService'
 
 // Operations page summarizes county-level pressure signals into one operator-facing
 // decision contract: triage now, then export evidence for leadership review.

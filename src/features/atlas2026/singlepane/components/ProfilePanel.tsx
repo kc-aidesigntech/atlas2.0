@@ -9,7 +9,7 @@ import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
 import { getZCodeParentColor } from '@atlas/shared'
 import ZCodeBadge from '../../components/ZCodeBadge'
 import type { EnrolleeProfile } from '../types'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 const elenaRodriguezPortraitUrl = new URL('../../../../../assets/portraits/elena-rodriguez.jpeg', import.meta.url).href
 

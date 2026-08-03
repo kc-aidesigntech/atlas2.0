@@ -1,3 +1,9 @@
+/**
+ * Single-pane and domain User Interface (UI) contracts shared across feature
+ * views, hooks, and data-access boundaries. These interaction-facing contracts
+ * are distinct from journey, Bill of Materials (BOM), and routing dataset
+ * contracts re-exported by `data/contracts.ts`.
+ */
 import type {
   AdminDeletableServiceCapacitySubmissionRecord,
   EnrolleeBurdenSurveyAnswer,
@@ -15,14 +21,6 @@ import type {
   ZCodeDomainSurveyAnswerLogRecord,
   ZCodeDomainSurveyHistorySummary
 } from '@atlas/shared'
-
-/**
- * Single-pane domain type contracts.
- *
- * Purpose:
- * - centralizes cross-feature interfaces shared by data-access, hooks, and User Interface (UI).
- * - preserves compatibility with shared package contracts via explicit re-exports.
- */
 
 export type AtlasRole = 'navigator' | 'partner' | 'supervisor' | 'administrator'
 

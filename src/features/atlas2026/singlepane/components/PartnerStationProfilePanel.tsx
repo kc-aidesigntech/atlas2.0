@@ -3,7 +3,7 @@ import { getZCodeParentColor, usesLightTextOnZCodeColor } from '@atlas/shared'
 import AtlasImageUploadTile from '../../components/AtlasImageUploadTile'
 import { createFallbackAvatarDataUrl } from '../../components/avatarFallback'
 import type { AccountSettings, PartnerStationProfile, PartnerStationSpecialtyGroup } from '../types'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface PartnerStationProfilePanelProps {
   accountSettings: AccountSettings

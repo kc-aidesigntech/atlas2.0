@@ -9,9 +9,9 @@ When infrastructure behavior changes, documentation must be updated in the same 
 
 ## Required updates
 
-- Update runbooks such as `Runpod_VM.md` when pod specs, image/template, ports, startup commands, or deployment wiring change.
-- Update environment variable guidance in README or runbooks when endpoint contracts change.
-- Record newly observed operational failure signatures and resolutions in troubleshooting sections.
+- Update runbooks such as `docs/it/mcp-consumer.md` (Atlas Model Context Protocol consumer) when endpoint contracts, bearer auth, or deployment wiring change. Sibling Graphics Processing Unit (GPU) / RunPod ops live in `atlas-mcp-server/Runpod_VM.md`.
+- Update environment variable guidance in `env.template`, README, or Information Technology (IT) runbooks when endpoint contracts change.
+- Record newly observed operational failure signatures and resolutions in troubleshooting sections (`docs/it/commissioning.md` and deep appendix).
 
 ## Completion rule
 

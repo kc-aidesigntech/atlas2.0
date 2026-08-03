@@ -3,8 +3,8 @@
 Engineering and ops gates required to put a real partner site live. These are non-negotiable even when not listed in client review notes.
 
 **Partner site checklist (per org):** [partner-go-live-checklist.md](./partner-go-live-checklist.md)  
-**Commissioning runbook:** [HOW_TO_COMMISSION_SYSTEM.md](./HOW_TO_COMMISSION_SYSTEM.md)  
-**Security model + residuals:** [security-model.md](./security-model.md)
+**Commissioning runbook:** [it/commissioning.md](./it/commissioning.md) ([deep appendix](./HOW_TO_COMMISSION_SYSTEM.md))  
+**Security model + residuals:** [it/security-model.md](./it/security-model.md)
 
 ---
 
@@ -14,7 +14,7 @@ Engineering and ops gates required to put a real partner site live. These are no
 |---|------|---------------|
 | 1 | No pilot passwords / pilot users in production | Zero `@atlas.test` pilot/demo auth users; no shared pilot password |
 | 2 | Migration + Row-Level Security (RLS) commissioning | Migrations applied; verify scripts green |
-| 3 | Security residuals reviewed | Known items in security-model.md acknowledged; no open high-severity PHI exposure |
+| 3 | Security residuals reviewed | Known items in `docs/it/security-model.md` acknowledged; no open high-severity PHI exposure |
 | 4 | Regulation instruments | Approved instruments **or** explicit placeholder waiver |
 | 5 | Role end-to-end (E2E) smoke | Admin / navigator / supervisor / partner / public on production-like data |
 | 6 | Partner go-live checklist signed | [partner-go-live-checklist.md](./partner-go-live-checklist.md) complete for first site |
@@ -30,11 +30,11 @@ Pilot identities are for local/staging walkthroughs only.
 | [../PILOT.md](../PILOT.md) | `pilot.admin@atlas.test`, `pilot.navigator@atlas.test`, `pilot.supervisor@atlas.test`, `pilot.partner@atlas.test` + password `AtlasPilot2026!` | **Must not exist** in production Auth |
 | `verification/pilot_setup.sql` | Same four users + seed scope | Run only on non-production projects |
 | `verification/demo_partner_setup.sql` | `demo.partner@atlas.test` (Harborview demo login) | **Must not exist** in production Auth |
-| [PILOT_RUNBOOK.md](./PILOT_RUNBOOK.md) | Condensed pilot procedures | Staging/demo only |
+| [users/pilot-guide.md](./users/pilot-guide.md) | Condensed pilot procedures | Staging/demo only |
 
 **Pre-flight:** run section A of `verification/prod_commission_verify.sql`. Any matching row fails the gate.
 
-**Provision real users instead:** follow [AUTH_SETUP.md](./AUTH_SETUP.md) and the identity bridge (`supabase/migrations/20260504010000_launch_identity_bridge_baseline.sql`). Every production login needs `atlas.people` + active role assignment + partner/navigator edges as applicable.
+**Provision real users instead:** follow [it/auth-and-identity.md](./it/auth-and-identity.md) and the identity bridge (`supabase/migrations/20260504010000_launch_identity_bridge_baseline.sql`). Every production login needs `atlas.people` + active role assignment + partner/navigator edges as applicable.
 
 **Do not** run `pilot_setup.sql` teardown against production without an explicit ops change window and backup. Prefer Auth dashboard deletion of known pilot emails after verifying no production data depends on those person ids.
 
@@ -45,8 +45,8 @@ Pilot identities are for local/staging walkthroughs only.
 ### Apply
 
 1. Apply the full `supabase/migrations/` chain for the target environment (Supabase Command-Line Interface (CLI) `db push`, migration runner, or Studio — team standard).
-2. Apply required seeds (Z-code taxonomy, partner capabilities as needed for the site). See [HOW_TO_COMMISSION_SYSTEM.md](./HOW_TO_COMMISSION_SYSTEM.md).
-3. Confirm `VITE_ENABLE_SINGLEPANE_SUPABASE_BOOTSTRAP=true` only after runtime cutover objects exist and identity is commissioned.
+2. Apply required seeds (Z-code taxonomy, partner capabilities as needed for the site). See [it/commissioning.md](./it/commissioning.md) and [HOW_TO_COMMISSION_SYSTEM.md](./HOW_TO_COMMISSION_SYSTEM.md).
+3. Confirm `VITE_ENABLE_SINGLEPANE_SUPABASE_BOOTSTRAP=true` only after runtime cutover objects exist and identity is commissioned. See [it/commissioning.md](./it/commissioning.md).
 
 ### Verify (non-destructive)
 
@@ -71,11 +71,11 @@ After real partner users can complete capacity surveys, disable legacy public pa
 
 ## 3. Security residuals
 
-Authoritative list: [security-model.md](./security-model.md) → **Known remaining hardening (follow-up)**.
+Authoritative list: [it/security-model.md](./it/security-model.md) → **Known remaining hardening (follow-up)**.
 
 Before go-live, Engineering + Security must:
 
-- [ ] Confirm high-severity enrollee PHI exposures called out historically are closed (Phases 1–8 in security-model.md)
+- [ ] Confirm high-severity enrollee PHI exposures called out historically are closed (Phases 1–8 in `docs/it/security-model.md`)
 - [ ] Acknowledge remaining `SECURITY DEFINER` reporting/ranking views (defense-in-depth follow-up; not automatic launch blockers if scoped and PHI-safe as documented)
 - [ ] Acknowledge `EXECUTE` still grantable via Postgres `PUBLIC` default on some definer functions (functions self-deny `anon`; revoke is follow-up)
 - [ ] Confirm Supabase Auth leaked-password protection plan and `profile-images` bucket listing tightening (ties to navigator photo upload)
@@ -91,7 +91,7 @@ Regulation gates use Mental Health – Symptom and Coping Assessment (MH-SCA) an
 
 `src/features/atlas2026/singlepane/data/assessmentCatalog.ts`
 
-Those regulation-stage entries are **placeholder instruments** until the client supplies approved content (see file comments and [REGULATION.md](./REGULATION.md)).
+Those regulation-stage entries are **placeholder instruments** until the client supplies approved content (see file comments and [users/journey-phases.md](./users/journey-phases.md)).
 
 ### Option A — Replace (preferred when content is ready)
 
@@ -150,7 +150,7 @@ Complete [partner-go-live-checklist.md](./partner-go-live-checklist.md) for the 
 ## Definition of done (live)
 
 - Production env commissioned; verify scripts green; pilot/demo Auth users absent
-- Security residuals reviewed against security-model.md
+- Security residuals reviewed against `docs/it/security-model.md`
 - Regulation instruments replaced **or** placeholder waiver signed
 - First partner checklist signed through first referral claim
 - County Commons absent; role roaming cannot dodge surveys (non-admin)

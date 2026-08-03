@@ -2,16 +2,21 @@
 /**
  * Exercise real C.R.E.A.T.E. reflection generation for the pilot session.
  *
- * Does NOT invent narrative SQL. Calls the same MCP contract Atlas uses:
+ * Does NOT invent narrative Structured Query Language (SQL). Calls the same
+ * Model Context Protocol (MCP) contract Atlas uses:
  *   POST /summarize-create-session → RunPod Ollama qwen2.5:3b-instruct
  *
- * Env:
- *   VITE_ATLAS_CREATE_REFLECTION_URL  (or ATLAS_CREATE_REFLECTION_URL)
- *   VITE_ATLAS_DEMO_INFERENCE_BEARER  (or ATLAS_MCP_BEARER_TOKEN)
+ * Preferred Atlas environment variables:
+ *   VITE_ATLAS_MCP_BASE_URL + path /summarize-create-session
+ *   VITE_ATLAS_MCP_BEARER
+ * Optional command-line aliases: ATLAS_MCP_BASE_URL, ATLAS_MCP_BEARER_TOKEN.
+ * Removed Atlas guidance (legacy fallbacks only):
+ *   VITE_ATLAS_CREATE_REFLECTION_URL, VITE_ATLAS_DEMO_INFERENCE_BEARER
  *
  * Exit codes:
- *   0 — MCP returned reflectionText (prints JSON + optional upsert SQL stub)
- *   2 — MCP unreachable / empty response (no DB write; fail closed)
+ *   0 — MCP returned reflectionText (prints JavaScript Object Notation (JSON)
+ *       plus an optional upsert SQL stub)
+ *   2 — MCP unreachable / empty response (no database write; fail closed)
  *
  * Usage:
  *   node verification/generate_pilot_create_reflection.mjs
@@ -19,18 +24,25 @@
 
 const SESSION_ID = 'a11ce0c7-0000-4000-8000-000000000001'
 
+const mcpBase = (
+  process.env.ATLAS_MCP_BASE_URL ||
+  process.env.VITE_ATLAS_MCP_BASE_URL ||
+  ''
+).trim().replace(/\/$/, '')
+
 const endpoint = (
   process.env.ATLAS_CREATE_REFLECTION_URL ||
   process.env.VITE_ATLAS_CREATE_REFLECTION_URL ||
+  (mcpBase ? `${mcpBase}/summarize-create-session` : '') ||
   'http://localhost:4310/summarize-create-session'
 ).trim()
 
 const bearer = (
   process.env.ATLAS_MCP_BEARER_TOKEN ||
+  process.env.VITE_ATLAS_MCP_BEARER ||
   process.env.VITE_ATLAS_DEMO_INFERENCE_BEARER ||
   ''
 ).trim()
-
 // Payload mirrors the seeded pilot C.R.E.A.T.E. session notes (form data, not a reflection).
 const payload = {
   navigatorName: 'Pilot Navigator',

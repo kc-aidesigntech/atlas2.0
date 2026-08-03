@@ -36,7 +36,7 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
       <DialogPrimitive.Close asChild>
         <AtlasCloseButton
           className="absolute right-4 top-4 opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          style={{ ['--button-border-color' as const]: 'currentColor' }}
+          style={{ '--button-border-color': 'currentColor' }}
         />
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>

@@ -9,6 +9,7 @@ const repoRoot = path.resolve(__dirname, '..')
 const ALLOWED_ROOT_MARKDOWN = new Set([
   'README.md',
   'PILOT.md',
+  // Redirect stubs only — do not expand content at root
   'DB_RLS.md',
   'NAVIGATOR_MY_PROFILE.md',
   'PARTNER_MY_STATION.md',

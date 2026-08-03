@@ -5,7 +5,7 @@
 import React from 'react'
 import { PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer } from 'recharts'
 import type { DomainLoad } from '../types'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface RadialLoadChartProps {
   load: DomainLoad | null

@@ -3,8 +3,8 @@
 Per-site commissioning checklist for the first live Atlas partner station (MVP definition: first partner site + navigator cohort). Use one copy of this checklist per organization/station.
 
 **Parent hard gates:** [production-go-live-hard-gates.md](./production-go-live-hard-gates.md)  
-**System commissioning:** [HOW_TO_COMMISSION_SYSTEM.md](./HOW_TO_COMMISSION_SYSTEM.md)  
-**Harborview demo pattern (template only, not production logins):** [../demo.md](../demo.md)
+**System commissioning:** [it/commissioning.md](./it/commissioning.md) ([deep appendix](./HOW_TO_COMMISSION_SYSTEM.md))  
+**Harborview demo pattern (template only, not production logins):** [demo.md](./demo.md)
 
 ---
 
@@ -12,11 +12,11 @@ Per-site commissioning checklist for the first live Atlas partner station (MVP d
 
 **Pilot and demo `@atlas.test` accounts must not exist in the production project.**
 
-- Source of pilot identities: [../PILOT.md](../PILOT.md), [PILOT_RUNBOOK.md](./PILOT_RUNBOOK.md)
+- Source of pilot identities: [../PILOT.md](../PILOT.md), [users/pilot-guide.md](./users/pilot-guide.md)
 - Provisioning scripts (dev/staging only): `verification/pilot_setup.sql`, `verification/demo_partner_setup.sql`
 - Pre-flight fail if any pilot/demo auth users remain: `verification/prod_commission_verify.sql` (section A)
 
-Do not reuse `AtlasPilot2026!` or any shared pilot password in production. Provision real org users via the identity bridge (`auth.users` → `atlas.people.external_ref`). See [AUTH_SETUP.md](./AUTH_SETUP.md).
+Do not reuse `AtlasPilot2026!` or any shared pilot password in production. Provision real org users via the identity bridge (`auth.users` → `atlas.people.external_ref`). See [it/auth-and-identity.md](./it/auth-and-identity.md).
 
 ---
 
@@ -65,7 +65,7 @@ My Station must not be treated as production-ready until capacity commissioning 
 - [ ] At least one completed submission appears in partner survey history for this org
 - [ ] Ops confirms answers look plausible for the station’s real service lines (spot-check, not a full audit)
 
-**Failure modes:** missing migrations / Row-Level Security (RLS) mismatch / contact email not linked to partner — see troubleshooting in [HOW_TO_COMMISSION_SYSTEM.md](./HOW_TO_COMMISSION_SYSTEM.md).
+**Failure modes:** missing migrations / Row-Level Security (RLS) mismatch / contact email not linked to partner — see troubleshooting in [it/commissioning.md](./it/commissioning.md) and [HOW_TO_COMMISSION_SYSTEM.md](./HOW_TO_COMMISSION_SYSTEM.md).
 
 ---
 
@@ -128,7 +128,7 @@ Database-side RLS replay for pilot identities is **not** a production sign-off. 
 |------|-------|------|----------------------|
 | Pilot/demo accounts absent from production | Engineering | | |
 | Migrations + RLS verify green | Engineering | | |
-| Security residuals reviewed ([security-model.md](./security-model.md)) | Engineering + Security | | |
+| Security residuals reviewed ([it/security-model.md](./it/security-model.md)) | Engineering + Security | | |
 | Regulation instrument sign-off or placeholder waiver ([production-go-live-hard-gates.md](./production-go-live-hard-gates.md#4-regulation-instruments)) | Product / Client | | |
 | Capacity → My Station debut complete | Ops + Partner | | |
 | First referral claimed | Ops + Navigator | | |
@@ -140,5 +140,5 @@ Database-side RLS replay for pilot identities is **not** a production sign-off. 
 
 - `verification/prod_commission_verify.sql` — non-destructive production pre-flight
 - `docs/launch-db-integrity-verification.sql` — identity / RPC integrity
-- `docs/security-model.md` — remaining SECURITY DEFINER / storage hardening
+- `docs/it/security-model.md` — remaining SECURITY DEFINER / storage hardening
 - `src/features/atlas2026/singlepane/data/assessmentCatalog.ts` — MH-SCA / SVS instrument definitions (placeholder until waived or replaced)

@@ -34,14 +34,15 @@ apps/mobile/.expo-shared
 .env.test.local
 .env.production.local
 
-# Firebase
+# Local deploy/link scratch (not used; ignore if recreated)
+.vercel
 .firebase
 .firebaserc
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
-
-.vercel
+.tmp/
+.tmp-supabase-run/
 
 # Playwright-managed browser binaries (downloaded locally for pilot screenshots)
 .playwright-browsers/

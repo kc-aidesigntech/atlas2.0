@@ -3,12 +3,12 @@ import { Route } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
-import { STEP_STATUS } from '@/services/atlas2026/step-graph'
-import { downloadCsv } from '@/services/atlas2026/export-service'
-import { getInterferenceMitigations } from '@/services/atlas2026/route-engine'
+import { STEP_STATUS } from '@/services/atlas2026/stepGraph'
+import { downloadCsv } from '@/services/atlas2026/exportService'
+import { getInterferenceMitigations } from '@/services/atlas2026/routeEngine'
 import { canRolePerform } from '@/core/atlas2026/policy'
 
-// Precision navigation translates route-engine diagnostics into operator choices:
+// Precision navigation translates route engine diagnostics into operator choices:
 // activate, transition, or hold when interference risk is too high.
 function formatFirestoreTimestamp(value) {
   if (!value) return 'No timestamp'

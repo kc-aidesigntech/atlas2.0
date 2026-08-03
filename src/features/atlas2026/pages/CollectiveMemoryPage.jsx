@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { canRolePerform } from '@/core/atlas2026/policy'
-import { downloadCsv } from '@/services/atlas2026/export-service'
+import { downloadCsv } from '@/services/atlas2026/exportService'
 
 // Collective memory turns mutable field activity into verified receipts that can be
 // shared across roles without exposing unverified or speculative events as truth.

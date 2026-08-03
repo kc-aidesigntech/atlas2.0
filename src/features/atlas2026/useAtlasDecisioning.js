@@ -4,16 +4,16 @@ import { evaluateParticipantForRoutes } from '@/core/atlas2026/intel-contract'
 import { createParticipantState, MEMORY_EVENT_TYPES, ROUTE_LIFECYCLE } from '@/core/atlas2026/data-model'
 import { DEFAULT_ONTOLOGY_WEIGHTS } from '@/core/atlas2026/canonical-spec'
 import { canRolePerform } from '@/core/atlas2026/policy'
-import { generateRoutePlan } from '@/services/atlas2026/route-engine'
-import { buildMemoryView } from '@/services/atlas2026/memory-service'
-import { buildSituationalOverlay } from '@/services/atlas2026/situational-service'
-import { buildCountyComparisonSnapshot, buildOperationsSnapshot } from '@/services/atlas2026/operations-service'
-import { buildExecutionSnapshot } from '@/services/atlas2026/execution-service'
+import { generateRoutePlan } from '@/services/atlas2026/routeEngine'
+import { buildMemoryView } from '@/services/atlas2026/memoryService'
+import { buildSituationalOverlay } from '@/services/atlas2026/situationalService'
+import { buildCountyComparisonSnapshot, buildOperationsSnapshot } from '@/services/atlas2026/operationsService'
+import { buildExecutionSnapshot } from '@/services/atlas2026/executionService'
 import {
   buildAscentEngineSnapshot,
   buildInstitutionalEcosystemSnapshot,
   buildRenewalSnapshot
-} from '@/services/atlas2026/civic-bioengineering-service'
+} from '@/services/atlas2026/civicBioengineeringService'
 import {
   createMemoryEvent,
   createOntologyAuditRecord,
@@ -23,8 +23,8 @@ import {
   saveRenewalRoleRecord,
   updateRouteStepRecord,
   updateRouteRecord
-} from '@/services/atlas2026/contract-gateway'
-import { buildRouteSteps, canTransitionStep, deriveRouteLifecycleFromSteps, STEP_STATUS } from '@/services/atlas2026/step-graph'
+} from '@/services/atlas2026/contractGateway'
+import { buildRouteSteps, canTransitionStep, deriveRouteLifecycleFromSteps, STEP_STATUS } from '@/services/atlas2026/stepGraph'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 /**

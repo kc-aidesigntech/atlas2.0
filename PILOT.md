@@ -222,7 +222,7 @@ partner enrollee PHI = 0; anon only `z_codes` / `z_code_headers`.
 - A few reporting/aggregate `SECURITY DEFINER` views (county heatmap, data
   quality, route candidates) and three command RPCs remain executable beyond the
   strictly necessary role. They expose no direct enrollee PHI and self-deny
-  anonymous callers; they are tracked for tightening in `docs/security-model.md`
+  anonymous callers; they are tracked for tightening in `docs/it/security-model.md`
   ("Known remaining hardening").
 - Browser automation is wired up via Playwright (`pilot-decks/capture/`) and was
   used to capture the walkthrough decks below. The SQL replay harness
@@ -260,6 +260,6 @@ screenshots the real screen behind every step into `pilot-decks/screenshots/`.
 
 - `verification/pilot_setup.sql` — provisions/reset the pilot logins and seed.
 - `verification/pilot_verify.sql` — per-identity RLS read-scope verification.
-- `docs/PILOT_RUNBOOK.md` — condensed runbook version of this guide.
-- `docs/security-model.md` — the full database-first security model.
+- `docs/users/pilot-guide.md` — condensed user-facing pilot entry.
+- `docs/it/security-model.md` — the full database-first security model.
 - `pilot-decks/` — pilot slide decks + the Playwright screenshot pipeline.

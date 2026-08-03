@@ -77,7 +77,9 @@ flowchart TD
 - Narrow/mobile route planning now uses an Metropolitan Transportation Authority (MTA)-inspired symbolic route board and applies the same visual system inside the readiness route-planning overlay
 - Supabase/Postgres is active for survey and capacity workflows
 - Authorization foundation is now in place (roles, permissions, user exceptions, Row-Level Security (RLS) toggles)
-- Legacy Firebase paths still exist in the repo for specific 2026 services and migration continuity
+- Runtime data path is Supabase/Postgres
+
+Documentation hub: [`docs/README.md`](./docs/README.md).
 
 ## Visual Direction
 
@@ -85,7 +87,7 @@ The User Interface (UI) is intentionally dark and operational, not pastel/civic-
 
 - Base surface: black-first (`SP_COLORS.bg = #000000`)
 - Reference palette model: `references/NYC-subway-pantone-colors.jpg`
-- Accent colors align with subway-inspired signal tones in `src/features/atlas2026/singlepane/theme.ts`
+- Accent colors align with subway-inspired signal tones in `src/features/atlas2026/shared/theme.ts`
 - Typography and casing follow the current shell behavior (including lowercase UI treatment from `src/index.css`)
 
 ## Core Workflows
@@ -108,7 +110,7 @@ The User Interface (UI) is intentionally dark and operational, not pastel/civic-
   - admin-only operations panels
   - data controls, governance scaffolding, and policy toggles
 
-Detailed behavior spec: `MAKE_APP_ALIVE.md`
+Detailed behavior spec: [`docs/users/README.md`](./docs/users/README.md) (users) and [`docs/it/README.md`](./docs/it/README.md) (IT)
 
 ## Technical Setup
 
@@ -116,7 +118,6 @@ Detailed behavior spec: `MAKE_APP_ALIVE.md`
 - Expo + React Native (mobile)
 - Tailwind + Radix primitives
 - Supabase JS client (`@supabase/supabase-js`) for Postgres/Application Programming Interface (API) integration
-- Firebase Software Development Kit (SDK) still present for legacy/transition services
 - Shared cross-platform TypeScript package at `packages/shared`
 
 ## Quick Start
@@ -171,11 +172,12 @@ Mobile runtime (`apps/mobile/.env`):
 
 ## Database and Authorization
 
-Start here for the current model:
+Start here:
 
-- `docs/atlas-2026-database-model.md` (canonical model and authz foundation)
-- `supabase/README.md` (migration order and runtime setup)
-- `SQL_SCHEMA.md` (expanded schema map)
+- [`docs/it/database.md`](./docs/it/database.md) — schema / RPC index
+- [`docs/it/security.md`](./docs/it/security.md) — security / RLS / compliance index
+- [`docs/atlas-2026-database-model.md`](./docs/atlas-2026-database-model.md) — canonical model
+- [`supabase/README.md`](./supabase/README.md) — migration notes
 
 Key authz components now implemented:
 
@@ -193,21 +195,9 @@ Phased rollout toggles:
 - `allow_legacy_public_partner_capacity_write`
 - `allow_legacy_public_partner_capacity_delete`
 
-## Migrations (Current Baseline)
+## Migrations
 
-Apply in this sequence for a new Supabase environment:
-
-1. `supabase/migrations/20260114_make_app_alive.sql`
-2. `supabase/migrations/20260401_profile_images.sql`
-3. `supabase/migrations/20260402_partner_service_capacity_surveys.sql`
-4. `supabase/migrations/20260411_grant_delete_partner_service_capacity.sql`
-5. `supabase/migrations/20260411_authorization_foundation.sql`
-6. `supabase/migrations/20260411_supervisor_navigator_competency.sql`
-7. `supabase/migrations/20260414_zcode_master_alignment.sql`
-8. `supabase/migrations/20260413_atlas_app_runtime_cutover.sql`
-9. `supabase/migrations/20260415_example_records_seed.sql`
-10. `supabase/migrations/20260416_weighted_route_candidate_ranking.sql`
-11. `supabase/migrations/20260417_route_candidate_runtime_fix.sql`
+Apply the full live chain under `supabase/migrations/` in timestamp order. Prefer that folder over any embedded list in older docs. Commissioning entry point: [`docs/it/commissioning.md`](./docs/it/commissioning.md).
 
 ## Useful Scripts
 
@@ -229,12 +219,16 @@ This scenario is intended to make the mobile route board and readiness routing o
 
 ## Documentation Map
 
-- Product behavior and execution spec: `MAKE_APP_ALIVE.md`
-- Canonical 2026 technical orientation: `docs/atlas-2026-canonical-spec.md`
-- Security and governance model notes: `docs/atlas-2026-security-model.md`
-- Repo cutover plan: `docs/atlas-2026-repo-cutover.md`
-- Seeding guide: `docs/atlas-2026-seeding.md`
-- RunPod and MCP deployment handshake: `Runpod_VM.md`
+**Start here:** [`docs/README.md`](./docs/README.md)
+
+| Audience | Entry |
+|----------|-------|
+| IT / Information Systems (IS) | [`docs/it/README.md`](./docs/it/README.md) |
+| End users | [`docs/users/README.md`](./docs/users/README.md) |
+| Pilot (full procedures) | [`PILOT.md`](./PILOT.md) |
+| Archive (obsolete) | [`docs/archive/README.md`](./docs/archive/README.md) |
+
+Root markdown files other than `README.md` and `PILOT.md` are redirect stubs to `docs/it/` or `docs/users/`.
 
 ## Contribution Guidance
 
@@ -245,4 +239,5 @@ When making changes:
 - Treat authorization and data policy changes as migration-backed, reviewed infrastructure work.
 - Update docs in the same Pull Request (PR) when behavior or architecture changes.
 - Follow `docs/writing-standards.md`, including required first-use acronym expansion in every file.
+- Prefer adding or editing under `docs/it/` or `docs/users/` — do not expand root-level markdown.
 

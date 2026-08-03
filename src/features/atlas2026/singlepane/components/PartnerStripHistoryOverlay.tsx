@@ -1,7 +1,7 @@
 import React from 'react'
 import { AtlasCloseButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { PartnerStripHistoryRecord } from '../types'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface PartnerStripHistoryOverlayProps {
   isOpen: boolean

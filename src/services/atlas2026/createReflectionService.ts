@@ -1,12 +1,12 @@
 /**
  * Client for Connect, Recognize, Encourage, Acknowledge, Train, and Empower
  * (C.R.E.A.T.E.) reflection generation via Heroku Model Context Protocol (MCP)
- * → RunPod Ollama `qwen2.5:3b-instruct`. Mirrors the Z-code demo inference path.
+ * → RunPod Ollama `qwen2.5:3b-instruct`. Shares MCP env with Z-code inference.
  */
 import type { CreateSessionRecord } from '@/features/atlas2026/shared/contracts'
+import { getAtlasMcpBearer, getSummarizeCreateSessionUrl } from './atlasMcpEnv'
 
-const DEFAULT_REFLECTION_ENDPOINT = 'http://localhost:4310/summarize-create-session'
-const INFERENCE_BEARER = (import.meta.env.VITE_ATLAS_DEMO_INFERENCE_BEARER || '').trim()
+const INFERENCE_BEARER = getAtlasMcpBearer()
 
 /** Maximum sessions sent to MCP / used for local fallback (latest + prior nine). */
 export const CREATE_REFLECTION_SESSION_LIMIT = 10
@@ -113,7 +113,7 @@ export async function generateCreateReflection(
     sessions: sessions.map(serializeSessionForMcp)
   }
 
-  const endpoint = (import.meta.env.VITE_ATLAS_CREATE_REFLECTION_URL || DEFAULT_REFLECTION_ENDPOINT).trim()
+  const endpoint = getSummarizeCreateSessionUrl()
   try {
     const headers: Record<string, string> = { 'content-type': 'application/json' }
     if (INFERENCE_BEARER) {

@@ -5,7 +5,7 @@ import { AtlasTextButton } from '../../components/AtlasPrimitives'
 import ZCodeBadge from '../../components/ZCodeBadge'
 import { DEFAULT_SERVICE_CAPACITY_SECTIONS } from '../data/serviceCapacitySurveyCatalog'
 import { toSupabaseErrorMessage } from '../data-access/supabaseOptionalData'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
   EnrolleeProfile,
   EnrolleeZCodeOverrideInput,

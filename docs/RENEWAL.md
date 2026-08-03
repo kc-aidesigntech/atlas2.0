@@ -1,9 +1,5 @@
-# Renewal Phase Placeholder
+# Archived
 
-Renewal is intentionally marked as `TBD`.
+Renewal phase guidance is covered in [users/journey-phases.md](./users/journey-phases.md).
 
-This document is a placeholder for:
-- renewal entry criteria,
-- renewal cycle actions,
-- renewal success and regression conditions,
-- renewal reporting and governance rules.
+Historical placeholder: [archive/RENEWAL.md](./archive/RENEWAL.md)

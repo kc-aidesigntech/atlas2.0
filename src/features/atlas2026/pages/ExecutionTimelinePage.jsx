@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { downloadCsv } from '@/services/atlas2026/export-service'
+import { downloadCsv } from '@/services/atlas2026/exportService'
 
 // Execution timeline reconciles step-level transitions with macro route progress so
 // operators can reason about dependencies and operational drift in one place.

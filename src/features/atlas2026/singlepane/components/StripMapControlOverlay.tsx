@@ -7,7 +7,7 @@ import {
   buildTimelinePhaseSegments,
   normalizeTimelineConfig
 } from '../timelineConfigUtils'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { formatDateInputValue } from './timelineDateUtils'
 import { TIMELINE_PHASE_COLORS } from './timelineVisualConfig'
 

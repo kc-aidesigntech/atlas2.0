@@ -48,4 +48,4 @@ No destructive drop is executed in this phase. Before any legacy object drop:
 
 - Watermark table: `dw_export_watermarks`
 - Watermark helper function: `fn_dw_mark_pipeline_success(...)`
-- Operational runbook: `docs/warehouse-etl-runbook.md`
+- Operational runbook: `docs/it/warehouse-and-powerbi.md`

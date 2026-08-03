@@ -14,7 +14,7 @@ import {
   SERVICE_CAPACITY_FORM_VERSION,
   flattenSurveyPrompts
 } from '../data/serviceCapacitySurveyCatalog'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import {
   BurdenCard,
   SurveyProgressHeader,

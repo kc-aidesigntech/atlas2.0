@@ -388,23 +388,64 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
-    align-items: start;
+    /* Stretch rail to the main identity pane so self-awareness load bottoms align. */
+    align-items: stretch;
   }
 
   .atlas-navigator-profile-main {
+    display: flex;
     min-width: 0;
+    min-height: 0;
+  }
+
+  .atlas-navigator-profile-main > *,
+  .atlas-navigator-profile-rail > * {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .atlas-navigator-profile-rail {
     display: flex;
     flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* Full-width band under identity + radar (Section 1 IPSCC averages). */
+  .atlas-navigator-profile-section-span {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* Enrollee / self-reflection / C.R.E.A.T.E. cards: one centered row under the main pane. */
+  .atlas-navigator-profile-card-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: stretch;
     gap: 1rem;
+    width: 100%;
+  }
+
+  .atlas-navigator-profile-card-row > * {
+    flex: 1 1 240px;
+    max-width: 320px;
+    min-width: 0;
   }
 
   @media (min-width: 1024px) {
     .atlas-navigator-profile-layout {
       grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
       gap: 1.25rem;
+    }
+
+    .atlas-navigator-profile-card-row {
+      gap: 1.25rem;
+    }
+
+    .atlas-navigator-profile-card-row > * {
+      flex: 1 1 0;
+      max-width: 340px;
     }
   }
 
@@ -419,6 +460,30 @@
 
   .atlas-ticker {
     animation: atlasTickerMarquee 45s linear infinite;
+  }
+
+  /* Grow/shrink pulse for the weekly regulation-review calendar badge (attention cue). */
+  @keyframes atlasRegulationReviewBadgePulse {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.55);
+      opacity: 0.72;
+    }
+  }
+
+  .atlas-regulation-review-badge {
+    animation: atlasRegulationReviewBadgePulse 1.15s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .atlas-regulation-review-badge {
+      animation: none;
+    }
   }
 
   .text-slate-900 {

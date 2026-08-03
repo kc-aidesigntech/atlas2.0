@@ -2,11 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { usesLightTextOnZCodeColor } from '@atlas/shared'
 import CircularSlider from '@fseehawer/react-circular-slider'
 import { getScaleOption } from '../../data/serviceCapacitySurveyCatalog'
-import { SP_COLORS } from '../../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type { PartnerServiceCapacityScaleOption, ZCodeSurveyPrompt } from '../../types'
 import AtlasArrowIcon from '../../../components/AtlasArrowIcon'
 import { AtlasTextButton, AtlasTextLink } from '../../../components/AtlasPrimitives'
 
+// Explicit >400-line exception: this pre-existing shared survey chrome module serves
+// multiple instruments. Its controls should be split in a dedicated follow-up to avoid
+// coupling the behavior-preserving service-capacity decomposition to unrelated surveys.
 export interface SurveySectionProgressItem {
   parentCode: string
   total: number

@@ -15,7 +15,7 @@ import type {
   ZDomain
 } from '../types'
 import { buildTimelinePhaseSegments, normalizeTimelineConfig } from '../timelineConfigUtils'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import {
   addMonths,
   formatDateInputValue,
@@ -25,6 +25,7 @@ import {
   mergeDateInputWithTime
 } from './timelineDateUtils'
 import { TIMELINE_PHASE_COLORS, TIMELINE_STATUS_COLORS } from './timelineVisualConfig'
+import { sortByTimestamp } from './stripMapTimeline/geometry'
 
 interface VerticalStripMapTimelineProps {
   events: RouteLogEvent[]
@@ -100,24 +101,19 @@ export default function VerticalStripMapTimeline({
   const [activeResolvedMarkerId, setActiveResolvedMarkerId] = React.useState<string | null>(null)
   const sortedEvents = useMemo(
     // Timeline visuals rely on strict chronological rendering, regardless of upstream order.
-    () => [...events].sort((a, b) => new Date(a.timestampIso).getTime() - new Date(b.timestampIso).getTime()),
+    () => sortByTimestamp(events, (event) => event.timestampIso),
     [events]
   )
   const suggestedMarkers = useMemo(() => stationMarkers.filter((marker) => marker.markerType === 'suggested'), [stationMarkers])
   const visibleSuggestedMarkers = showReadinessProgress ? suggestedMarkers : []
   const regulationHistoryMarkers = useMemo(
-    () =>
-      [...regulationTestMarkers].sort(
-        (left, right) => new Date(left.attemptedAtIso).getTime() - new Date(right.attemptedAtIso).getTime()
-      ),
+    () => sortByTimestamp(regulationTestMarkers, (marker) => marker.attemptedAtIso),
     [regulationTestMarkers]
   )
   const visibleResolvedZCodeMarkers = useMemo(
     () =>
       showReadinessProgress
-        ? [...resolvedZCodeMarkers].sort(
-            (left, right) => new Date(left.resolvedAtIso).getTime() - new Date(right.resolvedAtIso).getTime()
-          )
+        ? sortByTimestamp(resolvedZCodeMarkers, (marker) => marker.resolvedAtIso)
         : [],
     [resolvedZCodeMarkers, showReadinessProgress]
   )
@@ -127,17 +123,11 @@ export default function VerticalStripMapTimeline({
   }, [normalizedTimelineConfig])
   const isPartnerAggregateMode = isPartnerAggregateView && (partnerAggregateReferredDots.length > 0 || partnerAggregateActiveDots.length > 0)
   const groupedPartnerReferredDots = useMemo(
-    () =>
-      partnerAggregateReferredDots
-        .slice()
-        .sort((left, right) => new Date(left.occurredAtIso).getTime() - new Date(right.occurredAtIso).getTime()),
+    () => sortByTimestamp(partnerAggregateReferredDots, (dot) => dot.occurredAtIso),
     [partnerAggregateReferredDots]
   )
   const groupedPartnerActiveDots = useMemo(
-    () =>
-      partnerAggregateActiveDots
-        .slice()
-        .sort((left, right) => new Date(left.occurredAtIso).getTime() - new Date(right.occurredAtIso).getTime()),
+    () => sortByTimestamp(partnerAggregateActiveDots, (dot) => dot.occurredAtIso),
     [partnerAggregateActiveDots]
   )
 

@@ -2,8 +2,9 @@
  * Compact competency dashboard for navigator My Profile.
  * Section 1: horizontal Intentional Peer Support Core Competencies (IPSCC)
  * thermometer gauges for enrollee weighted averages (privacy-gated).
+ * Renders full-width under the identity + radar band.
  * Section 2 (self-awareness list) is hidden — dual radar on the rail covers strain.
- * Section 3 (C.R.E.A.T.E. reflection) renders above the assignment board.
+ * Section 3 (C.R.E.A.T.E. reflection + session history) opens from the centered card row under the main pane.
  */
 import React from 'react'
 import type {

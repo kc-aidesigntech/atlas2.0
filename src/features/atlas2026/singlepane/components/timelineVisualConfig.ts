@@ -1,5 +1,5 @@
 import type { RouteLogStatus, StabilizationPhase } from '../types'
-import { SP_COLORS } from '../theme'
+import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 /**
  * Shared timeline visual tokens used by horizontal/vertical strip-map

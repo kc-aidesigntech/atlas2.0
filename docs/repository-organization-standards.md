@@ -21,7 +21,9 @@ This standard defines canonical paths and naming conventions for Atlas 2026 asse
   - Keep design/reference artifacts here when they are not shipped to runtime bundles.
 - **Documentation**
   - `docs/**`
-  - Root-level markdown files are legacy-only and should not expand.
+  - Audience trees: `docs/it/**` (Information Technology / Information Systems), `docs/users/**` (end users)
+  - Obsolete material: `docs/archive/**`
+  - Root-level markdown files are redirect stubs only (`README.md` and `PILOT.md` excepted) and should not expand.
 
 ## Naming Conventions
 

@@ -193,7 +193,7 @@ ATLAS operates a defense-in-depth security program for all regulated and sensiti
 
 ## 12) Related Standards and Artifacts
 
-- `docs/atlas-2026-security-model.md`
+- `docs/it/security-model.md`
 - System-specific standards (access control, incident response, change management, vendor risk, encryption, and retention)
 - Applicable contracts, BAAs, and customer security addenda
 

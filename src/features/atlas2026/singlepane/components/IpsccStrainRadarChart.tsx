@@ -16,6 +16,7 @@ interface IpsccStrainRadarChartProps {
   correlationRows: IpsccSelfAwarenessCorrelationRow[]
   enrolleeFeedbackPrivacy: IpsccEnrolleeFeedbackPrivacy
   onOpenAwareness?: () => void
+  className?: string
 }
 
 /** Wrap multi-word Intentional Peer Support Core Competencies (IPSCC) labels for radial ticks. */
@@ -64,7 +65,8 @@ function AxisTick(props: {
 export default function IpsccStrainRadarChart({
   correlationRows,
   enrolleeFeedbackPrivacy,
-  onOpenAwareness
+  onOpenAwareness,
+  className
 }: IpsccStrainRadarChartProps) {
   const averagesRevealed = enrolleeFeedbackPrivacy.averagesRevealed
   const chartData = correlationRows.map((row) => ({
@@ -100,18 +102,19 @@ export default function IpsccStrainRadarChart({
     <Wrapper
       type={onOpenAwareness ? 'button' : undefined}
       onClick={onOpenAwareness}
-      className={`atlas-surface-panel w-full px-3 py-3 text-left ${
+      className={`atlas-surface-panel flex h-full min-h-0 w-full flex-col px-3 py-3 text-left ${
         onOpenAwareness ? 'cursor-pointer transition-opacity hover:opacity-90' : ''
-      }`}
+      } ${className || ''}`}
       aria-label="Intentional Peer Support Core Competencies self-awareness strain radar"
     >
-      <small className="atlas-overline block text-[#9eacb9]">self-awareness load</small>
-      <div className="text-[15px] font-medium text-white">IPSCC perception strain</div>
-      <small className="atlas-meta mt-0.5 block text-[#9eacb9]">
+      <small className="atlas-overline block shrink-0 text-[#9eacb9]">self-awareness load</small>
+      <div className="shrink-0 text-[15px] font-medium text-white">IPSCC perception strain</div>
+      <small className="atlas-meta mt-0.5 block shrink-0 text-[#9eacb9]">
         Blue = your weekly self-assessment · Red = enrollee feedback averages
       </small>
 
-      <div className="mt-2 h-[280px] w-full overflow-visible">
+      {/* Chart grows with the rail so the panel bottom stays even with the main navigator pane. */}
+      <div className="mt-2 min-h-[280px] w-full flex-1 overflow-visible">
         {hasAnySelf ? (
           <ResponsiveContainer width="100%" height="100%">
             <RadarChart
@@ -182,7 +185,7 @@ export default function IpsccStrainRadarChart({
         )}
       </div>
 
-      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-[#9eacb9]">
+      <div className="mt-1 flex shrink-0 flex-wrap items-center gap-3 text-[11px] text-[#9eacb9]">
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: SP_COLORS.blue }} />
           Self
@@ -200,7 +203,7 @@ export default function IpsccStrainRadarChart({
       </div>
 
       {!averagesRevealed ? (
-        <div className="mt-2 rounded-[12px] border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] leading-snug text-[#d7e0e9]">
+        <div className="mt-2 shrink-0 rounded-[12px] border border-white/10 bg-white/5 px-2.5 py-2 text-[11px] leading-snug text-[#d7e0e9]">
           Enrollee IPSCC averages stay hidden until {enrolleeFeedbackPrivacy.minEntriesToRevealAverages}{' '}
           encounter submissions protect anonymity
           {remaining > 0
@@ -209,7 +212,7 @@ export default function IpsccStrainRadarChart({
           Individual enrollee responses are never shown.
         </div>
       ) : topStrain ? (
-        <div className="mt-2 text-[11px] leading-snug text-[#d7e0e9]">
+        <div className="mt-2 shrink-0 text-[11px] leading-snug text-[#d7e0e9]">
           Highest strain: <span className="font-medium text-white">{topStrain.label}</span>
           {typeof topStrain.strain === 'number' ? ` · gap ${topStrain.strain.toFixed(2)}` : ''} — most likely to tip
           into care disruption if unaddressed in supervision.
@@ -217,7 +220,7 @@ export default function IpsccStrainRadarChart({
       ) : null}
 
       {onOpenAwareness ? (
-        <small className="mt-2 block text-center text-[10px] uppercase tracking-[0.08em] text-[#9f9f9f]">
+        <small className="mt-2 block shrink-0 text-center text-[10px] uppercase tracking-[0.08em] text-[#9f9f9f]">
           tap to open self-awareness
         </small>
       ) : null}

@@ -1,8 +1,11 @@
 # How To Commission Atlas (ATLAS)
 
+> **Start here first:** [it/commissioning.md](./it/commissioning.md) — short operating path.  
+> This file remains the **deep appendix** (migration detail and failure signatures).
+
 ## Purpose
 
-This document is the commissioning runbook for bringing the repo from local development into a fully functioning Supabase-backed ATLAS system.
+This document is the detailed commissioning appendix for bringing the repo from local development into a fully functioning Supabase-backed ATLAS system.
 
 It covers:
 
