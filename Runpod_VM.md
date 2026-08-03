@@ -4,14 +4,16 @@ This guide explains how Atlas consumes the deployed `atlas-mcp-server` stack whe
 
 ## System Topology
 
-1. Atlas web frontend calls MCP endpoints:
+1. Atlas web frontend (Heroku) calls MCP endpoints on the MCP Heroku app:
    - `POST /infer-zcodes` (referral Z-code inference)
    - `POST /summarize-create-session` (C.R.E.A.T.E. supervisor reflection)
 2. MCP service runs on Heroku.
 3. MCP service calls Ollama through:
-   - `OLLAMA_BASE_URL=https://ollama.<your-domain>`
-4. Caddy reverse-proxies `https://ollama.<your-domain>` to `127.0.0.1:11434` on the RunPod VM.
+   - `OLLAMA_BASE_URL=https://ollama.<your-domain-or-runpod-proxy>`
+4. Caddy reverse-proxies public Ollama HTTPS to `127.0.0.1:11434` on the RunPod VM (or use RunPod's HTTP proxy for port 11434).
 5. Ollama serves `qwen2.5:3b-instruct` (text-only; no vision/VLM model for these routes).
+
+Atlas and MCP are both Heroku apps. RunPod is GPU-only.
 
 ## Known-good RunPod profile
 

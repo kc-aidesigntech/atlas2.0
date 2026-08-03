@@ -1,7 +1,6 @@
 import React from 'react'
 import type {
   AccountSettings,
-  CreateInsightRow,
   CreateSessionRecord,
   DomainLoad,
   EnrolleeProfile,
@@ -54,7 +53,6 @@ interface NavigatorMyProfilePanelProps {
   selfAwarenessSummary: IpsccSelfAwarenessSummary
   ipsSelfAssessments: IpsCompetencySelfAssessmentRecord[]
   navigatorSupervisorIpsAssessments: SupervisorIpsAssessmentRecord[]
-  createInsights: CreateInsightRow[]
   createSessions: CreateSessionRecord[]
   createReflection: NavigatorCreateReflectionRecord | null
   supervisionSessions: SupervisionSessionRecord[]
@@ -75,7 +73,6 @@ interface NavigatorMyProfilePanelProps {
   onSaveIpsSelfAssessment: (record: IpsCompetencySelfAssessmentRecord) => Promise<unknown> | unknown
   onSaveIpsccEncounterSubmission: (record: IpsccEncounterSubmissionRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
-  onSaveCreateSession: (record: CreateSessionRecord) => Promise<unknown> | unknown
 }
 
 type OverlayKey =
@@ -114,19 +111,34 @@ const CARD_DEFS: Array<{
 
 const ACTIVE_PROFILE_RAIL_CARDS = CARD_DEFS.filter((card) => card.isActiveOnProfileRail)
 
-const CREATE_NOTE_FIELDS: Array<{
+const CREATE_HISTORY_FIELDS: Array<{
   key: 'recognizeNotes' | 'encourageNotes' | 'acknowledgeNotes' | 'trainNotes' | 'empowerNotes' | 'createActionPlan' | 'superviseeSubmission' | 'supervisorSubmission'
   label: string
 }> = [
-  { key: 'recognizeNotes', label: 'Recognize: success, achievements, etc.' },
-  { key: 'encourageNotes', label: 'Encourage: challenges, difficulties, etc.' },
-  { key: 'acknowledgeNotes', label: 'Acknowledge: initiative, leadership, advocacy, etc.' },
-  { key: 'trainNotes', label: 'Train: learning opportunities and support needed' },
-  { key: 'empowerNotes', label: 'Empower: time, tools, transportation, materials, etc.' },
-  { key: 'createActionPlan', label: 'C.R.E.A.T.E. action plan for implementation' },
+  { key: 'recognizeNotes', label: 'Recognize' },
+  { key: 'encourageNotes', label: 'Encourage' },
+  { key: 'acknowledgeNotes', label: 'Acknowledge' },
+  { key: 'trainNotes', label: 'Train' },
+  { key: 'empowerNotes', label: 'Empower' },
+  { key: 'createActionPlan', label: 'Action plan' },
   { key: 'superviseeSubmission', label: 'Peer specialist submission' },
   { key: 'supervisorSubmission', label: 'Supervisor submission' }
 ]
+
+function formatSupervisionMode(mode: CreateSessionRecord['supervisionMode']) {
+  switch (mode) {
+    case 'in_person':
+      return 'in-person'
+    case 'online':
+      return 'online'
+    case 'phone_call':
+      return 'phone call'
+    default: {
+      const _exhaustive: never = mode
+      return _exhaustive
+    }
+  }
+}
 
 function createRecordId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -186,7 +198,6 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
     selfAwarenessSummary,
     ipsSelfAssessments,
     navigatorSupervisorIpsAssessments,
-    createInsights,
     createSessions,
     createReflection,
     supervisionSessions,
@@ -202,8 +213,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
     onToggleEnrollmentAssignment,
     onSaveIpsSelfAssessment,
     onSaveIpsccEncounterSubmission,
-    onSaveSupervisionSession,
-    onSaveCreateSession
+    onSaveSupervisionSession
   } = props
 
   const [activeOverlay, setActiveOverlay] = React.useState<OverlayKey | null>(null)
@@ -218,21 +228,8 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
   const [ipsccNoteDraft, setIpsccNoteDraft] = React.useState('')
   const [ipsSelfDraftScores, setIpsSelfDraftScores] = React.useState<IpsCompetencyScoreMap>({})
   const [ipsSelfDraftNote, setIpsSelfDraftNote] = React.useState('')
-  const [createDraft, setCreateDraft] = React.useState({
-    supervisionMode: 'in_person' as 'in_person' | 'online' | 'phone_call',
-    sessionDurationMinutes: '50',
-    connectFocusedListening: true,
-    recognizeNotes: '',
-    encourageNotes: '',
-    acknowledgeNotes: '',
-    trainNotes: '',
-    empowerNotes: '',
-    createActionPlan: '',
-    supervisorSubmission: '',
-    superviseeSubmission: '',
-    peerSpecialistSignature: currentNavigatorName,
-    supervisorSignature: 'peer supervisor'
-  })
+  // Navigators may expand historical C.R.E.A.T.E. entries but cannot author new ones here.
+  const [expandedCreateSessionId, setExpandedCreateSessionId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (assignedEnrollees.length && !selectedIpsccEnrolleeId) {
@@ -243,6 +240,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
   React.useEffect(() => {
     setOverlaySaveState('idle')
     setOverlaySaveMessage(null)
+    setExpandedCreateSessionId(null)
   }, [activeOverlay])
 
   const navigatorDisplayName = currentNavigatorName.trim() || accountSettings.fullName.trim() || 'navigator'
@@ -362,7 +360,7 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                     onClick={() => setActiveOverlay('section_3_create')}
                     className="px-3 py-1 text-[12px]"
                   >
-                    open C.R.E.A.T.E.
+                    view history
                   </AtlasTextButton>
                 </div>
                 {createReflection?.reflectionText?.trim() ? (
@@ -374,7 +372,11 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
                       Updated after latest C.R.E.A.T.E. · based on last{' '}
                       {createReflection.sourceSessionIds?.length || 1} session
                       {(createReflection.sourceSessionIds?.length || 1) === 1 ? '' : 's'}
-                      {createReflection.usedFallback ? ' · offline summary' : ''}
+                      {createReflection.supervisorOverriddenAtIso
+                        ? ` · edited by ${createReflection.supervisorOverriddenBy || 'supervisor'}`
+                        : createReflection.usedFallback
+                          ? ' · offline summary'
+                          : ''}
                     </small>
                   </div>
                 ) : (
@@ -723,113 +725,86 @@ export default function NavigatorMyProfilePanel(props: NavigatorMyProfilePanelPr
             {activeOverlay === 'section_3_create' ? (
               <div className="space-y-3">
                 <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
-                  <div className="font-medium">Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) supervision notes</div>
+                  <div className="font-medium">
+                    Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) session history
+                  </div>
                   <div className="mt-1 text-[#9eacb9]">
-                    This form is attributed to the navigator profile. Field labels stay visible while typing so
-                    mid-session context is never lost.
+                    Read-only view of supervision entries recorded with your supervisor. New C.R.E.A.T.E. sessions are
+                    authored during supervision, not from this navigator profile.
                   </div>
                 </div>
-                {createInsights.map((insight) => (
-                  <div key={insight.pillar} className="atlas-surface-raised px-3 py-2 text-[12px] text-white">
-                    <strong>{insight.label}:</strong> {insight.latestSummary}
+                {createSessions.length ? (
+                  createSessions
+                    .slice()
+                    .sort(
+                      (left, right) =>
+                        new Date(right.sessionAtIso).getTime() - new Date(left.sessionAtIso).getTime()
+                    )
+                    .map((session) => {
+                      const isExpanded = expandedCreateSessionId === session.id
+                      return (
+                        <div key={session.id} className="atlas-surface-raised space-y-2 px-3 py-3 text-[12px]">
+                          <button
+                            type="button"
+                            className="flex w-full items-start justify-between gap-3 text-left"
+                            onClick={() =>
+                              setExpandedCreateSessionId((current) =>
+                                current === session.id ? null : session.id
+                              )
+                            }
+                            aria-expanded={isExpanded}
+                          >
+                            <div className="min-w-0">
+                              <div className="font-medium text-white">
+                                {formatDateLabel(session.sessionAtIso)} · {session.supervisorName}
+                              </div>
+                              <small className="atlas-meta mt-0.5 block text-[#9eacb9]">
+                                {formatSupervisionMode(session.supervisionMode)}
+                                {session.sessionDurationMinutes != null
+                                  ? ` · ${session.sessionDurationMinutes} min`
+                                  : ''}
+                                {session.connectFocusedListening ? ' · focused listening' : ''}
+                              </small>
+                            </div>
+                            <small className="shrink-0 text-[#9eacb9]">
+                              {isExpanded ? 'click to collapse' : 'click to expand'}
+                            </small>
+                          </button>
+                          {isExpanded ? (
+                            <div className="space-y-2 border-t border-white/10 pt-2">
+                              {CREATE_HISTORY_FIELDS.map((field) => {
+                                const value = String(session[field.key] || '').trim()
+                                if (!value) return null
+                                return (
+                                  <div key={field.key}>
+                                    <small className="atlas-overline block text-[#9eacb9]">{field.label}</small>
+                                    <p className="mt-0.5 whitespace-pre-wrap leading-relaxed text-[#d7e0e9]">
+                                      {value}
+                                    </p>
+                                  </div>
+                                )
+                              })}
+                              <small className="atlas-meta block text-[#9eacb9]">
+                                Signed: {session.peerSpecialistSignature || 'navigator'}
+                                {session.peerSpecialistSignedAtIso
+                                  ? ` (${formatDateLabel(session.peerSpecialistSignedAtIso)})`
+                                  : ''}
+                                {' · '}
+                                {session.supervisorSignature || 'supervisor'}
+                                {session.supervisorSignedAtIso
+                                  ? ` (${formatDateLabel(session.supervisorSignedAtIso)})`
+                                  : ''}
+                              </small>
+                            </div>
+                          ) : null}
+                        </div>
+                      )
+                    })
+                ) : (
+                  <div className="text-[12px] text-[#9eacb9]">
+                    No C.R.E.A.T.E. supervision sessions are on record for this navigator yet.
                   </div>
-                ))}
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  <PersistentField label="Mode of supervision">
-                    <select
-                      className="atlas-select h-10 w-full bg-transparent text-white"
-                      value={createDraft.supervisionMode}
-                      onChange={(event) =>
-                        setCreateDraft((current) => ({
-                          ...current,
-                          supervisionMode: event.target.value as 'in_person' | 'online' | 'phone_call'
-                        }))
-                      }
-                    >
-                      <option value="in_person" className="bg-black text-white">In-person</option>
-                      <option value="online" className="bg-black text-white">Online</option>
-                      <option value="phone_call" className="bg-black text-white">Phone call</option>
-                    </select>
-                  </PersistentField>
-                  <PersistentField label="Duration (minutes)">
-                    <input
-                      className="atlas-input h-10 w-full bg-transparent text-white"
-                      value={createDraft.sessionDurationMinutes}
-                      onChange={(event) => setCreateDraft((current) => ({ ...current, sessionDurationMinutes: event.target.value }))}
-                    />
-                  </PersistentField>
-                </div>
-                <label className="inline-flex items-center gap-2 text-[12px] text-white">
-                  <input
-                    type="checkbox"
-                    checked={createDraft.connectFocusedListening}
-                    onChange={(event) => setCreateDraft((current) => ({ ...current, connectFocusedListening: event.target.checked }))}
-                  />
-                  Connect: focused listening and minimized distractions
-                </label>
-                {CREATE_NOTE_FIELDS.map((field) => (
-                  <PersistentField key={field.key} label={field.label}>
-                    <textarea
-                      className="atlas-textarea min-h-[72px] bg-transparent text-white"
-                      value={createDraft[field.key]}
-                      onChange={(event) => setCreateDraft((current) => ({ ...current, [field.key]: event.target.value }))}
-                    />
-                  </PersistentField>
-                ))}
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                  <PersistentField label="Peer specialist signature">
-                    <input
-                      className="atlas-input h-10 w-full bg-transparent text-white"
-                      value={createDraft.peerSpecialistSignature}
-                      onChange={(event) => setCreateDraft((current) => ({ ...current, peerSpecialistSignature: event.target.value }))}
-                    />
-                  </PersistentField>
-                  <PersistentField label="Supervisor signature">
-                    <input
-                      className="atlas-input h-10 w-full bg-transparent text-white"
-                      value={createDraft.supervisorSignature}
-                      onChange={(event) => setCreateDraft((current) => ({ ...current, supervisorSignature: event.target.value }))}
-                    />
-                  </PersistentField>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <small style={{ color: overlaySaveState === 'error' ? SP_COLORS.red : '#9eacb9' }}>
-                    {overlaySaveMessage || `${createSessions.length} C.R.E.A.T.E. sessions recorded`}
-                  </small>
-                  <AtlasTextButton
-                    disabled={overlaySaveState === 'saving'}
-                    onClick={() =>
-                      void runOverlaySave(async () => {
-                        const now = new Date().toISOString()
-                        await onSaveCreateSession({
-                          id: createRecordId(),
-                          navigatorName: currentNavigatorName,
-                          supervisorName: createDraft.supervisorSignature || 'supervisor',
-                          sessionAtIso: now,
-                          submittedAtIso: now,
-                          supervisionMode: createDraft.supervisionMode,
-                          sessionDurationMinutes: Number(createDraft.sessionDurationMinutes) || null,
-                          connectFocusedListening: createDraft.connectFocusedListening,
-                          recognizeNotes: createDraft.recognizeNotes,
-                          encourageNotes: createDraft.encourageNotes,
-                          acknowledgeNotes: createDraft.acknowledgeNotes,
-                          trainNotes: createDraft.trainNotes,
-                          empowerNotes: createDraft.empowerNotes,
-                          createActionPlan: createDraft.createActionPlan,
-                          supervisorSubmission: createDraft.supervisorSubmission,
-                          superviseeSubmission: createDraft.superviseeSubmission,
-                          peerSpecialistSignature: createDraft.peerSpecialistSignature,
-                          peerSpecialistSignedAtIso: now,
-                          supervisorSignature: createDraft.supervisorSignature,
-                          supervisorSignedAtIso: now
-                        })
-                      }, 'C.R.E.A.T.E. supervision notes saved.')
-                    }
-                    className="px-4 py-2 text-[12px]"
-                  >
-                    {overlaySaveState === 'saving' ? 'saving...' : 'save C.R.E.A.T.E. notes'}
-                  </AtlasTextButton>
-                </div>
+                )}
               </div>
             ) : null}
 

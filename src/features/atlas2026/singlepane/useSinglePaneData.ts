@@ -121,6 +121,7 @@ import {
   upsertEnrollmentInferredZCodes,
   loadAccessMatrixDataset,
   loadNavigatorCreateReflection,
+  loadNavigatorCreateReflections,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,
@@ -1248,6 +1249,10 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
   // One current C.R.E.A.T.E. reflection per navigator (separate table from session rows).
   const [navigatorCreateReflection, setNavigatorCreateReflection] =
     useState<NavigatorCreateReflectionRecord | null>(null)
+  // Supervisor review surface: reflections for navigators this supervisor manages.
+  const [supervisorManagedCreateReflections, setSupervisorManagedCreateReflections] = useState<
+    NavigatorCreateReflectionRecord[]
+  >([])
   const [isSavingPartnerServiceCapacitySurvey, setIsSavingPartnerServiceCapacitySurvey] = useState(false)
   const [isSavingEnrolleeBurdenSurvey, setIsSavingEnrolleeBurdenSurvey] = useState(false)
   const [enrolleeBurdenSurveyError, setEnrolleeBurdenSurveyError] = useState<string | null>(null)
@@ -2299,6 +2304,30 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       isMounted = false
     }
   }, [currentNavigatorName])
+
+  useEffect(() => {
+    // Supervisor profile needs reflections for managed navigators so overrides can be edited.
+    const managedNames = supervisorNavigatorDirectory
+      .filter((row) => row.isManagedByCurrentSupervisor)
+      .map((row) => row.navigatorName)
+    if (!managedNames.length) {
+      setSupervisorManagedCreateReflections([])
+      return
+    }
+    let isMounted = true
+    loadNavigatorCreateReflections(managedNames)
+      .then((rows) => {
+        if (!isMounted) return
+        setSupervisorManagedCreateReflections(rows)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        console.warn('Unable to load managed navigator C.R.E.A.T.E. reflections.', error)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [supervisorNavigatorDirectory])
 
   useEffect(() => {
     // Load the forced regulation review policy once at startup; it persists in the same
@@ -3797,19 +3826,113 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
       const reflection = await persistNavigatorCreateReflection({
         navigatorName: savedRecord.navigatorName,
         reflectionText: generated.reflectionText,
+        // Fresh generation replaces any prior supervisor edit of the display narrative.
+        generatedReflectionText: generated.reflectionText,
         sourceSessionIds: sessionsForReflection.map((session) => session.id),
         sourceLatestSessionId: savedRecord.id,
         model: generated.model,
         generatedAtIso: new Date().toISOString(),
-        usedFallback: generated.usedFallback
+        usedFallback: generated.usedFallback,
+        supervisorOverriddenAtIso: null,
+        supervisorOverriddenBy: ''
       })
       setNavigatorCreateReflection(reflection)
+      setSupervisorManagedCreateReflections((current) => {
+        const without = current.filter(
+          (item) => item.navigatorName.trim().toLowerCase() !== reflection.navigatorName.trim().toLowerCase()
+        )
+        return [reflection, ...without]
+      })
     } catch (error) {
       // Session save already succeeded; keep that result even if reflection persistence fails.
       console.warn('Unable to persist C.R.E.A.T.E. reflection after session save.', error)
     }
 
     return savedProgramState
+  }
+
+  async function saveSupervisorCreateReflectionOverride(input: {
+    navigatorName: string
+    reflectionText: string
+  }) {
+    ensureWriteAllowed('navigatorProgram.write', 'override C.R.E.A.T.E. reflection')
+    const navigatorName = input.navigatorName.trim()
+    const reflectionText = input.reflectionText.trim()
+    if (!navigatorName) throw new Error('Select a navigator before overriding the reflection.')
+    if (!reflectionText) throw new Error('Reflection text cannot be empty.')
+
+    const existing =
+      supervisorManagedCreateReflections.find(
+        (row) => row.navigatorName.trim().toLowerCase() === navigatorName.toLowerCase()
+      ) ||
+      (await loadNavigatorCreateReflection(navigatorName))
+
+    const nowIso = new Date().toISOString()
+    // Preserve the last auto-generated copy so supervisors can restore it later if needed.
+    const generatedReflectionText =
+      existing?.generatedReflectionText?.trim() ||
+      existing?.reflectionText?.trim() ||
+      reflectionText
+
+    const saved = await persistNavigatorCreateReflection({
+      id: existing?.id,
+      navigatorName,
+      reflectionText,
+      generatedReflectionText,
+      sourceSessionIds: existing?.sourceSessionIds || [],
+      sourceLatestSessionId: existing?.sourceLatestSessionId || '',
+      model: existing?.model || 'supervisor-override',
+      generatedAtIso: existing?.generatedAtIso || nowIso,
+      usedFallback: existing?.usedFallback || false,
+      supervisorOverriddenAtIso: nowIso,
+      supervisorOverriddenBy: currentSupervisorName.trim() || 'supervisor'
+    })
+
+    setSupervisorManagedCreateReflections((current) => {
+      const without = current.filter(
+        (item) => item.navigatorName.trim().toLowerCase() !== saved.navigatorName.trim().toLowerCase()
+      )
+      return [saved, ...without]
+    })
+    if (saved.navigatorName.trim().toLowerCase() === currentNavigatorName.trim().toLowerCase()) {
+      setNavigatorCreateReflection(saved)
+    }
+    return saved
+  }
+
+  async function restoreSupervisorCreateReflectionGenerated(navigatorNameInput: string) {
+    ensureWriteAllowed('navigatorProgram.write', 'restore generated C.R.E.A.T.E. reflection')
+    const navigatorName = navigatorNameInput.trim()
+    if (!navigatorName) throw new Error('Select a navigator before restoring the generated reflection.')
+
+    const existing =
+      supervisorManagedCreateReflections.find(
+        (row) => row.navigatorName.trim().toLowerCase() === navigatorName.toLowerCase()
+      ) ||
+      (await loadNavigatorCreateReflection(navigatorName))
+    if (!existing) throw new Error('No C.R.E.A.T.E. reflection exists for this navigator yet.')
+
+    const restoredText = existing.generatedReflectionText.trim() || existing.reflectionText.trim()
+    if (!restoredText) throw new Error('No generated reflection is available to restore.')
+
+    const saved = await persistNavigatorCreateReflection({
+      ...existing,
+      reflectionText: restoredText,
+      generatedReflectionText: restoredText,
+      supervisorOverriddenAtIso: null,
+      supervisorOverriddenBy: ''
+    })
+
+    setSupervisorManagedCreateReflections((current) => {
+      const without = current.filter(
+        (item) => item.navigatorName.trim().toLowerCase() !== saved.navigatorName.trim().toLowerCase()
+      )
+      return [saved, ...without]
+    })
+    if (saved.navigatorName.trim().toLowerCase() === currentNavigatorName.trim().toLowerCase()) {
+      setNavigatorCreateReflection(saved)
+    }
+    return saved
   }
 
   async function saveIntervalAssessmentRule(rule: IntervalAssessmentRule) {
@@ -4088,6 +4211,7 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     navigatorCreateSessions,
     navigatorCreateInsights,
     navigatorCreateReflection,
+    supervisorManagedCreateReflections,
     navigatorSelfAssessments,
     navigatorSelfAssessmentSummary,
     navigatorEnrollmentAssignments: navigatorAssignmentBoardRows,
@@ -4147,6 +4271,8 @@ export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
     saveSupervisorIpsAssessment,
     saveNavigatorIpsccEncounterSubmission,
     saveNavigatorCreateSession,
+    saveSupervisorCreateReflectionOverride,
+    restoreSupervisorCreateReflectionGenerated,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,

@@ -317,15 +317,25 @@ function mapCreateReflectionRow(row: Record<string, unknown>): NavigatorCreateRe
   const sourceIds = Array.isArray(row.source_session_ids)
     ? row.source_session_ids.map((value) => String(value || '').trim()).filter(Boolean)
     : []
+  const reflectionText = String(row.reflection_text || '').trim()
+  const generatedReflectionText =
+    String(row.generated_reflection_text || '').trim() || reflectionText
+  const model = String(row.model || '').trim()
+  const supervisorOverriddenAtIso = row.supervisor_overridden_at
+    ? String(row.supervisor_overridden_at)
+    : null
   return {
     id: String(row.id || ''),
     navigatorName: String(row.navigator_name || '').trim(),
-    reflectionText: String(row.reflection_text || '').trim(),
+    reflectionText,
+    generatedReflectionText,
     sourceSessionIds: sourceIds,
     sourceLatestSessionId: String(row.source_latest_session_id || '').trim(),
-    model: String(row.model || '').trim(),
+    model,
     generatedAtIso: String(row.generated_at || row.updated_at || row.created_at || new Date().toISOString()),
-    usedFallback: String(row.model || '').toLowerCase().includes('fallback')
+    usedFallback: model.toLowerCase().includes('fallback'),
+    supervisorOverriddenAtIso,
+    supervisorOverriddenBy: String(row.supervisor_overridden_by || '').trim()
   }
 }
 
@@ -349,6 +359,28 @@ export async function loadNavigatorCreateReflection(
   }, null)
 }
 
+/** Load current reflections for a set of navigators (supervisor review surface). */
+export async function loadNavigatorCreateReflections(
+  navigatorNames: string[]
+): Promise<NavigatorCreateReflectionRecord[]> {
+  if (!hasSupabaseConfig || !supabase) return []
+  const normalized = Array.from(
+    new Set(navigatorNames.map((name) => name.trim().toLowerCase()).filter(Boolean))
+  )
+  if (!normalized.length) return []
+  return withOptionalSupabaseFallback('singlepane.navigatorCreateReflections', async () => {
+    const { data, error } = await supabase
+      .schema('atlas')
+      .from('navigator_create_reflections')
+      .select('*')
+      .order('generated_at', { ascending: false })
+    if (error) throw error
+    return (data || [])
+      .map((row) => mapCreateReflectionRow(row as Record<string, unknown>))
+      .filter((row) => normalized.includes(row.navigatorName.trim().toLowerCase()))
+  }, [])
+}
+
 export async function saveNavigatorCreateReflection(
   record: Omit<NavigatorCreateReflectionRecord, 'id'> & { id?: string }
 ): Promise<NavigatorCreateReflectionRecord> {
@@ -357,20 +389,26 @@ export async function saveNavigatorCreateReflection(
       id: record.id || `local-create-reflection-${Date.now()}`,
       navigatorName: record.navigatorName,
       reflectionText: record.reflectionText,
+      generatedReflectionText: record.generatedReflectionText,
       sourceSessionIds: record.sourceSessionIds,
       sourceLatestSessionId: record.sourceLatestSessionId,
       model: record.model,
       generatedAtIso: record.generatedAtIso,
-      usedFallback: record.usedFallback
+      usedFallback: record.usedFallback,
+      supervisorOverriddenAtIso: record.supervisorOverriddenAtIso,
+      supervisorOverriddenBy: record.supervisorOverriddenBy
     }
   }
   const payload = {
     navigator_name: record.navigatorName,
     reflection_text: record.reflectionText,
+    generated_reflection_text: record.generatedReflectionText,
     source_session_ids: record.sourceSessionIds,
     source_latest_session_id: record.sourceLatestSessionId,
     model: record.model,
     generated_at: record.generatedAtIso,
+    supervisor_overridden_at: record.supervisorOverriddenAtIso,
+    supervisor_overridden_by: record.supervisorOverriddenBy,
     updated_at: new Date().toISOString()
   }
   // Upsert on navigator_name so each navigator keeps one current reflection row.

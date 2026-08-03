@@ -721,11 +721,15 @@ export interface NavigatorCreateReflectionRecord {
   id: string
   navigatorName: string
   reflectionText: string
+  /** Last auto-generated narrative, kept when a supervisor overrides display text. */
+  generatedReflectionText: string
   sourceSessionIds: string[]
   sourceLatestSessionId: string
   model: string
   generatedAtIso: string
   usedFallback: boolean
+  supervisorOverriddenAtIso: string | null
+  supervisorOverriddenBy: string
 }
 
 export type SupervisionSessionStatus = 'scheduled' | 'completed'

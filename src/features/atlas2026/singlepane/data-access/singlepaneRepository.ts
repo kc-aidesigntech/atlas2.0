@@ -60,6 +60,7 @@ import {
 } from '@/features/atlas2026/singlepane/data-access/navigatorAssessmentRepository'
 import {
   loadNavigatorCreateReflection,
+  loadNavigatorCreateReflections,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,
@@ -1202,6 +1203,7 @@ export {
   loadEnrolleeIntakes,
   loadNavigatorCompetencyAssessments,
   loadNavigatorCreateReflection,
+  loadNavigatorCreateReflections,
   loadNavigatorCreateSessions,
   loadNavigatorIpsSelfAssessments,
   loadNavigatorIpsccEncounterSubmissions,

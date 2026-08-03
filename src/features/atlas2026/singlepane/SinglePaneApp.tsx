@@ -116,8 +116,8 @@ export default function SinglePaneApp() {
     navigatorSelfAwarenessCorrelationRows,
     navigatorSelfAwarenessSummary,
     navigatorCreateSessions,
-    navigatorCreateInsights,
     navigatorCreateReflection,
+    supervisorManagedCreateReflections,
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,
@@ -173,7 +173,8 @@ export default function SinglePaneApp() {
     saveNavigatorIpsSelfAssessment,
     saveSupervisorIpsAssessment,
     saveNavigatorIpsccEncounterSubmission,
-    saveNavigatorCreateSession,
+    saveSupervisorCreateReflectionOverride,
+    restoreSupervisorCreateReflectionGenerated,
     saveSupervisionSession,
     saveIntervalAssessmentRule,
     submitPartnerReferral,
@@ -1004,7 +1005,6 @@ export default function SinglePaneApp() {
                     selfAwarenessSummary={navigatorSelfAwarenessSummary}
                     ipsSelfAssessments={navigatorIpsSelfAssessments}
                     navigatorSupervisorIpsAssessments={navigatorSupervisorIpsAssessments}
-                    createInsights={navigatorCreateInsights}
                     createSessions={navigatorCreateSessions}
                     createReflection={navigatorCreateReflection}
                     supervisionSessions={navigatorSupervisionSessions}
@@ -1022,7 +1022,6 @@ export default function SinglePaneApp() {
                     onSaveIpsSelfAssessment={saveNavigatorIpsSelfAssessment}
                     onSaveIpsccEncounterSubmission={saveNavigatorIpsccEncounterSubmission}
                     onSaveSupervisionSession={saveSupervisionSession}
-                    onSaveCreateSession={saveNavigatorCreateSession}
                   />
                 ) : isSupervisorMyProfileView ? (
                   <div
@@ -1035,9 +1034,12 @@ export default function SinglePaneApp() {
                         navigatorDirectory={supervisorNavigatorDirectory}
                         competencyByNavigator={supervisorNavigatorCompetency}
                         allSupervisorIpsAssessments={allSupervisorIpsAssessments}
+                        managedCreateReflections={supervisorManagedCreateReflections}
                         onToggleManagedNavigator={toggleSupervisorManagedNavigator}
                         isSavingAssignments={isSavingAccessMatrix}
                         onSaveSupervisorIpsAssessment={saveSupervisorIpsAssessment}
+                        onSaveCreateReflectionOverride={saveSupervisorCreateReflectionOverride}
+                        onRestoreCreateReflectionGenerated={restoreSupervisorCreateReflectionGenerated}
                       />
                     </div>
                   </div>
