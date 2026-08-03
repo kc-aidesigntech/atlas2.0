@@ -65,13 +65,20 @@ Current pricing snapshot from the active pod:
 
 ## Required Atlas environment variables
 
-Set in the Atlas deployment environment:
+Heroku apps (confirmed):
 
-- `VITE_ATLAS_DEMO_INFERENCE_URL=https://<mcp-heroku-app>.herokuapp.com/infer-zcodes`
-- `VITE_ATLAS_CREATE_REFLECTION_URL=https://<mcp-heroku-app>.herokuapp.com/summarize-create-session`
+- Atlas web: `atlas-simplified`
+- MCP: `atlas-mcp-server` → `https://atlas-mcp-server-1117efe08e58.herokuapp.com`
+
+Set on **atlas-simplified** (then redeploy so Vite embeds them):
+
+- `VITE_ATLAS_DEMO_INFERENCE_URL=https://atlas-mcp-server-1117efe08e58.herokuapp.com/infer-zcodes`
+- `VITE_ATLAS_CREATE_REFLECTION_URL=https://atlas-mcp-server-1117efe08e58.herokuapp.com/summarize-create-session`
 - `VITE_ATLAS_DEMO_INFERENCE_BEARER=<shared-long-random-token>`
 
-The bearer token must match `ATLAS_MCP_BEARER_TOKEN` in MCP Heroku config. Both Z-code inference and C.R.E.A.T.E. reflection reuse the same bearer.
+The bearer token must match `ATLAS_MCP_BEARER_TOKEN` on **atlas-mcp-server**. Both Z-code inference and C.R.E.A.T.E. reflection reuse the same bearer.
+
+On **atlas-mcp-server**, also set `ATLAS_MCP_ALLOWED_ORIGINS` to the exact Atlas origin (e.g. `https://atlas-simplified-<hash>.herokuapp.com` or the custom domain).
 
 ### C.R.E.A.T.E. reflection contract (`POST /summarize-create-session`)
 
