@@ -7,6 +7,7 @@
 -- role's screens have data to act on:
 --   - navigator  -> assigned to two enrollments (sees those enrollees) plus
 --                  10 improving IPSCC encounter submissions from Sandra Morrison
+--                  plus one complete C.R.E.A.T.E. session with Pilot Supervisor
 --   - supervisor -> supervises every navigator (sees competency rollups)
 --   - partner    -> primary contact of a dedicated pilot partner org
 --   - admin      -> app_metadata.atlas_role = 'administrator' (full access)
@@ -50,6 +51,15 @@ delete from atlas.navigator_ipscc_encounter_submissions
    lower(navigator_name) = 'pilot navigator'
    and enrollee_id = '00000000-0000-0000-0000-000000000401'
  );
+delete from atlas.navigator_create_reflections
+ where id = 'a11ce0c7-0000-4000-8000-0000000000f1'
+    or lower(navigator_name) = 'pilot navigator';
+delete from atlas.navigator_create_sessions
+ where id = 'a11ce0c7-0000-4000-8000-000000000001'
+    or (
+      lower(navigator_name) = 'pilot navigator'
+      and lower(supervisor_name) = 'pilot supervisor'
+    );
 delete from atlas.supervisor_navigator_assignments
  where supervisor_person_id = 'a11ce000-0000-0000-0000-000000000003'
     or navigator_person_id   = 'a11ce000-0000-0000-0000-000000000002';
@@ -223,6 +233,57 @@ join atlas.roles r on r.id = pra.role_id
 where r.role_key = 'navigator'
   and pra.ends_on is null
   and pra.person_id <> 'a11ce000-0000-0000-0000-000000000003'::uuid;
+
+-- ---------------------------------------------------------------------------
+-- 5b) One complete C.R.E.A.T.E. supervision session + Section 3 reflection for
+--     Pilot Navigator / Pilot Supervisor so My Profile shows workshop focus.
+-- ---------------------------------------------------------------------------
+insert into atlas.navigator_create_sessions (
+  id, navigator_name, supervisor_name, session_at, submitted_at, supervision_mode,
+  session_duration_minutes, connect_focused_listening,
+  recognize_notes, encourage_notes, acknowledge_notes, train_notes, empower_notes,
+  create_action_plan, supervisor_submission, supervisee_submission,
+  peer_specialist_signature, peer_specialist_signed_at,
+  supervisor_signature, supervisor_signed_at, created_at, updated_at
+) values (
+  'a11ce0c7-0000-4000-8000-000000000001',
+  'Pilot Navigator',
+  'Pilot Supervisor',
+  now() - interval '2 days',
+  now() - interval '2 days',
+  'in_person',
+  55,
+  true,
+  'You are building genuine warmth with Sandra and Marcus — enrollee IPSCC scores are climbing because people feel seen, not managed. I especially noticed how you named shared ground before problem-solving.',
+  'Housing follow-through and transportation friction still pull you into fixing mode under time pressure. When that happens, slow down and ask what the service user already knows before offering options.',
+  'You advocated clearly in interdisciplinary updates this week and invited Marcus into the plan instead of speaking for him. That mutuality is leadership worth naming out loud.',
+  'Practice one co-learning opener in every encounter this week: “What have you already tried?” Then stay with their answer for two full sentences before adding anything of yours.',
+  'You asked for clearer prep time before supervision and for a simple checklist when coordinating partner handoffs — both are fair. I will protect that prep block on our calendar and share the handoff template tomorrow.',
+  'Before next supervision: (1) use the co-learning opener with both assigned enrollees, (2) jot one reconnect moment when disconnection shows up, (3) bring one sticky encounter for us to unpack without rushing to solutions.',
+  'Pilot Navigator is showing strong connection and mutuality with assigned enrollees, and enrollee opinion of the work is trending upward. The growth edge is staying in learning-together when logistics get loud. We agreed on a concrete practice target and the supports I will provide so the plan is doable, not aspirational.',
+  'I want tighter feedback when I slip into advising, and I want help noticing disconnect earlier with Sandra when conversations go flat. The co-learning opener feels usable this week.',
+  'Pilot Navigator',
+  now() - interval '2 days',
+  'Pilot Supervisor',
+  now() - interval '2 days',
+  now() - interval '2 days',
+  now() - interval '2 days'
+);
+
+insert into atlas.navigator_create_reflections (
+  id, navigator_name, reflection_text, source_session_ids, source_latest_session_id,
+  model, generated_at, created_at, updated_at
+) values (
+  'a11ce0c7-0000-4000-8000-0000000000f1',
+  'Pilot Navigator',
+  'Pilot Navigator, thank you for the care and honesty you brought into this C.R.E.A.T.E. supervision. In this latest session I heard real strength in how you cultivate connection and mutuality with Sandra and Marcus, and that growth is showing up in how enrollees experience the work. Building on that trajectory, keep practicing the co-learning opener when logistics get loud so helping does not crowd out curiosity. I will protect your prep time and send the partner handoff checklist so the action plan stays supported between now and our next meeting.',
+  jsonb_build_array('a11ce0c7-0000-4000-8000-000000000001'),
+  'a11ce0c7-0000-4000-8000-000000000001',
+  'seeded-supervisor-simulation',
+  now() - interval '2 days',
+  now() - interval '2 days',
+  now() - interval '2 days'
+);
 
 -- ---------------------------------------------------------------------------
 -- 6) Partner scope: a dedicated pilot partner org whose primary contact email

@@ -104,7 +104,7 @@ const CARD_DEFS: Array<{
 }> = [
   { key: 'section_1_ipscc', title: 'Section 1: IPSCC ratings and reviews', cardTitle: 'enrollee', cardSubtitle: 'ipscc', actionLabel: 'view feedback', variant: 'green', illustration: 'feedback', isActiveOnProfileRail: true },
   { key: 'section_2_awareness', title: 'Section 2: Self-awareness correlation', cardTitle: 'self-reflection', cardSubtitle: 'ips', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection', isActiveOnProfileRail: true },
-  { key: 'section_3_create', title: 'Section 3: C.R.E.A.T.E. supervision form', cardTitle: 'c.r.e.a.t.e', cardSubtitle: 'create & share', actionLabel: 'create & share', variant: 'green', illustration: 'create', isActiveOnProfileRail: true },
+  { key: 'section_3_create', title: 'Section 3: C.R.E.A.T.E. supervision history', cardTitle: 'c.r.e.a.t.e', cardSubtitle: 'session history', actionLabel: 'view history', variant: 'green', illustration: 'create', isActiveOnProfileRail: true },
   { key: 'section_4_assignments', title: 'Section 4: Enrollment assignment board', cardTitle: 'assignment board', cardSubtitle: 'enrollment', actionLabel: 'view board', variant: 'blue', illustration: 'feedback', isActiveOnProfileRail: false },
   { key: 'section_5_zcode_updates', title: 'Section 5: Enrollee z-code updates', cardTitle: 'z-code updates', cardSubtitle: 'enrollee', actionLabel: 'update z-codes', variant: 'green', illustration: 'reflection', isActiveOnProfileRail: false },
   { key: 'section_6_competency', title: 'Section 6: Navigator competency', cardTitle: 'competency', cardSubtitle: 'navigator', actionLabel: 'open competency', variant: 'blue', illustration: 'create', isActiveOnProfileRail: false },
