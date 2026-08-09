@@ -45,3 +45,13 @@ export function getSummarizeCreateSessionUrl(): string {
   if (legacy) return legacy
   return `${LOCAL_MCP_BASE}/summarize-create-session`
 }
+
+/** Scribe audio chunk transcription (Whisper behind MCP). */
+export function getTranscribeUrl(): string {
+  return `${getAtlasMcpBaseUrl()}/transcribe`
+}
+
+/** Scribe Subjective, Objective, Assessment, Plan (SOAP) note generation. */
+export function getGenerateSoapNoteUrl(): string {
+  return `${getAtlasMcpBaseUrl()}/generate-soap-note`
+}

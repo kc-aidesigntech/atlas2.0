@@ -1,43 +1,40 @@
 # Database Row-Level Security (RLS) Inventory
 
-Last updated: 2026-07-19  
+Last updated: 2026-08-08  
 Source of truth: live metadata queries against Postgres system catalogs (`pg_class`, `pg_namespace`, `pg_policies`)
 
 ## Executive Snapshot
 
 - This document inventories **Row-Level Security (RLS)** posture for all non-system schemas in this project database.
 - Coverage by schema:
-  - `atlas`: 56 tables (`37` RLS enabled, `19` RLS disabled)
-  - `auth`: 23 tables (`16` enabled, `7` disabled)
-  - `realtime`: 2 tables (`0` enabled, `2` disabled)
-  - `storage`: 8 tables (`8` enabled, `0` disabled)
-  - `supabase_migrations`: 1 table (`0` enabled, `1` disabled)
-  - `vault`: 1 table (`0` enabled, `1` disabled)
-- Critical app risk is concentrated in **`atlas` tables with RLS disabled**.
+  - `atlas`: 62 tables (`62` RLS enabled, `0` RLS disabled)
+  - Managed schemas (`auth`, `realtime`, `storage`, `supabase_migrations`, `vault`) remain vendor-controlled; do not bulk-modify blindly.
+- Critical app risk from **`atlas` tables with RLS disabled** is closed as of migration `20260804170000_db_rls_phase2_phase3_remaining_tables.sql`.
+- Remaining advisor INFO notes: `dw_export_watermarks` and `legacy_decommission_registry` intentionally have RLS enabled with **no policies** (default deny for `anon`/`authenticated`; `service_role` bypasses RLS).
 
 ## Atlas Schema Table Inventory
 
 | Table | RLS | Policy Count |
 |---|---:|---:|
-| `addresses` | disabled | 0 |
-| `app_config_documents` | enabled | 1 |
+| `addresses` | enabled | 1 |
+| `app_config_documents` | enabled | 4 |
 | `app_role_navigation` | enabled | 2 |
 | `assessment_answers` | enabled | 1 |
 | `assessment_participants` | enabled | 1 |
 | `assessment_submissions` | enabled | 1 |
-| `audit_events` | disabled | 0 |
-| `authorization_settings` | disabled | 0 |
+| `audit_events` | enabled | 1 |
+| `authorization_settings` | enabled | 1 |
 | `counties` | enabled | 1 |
-| `countries` | disabled | 0 |
+| `countries` | enabled | 1 |
 | `demo_access_events` | enabled | 2 |
 | `demo_record_tags` | enabled | 1 |
-| `dw_export_watermarks` | disabled | 0 |
+| `dw_export_watermarks` | enabled | 0 |
 | `enrollee_burden_survey_answers` | enabled | 4 |
 | `enrollee_burden_survey_submissions` | enabled | 4 |
 | `enrollee_z_code_uncheck_log` | enabled | 1 |
 | `enrollee_z_codes` | enabled | 1 |
 | `enrollees` | enabled | 2 |
-| `enrollment_requests` | disabled | 0 |
+| `enrollment_requests` | enabled | 2 |
 | `enrollments` | enabled | 2 |
 | `journey_logs` | enabled | 1 |
 | `legacy_decommission_registry` | enabled | 0 |
@@ -50,89 +47,115 @@ Source of truth: live metadata queries against Postgres system catalogs (`pg_cla
 | `navigator_ipscc_encounter_submissions` | enabled | 2 |
 | `navigator_ips_self_assessments` | enabled | 2 |
 | `navigator_create_sessions` | enabled | 2 |
+| `navigator_create_reflections` | enabled | 2 |
 | `partner_service_capacity_answers` | enabled | 4 |
 | `partner_service_capacity_deletion_log` | enabled | 1 |
 | `partner_service_capacity_submissions` | enabled | 4 |
-| `partner_station_icons` | disabled | 0 |
+| `partner_station_icons` | enabled | 1 |
 | `partner_stations` | enabled | 2 |
 | `partner_z_code_burden_scores` | enabled | 4 |
 | `partner_z_code_capabilities` | enabled | 1 |
 | `partners` | enabled | 1 |
 | `people` | enabled | 2 |
 | `people_role_assignments` | enabled | 1 |
-| `permissions` | disabled | 0 |
+| `permissions` | enabled | 1 |
 | `profile_images` | enabled | 5 |
-| `public_referral_intake_events` | enabled | 2 |
-| `referrals` | disabled | 0 |
-| `role_permissions` | disabled | 0 |
-| `roles` | disabled | 0 |
-| `route_plan_stops` | disabled | 0 |
-| `route_plans` | disabled | 0 |
-| `states` | disabled | 0 |
-| `station_metric_snapshots` | disabled | 0 |
+| `public_referral_intake_events` | enabled | 3 |
+| `referrals` | enabled | 2 |
+| `role_permissions` | enabled | 1 |
+| `roles` | enabled | 1 |
+| `route_plan_stops` | enabled | 2 |
+| `route_plans` | enabled | 2 |
+| `scribe_encounters` | enabled | 4 |
+| `states` | enabled | 1 |
+| `station_metric_snapshots` | enabled | 1 |
 | `supervisor_navigator_assignments` | enabled | 1 |
 | `supervisor_ips_assessments` | enabled | 2 |
-| `timeline_settings` | disabled | 0 |
-| `user_permission_exceptions` | disabled | 0 |
-| `z_code_categories` | disabled | 0 |
-| `z_code_category_map` | disabled | 0 |
+| `timeline_settings` | enabled | 2 |
+| `user_permission_exceptions` | enabled | 1 |
+| `z_code_categories` | enabled | 1 |
+| `z_code_category_map` | enabled | 1 |
 | `z_code_headers` | enabled | 1 |
 | `z_code_timeline_labels` | enabled | 1 |
 | `z_codes` | enabled | 1 |
 
-## Atlas Tables With RLS Disabled (Priority Remediation Set)
+## Atlas Tables With RLS Enabled But No Policies (Intentional Deny-All)
 
-`addresses`, `audit_events`, `authorization_settings`, `countries`, `dw_export_watermarks`, `enrollment_requests`, `partner_station_icons`, `permissions`, `referrals`, `role_permissions`, `roles`, `route_plan_stops`, `route_plans`, `states`, `station_metric_snapshots`, `timeline_settings`, `user_permission_exceptions`, `z_code_categories`, `z_code_category_map`
+- `legacy_decommission_registry` — internal registry; revoked from `anon`/`authenticated`
+- `dw_export_watermarks` — warehouse Extract Transform Load (ETL) cursor state; `service_role` only
 
-## Atlas Tables With RLS Enabled But No Policies
+## Remediation History
 
-- `legacy_decommission_registry` (default deny-all behavior until policies are added)
+### Phase 1 (completed): reference tables
+
+Migration: `20260629010500_db_rls_phase1_reference_tables.sql`
+
+- `countries`, `states`, `z_code_categories`, `z_code_category_map`, `partner_station_icons`
+- Authenticated SELECT policies for single-pane / radial reference lookups
+
+### Phase 2 + 3 (completed 2026-08-04): remaining 14 tables
+
+Migration: `20260804170000_db_rls_phase2_phase3_remaining_tables.sql`
+
+| Table | Policy posture | PostgREST grants |
+|---|---|---|
+| `roles` | authenticated SELECT | SELECT |
+| `permissions` | authenticated SELECT | SELECT |
+| `role_permissions` | authenticated SELECT | SELECT |
+| `user_permission_exceptions` | administrator SELECT | none (SECURITY DEFINER helpers) |
+| `authorization_settings` | administrator SELECT | none (SECURITY DEFINER helpers) |
+| `timeline_settings` | admin ALL + staff enrollment SELECT | none |
+| `enrollment_requests` | admin ALL + navigator/supervisor SELECT | none |
+| `referrals` | admin ALL + staff enrollment SELECT | none |
+| `route_plans` | admin ALL + staff enrollment SELECT | none |
+| `route_plan_stops` | admin ALL + staff via parent plan SELECT | none |
+| `station_metric_snapshots` | authenticated SELECT | none |
+| `addresses` | authenticated SELECT | none |
+| `audit_events` | administrator SELECT | none |
+| `dw_export_watermarks` | no policies (deny-all for app roles) | none; service_role CRUD |
+
+Also converted `atlas.fn_log_audit()` to SECURITY DEFINER so audit trigger inserts remain reliable under RLS.
+
+Enrollment-scoped tables keep policies ready for intentional grants or `security_invoker` view conversion without newly exposing them via PostgREST.
+
+### Scribe encounters (added 2026-08-08)
+
+Migration: `20260808120000_atlas_scribe_encounters.sql`
+
+| Table | Policy posture | PostgREST grants |
+|---|---|---|
+| `scribe_encounters` | owner-only SELECT/INSERT/UPDATE/DELETE (`created_by = auth.uid()`) | SELECT, INSERT, UPDATE, DELETE |
+
+Point-of-care transcripts and Subjective, Objective, Assessment, Plan (SOAP) notes are sensitive, so no cross-user read path exists; audio is never stored anywhere.
 
 ## Atlas Policy Inventory (Configured Policies)
 
-This is the currently observed policy set in `atlas`:
+This is the currently observed policy set in `atlas` (high-level):
 
-- `app_config_documents`: `app_config_documents_authenticated_all (ALL, authenticated)`
-- `app_role_navigation`: `app_role_navigation_admin_write (ALL, authenticated)`, `app_role_navigation_authenticated_select (SELECT, authenticated)`
-- `assessment_answers`: `assessment_answers_select_scoped (SELECT, authenticated)`
-- `assessment_participants`: `assessment_participants_select_scoped (SELECT, authenticated)`
-- `assessment_submissions`: `assessment_submissions_select_scoped (SELECT, authenticated)`
-- `counties`: `counties_authenticated_select (SELECT, authenticated)`
-- `demo_access_events`: `demo_access_events_insert_authenticated (INSERT, authenticated)`, `demo_access_events_select_admin (SELECT, authenticated)`
-- `demo_record_tags`: `demo_record_tags_authenticated_select (SELECT, authenticated)`
-- `enrollee_burden_survey_answers`: select/insert/update/delete scoped policies (4 total)
-- `enrollee_burden_survey_submissions`: select/insert/update/delete scoped policies (4 total)
-- `enrollee_z_code_uncheck_log`: `enrollee_z_code_uncheck_log_staff_select (SELECT, authenticated)`
-- `enrollee_z_codes`: `enrollee_z_codes_staff_select (SELECT, authenticated)`
-- `enrollees`: `enrollees_admin_all (ALL, public)`, `enrollees_staff_select (SELECT, authenticated)`
-- `enrollments`: `enrollments_admin_all (ALL, public)`, `enrollments_staff_select (SELECT, authenticated)`
-- `journey_logs`: `journey_logs_admin_all (ALL, public)`
-- `navigator_assignments`: `navigator_assignments_select_scoped (SELECT, authenticated)`
-- `navigator_competency_assessment_answers`: `navigator_competency_assessment_answers_select_scoped (SELECT, authenticated)`
-- `navigator_competency_assessments`: `navigator_competency_assessments_select_scoped (SELECT, authenticated)`
-- `navigator_partner_assignments`: `navigator_partner_assignments_select_scoped (SELECT, authenticated)`
-- `navigator_regulation_test_answers`: `navigator_regulation_test_answers_select_scoped (SELECT, authenticated)`
-- `navigator_regulation_test_submissions`: `navigator_regulation_test_submissions_select_scoped (SELECT, authenticated)`
-- `navigator_ipscc_encounter_submissions`: `navigator ipscc authenticated read (SELECT, authenticated)`, `navigator ipscc authenticated write (ALL, authenticated)` — table GRANTs to `authenticated` required (see `20260720010808_navigator_profile_workflow_authenticated_grants.sql`)
-- `navigator_ips_self_assessments`: `navigator ips self authenticated read (SELECT, authenticated)`, `navigator ips self authenticated write (ALL, authenticated)` — same GRANT requirement
-- `navigator_create_sessions`: `navigator create authenticated read (SELECT, authenticated)`, `navigator create authenticated write (ALL, authenticated)` — same GRANT requirement
-- `partner_service_capacity_answers`: select/insert/update/delete scoped policies (4 total)
-- `partner_service_capacity_deletion_log`: `partner_service_capacity_deletion_log_admin_select (SELECT, authenticated)`
-- `partner_service_capacity_submissions`: select/insert/update/delete scoped policies (4 total)
-- `partner_stations`: `partner_stations_admin_all (ALL, public)`, `partner_stations_authenticated_select (SELECT, authenticated)`
-- `partner_z_code_burden_scores`: select/insert/update/delete scoped policies (4 total)
-- `partner_z_code_capabilities`: `partner_z_code_capabilities_authenticated_select (SELECT, authenticated)`
-- `partners`: `partners_authenticated_select (SELECT, authenticated)`
-- `people`: `people_admin_all (ALL, public)`, `people_directory_select (SELECT, authenticated)`
-- `people_role_assignments`: `people_role_assignments_authenticated_select (SELECT, authenticated)`
-- `profile_images`: admin-all plus authenticated CRUD-scoped policies (5 total)
-- Storage `profile-images` public read: `enrollees/%` (enrollee portraits) and `accounts/%` (navigator/partner My Profile avatars); authenticated users retain full-bucket read/write policies for staff upload flows.
-- `public_referral_intake_events`: `public_referral_intake_events_insert_public (INSERT, anon+authenticated)`, `public_referral_intake_events_select_staff (SELECT, authenticated)`
-- `supervisor_navigator_assignments`: `supervisor_navigator_assignments_select_scoped (SELECT, authenticated)`
-- `supervisor_ips_assessments`: `supervisor ips authenticated read (SELECT, authenticated)`, `supervisor ips authenticated write (ALL, authenticated)` — table GRANTs to `authenticated` required (see `20260720010808_navigator_profile_workflow_authenticated_grants.sql`)
-- `z_code_headers`: `z_code_headers_public_select (SELECT, public)`
-- `z_code_timeline_labels`: `z_code_timeline_labels_public_select (SELECT, public)`
-- `z_codes`: `z_codes_public_select (SELECT, anon+authenticated)`
+- `app_config_documents`: authenticated CRUD policies
+- `app_role_navigation`: admin write + authenticated select
+- `assessment_*`: scoped staff/admin SELECT
+- `addresses`: `addresses_authenticated_select`
+- `audit_events`: `audit_events_admin_select`
+- `authorization_settings`: `authorization_settings_admin_select`
+- `counties` / `countries` / `states`: authenticated SELECT
+- `demo_access_events` / `demo_record_tags`: insert/select as previously configured
+- `enrollee_burden_*`: select/insert/update/delete scoped policies
+- `enrollee_z_codes` / `enrollee_z_code_uncheck_log`: staff SELECT
+- `enrollees` / `enrollments`: admin ALL + staff SELECT
+- `enrollment_requests`: admin ALL + navigator/supervisor SELECT
+- `journey_logs`: admin ALL
+- `navigator_*` / `supervisor_*` assignment and assessment tables: scoped SELECT or authenticated CRUD as previously configured
+- `partner_*` capacity/capability/station tables: scoped or authenticated SELECT as previously configured
+- `people` / `people_role_assignments`: admin + directory SELECT
+- `permissions` / `roles` / `role_permissions`: authenticated SELECT
+- `profile_images`: admin-all plus authenticated CRUD-scoped policies
+- `public_referral_intake_events`: public insert + staff select
+- `referrals` / `route_plans` / `route_plan_stops` / `timeline_settings`: admin + staff enrollment scope
+- `scribe_encounters`: owner-only CRUD (`created_by = auth.uid()`)
+- `station_metric_snapshots`: authenticated SELECT
+- `user_permission_exceptions`: administrator SELECT
+- `z_code_*` reference tables: public or authenticated SELECT as previously configured
 
 ## Managed Schema Notes (Do Not Bulk-Modify Blindly)
 
@@ -140,66 +163,10 @@ This is the currently observed policy set in `atlas`:
 - Some tables intentionally run with RLS disabled in these schemas.
 - Recommendation: treat any change outside `atlas` as a controlled, vendor-aware change request.
 
-## Safe Rollout Plan for Atlas RLS Hardening
+## Follow-Up (Not Part Of This Table Hardening)
 
-### Phase 0: Freeze and Verify
-
-- Snapshot current grants and policies before changes.
-- Confirm application roles actually used (`anon`, `authenticated`, service role paths, custom claims).
-
-### Phase 1: Low-Risk Reference Tables
-
-Enable RLS first on mostly read-only/reference tables and add explicit read policies:
-
-- `countries`, `states`, `z_code_categories`, `z_code_category_map`, `partner_station_icons`
-
-Implementation status:
-
-- Completed via `supabase/migrations/20260629010500_db_rls_phase1_reference_tables.sql`.
-- Scope intentionally keeps `authenticated` SELECT access explicit so single-pane radial load and related reference lookups continue to function under RLS.
-
-### Phase 2: Configuration and Authorization Tables
-
-Enable RLS and apply strict admin-only policies:
-
-- `roles`, `permissions`, `role_permissions`, `user_permission_exceptions`, `authorization_settings`, `timeline_settings`
-
-### Phase 3: Workflow and Analytics Tables
-
-Enable RLS with scoped staff/admin policies:
-
-- `enrollment_requests`, `referrals`, `route_plans`, `route_plan_stops`, `station_metric_snapshots`, `addresses`, `audit_events`, `dw_export_watermarks`
-
-### Phase 4: Validation and Forced RLS
-
-- Run end-to-end role tests for `administrator`, `navigator`, `supervisor`, `partner`.
-- After policy correctness is proven, selectively evaluate `FORCE ROW LEVEL SECURITY` on sensitive tables.
-
-## Baseline SQL Playbook (Enable-Only; Policies Added Per Phase)
-
-```sql
-ALTER TABLE atlas.addresses ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.audit_events ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.authorization_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.countries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.dw_export_watermarks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.enrollment_requests ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.partner_station_icons ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.permissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.referrals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.role_permissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.roles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.route_plan_stops ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.route_plans ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.states ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.station_metric_snapshots ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.timeline_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.user_permission_exceptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.z_code_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE atlas.z_code_category_map ENABLE ROW LEVEL SECURITY;
-```
-
-> Important: enabling RLS before adding at least one appropriate policy can break production paths. Roll out per phase with tests.
+- Supabase security advisor still reports **ERROR** on several `SECURITY DEFINER` views (bypass base-table RLS). Convert remaining reporting views to `security_invoker` in a dedicated pass (see Phase 6 pattern in `20260530129000_security_phase6_definer_view_and_table_rls.sql`).
+- Optionally evaluate `FORCE ROW LEVEL SECURITY` on sensitive tables after role end-to-end tests.
 
 ## Recommended Verification Queries
 
@@ -208,19 +175,20 @@ ALTER TABLE atlas.z_code_category_map ENABLE ROW LEVEL SECURITY;
 select n.nspname as schema_name, c.relname as table_name, c.relrowsecurity, c.relforcerowsecurity
 from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
-where c.relkind='r' and n.nspname not in ('pg_catalog','information_schema')
+where c.relkind='r' and n.nspname = 'atlas'
 order by 1,2;
 
 -- Policy inventory
 select schemaname, tablename, policyname, roles, cmd
 from pg_policies
+where schemaname = 'atlas'
 order by 1,2,3;
 
 -- RLS enabled but no policies
 with t as (
   select n.nspname as schemaname, c.relname as tablename
   from pg_class c join pg_namespace n on n.oid = c.relnamespace
-  where c.relkind='r' and c.relrowsecurity
+  where c.relkind='r' and c.relrowsecurity and n.nspname = 'atlas'
 )
 select t.schemaname, t.tablename
 from t

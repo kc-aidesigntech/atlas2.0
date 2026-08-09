@@ -67,6 +67,8 @@ npm run dev
 | Red permission banner | RLS deny (expected if identity/role missing) | `atlas.people` + role assignment |
 | Survey save fails | Missing survey migrations / RPC grants | Commissioning appendix migration list |
 | Inference / reflection fails | MCP down or bearer mismatch | [mcp-consumer.md](./mcp-consumer.md) |
+| Profile photo save fails with `exceeded the quota` / `QuotaExceededError` on an `atlas2026.singlepane.*` key | Browser localStorage full from legacy data-URL avatar caches predating Storage-backed uploads | Current builds self-heal by pruning oversized `atlas2026.*` image caches and retrying; the localStorage copy is cache-only when Supabase is configured. Manual recovery: clear site data for the app origin. |
+| `permission denied for table navigator_ipscc_encounter_submissions (42501)` while a profile appears signed in | Requests running as `anon` (no persisted Supabase auth session — can be a side effect of full localStorage blocking the `sb-*-auth-token` write) | Clear site data and sign in again; confirm `authenticated` grants via `information_schema.role_table_grants` |
 
 ## Related
 

@@ -14,6 +14,7 @@ const AtlasAuthScreen = React.lazy(() => import('@/auth/AtlasAuthScreen'))
 const PublicAtlasLandingPage = React.lazy(() => import('@/features/atlas2026/public/PublicAtlasLandingPage'))
 const PublicAtlasDemoPage = React.lazy(() => import('@/features/atlas2026/public/PublicAtlasDemoPage'))
 const StandaloneZCodeSurveysPage = React.lazy(() => import('@/features/atlas2026/singlepane/StandaloneZCodeSurveysPage'))
+const StandaloneScribePage = React.lazy(() => import('@/features/atlas2026/scribe/StandaloneScribePage'))
 
 function ShellFallback({ message }) {
   return (
@@ -51,6 +52,24 @@ function isLegacyDomainSpectrumPath(pathname) {
   )
 }
 
+function isScribePath(pathname) {
+  const normalizedPath = normalizePathname(pathname)
+  return normalizedPath === '/scribe' || normalizedPath.startsWith('/scribe/')
+}
+
+/**
+ * Subdomain mount for the Scribe subapp: when the page is served from the
+ * configured scribe hostname (e.g. scribe.<domain>), the whole origin renders
+ * the scribe experience regardless of path. The same deploy also serves
+ * /scribe as a path fallback so no Domain Name System (DNS) setup is required
+ * for the feature to work.
+ */
+function isScribeHost(hostname) {
+  const configured = String(import.meta.env.VITE_ATLAS_SCRIBE_HOSTNAME || '').trim().toLowerCase()
+  if (!configured || !hostname) return false
+  return hostname.toLowerCase() === configured
+}
+
 function isWorkspacePath(pathname) {
   const normalizedPath = normalizePathname(pathname)
   return normalizedPath === '/app' || normalizedPath.startsWith('/app/')
@@ -68,12 +87,15 @@ function RootAppInner() {
   const isLegacyDomainRoute = typeof window !== 'undefined' && isLegacyDomainSpectrumPath(pathname)
   const isWorkspaceRoute = isWorkspacePath(pathname)
   const isStandaloneZCodeSurveysRoute = typeof window !== 'undefined' && isStandaloneZCodeSurveysPath(pathname)
+  // Scribe mounts on its dedicated hostname (subdomain) or the /scribe path.
+  const isScribeRoute =
+    typeof window !== 'undefined' && (isScribeHost(window.location.hostname) || isScribePath(pathname))
   const needsSupabaseSession =
     typeof window !== 'undefined' &&
     hasSupabaseConfig &&
     Boolean(supabase) &&
     isSinglePaneSupabaseBootstrapEnabled &&
-    (isWorkspaceRoute || isStandaloneZCodeSurveysRoute)
+    (isWorkspaceRoute || isStandaloneZCodeSurveysRoute || isScribeRoute)
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return
@@ -103,6 +125,26 @@ function RootAppInner() {
     nextUrl.hash = nextHash
     window.location.replace(nextUrl.toString())
     return <ShellFallback message="Redirecting to z-code surveys…" />
+  }
+
+  // Scribe wins over path routes so the dedicated hostname always renders the
+  // subapp even at '/', while /scribe works on the primary domain too.
+  if (isScribeRoute) {
+    if (needsSupabaseSession && isLoading) {
+      return <ShellFallback message="Checking sign-in…" />
+    }
+    if (needsSupabaseSession && !session) {
+      return (
+        <React.Suspense fallback={<ShellFallback message="Loading sign-in…" />}>
+          <AtlasAuthScreen />
+        </React.Suspense>
+      )
+    }
+    return (
+      <React.Suspense fallback={<ShellFallback message="Loading scribe…" />}>
+        <StandaloneScribePage />
+      </React.Suspense>
+    )
   }
 
   if (isStandaloneZCodeSurveysRoute && needsSupabaseSession && isLoading) {

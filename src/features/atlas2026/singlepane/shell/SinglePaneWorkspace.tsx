@@ -262,6 +262,16 @@ export default function SinglePaneWorkspace() {
     if (typeof window === 'undefined') return '/z-code-surveys'
     return new URL('z-code-surveys', window.location.href.split('#')[0]).toString()
   }, [])
+  // Scribe is a standalone subapp, not an in-shell pane: prefer the dedicated
+  // subdomain when configured, otherwise fall back to the /scribe path route.
+  const scribeUrl = React.useMemo(() => {
+    const configuredHost = String(import.meta.env.VITE_ATLAS_SCRIBE_HOSTNAME || '').trim()
+    if (configuredHost && typeof window !== 'undefined') {
+      return `${window.location.protocol}//${configuredHost}/`
+    }
+    if (typeof window === 'undefined') return '/scribe'
+    return new URL('/scribe', window.location.origin).toString()
+  }, [])
 
   React.useEffect(() => {
     if (activeMenu !== 'route planning' && activeMenu !== 'referral portal' && activeMenu !== 'refer') {
@@ -574,6 +584,12 @@ export default function SinglePaneWorkspace() {
   function handleMenuSelect(menu: string) {
     if (!remoteSession?.isActive && uiRole === 'partner' && menu === 'service capacity') {
       window.location.assign(standaloneSurveyUrl)
+      return
+    }
+    if (menu === 'scribe') {
+      // Navigate away to the standalone scribe subapp (same pattern as the
+      // partner service-capacity survey) instead of rendering a shell pane.
+      window.location.assign(scribeUrl)
       return
     }
     if (menu === 'referral portal' || menu === 'refer') {

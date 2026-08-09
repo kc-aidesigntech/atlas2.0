@@ -29,17 +29,57 @@ export function loadLocalStorageState<T>(
   return normalize ? normalize(parsed) : parsed
 }
 
+// Values at or above this length that embed a data Uniform Resource Locator (URL)
+// image are almost certainly legacy full-resolution avatar caches from builds that
+// predate Storage-backed uploads. They are safe to evict: current builds persist
+// only short public URLs, and every pruned key re-hydrates from Supabase or defaults.
+const LEGACY_OVERSIZED_CACHE_VALUE_MIN_LENGTH = 100_000
+
+function isLocalStorageQuotaError(error: unknown) {
+  return (
+    (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'QuotaExceededError') ||
+    (error instanceof Error && /quota/i.test(error.message))
+  )
+}
+
+/**
+ * Evict legacy oversized data-URL image caches so a single stale avatar from an
+ * old build cannot permanently wedge every future localStorage write at quota.
+ * Returns true when at least one entry was removed (so callers can retry once).
+ */
+function pruneLegacyOversizedImageCaches(excludedKey: string) {
+  let removedAny = false
+  // Iterate backwards because removeItem reindexes the remaining keys.
+  for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+    const key = window.localStorage.key(index)
+    if (!key || key === excludedKey || !key.startsWith('atlas2026.')) continue
+    const value = window.localStorage.getItem(key)
+    if (value && value.length >= LEGACY_OVERSIZED_CACHE_VALUE_MIN_LENGTH && value.includes('data:image/')) {
+      window.localStorage.removeItem(key)
+      removedAny = true
+    }
+  }
+  return removedAny
+}
+
 export function persistLocalStorageState<T>(storageKey: string, payload: T) {
   if (typeof window === 'undefined') return
+  const serialized = JSON.stringify(payload)
   try {
-    window.localStorage.setItem(storageKey, JSON.stringify(payload))
+    window.localStorage.setItem(storageKey, serialized)
   } catch (error) {
-    // Large data-URL avatars historically blew past browser quota; surface a clear
-    // recovery path instead of a raw DOMException.
-    const isQuotaError =
-      (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'QuotaExceededError') ||
-      (error instanceof Error && /quota/i.test(error.message))
-    if (isQuotaError) {
+    // Large data-URL avatars historically blew past browser quota. First try to
+    // self-heal by evicting legacy oversized image caches, then retry once.
+    if (isLocalStorageQuotaError(error) && pruneLegacyOversizedImageCaches(storageKey)) {
+      try {
+        window.localStorage.setItem(storageKey, serialized)
+        return
+      } catch (retryError) {
+        error = retryError
+      }
+    }
+    if (isLocalStorageQuotaError(error)) {
+      // Surface a clear recovery path instead of a raw DOMException.
       throw new Error(
         'Browser storage is full. Use a smaller profile image, or sign in so the photo can upload to cloud storage.'
       )

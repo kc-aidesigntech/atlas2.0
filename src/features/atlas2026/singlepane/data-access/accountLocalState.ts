@@ -91,6 +91,21 @@ function loadLocalAccountSettingsState(storageKey: string, fallback: AccountSett
   return loadLocalStorageState(storageKey, fallback, (parsed) => normalizeAccountSettingsPayload(parsed as Partial<AccountSettings>, fallback))
 }
 
+/**
+ * Write the account settings localStorage copy without letting a full browser
+ * store break the save. When Supabase is configured it is the durable record and
+ * localStorage is only a warm cache, so quota failures degrade to a warning.
+ * Without Supabase, localStorage IS the durable store, so failures stay fatal.
+ */
+function cacheAccountSettingsLocally(storageKey: string, settings: AccountSettings) {
+  try {
+    persistLocalStorageState(storageKey, settings)
+  } catch (error) {
+    if (!hasSupabaseConfig || !supabase) throw error
+    console.warn('[singlepane] skipped account settings cache write (browser storage full)', error)
+  }
+}
+
 export async function loadAccountSettings(): Promise<AccountSettings> {
   const context = await resolveAccountSettingsIdentityContext()
   const { payload, error } = await loadLatestConfigPayload<Partial<AccountSettings>>(context.configKey)
@@ -104,21 +119,21 @@ export async function loadAccountSettings(): Promise<AccountSettings> {
       const normalized = normalizeAccountSettingsPayload(legacy.payload, context.fallback)
       const legacyEmail = normalizeEmailValue(normalized.email)
       if (!context.normalizedSessionEmail || !legacyEmail || legacyEmail === context.normalizedSessionEmail) {
-        persistLocalStorageState(context.localStorageKey, normalized)
+        cacheAccountSettingsLocally(context.localStorageKey, normalized)
         await upsertConfigPayload(context.configKey, normalized)
         return normalized
       }
     }
   }
   const normalized = normalizeAccountSettingsPayload(payload, context.fallback)
-  persistLocalStorageState(context.localStorageKey, normalized)
+  cacheAccountSettingsLocally(context.localStorageKey, normalized)
   return normalized
 }
 
 export async function saveAccountSettings(settings: AccountSettings): Promise<AccountSettings> {
   const context = await resolveAccountSettingsIdentityContext()
   const normalized = normalizeAccountSettingsPayload(settings, context.fallback)
-  persistLocalStorageState(context.localStorageKey, normalized)
+  cacheAccountSettingsLocally(context.localStorageKey, normalized)
   const error = await upsertConfigPayload(context.configKey, normalized)
   if (error && !isOptionalSupabaseDataError(error)) throw error
   return normalized
