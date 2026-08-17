@@ -9,8 +9,9 @@ Start here if you commission environments, manage identity and access, enforce s
 3. [Security](./security.md) — database-first model, Row-Level Security (RLS), compliance, production gates.
 4. [Database](./database.md) — schema map, RPCs, source-of-truth matrix.
 5. [MCP consumer](./mcp-consumer.md) — Atlas ↔ Model Context Protocol (MCP) handshake (inference / reflection).
-6. [Warehouse and Power BI](./warehouse-and-powerbi.md) — extract contracts and semantic model.
-7. Go-live: [production-go-live-hard-gates.md](../production-go-live-hard-gates.md) and [partner-go-live-checklist.md](../partner-go-live-checklist.md).
+6. [Pray Phone warm line](./prayphone.md) — navigator portal entry to the SignalWire agent console (Pi kiosk stays on `prayphone-server`).
+7. [Warehouse and Power BI](./warehouse-and-powerbi.md) — extract contracts and semantic model.
+8. Go-live: [production-go-live-hard-gates.md](../production-go-live-hard-gates.md) and [partner-go-live-checklist.md](../partner-go-live-checklist.md).
 
 ## Quick reference
 

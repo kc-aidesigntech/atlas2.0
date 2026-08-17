@@ -19,6 +19,7 @@ import { workspaceLoadMetrics } from '../workspaceLoadMetrics'
 import { useWorkspaceOverlayRouter } from './useWorkspaceOverlayRouter'
 import { LazyPanelFallback, WorkspaceLoadingShell, WorkspaceLoadingSpinner } from './WorkspaceLoadingStates'
 import WorkspaceFrame from './WorkspaceFrame'
+import { isWarmLineMenu, openPrayPhoneAgentFromWorkspace } from '../data-access/prayphoneSubapp'
 
 const AdminDataControlPanel = React.lazy(() => import('../../admin/AdminDataControlPanel'))
 const LiveAccessMatrixPanel = React.lazy(() => import('../components/LiveAccessMatrixPanel'))
@@ -590,6 +591,11 @@ export default function SinglePaneWorkspace() {
       // Navigate away to the standalone scribe subapp (same pattern as the
       // partner service-capacity survey) instead of rendering a shell pane.
       window.location.assign(scribeUrl)
+      return
+    }
+    if (isWarmLineMenu(menu)) {
+      // Pray Phone agent console lives on its own origin; hand off the Atlas session.
+      void openPrayPhoneAgentFromWorkspace()
       return
     }
     if (menu === 'referral portal' || menu === 'refer') {

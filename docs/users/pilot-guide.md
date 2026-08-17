@@ -42,6 +42,7 @@ Use the matching login **and** set the role switcher to the same role for the tr
 - Complete regulation tests
 - Competency self-assessment
 - Intake / resolve Z-codes
+- Open **warm line** (Pray Phone agent) when that menu is present
 
 ### Supervisor
 

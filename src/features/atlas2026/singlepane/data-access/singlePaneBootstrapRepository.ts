@@ -16,6 +16,7 @@ import {
   fetchSinglePaneTimelineConfig
 } from '@atlas/shared'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
+import { isPrayPhoneWarmLineConfigured } from '@/features/atlas2026/singlepane/data-access/prayphoneSubapp'
 import {
   applyIntakeOverrides,
   loadEnrolleeIntakes,
@@ -50,17 +51,25 @@ function hideDeferredCountyCommonsMenu(menus: string[]) {
   return menus.filter((menu) => menu.trim().toLowerCase() !== 'county commons')
 }
 
+/** Hide the warm-line item until Pray Phone's agent origin is configured. */
+function hideUnconfiguredWarmLineMenu(menus: string[]) {
+  if (isPrayPhoneWarmLineConfigured()) return menus
+  return menus.filter((menu) => menu.trim().toLowerCase() !== 'warm line')
+}
+
 function normalizeNavigatorTopMenus(menus: string[]) {
-  const normalized = hideDeferredCountyCommonsMenu(
-    menus
-      .map((menu) => {
-        const lower = menu.trim().toLowerCase()
-        if (lower === 'assigned enrollees') return 'enrollees'
-        if (lower === 'requests to enroll') return 'my profile'
-        if (lower === 'referral portal') return 'refer'
-        return menu
-      })
-      .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+  const normalized = hideUnconfiguredWarmLineMenu(
+    hideDeferredCountyCommonsMenu(
+      menus
+        .map((menu) => {
+          const lower = menu.trim().toLowerCase()
+          if (lower === 'assigned enrollees') return 'enrollees'
+          if (lower === 'requests to enroll') return 'my profile'
+          if (lower === 'referral portal') return 'refer'
+          return menu
+        })
+        .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+    )
   )
   if (!normalized.some((menu) => menu.trim().toLowerCase() === 'enrollees')) normalized.unshift('enrollees')
   return normalized
@@ -70,12 +79,12 @@ function normalizeRoleTopMenus(roleKey: string, menus: string[]) {
   if (roleKey === 'navigator') return normalizeNavigatorTopMenus(menus)
   if (roleKey === 'partner') return ['referral portal', 'my station', 'service capacity']
   if (roleKey === 'supervisor') {
-    const normalized = hideDeferredCountyCommonsMenu(
-      menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+    const normalized = hideUnconfiguredWarmLineMenu(
+      hideDeferredCountyCommonsMenu(menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning'))
     )
     return normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]
   }
-  return hideDeferredCountyCommonsMenu(menus)
+  return hideUnconfiguredWarmLineMenu(hideDeferredCountyCommonsMenu(menus))
 }
 
 function buildAdminSupersetMenus(roleConfigs: Array<{ role: AtlasRole; topMenus: string[]; actionMenus: string[] }>) {

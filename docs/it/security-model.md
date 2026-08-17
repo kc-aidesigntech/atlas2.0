@@ -63,6 +63,8 @@ declared `STABLE` so the planner can cache argument-free calls
   - Partner service capacity — `fn_save_partner_service_capacity` (returns the id
     packet so survey-only users need no scoped read-back), `fn_ensure_partner_identifier`,
     `fn_delete_partner_service_capacity_draft`, `fn_set_partner_survey_answer_nullification`
+  - Warm-line agent console — `fn_can_access_warmline_agent` (read-only; navigator /
+    supervisor / administrator). The Raspberry Pi kiosk is not authenticated through Atlas.
   - Assignment tables (`navigator_assignments`, `supervisor_navigator_assignments`)
     got scoped-read RLS (writes already flow through assignment RPCs).
 - **Phase 4** — locked the data-warehouse export contract (`v_dw_*`) and pipeline

@@ -35,6 +35,7 @@ VITE_ENABLE_SINGLEPANE_SUPABASE_BOOTSTRAP=false
 Optional integrations:
 
 - Model Context Protocol (MCP): `VITE_ATLAS_MCP_BASE_URL`, `VITE_ATLAS_MCP_BEARER` — see [mcp-consumer.md](./mcp-consumer.md)
+- Pray Phone warm line: `VITE_ATLAS_PRAYPHONE_URL` — see [prayphone.md](./prayphone.md)
 - Maps: `VITE_GOOGLE_MAPS_API_KEY`
 - AlayaCare broker (no client secrets in `VITE_*`): see `env.template`
 

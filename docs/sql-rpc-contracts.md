@@ -21,4 +21,4 @@
 | RPC | Inputs | Side Effects | Permissions |
 | --- | --- | --- | --- |
 | `atlas.fn_access_matrix_save_person_roles` | `target_person_id`, `target_role_keys[]` | Reconciles role assignments and related enrollment/person consistency hooks | `authenticated`, admin claim enforced |
-| `fn_set_enrollee_z_code_resolution_context` | resolution input fields | Updates enrollee z-code resolution state and metadata | `authenticated`, RLS/RPC grants |
+| `atlas.fn_can_access_warmline_agent` | none | none (read-only) | `authenticated`; true for active navigator / supervisor / administrator |

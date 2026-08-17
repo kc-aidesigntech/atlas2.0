@@ -12,6 +12,7 @@ In the Supabase project used by that environment:
 2. **Authentication → Uniform Resource Locator (URL) configuration**
    - **Site URL** = primary app origin.
    - **Redirect URLs** for every environment: `http://localhost:5173/`, previews, production (include path prefix if `VITE_BASE_PATH` is set).
+   - When the warm line is live, also add the Pray Phone agent origin (`https://pray.<host>/agent` and the Heroku origin). See [prayphone.md](./prayphone.md).
 3. **Authentication → advanced**
    - Enable **Allow manual identity linking** so operators can use **Link Google / Link Apple** in Account Settings while signed in with email.
 4. **Provider consoles**
@@ -51,6 +52,7 @@ Every production login needs:
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable (or legacy anon) key — **never** service role |
 | `VITE_SUPABASE_AUTH_REDIRECT_URL` | Optional absolute OAuth/email callback |
 | `VITE_ENABLE_SINGLEPANE_SUPABASE_BOOTSTRAP` | When true, shell requires a session before loading the workspace |
+| `VITE_ATLAS_PRAYPHONE_URL` | Origin of the Pray Phone agent app; enables the **warm line** portal item — [prayphone.md](./prayphone.md) |
 
 The Vite client uses Proof Key for Code Exchange (PKCE) and session detection from the URL (`src/lib/supabaseClient.ts`).
 
