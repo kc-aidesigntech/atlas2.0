@@ -17,6 +17,7 @@ import {
 } from '@atlas/shared'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 import { isPrayPhoneWarmLineConfigured } from '@/features/atlas2026/singlepane/data-access/prayphoneSubapp'
+import { fetchCanAccessWarmLineAgent } from '@/features/atlas2026/singlepane/data-access/warmlineAccess'
 import {
   applyIntakeOverrides,
   loadEnrolleeIntakes,
@@ -51,13 +52,13 @@ function hideDeferredCountyCommonsMenu(menus: string[]) {
   return menus.filter((menu) => menu.trim().toLowerCase() !== 'county commons')
 }
 
-/** Hide the warm-line item until Pray Phone's agent origin is configured. */
-function hideUnconfiguredWarmLineMenu(menus: string[]) {
-  if (isPrayPhoneWarmLineConfigured()) return menus
+/** Hide warm line unless the agent origin is configured and this identity may sit it. */
+function hideUnconfiguredWarmLineMenu(menus: string[], canAccessWarmLine: boolean) {
+  if (isPrayPhoneWarmLineConfigured() && canAccessWarmLine) return menus
   return menus.filter((menu) => menu.trim().toLowerCase() !== 'warm line')
 }
 
-function normalizeNavigatorTopMenus(menus: string[]) {
+function normalizeNavigatorTopMenus(menus: string[], canAccessWarmLine: boolean) {
   const normalized = hideUnconfiguredWarmLineMenu(
     hideDeferredCountyCommonsMenu(
       menus
@@ -69,22 +70,24 @@ function normalizeNavigatorTopMenus(menus: string[]) {
           return menu
         })
         .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
-    )
+    ),
+    canAccessWarmLine
   )
   if (!normalized.some((menu) => menu.trim().toLowerCase() === 'enrollees')) normalized.unshift('enrollees')
   return normalized
 }
 
-function normalizeRoleTopMenus(roleKey: string, menus: string[]) {
-  if (roleKey === 'navigator') return normalizeNavigatorTopMenus(menus)
+function normalizeRoleTopMenus(roleKey: string, menus: string[], canAccessWarmLine: boolean) {
+  if (roleKey === 'navigator') return normalizeNavigatorTopMenus(menus, canAccessWarmLine)
   if (roleKey === 'partner') return ['referral portal', 'my station', 'service capacity']
   if (roleKey === 'supervisor') {
     const normalized = hideUnconfiguredWarmLineMenu(
-      hideDeferredCountyCommonsMenu(menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning'))
+      hideDeferredCountyCommonsMenu(menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning')),
+      canAccessWarmLine
     )
     return normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]
   }
-  return hideUnconfiguredWarmLineMenu(hideDeferredCountyCommonsMenu(menus))
+  return hideUnconfiguredWarmLineMenu(hideDeferredCountyCommonsMenu(menus), canAccessWarmLine)
 }
 
 function buildAdminSupersetMenus(roleConfigs: Array<{ role: AtlasRole; topMenus: string[]; actionMenus: string[] }>) {
@@ -159,7 +162,8 @@ export async function loadSinglePaneBootstrap(
     loadRows,
     breakdownRows,
     navigatorAssignedEnrollees,
-    navigatorPersonId
+    navigatorPersonId,
+    canAccessWarmLine
   ] = await Promise.all([
     withOptionalSupabaseFallback('singlepane.roleNavigation', () => fetchAppRoleNavigation(supabase, 'singlepane'), []),
     withOptionalSupabaseFallback(
@@ -185,7 +189,8 @@ export async function loadSinglePaneBootstrap(
       : Promise.resolve([]),
     role === 'navigator'
       ? withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
-      : Promise.resolve(null)
+      : Promise.resolve(null),
+    withOptionalSupabaseFallback('singlepane.warmLineAccess', () => fetchCanAccessWarmLineAgent(), false)
   ])
 
   const navigatorEnrollmentIds =
@@ -237,7 +242,7 @@ export async function loadSinglePaneBootstrap(
 
   const normalizedRoleConfigs = roleNavigation.map((item) => ({
     role: item.roleKey as AtlasRole,
-    topMenus: normalizeRoleTopMenus(item.roleKey, item.topMenus),
+    topMenus: normalizeRoleTopMenus(item.roleKey, item.topMenus, canAccessWarmLine === true),
     actionMenus: item.actionMenus
   }))
   const adminSuperset = buildAdminSupersetMenus(normalizedRoleConfigs)

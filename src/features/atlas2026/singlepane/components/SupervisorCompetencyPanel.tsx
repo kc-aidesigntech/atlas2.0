@@ -1,4 +1,5 @@
 import React from 'react'
+import WarmLineAccessToggle from '@/features/atlas2026/singlepane/components/WarmLineAccessToggle'
 import type { SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/shared/contracts'
 
 interface SupervisorNavigatorDirectoryEntry {
@@ -33,7 +34,7 @@ export default function SupervisorCompetencyPanel({
         {navigatorDirectory.length ? (
           <div className="space-y-2">
             {navigatorDirectory.map((row) => (
-              <label
+              <div
                 key={row.navigatorPersonId}
                 className="flex items-center justify-between rounded-md border px-2 py-1.5"
                 style={{ borderColor: '#ffffff3a' }}
@@ -42,14 +43,25 @@ export default function SupervisorCompetencyPanel({
                   <small className="block text-[12px] text-white">{row.navigatorName}</small>
                   <small className="text-[11px] text-[#cfcfcf]">{row.assignedEnrolleeCount} assigned enrollees</small>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={row.isManagedByCurrentSupervisor}
-                  onChange={() => onToggleManagedNavigator?.(row.navigatorPersonId, !row.isManagedByCurrentSupervisor)}
-                  className="h-4 w-4 accent-white"
-                  disabled={isSavingAssignments}
-                />
-              </label>
+                <div className="flex flex-col items-end gap-2">
+                  <input
+                    type="checkbox"
+                    checked={row.isManagedByCurrentSupervisor}
+                    onChange={() => onToggleManagedNavigator?.(row.navigatorPersonId, !row.isManagedByCurrentSupervisor)}
+                    className="h-4 w-4 accent-white"
+                    disabled={isSavingAssignments}
+                    title="managed by you"
+                  />
+                  {row.isManagedByCurrentSupervisor ? (
+                    <WarmLineAccessToggle
+                      personId={row.navigatorPersonId}
+                      personRoles={['navigator']}
+                      mode="supervisor"
+                      disabled={isSavingAssignments}
+                    />
+                  ) : null}
+                </div>
+              </div>
             ))}
           </div>
         ) : (

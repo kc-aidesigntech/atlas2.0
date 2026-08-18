@@ -1,6 +1,7 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import WarmLineAccessToggle from '@/features/atlas2026/singlepane/components/WarmLineAccessToggle'
 import type {
   AdminDirectorySectionDataProps,
   FieldComponentType,
@@ -325,6 +326,13 @@ export default function AdminDirectorySection({
                   Controls whether this user can add an enrollee from the assignment board using the referral workflow.
                 </small>
               </div>
+            </FieldComponent>
+            <FieldComponent label="pray phone warm line">
+              <WarmLineAccessToggle
+                personId={personDraft.id}
+                personRoles={personDraft.roles}
+                mode="admin"
+              />
             </FieldComponent>
             <FieldComponent label="signup approval">
               <div className="flex flex-wrap items-center gap-2">

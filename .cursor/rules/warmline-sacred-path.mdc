@@ -1,0 +1,34 @@
+---
+description: Warm-line portal contract — do not rename the RPC or invent a second login
+alwaysApply: true
+---
+
+# Atlas warm line — keep the existing names
+
+Atlas owns login and the warm-line yes/no. The conferencer stays on prayphone-server. Do not merge `/agent` into the Atlas SPA unless asked.
+
+## Live handoff (sacred)
+
+`src/features/atlas2026/singlepane/data-access/prayphoneSubapp.ts` opens `/agent#atlas_access_token=…` (URL **fragment**, not sent to the server). `AgentAuthGate` on prayphone-server consumes and strips the hash.
+
+## Capability
+
+`atlas.fn_can_access_warmline_agent` returns `atlas.fn_has_permission('warmline_agent.access')`. Seeded for administrator and supervisor. Navigators need an exception. Do not rename the RPC. Do not add a sixth `role_key`. Do not use Admin Directory `featurePolicy` JSON as the source of truth.
+
+## Do not
+
+- Invent `prayphone_agent.access`
+- Put JWTs in the query string
+- Change kiosk camera, bridge protocol, or SignalWire join from this repo
+
+## Traverse
+
+- This repo: `prayphoneSubapp.ts`, `supabase/migrations/20260817120000_warmline_agent_capability.sql`
+- Device: `README.md`, `src/kiosk2.py`, `src/kiosk_bridge.py`
+- Server: `app/kiosk/call/page.tsx`, `app/agent/page.tsx`, `components/BackendIntercom.tsx`
+- **Phase 6** (six concurrent calls, `agent-1`…`agent-6` queue): prayphone-server rule + assessment canvas. Do not start.
+
+```ts
+// BAD: featurePolicy.prayphone_agent.access or a new role_key
+// GOOD: keep fn_can_access_warmline_agent; grant via warmline_agent.access
+```

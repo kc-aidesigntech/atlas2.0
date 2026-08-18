@@ -6,7 +6,11 @@ Pray Phone stays its own application (SignalWire agent webpage + Raspberry Pi ki
 
 - Shows **warm line** in the navigator / supervisor / administrator top menu when `VITE_ATLAS_PRAYPHONE_URL` is set.
 - Navigates to `{VITE_ATLAS_PRAYPHONE_URL}/agent` and hands off the current Atlas session in the URL fragment (not sent to the server).
-- Authorizes the console with Remote Procedure Call (RPC) `atlas.fn_can_access_warmline_agent()` — active navigator, supervisor, or administrator only. Partners never see the menu and cannot pass the RPC.
+- Authorizes the console with Remote Procedure Call (RPC) `atlas.fn_can_access_warmline_agent()`.
+  Administrators and supervisors have `warmline_agent.access` by role. Navigators need a non-expiring
+  allow exception set in Admin Directory or by their supervisor on the assigned-navigators roster.
+  An administrator can deny a supervisor. Partners never pass. The Warm line menu is hidden unless
+  this RPC is true.
 
 ## What Pray Phone still does
 
@@ -33,6 +37,11 @@ Set **before** `next build` (`NEXT_PUBLIC_*` is compile-time):
 NEXT_PUBLIC_ATLAS_SUPABASE_URL=<same as Atlas VITE_SUPABASE_URL>
 NEXT_PUBLIC_ATLAS_SUPABASE_ANON_KEY=<same as Atlas VITE_SUPABASE_PUBLISHABLE_KEY>
 NEXT_PUBLIC_ATLAS_APP_ORIGIN=https://<atlas-simplified-or-custom-host>
+NEXT_PUBLIC_KIOSK_INGEST_TOKEN=<same as INGEST_TOKEN so the Pi Chromium can create calls>
+INGEST_TOKEN=<device ingest secret>
+ATLAS_SUPABASE_SERVICE_ROLE_KEY=<Atlas service role>
+NEXT_PUBLIC_ATLAS_SUPABASE_URL=<same as Atlas>
+NEXT_PUBLIC_ATLAS_SUPABASE_ANON_KEY=<same as Atlas>
 ```
 
 If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` are used as fallbacks.
