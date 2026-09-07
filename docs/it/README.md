@@ -23,6 +23,7 @@ Start here if you commission environments, manage identity and access, enforce s
 | Authoritative security model | [security-model.md](./security-model.md) |
 | Compliance policy (full) | [executive-compliance-security-policy.md](../executive-compliance-security-policy.md) |
 | Control owners | [compliance-control-owner-checklist.md](../compliance-control-owner-checklist.md) |
+| Atlas Scribe (point-of-care notes) | [scribe.md](./scribe.md) |
 | Pilot accounts (non-production only) | [../users/pilot-guide.md](../users/pilot-guide.md) |
 | Supabase migration notes | [`supabase/README.md`](../../supabase/README.md) |
 
