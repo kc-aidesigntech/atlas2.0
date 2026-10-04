@@ -1,5 +1,6 @@
 import React from 'react'
 import { AtlasInsetCard } from '@/features/atlas2026/components/AtlasPrimitives'
+import AdminPersonNameButton from '@/features/atlas2026/admin/components/AdminPersonNameButton'
 import type { AdminRelationshipsSectionDataProps } from '@/features/atlas2026/admin/components/types'
 
 interface AdminRelationshipsSectionProps extends AdminRelationshipsSectionDataProps {}
@@ -15,7 +16,8 @@ export default function AdminRelationshipsSection({
   handleNavigatorAssignment,
   combinedPeople,
   combinedOrganizations,
-  handlePersonOrganizationAssignment
+  handlePersonOrganizationAssignment,
+  onOpenPerson
 }: AdminRelationshipsSectionProps) {
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
@@ -26,7 +28,7 @@ export default function AdminRelationshipsSection({
             <div key={navigator.id} className="rounded-[18px] border border-white/10 bg-white/5 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-[15px] font-medium text-white">{navigator.fullName}</div>
+                  <AdminPersonNameButton name={navigator.fullName} onOpen={() => onOpenPerson(navigator.id)} className="text-[15px]" />
                   <small className="text-[12px] text-[var(--foreground-secondary)]">{navigator.title || 'navigator'}</small>
                 </div>
                 <select
@@ -119,7 +121,7 @@ export default function AdminRelationshipsSection({
             <div key={person.id} className="rounded-[18px] border border-white/10 bg-white/5 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-[15px] font-medium text-white">{person.fullName}</div>
+                  <AdminPersonNameButton name={person.fullName} onOpen={() => onOpenPerson(person.id)} className="text-[15px]" />
                   <small className="text-[12px] text-[var(--foreground-secondary)]">{person.roles.join(', ') || 'no roles assigned'}</small>
                 </div>
                 <select

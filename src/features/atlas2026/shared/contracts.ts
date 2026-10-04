@@ -322,6 +322,10 @@ export interface AdminPortalFeaturePolicy {
   actionToggles: Record<string, boolean>
 }
 
+// Role maps store only the capabilities an administrator changed for that role.
+// Missing keys keep the shipped Role-Based Access Control (RBAC) baseline.
+export type AdminRoleCapabilityPolicies = Partial<Record<AtlasRole, AdminPortalFeaturePolicy>>
+
 export interface AdminPortalPersonRecord {
   id: string
   fullName: string
@@ -362,6 +366,7 @@ export interface AdminPortalRegistry {
   archivedPersonIds: string[]
   archivedOrganizationIds: string[]
   archivedEnrolleeIds: string[]
+  rolePolicies: AdminRoleCapabilityPolicies
   updatedAtIso: string
 }
 

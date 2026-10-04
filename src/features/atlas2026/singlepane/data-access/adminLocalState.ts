@@ -1,4 +1,4 @@
-import type { AdminPortalRegistry } from '@/features/atlas2026/shared/contracts'
+import type { AdminPortalFeaturePolicy, AdminPortalRegistry, AdminRoleCapabilityPolicies, AtlasRole } from '@/features/atlas2026/shared/contracts'
 import {
   loadLatestConfigPayload,
   loadLocalStorageState,
@@ -18,17 +18,39 @@ function getDefaultAdminPortalRegistry(): AdminPortalRegistry {
     archivedPersonIds: [],
     archivedOrganizationIds: [],
     archivedEnrolleeIds: [],
+    rolePolicies: {},
     updatedAtIso: new Date().toISOString()
   }
 }
 
-function getDefaultFeaturePolicy() {
+function booleanCapabilityMap(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== 'object') return {}
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean')
+  )
+}
+
+function normalizeFeaturePolicy(value: unknown): AdminPortalFeaturePolicy {
+  const policy = value && typeof value === 'object' ? (value as Partial<AdminPortalFeaturePolicy>) : {}
   return {
-    // Default-open posture lets administrators tighten access by screen, card, or action.
-    screenToggles: {},
-    cardToggles: {},
-    actionToggles: {}
+    screenToggles: booleanCapabilityMap(policy.screenToggles),
+    cardToggles: booleanCapabilityMap(policy.cardToggles),
+    actionToggles: booleanCapabilityMap(policy.actionToggles)
   }
+}
+
+const ROLE_POLICY_KEYS: AtlasRole[] = ['administrator', 'supervisor', 'navigator', 'partner']
+
+// Older registries have no rolePolicies field. Empty maps mean every role still
+// uses the shipped baseline until an administrator changes that role.
+function normalizeRolePolicies(value: unknown): AdminRoleCapabilityPolicies {
+  if (!value || typeof value !== 'object') return {}
+  const source = value as Record<string, unknown>
+  return ROLE_POLICY_KEYS.reduce<AdminRoleCapabilityPolicies>((policies, role) => {
+    if (!source[role] || typeof source[role] !== 'object') return policies
+    policies[role] = normalizeFeaturePolicy(source[role])
+    return policies
+  }, {})
 }
 
 function normalizeAdminPortalRegistry(payload: Partial<AdminPortalRegistry> | null | undefined): AdminPortalRegistry {
@@ -43,15 +65,7 @@ function normalizeAdminPortalRegistry(payload: Partial<AdminPortalRegistry> | nu
             String((person as { email?: string }).email || ''),
             ...((person as { linkedEmails?: string[] }).linkedEmails || [])
           ].map((value) => value.trim().toLowerCase()).filter(Boolean))),
-          featurePolicy:
-            (person as { featurePolicy?: unknown }).featurePolicy &&
-            typeof (person as { featurePolicy?: unknown }).featurePolicy === 'object'
-              ? {
-                  screenToggles: { ...getDefaultFeaturePolicy().screenToggles, ...(((person as any).featurePolicy?.screenToggles || {}) as Record<string, boolean>) },
-                  cardToggles: { ...getDefaultFeaturePolicy().cardToggles, ...(((person as any).featurePolicy?.cardToggles || {}) as Record<string, boolean>) },
-                  actionToggles: { ...getDefaultFeaturePolicy().actionToggles, ...(((person as any).featurePolicy?.actionToggles || {}) as Record<string, boolean>) }
-                }
-              : getDefaultFeaturePolicy()
+          featurePolicy: normalizeFeaturePolicy((person as { featurePolicy?: unknown }).featurePolicy)
         }))
       : [],
     organizations: Array.isArray(payload?.organizations) ? payload.organizations.filter(Boolean) : [],
@@ -59,6 +73,7 @@ function normalizeAdminPortalRegistry(payload: Partial<AdminPortalRegistry> | nu
     archivedPersonIds: Array.isArray(payload?.archivedPersonIds) ? payload.archivedPersonIds.map(String).filter(Boolean) : [],
     archivedOrganizationIds: Array.isArray(payload?.archivedOrganizationIds) ? payload.archivedOrganizationIds.map(String).filter(Boolean) : [],
     archivedEnrolleeIds: Array.isArray(payload?.archivedEnrolleeIds) ? payload.archivedEnrolleeIds.map(String).filter(Boolean) : [],
+    rolePolicies: normalizeRolePolicies(payload?.rolePolicies),
     updatedAtIso: payload?.updatedAtIso || new Date().toISOString()
   }
 }

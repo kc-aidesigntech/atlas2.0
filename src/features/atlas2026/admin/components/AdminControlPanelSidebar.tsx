@@ -1,8 +1,8 @@
-import React from 'react'
-import { ShieldCheck } from 'lucide-react'
-import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import React, { useEffect, useState } from 'react'
+import { ChevronDown, ShieldCheck } from 'lucide-react'
+import { AtlasIconButton, AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
-import { ADMIN_SECTIONS, type AdminPortalSection } from './adminDataControlPanelModel'
+import { ADMIN_SECTIONS, parentAdminSectionId, type AdminPortalSection } from './adminDataControlPanelModel'
 
 interface AdminControlPanelSidebarProps {
   accountSettings: { fullName: string; organization: string }
@@ -20,6 +20,38 @@ export default function AdminControlPanelSidebar({
   portalMessage,
   registryError
 }: AdminControlPanelSidebarProps) {
+  const [openParentIds, setOpenParentIds] = useState<AdminPortalSection[]>(() => {
+    const parentId = parentAdminSectionId(activeSection)
+    return parentId ? [parentId] : []
+  })
+
+  // A restored matrix editor should show its nav item. Opening happens here
+  // only when the active section changes, so a manual collapse stays closed.
+  useEffect(() => {
+    const parentId = parentAdminSectionId(activeSection)
+    if (!parentId) return
+    setOpenParentIds((current) => (current.includes(parentId) ? current : [...current, parentId]))
+  }, [activeSection])
+
+  function toggleParent(sectionId: AdminPortalSection) {
+    const willClose = openParentIds.includes(sectionId)
+    setOpenParentIds((current) =>
+      current.includes(sectionId) ? current.filter((id) => id !== sectionId) : [...current, sectionId]
+    )
+    // Closing the branch leaves the parent page, so a matrix does not stay open
+    // after its nav item is hidden.
+    if (willClose && parentAdminSectionId(activeSection) === sectionId) {
+      onSelectSection(sectionId)
+    }
+  }
+
+  function selectSection(sectionId: AdminPortalSection) {
+    onSelectSection(sectionId)
+    const entry = ADMIN_SECTIONS.find((section) => section.id === sectionId)
+    if (!entry?.children?.length) return
+    setOpenParentIds((current) => (current.includes(sectionId) ? current : [...current, sectionId]))
+  }
+
   return (
     <div className="space-y-4">
       <AtlasInsetCard className="rounded-[22px] border-white/15 bg-[#090909] px-4 py-4">
@@ -42,20 +74,59 @@ export default function AdminControlPanelSidebar({
       <div className="space-y-2">
         {ADMIN_SECTIONS.map((section) => {
           const isActive = section.id === activeSection
+          const childIsActive = Boolean(section.children?.some((child) => child.id === activeSection))
+          const isOpen = openParentIds.includes(section.id)
           return (
-            <AtlasTextButton
-              key={section.id}
-              onClick={() => onSelectSection(section.id)}
-              className="w-full px-4 py-3 text-left"
-              style={{
-                ['--button-border-color' as const]: isActive ? 'var(--atlas-signal-lucid-teal)' : '#ffffff25',
-                color: SP_COLORS.white,
-                backgroundColor: isActive ? 'var(--atlas-signal-lucid-teal)' : 'var(--surface-button)'
-              } as React.CSSProperties}
-            >
-              <div className="text-[14px] font-semibold">{section.label}</div>
-              <small className="mt-1 block text-[12px] text-[var(--foreground-secondary)]">{section.description}</small>
-            </AtlasTextButton>
+            <div key={section.id} className="space-y-2">
+              <div className="flex items-start gap-2">
+                <AtlasTextButton
+                  onClick={() => selectSection(section.id)}
+                  className="min-w-0 flex-1 px-4 py-3 text-left"
+                  style={{
+                    ['--button-border-color' as const]: isActive || childIsActive ? 'var(--atlas-signal-lucid-teal)' : '#ffffff25',
+                    color: SP_COLORS.white,
+                    backgroundColor: isActive ? 'var(--atlas-signal-lucid-teal)' : 'var(--surface-button)'
+                  } as React.CSSProperties}
+                >
+                  <div className="text-[14px] font-semibold">{section.label}</div>
+                  <small className="mt-1 block whitespace-normal text-[12px] text-[var(--foreground-secondary)]">{section.description}</small>
+                </AtlasTextButton>
+                {section.children?.length ? (
+                  <AtlasIconButton
+                    aria-expanded={isOpen}
+                    aria-label={isOpen ? `Hide ${section.label} matrices` : `Show ${section.label} matrices`}
+                    onClick={() => toggleParent(section.id)}
+                    style={{
+                      ['--button-border-color' as const]: isOpen ? 'var(--atlas-signal-lucid-teal)' : '#ffffff25',
+                      color: SP_COLORS.white,
+                      backgroundColor: 'var(--surface-button)'
+                    } as React.CSSProperties}
+                  >
+                    <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+                  </AtlasIconButton>
+                ) : null}
+              </div>
+              {isOpen
+                ? section.children?.map((child) => {
+                    const isChildActive = child.id === activeSection
+                    return (
+                      <AtlasTextButton
+                        key={child.id}
+                        onClick={() => onSelectSection(child.id)}
+                        className="ml-4 w-[calc(100%-1rem)] px-3 py-2 text-left"
+                        style={{
+                          ['--button-border-color' as const]: isChildActive ? 'var(--atlas-signal-lucid-teal)' : '#ffffff25',
+                          color: SP_COLORS.white,
+                          backgroundColor: isChildActive ? 'var(--atlas-signal-lucid-teal)' : 'var(--surface-button)'
+                        } as React.CSSProperties}
+                      >
+                        <div className="whitespace-normal text-[13px] font-semibold">{child.label}</div>
+                        <small className="mt-1 block whitespace-normal text-[12px] text-[var(--foreground-secondary)]">{child.description}</small>
+                      </AtlasTextButton>
+                    )
+                  })
+                : null}
+            </div>
           )
         })}
       </div>

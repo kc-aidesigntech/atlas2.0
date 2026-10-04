@@ -1,6 +1,7 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import AdminPersonNameButton from '@/features/atlas2026/admin/components/AdminPersonNameButton'
 import WarmLineAccessToggle from '@/features/atlas2026/singlepane/components/WarmLineAccessToggle'
 import type {
   AdminDirectorySectionDataProps,
@@ -18,15 +19,10 @@ interface AdminDirectorySectionProps {
   combinedOrganizations: AdminDirectorySectionDataProps['combinedOrganizations']
   personDraft: AdminDirectorySectionDataProps['personDraft']
   supervisors: AdminDirectorySectionDataProps['supervisors']
-  isCapabilityAllowedForAnyRole: AdminDirectorySectionDataProps['isCapabilityAllowedForAnyRole']
-  toAtlasRoles: AdminDirectorySectionDataProps['toAtlasRoles']
-  toggleCapabilityOverride: AdminDirectorySectionDataProps['toggleCapabilityOverride']
+  onOpenPerson: (personId: string) => void
   handleSavePersonDraft: AdminDirectorySectionDataProps['handleSavePersonDraft']
   handleDeletePerson: AdminDirectorySectionDataProps['handleDeletePerson']
   ROLE_OPTIONS: AdminDirectorySectionDataProps['roleOptions']
-  ADMIN_POLICY_SCREEN_KEYS: AdminDirectorySectionDataProps['adminPolicyScreenKeys']
-  ADMIN_POLICY_CARD_KEYS: AdminDirectorySectionDataProps['adminPolicyCardKeys']
-  ADMIN_POLICY_ACTION_KEYS: AdminDirectorySectionDataProps['adminPolicyActionKeys']
   RecordTableComponent: RecordTableComponentType
   StatusPillComponent: StatusPillComponentType
   FieldComponent: FieldComponentType
@@ -42,12 +38,7 @@ export default function AdminDirectorySection({
   personDraft,
   ROLE_OPTIONS,
   supervisors,
-  isCapabilityAllowedForAnyRole,
-  toAtlasRoles,
-  toggleCapabilityOverride,
-  ADMIN_POLICY_SCREEN_KEYS,
-  ADMIN_POLICY_CARD_KEYS,
-  ADMIN_POLICY_ACTION_KEYS,
+  onOpenPerson,
   handleSavePersonDraft,
   handleDeletePerson,
   RecordTableComponent,
@@ -79,17 +70,31 @@ export default function AdminDirectorySection({
             const person = combinedPeople.find((entry) => entry.id === id)
             if (!person) return null
             return (
-              <button
-                type="button"
-                className="grid w-full grid-cols-[1.3fr_repeat(3,minmax(0,1fr))] gap-3 px-4 py-3 text-left transition hover:bg-white/5"
+              <div
+                role="button"
+                tabIndex={0}
+                className="grid w-full cursor-pointer grid-cols-[1.3fr_repeat(3,minmax(0,1fr))] gap-3 px-4 py-3 text-left transition hover:bg-white/5"
                 style={selectedPersonId === person.id ? { backgroundColor: 'rgba(252,192,26,0.08)' } : undefined}
                 onClick={() => {
                   setSelectedPersonId(person.id)
                   setPersonDraft(person)
                 }}
+                onKeyDown={(event) => {
+                  // The name button opens the permission record. Enter on the row
+                  // itself only selects this directory record.
+                  if (event.target !== event.currentTarget) return
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  setSelectedPersonId(person.id)
+                  setPersonDraft(person)
+                }}
               >
                 <div>
-                  <div className="text-[14px] font-medium text-white">{person.fullName || 'unnamed person'}</div>
+                  <AdminPersonNameButton
+                    name={person.fullName || 'unnamed person'}
+                    onOpen={() => onOpenPerson(person.id)}
+                    className="text-[14px]"
+                  />
                   <small className="block text-[12px] text-[var(--foreground-secondary)]">{person.email || 'email pending'}</small>
                 </div>
                 <div className="text-[13px] text-white">{person.roles.join(', ')}</div>
@@ -102,14 +107,25 @@ export default function AdminDirectorySection({
                     {person.approvalState}
                   </small>
                 </div>
-              </button>
+              </div>
             )
           }}
         />
       </AtlasInsetCard>
 
       <AtlasInsetCard className="rounded-[22px] px-5 py-5">
-        <div className="mb-4 text-[22px] font-medium text-white">Directory editor</div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[22px] font-medium text-white">Directory editor</div>
+          {personDraft ? (
+            <AtlasTextButton
+              onClick={() => onOpenPerson(personDraft.id)}
+              className="px-3 py-2 text-[12px] font-medium"
+              style={{ ['--button-border-color' as const]: SP_COLORS.yellow, color: SP_COLORS.yellow } as React.CSSProperties}
+            >
+              open permission record
+            </AtlasTextButton>
+          ) : null}
+        </div>
         {personDraft ? (
           <div className="space-y-3">
             <FieldComponent label="full name">
@@ -220,113 +236,6 @@ export default function AdminDirectorySection({
                 </select>
               </FieldComponent>
             </div>
-            <FieldComponent label="assignment board access">
-              <div className="flex flex-wrap items-center gap-2">
-                <AtlasTextButton
-                  onClick={() =>
-                    setPersonDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            canViewNavigatorAssignmentNames: !current.canViewNavigatorAssignmentNames,
-                            featurePolicy: {
-                              ...current.featurePolicy,
-                              actionToggles: (() => {
-                                const nextCanView = !current.canViewNavigatorAssignmentNames
-                                const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
-                                  toAtlasRoles(current.roles),
-                                  'actionToggles',
-                                  'assignmentBoard.viewNavigatorNames',
-                                  undefined
-                                )
-                                if (nextCanView === roleDefaultsToAllowed) {
-                                  const next = { ...current.featurePolicy.actionToggles }
-                                  delete next['assignmentBoard.viewNavigatorNames']
-                                  return next
-                                }
-                                return {
-                                  ...current.featurePolicy.actionToggles,
-                                  'assignmentBoard.viewNavigatorNames': nextCanView
-                                }
-                              })()
-                            }
-                          }
-                        : current
-                    )
-                  }
-                  className="px-[14px] py-[7px] text-[13px] font-medium"
-                  style={
-                    {
-                      ['--button-border-color' as const]: personDraft.canViewNavigatorAssignmentNames ? SP_COLORS.deepGreen : '#ffffff25',
-                      color: personDraft.canViewNavigatorAssignmentNames ? SP_COLORS.deepGreen : SP_COLORS.white,
-                      backgroundColor: personDraft.canViewNavigatorAssignmentNames ? 'rgba(69,191,85,0.12)' : 'transparent'
-                    } as React.CSSProperties
-                  }
-                >
-                  {personDraft.canViewNavigatorAssignmentNames ? 'navigator names enabled' : 'navigator names disabled'}
-                </AtlasTextButton>
-                <small className="text-[12px] text-[var(--foreground-secondary)]">
-                  Allows this user to click assignment-count labels and view assigned navigator names.
-                </small>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <AtlasTextButton
-                  onClick={() =>
-                    setPersonDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            featurePolicy: {
-                              ...current.featurePolicy,
-                              actionToggles: (() => {
-                                const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
-                                  toAtlasRoles(current.roles),
-                                  'actionToggles',
-                                  'assignmentBoard.addReferral',
-                                  undefined
-                                )
-                                return toggleCapabilityOverride(
-                                  current.featurePolicy.actionToggles,
-                                  roleDefaultsToAllowed,
-                                  'assignmentBoard.addReferral'
-                                )
-                              })()
-                            }
-                          }
-                        : current
-                    )
-                  }
-                  className="px-[14px] py-[7px] text-[13px] font-medium"
-                  style={
-                    (() => {
-                      const canAddFromBoard = isCapabilityAllowedForAnyRole(
-                        toAtlasRoles(personDraft.roles),
-                        'actionToggles',
-                        'assignmentBoard.addReferral',
-                        personDraft.featurePolicy.actionToggles
-                      )
-                      return {
-                        ['--button-border-color' as const]: canAddFromBoard ? SP_COLORS.deepGreen : '#ffffff25',
-                        color: canAddFromBoard ? SP_COLORS.deepGreen : SP_COLORS.white,
-                        backgroundColor: canAddFromBoard ? 'rgba(69,191,85,0.12)' : 'transparent'
-                      } as React.CSSProperties
-                    })()
-                  }
-                >
-                  {isCapabilityAllowedForAnyRole(
-                    toAtlasRoles(personDraft.roles),
-                    'actionToggles',
-                    'assignmentBoard.addReferral',
-                    personDraft.featurePolicy.actionToggles
-                  )
-                    ? 'assignment board + enabled'
-                    : 'assignment board + disabled'}
-                </AtlasTextButton>
-                <small className="text-[12px] text-[var(--foreground-secondary)]">
-                  Controls whether this user can add an enrollee from the assignment board using the referral workflow.
-                </small>
-              </div>
-            </FieldComponent>
             <FieldComponent label="pray phone warm line">
               <WarmLineAccessToggle
                 personId={personDraft.id}
@@ -361,165 +270,8 @@ export default function AdminDirectorySection({
                   {personDraft.approvalState === 'approved' ? 'approved ✓' : 'pending approval'}
                 </AtlasTextButton>
                 <small className="text-[12px] text-[var(--foreground-secondary)]">
-                  Pending users inherit role defaults; use these toggles only for explicit admin exceptions.
+                  Approval decides whether this person can sign in. Permission exceptions are edited on the permission record.
                 </small>
-              </div>
-            </FieldComponent>
-            <FieldComponent label="feature policy controls">
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">screens</small>
-                  <div className="flex flex-wrap gap-2">
-                    {ADMIN_POLICY_SCREEN_KEYS.map((key) => {
-                      const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
-                        toAtlasRoles(personDraft.roles),
-                        'screenToggles',
-                        key,
-                        undefined
-                      )
-                      const isAllowed = isCapabilityAllowedForAnyRole(
-                        toAtlasRoles(personDraft.roles),
-                        'screenToggles',
-                        key,
-                        personDraft.featurePolicy.screenToggles
-                      )
-                      return (
-                        <AtlasTextButton
-                          key={key}
-                          onClick={() =>
-                            setPersonDraft((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    featurePolicy: {
-                                      ...current.featurePolicy,
-                                      screenToggles: toggleCapabilityOverride(
-                                        current.featurePolicy.screenToggles,
-                                        roleDefaultsToAllowed,
-                                        key
-                                      )
-                                    }
-                                  }
-                                : current
-                            )
-                          }
-                          className="px-[12px] py-[6px] text-[12px] font-medium"
-                          style={
-                            {
-                              ['--button-border-color' as const]: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
-                              color: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
-                              backgroundColor: isAllowed ? 'rgba(69,191,85,0.12)' : 'rgba(239,68,68,0.1)'
-                            } as React.CSSProperties
-                          }
-                        >
-                          {key}: {isAllowed ? 'allow' : 'block'}
-                        </AtlasTextButton>
-                      )
-                    })}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">cards</small>
-                  <div className="flex flex-wrap gap-2">
-                    {ADMIN_POLICY_CARD_KEYS.map((key) => {
-                      const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
-                        toAtlasRoles(personDraft.roles),
-                        'cardToggles',
-                        key,
-                        undefined
-                      )
-                      const isAllowed = isCapabilityAllowedForAnyRole(
-                        toAtlasRoles(personDraft.roles),
-                        'cardToggles',
-                        key,
-                        personDraft.featurePolicy.cardToggles
-                      )
-                      return (
-                        <AtlasTextButton
-                          key={key}
-                          onClick={() =>
-                            setPersonDraft((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    featurePolicy: {
-                                      ...current.featurePolicy,
-                                      cardToggles: toggleCapabilityOverride(
-                                        current.featurePolicy.cardToggles,
-                                        roleDefaultsToAllowed,
-                                        key
-                                      )
-                                    }
-                                  }
-                                : current
-                            )
-                          }
-                          className="px-[12px] py-[6px] text-[12px] font-medium"
-                          style={
-                            {
-                              ['--button-border-color' as const]: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
-                              color: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
-                              backgroundColor: isAllowed ? 'rgba(69,191,85,0.12)' : 'rgba(239,68,68,0.1)'
-                            } as React.CSSProperties
-                          }
-                        >
-                          {key}: {isAllowed ? 'allow' : 'block'}
-                        </AtlasTextButton>
-                      )
-                    })}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <small className="text-[12px] uppercase tracking-[0.08em] text-[var(--foreground-secondary)]">actions</small>
-                  <div className="flex flex-wrap gap-2">
-                    {ADMIN_POLICY_ACTION_KEYS.map((key) => {
-                      const roleDefaultsToAllowed = isCapabilityAllowedForAnyRole(
-                        toAtlasRoles(personDraft.roles),
-                        'actionToggles',
-                        key,
-                        undefined
-                      )
-                      const isAllowed = isCapabilityAllowedForAnyRole(
-                        toAtlasRoles(personDraft.roles),
-                        'actionToggles',
-                        key,
-                        personDraft.featurePolicy.actionToggles
-                      )
-                      return (
-                        <AtlasTextButton
-                          key={key}
-                          onClick={() =>
-                            setPersonDraft((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    featurePolicy: {
-                                      ...current.featurePolicy,
-                                      actionToggles: toggleCapabilityOverride(
-                                        current.featurePolicy.actionToggles,
-                                        roleDefaultsToAllowed,
-                                        key
-                                      )
-                                    }
-                                  }
-                                : current
-                            )
-                          }
-                          className="px-[12px] py-[6px] text-[12px] font-medium"
-                          style={
-                            {
-                              ['--button-border-color' as const]: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
-                              color: isAllowed ? SP_COLORS.deepGreen : SP_COLORS.red,
-                              backgroundColor: isAllowed ? 'rgba(69,191,85,0.12)' : 'rgba(239,68,68,0.1)'
-                            } as React.CSSProperties
-                          }
-                        >
-                          {key}: {isAllowed ? 'allow' : 'block'}
-                        </AtlasTextButton>
-                      )
-                    })}
-                  </div>
-                </div>
               </div>
             </FieldComponent>
             <FieldComponent label="status">

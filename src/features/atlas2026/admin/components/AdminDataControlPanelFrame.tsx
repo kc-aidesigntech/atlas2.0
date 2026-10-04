@@ -50,7 +50,7 @@ export default function AdminDataControlPanelFrame({
         </div>
       }
     >
-      <div className="grid gap-5 xl:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
         <AdminControlPanelSidebar
           accountSettings={accountSettings}
           activeSection={activeSection}

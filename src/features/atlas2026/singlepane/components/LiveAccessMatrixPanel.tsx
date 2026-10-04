@@ -1,5 +1,6 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasStatusPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AdminPersonNameButton from '@/features/atlas2026/admin/components/AdminPersonNameButton'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
   AccessMatrixPartnerRecord,
@@ -10,21 +11,26 @@ import type {
   TroubleshootingSessionState
 } from '@/features/atlas2026/shared/contracts'
 
+export type LiveAccessMatrixSection = 'person-roles' | 'navigator-enrollee' | 'supervisor-navigator' | 'partner-ownership'
+
 interface LiveAccessMatrixPanelProps {
+  section: LiveAccessMatrixSection
   dataset: AccessMatrixDataset | null
   error: string | null
   isSaving: boolean
-  onSavePersonRoles: (personId: string, roleKeys: AdminPortalPersonRole[]) => Promise<void>
-  onSaveEnrollmentNavigator: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<void>
-  onSaveSupervisorAssignment: (navigatorPersonId: string, supervisorPersonIds: string[]) => Promise<void>
-  onSavePartnerPrimaryContact: (partnerId: string, primaryContactPersonIds: string[]) => Promise<void>
+  onSavePersonRoles: (personId: string, roleKeys: AdminPortalPersonRole[]) => Promise<unknown> | unknown
+  onSaveEnrollmentNavigator: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<unknown> | unknown
+  onSaveSupervisorAssignment: (navigatorPersonId: string, supervisorPersonIds: string[]) => Promise<unknown> | unknown
+  onSavePartnerPrimaryContact: (partnerId: string, primaryContactPersonIds: string[]) => Promise<unknown> | unknown
   remoteSession: TroubleshootingSessionState | null
   partnerTroubleshootingGrants: Record<string, PartnerTroubleshootingGrant>
   onStartTroubleshooting: (personId: string, role: AtlasRole) => Promise<void> | void
   onStopTroubleshooting: () => void
+  onOpenPerson?: (personId: string) => void
 }
 
 export default function LiveAccessMatrixPanel({
+  section,
   dataset,
   error,
   isSaving,
@@ -35,7 +41,8 @@ export default function LiveAccessMatrixPanel({
   remoteSession,
   partnerTroubleshootingGrants,
   onStartTroubleshooting,
-  onStopTroubleshooting
+  onStopTroubleshooting,
+  onOpenPerson
 }: LiveAccessMatrixPanelProps) {
   const [message, setMessage] = React.useState<string | null>(null)
   const [busyKey, setBusyKey] = React.useState<string | null>(null)
@@ -56,7 +63,7 @@ export default function LiveAccessMatrixPanel({
   }
   const troubleshootingRoles: AtlasRole[] = ['administrator', 'supervisor', 'navigator', 'partner']
 
-  async function runSave(key: string, callback: () => Promise<void>, successMessage: string) {
+  async function runSave(key: string, callback: () => Promise<unknown> | unknown, successMessage: string) {
     setBusyKey(key)
     try {
       await callback()
@@ -75,31 +82,31 @@ export default function LiveAccessMatrixPanel({
   }
 
   return (
-    <AtlasInsetCard className="rounded-[22px] border-white/15 bg-[#090909] px-5 py-4">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <small className="block text-[12px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">live supabase matrix</small>
-          <div className="mt-1 text-[20px] font-medium text-white">Identity role and assignment matrix</div>
-          <small className="block text-[12px] text-[var(--foreground-secondary)]">
-            Saves through guarded admin RPC functions so relationship tests align with production contracts without direct browser writes.
-          </small>
-        </div>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <small className="block text-[12px] text-[var(--foreground-secondary)]">
+          Saves through guarded admin Remote Procedure Call (RPC) functions so relationship edits stay on the production contract.
+        </small>
         <AtlasStatusPill color={isSaving ? SP_COLORS.yellow : SP_COLORS.deepGreen}>
           {isSaving ? 'saving' : 'synced'}
         </AtlasStatusPill>
       </div>
 
-      {message ? <div className="mb-3 text-[12px] text-[var(--atlas-signal-green)]">{message}</div> : null}
-      {error ? <div className="mb-3 text-[12px]" style={{ color: SP_COLORS.red }}>{error}</div> : null}
+      {message ? <div className="text-[12px] text-[var(--atlas-signal-green)]">{message}</div> : null}
+      {error ? <div className="text-[12px]" style={{ color: SP_COLORS.red }}>{error}</div> : null}
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+      {section === 'person-roles' ? (
         <AtlasInsetCard className="rounded-[18px] px-4 py-4">
           <div className="mb-2 text-[16px] font-semibold text-white">Person-to-role matrix</div>
           <div className="space-y-2">
             {people.map((person) => (
               <div key={person.id} className="rounded-[14px] border border-white/10 bg-white/5 p-3">
                 <div className="mb-2">
-                  <div className="text-[13px] font-medium text-white">{person.fullName}</div>
+                  {onOpenPerson ? (
+                    <AdminPersonNameButton name={person.fullName} onOpen={() => onOpenPerson(person.id)} className="text-[13px]" />
+                  ) : (
+                    <div className="text-[13px] font-medium text-white">{person.fullName}</div>
+                  )}
                   <small className="text-[11px] text-[var(--foreground-secondary)]">{person.email || 'email not set'}</small>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -184,7 +191,9 @@ export default function LiveAccessMatrixPanel({
             ))}
           </div>
         </AtlasInsetCard>
+      ) : null}
 
+      {section === 'navigator-enrollee' ? (
         <AtlasInsetCard className="rounded-[18px] px-4 py-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div className="text-[16px] font-semibold text-white">Navigator-to-enrollee matrix</div>
@@ -239,7 +248,9 @@ export default function LiveAccessMatrixPanel({
             ))}
           </div>
         </AtlasInsetCard>
+      ) : null}
 
+      {section === 'supervisor-navigator' ? (
         <AtlasInsetCard className="rounded-[18px] px-4 py-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div className="text-[16px] font-semibold text-white">Supervisor-to-navigator matrix</div>
@@ -258,7 +269,13 @@ export default function LiveAccessMatrixPanel({
               const navigator = personById.get(row.navigatorPersonId)
               return (
                 <div key={row.navigatorPersonId} className="rounded-[14px] border border-white/10 bg-white/5 p-3">
-                  <div className="mb-2 text-[13px] font-medium text-white">{navigator?.fullName || 'navigator'}</div>
+                  <div className="mb-2">
+                    {onOpenPerson && navigator ? (
+                      <AdminPersonNameButton name={navigator.fullName} onOpen={() => onOpenPerson(navigator.id)} className="text-[13px]" />
+                    ) : (
+                      <div className="text-[13px] font-medium text-white">{navigator?.fullName || 'navigator'}</div>
+                    )}
+                  </div>
                   <select
                     multiple={!supervisorSingleChoice}
                     value={supervisorSingleChoice ? row.supervisorPersonIds[0] || '' : row.supervisorPersonIds}
@@ -296,7 +313,9 @@ export default function LiveAccessMatrixPanel({
             })}
           </div>
         </AtlasInsetCard>
+      ) : null}
 
+      {section === 'partner-ownership' ? (
         <AtlasInsetCard className="rounded-[18px] px-4 py-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div className="text-[16px] font-semibold text-white">Partner ownership matrix</div>
@@ -315,6 +334,13 @@ export default function LiveAccessMatrixPanel({
               <div key={row.partnerId} className="rounded-[14px] border border-white/10 bg-white/5 p-3">
                 <div className="mb-2">
                   <div className="text-[13px] font-medium text-white">{row.organizationName}</div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {row.primaryContactPersonIds.map((personId) => {
+                      const contact = personById.get(personId)
+                      if (!contact || !onOpenPerson) return null
+                      return <AdminPersonNameButton key={personId} name={contact.fullName} onOpen={() => onOpenPerson(contact.id)} className="text-[12px]" />
+                    })}
+                  </div>
                   <small className="text-[11px] text-[var(--foreground-secondary)]">
                     {row.primaryContactEmails.length ? row.primaryContactEmails.join(', ') : 'no primary contact email'}
                   </small>
@@ -353,7 +379,7 @@ export default function LiveAccessMatrixPanel({
             ))}
           </div>
         </AtlasInsetCard>
-      </div>
-    </AtlasInsetCard>
+      ) : null}
+    </div>
   )
 }

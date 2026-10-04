@@ -18,8 +18,11 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-.atlas-admin-input option {
-  color: #111111;
+.atlas-admin-input option,
+.atlas-admin-input option:checked {
+  /* Native option rows do not inherit the control color. Pin them to the
+     same foreground token so multi-select lists stay readable on dark surfaces. */
+  color: var(--foreground-primary, #f5f7fa);
 }
 @tailwind base;
 @tailwind components;

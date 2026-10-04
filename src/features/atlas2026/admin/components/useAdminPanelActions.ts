@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { AdminPortalOrganizationRecord, AdminPortalPersonRecord, AdminPortalRegistry, RegulationReviewSettings } from '@/features/atlas2026/shared/contracts'
+import type { AdminPortalFeaturePolicy, AdminPortalOrganizationRecord, AdminPortalPersonRecord, AdminPortalRegistry, AdminRoleCapabilityPolicies, AtlasRole, RegulationReviewSettings } from '@/features/atlas2026/shared/contracts'
 import type { CombinedEnrolleeRow, RegulationReviewRosterRow } from '@/features/atlas2026/admin/components/types'
 
 type AdminPanelActionContext = Record<string, any>
@@ -25,7 +25,6 @@ export function useAdminPanelActions(context: AdminPanelActionContext) {
     onSaveIntake,
     personDraft,
     setPersonDraft,
-    selectedPersonId,
     organizationDraft,
     setOrganizationDraft,
     navigatorCoverageOptions,
@@ -166,11 +165,59 @@ export function useAdminPanelActions(context: AdminPanelActionContext) {
     setPersonDraft(null)
   }
 
+  function syncDirectoryDraftPermissions(personId: string, featurePolicy: AdminPortalFeaturePolicy, canViewNavigatorAssignmentNames: boolean) {
+    // Directory identity edits stay in the draft. Only the permission fields move,
+    // so saving a name later does not write back a stale exception map.
+    setPersonDraft((current: AdminPortalPersonRecord | null) =>
+      current && current.id === personId ? { ...current, featurePolicy, canViewNavigatorAssignmentNames } : current
+    )
+  }
+
+  async function handleSavePersonFeaturePolicy(personId: string, featurePolicy: AdminPortalFeaturePolicy) {
+    const person = combinedPeople.find((entry: AdminPortalPersonRecord) => entry.id === personId)
+    if (!person) return
+    const canViewNavigatorAssignmentNames = isCapabilityAllowedForAnyRole(
+      toAtlasRoles(person.roles),
+      'actionToggles',
+      'assignmentBoard.viewNavigatorNames',
+      featurePolicy.actionToggles,
+      effectiveRegistry.rolePolicies
+    )
+    const nextPerson = { ...person, featurePolicy, canViewNavigatorAssignmentNames }
+    await commitRegistry(withRegistryPerson(nextPerson), `Saved permission record for ${person.fullName || person.email || 'person'}.`)
+    syncDirectoryDraftPermissions(personId, featurePolicy, canViewNavigatorAssignmentNames)
+  }
+
+  async function handleSaveRolePolicies(rolePolicies: AdminRoleCapabilityPolicies, role: AtlasRole) {
+    // The legacy navigator-name flag follows the role unless that person already
+    // has an exception, so a role change does not leave stored people behind.
+    const people = effectiveRegistry.people.map((person: AdminPortalPersonRecord) => {
+      if (Object.prototype.hasOwnProperty.call(person.featurePolicy.actionToggles, 'assignmentBoard.viewNavigatorNames')) return person
+      const canViewNavigatorAssignmentNames = isCapabilityAllowedForAnyRole(
+        toAtlasRoles(person.roles),
+        'actionToggles',
+        'assignmentBoard.viewNavigatorNames',
+        undefined,
+        rolePolicies
+      )
+      return canViewNavigatorAssignmentNames === person.canViewNavigatorAssignmentNames
+        ? person
+        : { ...person, canViewNavigatorAssignmentNames }
+    })
+    await commitRegistry({ ...effectiveRegistry, rolePolicies, people }, `Saved ${role} role permissions.`)
+  }
+
   async function handleClearPersonPermissionExceptions(person: AdminPortalPersonRecord) {
-    const canViewNames = isCapabilityAllowedForAnyRole(toAtlasRoles(person.roles), 'actionToggles', 'assignmentBoard.viewNavigatorNames', undefined)
+    const canViewNames = isCapabilityAllowedForAnyRole(
+      toAtlasRoles(person.roles),
+      'actionToggles',
+      'assignmentBoard.viewNavigatorNames',
+      undefined,
+      effectiveRegistry.rolePolicies
+    )
     const resetPerson = { ...person, canViewNavigatorAssignmentNames: canViewNames, featurePolicy: createDefaultFeaturePolicy() }
     await commitRegistry(withRegistryPerson(resetPerson), `Cleared permission exceptions for ${person.fullName || person.email || 'person'}.`)
-    if (selectedPersonId === resetPerson.id) setPersonDraft(resetPerson)
+    syncDirectoryDraftPermissions(resetPerson.id, resetPerson.featurePolicy, resetPerson.canViewNavigatorAssignmentNames)
   }
 
   async function handleSaveOrganizationDraft() {
@@ -287,6 +334,8 @@ export function useAdminPanelActions(context: AdminPanelActionContext) {
     handleArchiveEnrollee,
     handleSavePersonDraft,
     handleDeletePerson,
+    handleSavePersonFeaturePolicy,
+    handleSaveRolePolicies,
     handleClearPersonPermissionExceptions,
     handleSaveOrganizationDraft,
     handleDeleteOrganization,

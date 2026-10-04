@@ -17,9 +17,11 @@ import type {
   IntervalAssessmentDueItem,
   IntervalAssessmentRule,
   NavigatorProgramState,
+  PartnerTroubleshootingGrant,
   RegulationReviewDueItem,
   RegulationReviewSettings,
   SupervisorNavigatorCompetencySummary,
+  TroubleshootingSessionState,
   ZCodeDomainSurveyHistorySummary,
   ZCodeSurveyPrompt
 } from '@/features/atlas2026/shared/contracts'
@@ -32,6 +34,22 @@ export type AdminPortalSection =
   | 'relationships'
   | 'assessments'
   | 'permissions'
+  | 'matrix-person-roles'
+  | 'matrix-navigator-enrollee'
+  | 'matrix-supervisor-navigator'
+  | 'matrix-partner-ownership'
+
+export type AdminMatrixSection = Extract<
+  AdminPortalSection,
+  'matrix-person-roles' | 'matrix-navigator-enrollee' | 'matrix-supervisor-navigator' | 'matrix-partner-ownership'
+>
+
+export interface AdminNavEntry {
+  id: AdminPortalSection
+  label: string
+  description: string
+  children?: AdminNavEntry[]
+}
 
 export interface AdminDataControlPanelProps {
   metrics: AdminDataQualityMetric[]
@@ -73,6 +91,15 @@ export interface AdminDataControlPanelProps {
   requestedDomainSurveyZCode?: string | null
   onAcknowledgeRequestedDomainSurveyZCode?: () => void
   onSaveEnrollmentNavigators: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<unknown> | unknown
+  onSaveAccessMatrixPersonRoles: (personId: string, roleKeys: AdminPortalPersonRole[]) => Promise<unknown> | unknown
+  onSaveAccessMatrixSupervisorAssignments: (navigatorPersonId: string, supervisorPersonIds: string[]) => Promise<unknown> | unknown
+  onSaveAccessMatrixPartnerPrimaryContacts: (partnerId: string, primaryContactPersonIds: string[]) => Promise<unknown> | unknown
+  accessMatrixError: string | null
+  isSavingAccessMatrix: boolean
+  remoteSession: TroubleshootingSessionState | null
+  partnerTroubleshootingGrants: Record<string, PartnerTroubleshootingGrant>
+  onStartTroubleshooting: (personId: string, role: AtlasRole) => Promise<void> | void
+  onStopTroubleshooting: () => void
   onSaveIntervalAssessmentRule: (rule: IntervalAssessmentRule) => Promise<unknown> | unknown
   onSaveIntake: (intake: EnrolleeIntakeRecord) => Promise<unknown> | unknown
   onOverrideEnrolleeZCodes: (
@@ -82,15 +109,58 @@ export interface AdminDataControlPanelProps {
   onScribeMenuChanged?: (role: AtlasRole, visible: boolean) => void
 }
 
-export const ADMIN_SECTIONS: Array<{ id: AdminPortalSection; label: string; description: string }> = [
+// Matrices live under the control-center section they edit, and stay collapsed
+// until opened. Stacking all four on the admin screen made one endless page.
+export const ADMIN_SECTIONS: AdminNavEntry[] = [
   { id: 'overview', label: 'Overview', description: 'Portal health, requests, and system posture.' },
   { id: 'enrollees', label: 'Enrollees', description: 'Edit records, create drafts, archive, and reassign.' },
-  { id: 'directory', label: 'People & roles', description: 'Manage administrators, supervisors, navigators, and partner users.' },
-  { id: 'organizations', label: 'Organizations', description: 'Partner and internal organization registry with contact ownership.' },
-  { id: 'relationships', label: 'Assignments', description: 'Quickly manage one-to-many reporting and coverage relationships.' },
+  {
+    id: 'directory',
+    label: 'People & roles',
+    description: 'Manage administrators, supervisors, navigators, and partner users.',
+    children: [
+      { id: 'matrix-person-roles', label: 'Person-to-role matrix', description: 'Grant roles and open troubleshooting.' }
+    ]
+  },
+  {
+    id: 'organizations',
+    label: 'Organizations',
+    description: 'Partner and internal organization registry with contact ownership.',
+    children: [
+      { id: 'matrix-partner-ownership', label: 'Partner ownership matrix', description: 'Assign primary contacts for each partner.' }
+    ]
+  },
+  {
+    id: 'relationships',
+    label: 'Assignments',
+    description: 'Quickly manage one-to-many reporting and coverage relationships.',
+    children: [
+      { id: 'matrix-supervisor-navigator', label: 'Supervisor-to-navigator matrix', description: 'Set who supervises each navigator.' },
+      { id: 'matrix-navigator-enrollee', label: 'Navigator-to-enrollee matrix', description: 'Set navigator coverage for each enrollee.' }
+    ]
+  },
   { id: 'assessments', label: 'Assessments', description: 'Control interval rules, due generation, and navigator program monitoring.' },
-  { id: 'permissions', label: 'Permission exceptions', description: 'Show or hide scribe by permission level, and clear person-level overrides.' }
+  { id: 'permissions', label: 'Permissions', description: 'Open a person or a role. People inherit the role unless an exception is set.' }
 ]
+
+export function isAdminMatrixSection(section: AdminPortalSection): section is AdminMatrixSection {
+  return (
+    section === 'matrix-person-roles' ||
+    section === 'matrix-navigator-enrollee' ||
+    section === 'matrix-supervisor-navigator' ||
+    section === 'matrix-partner-ownership'
+  )
+}
+
+export function readStoredAdminPortalSection(value: string | null): AdminPortalSection {
+  const known = ADMIN_SECTIONS.flatMap((section) => [section.id, ...(section.children?.map((child) => child.id) || [])])
+  return known.find((id) => id === value) || 'overview'
+}
+
+export function parentAdminSectionId(section: AdminPortalSection): AdminPortalSection | null {
+  const parent = ADMIN_SECTIONS.find((entry) => entry.children?.some((child) => child.id === section))
+  return parent?.id || null
+}
 
 export const ROLE_OPTIONS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
 export const ORG_TYPE_OPTIONS: AdminPortalOrganizationType[] = ['partner', 'internal', 'public_agency', 'community']
@@ -99,6 +169,20 @@ export const ADMIN_ACTIVE_SECTION_KEY = 'atlas2026.admin.session.active-section'
 export const ADMIN_SELECTED_ENROLLEE_KEY = 'atlas2026.admin.session.selected-enrollee'
 export const ADMIN_SELECTED_PERSON_KEY = 'atlas2026.admin.session.selected-person'
 export const ADMIN_SELECTED_ORGANIZATION_KEY = 'atlas2026.admin.session.selected-organization'
+export const ADMIN_PERMISSION_INTERACTION_KEY = 'atlas2026.admin.session.permission-interaction'
+export const ADMIN_PERMISSION_RECORD_KIND_KEY = 'atlas2026.admin.session.permission-record-kind'
+export const ADMIN_SELECTED_PERMISSION_ROLE_KEY = 'atlas2026.admin.session.permission-role'
+
+export type AdminPermissionInteraction = 'navigate' | 'edit'
+export type AdminPermissionRecordKind = 'person' | 'role'
+
+export function readPermissionInteraction(value: string | null): AdminPermissionInteraction {
+  return value === 'edit' ? 'edit' : 'navigate'
+}
+
+export function readPermissionRecordKind(value: string | null): AdminPermissionRecordKind {
+  return value === 'role' ? 'role' : 'person'
+}
 
 export function createDefaultFeaturePolicy(): AdminPortalPersonRecord['featurePolicy'] {
   return { screenToggles: {}, cardToggles: {}, actionToggles: {} }
@@ -109,10 +193,6 @@ export function toAtlasRoles(roles: AdminPortalPersonRole[]): AtlasRole[] {
     (role): role is AtlasRole =>
       role === 'administrator' || role === 'supervisor' || role === 'navigator' || role === 'partner'
   )
-}
-
-export function hasCapabilityOverride(overrides: Record<string, boolean>, key: string) {
-  return Object.prototype.hasOwnProperty.call(overrides, key)
 }
 
 // Normalize the survey catalog once so every admin editor uses the same canonical
@@ -194,6 +274,7 @@ export function getEmptyRegistry(): AdminPortalRegistry {
     archivedPersonIds: [],
     archivedOrganizationIds: [],
     archivedEnrolleeIds: [],
+    rolePolicies: {},
     updatedAtIso: new Date().toISOString()
   }
 }

@@ -8,22 +8,14 @@ import type {
   EnrolleeProfile,
   SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/shared/contracts'
-import {
-  ADMIN_POLICY_ACTION_KEYS,
-  ADMIN_POLICY_CARD_KEYS,
-  ADMIN_POLICY_SCREEN_KEYS,
-  isCapabilityAllowedForAnyRole
-} from '@/features/atlas2026/shared/roleCapabilityPolicy'
-import type { CombinedEnrolleeRow, NavigatorCoverageOption, PermissionExceptionRow } from './types'
+import type { CombinedEnrolleeRow, NavigatorCoverageOption } from './types'
 import {
   buildExistingEnrolleeIntake,
   createDefaultFeaturePolicy,
   createSeedOrganizationId,
   createSeedPersonId,
   getEmptyRegistry,
-  hasCapabilityOverride,
-  mergeById,
-  toAtlasRoles
+  mergeById
 } from './adminDataControlPanelModel'
 
 interface AdminRegistryViewModelInput {
@@ -172,34 +164,6 @@ export function useAdminRegistryViewModel({
       .sort((left, right) => left.label.localeCompare(right.label)),
     [accessMatrixDataset?.people]
   )
-  const permissionExceptionRows = useMemo<PermissionExceptionRow[]>(() => combinedPeople
-    .map((person) => {
-      const roles = toAtlasRoles(person.roles)
-      const baseline = isCapabilityAllowedForAnyRole(
-        roles, 'actionToggles', 'assignmentBoard.viewNavigatorNames', undefined
-      )
-      const entries: PermissionExceptionRow['entries'] = []
-      const collect = (scope: 'screen' | 'card' | 'action', keys: readonly string[], overrides: Record<string, boolean>) => {
-        keys.forEach((key) => {
-          if (!hasCapabilityOverride(overrides, key)) return
-          const allowed = Boolean(overrides[key])
-          entries.push({ id: `${scope}:${key}`, label: `${scope} ${key} -> ${allowed ? 'allow' : 'block'}`, kind: allowed ? 'allow' : 'block' })
-        })
-      }
-      collect('screen', ADMIN_POLICY_SCREEN_KEYS, person.featurePolicy.screenToggles)
-      collect('card', ADMIN_POLICY_CARD_KEYS, person.featurePolicy.cardToggles)
-      collect('action', ADMIN_POLICY_ACTION_KEYS, person.featurePolicy.actionToggles)
-      if (person.canViewNavigatorAssignmentNames !== baseline) {
-        entries.push({
-          id: 'legacy:assignmentBoard.viewNavigatorNames',
-          label: `legacy navigator-name visibility -> ${person.canViewNavigatorAssignmentNames ? 'allow' : 'block'}`,
-          kind: person.canViewNavigatorAssignmentNames ? 'allow' : 'block'
-        })
-      }
-      return entries.length ? { person, roles, entries } : null
-    })
-    .filter((row): row is PermissionExceptionRow => Boolean(row))
-    .sort((left, right) => right.entries.length - left.entries.length), [combinedPeople])
 
   return {
     effectiveRegistry,
@@ -208,8 +172,6 @@ export function useAdminRegistryViewModel({
     visibleEnrollees,
     navigators,
     supervisors,
-    navigatorCoverageOptions,
-    permissionExceptionRows,
-    totalPermissionExceptionCount: permissionExceptionRows.reduce((sum, row) => sum + row.entries.length, 0)
+    navigatorCoverageOptions
   }
 }

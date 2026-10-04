@@ -13,17 +13,37 @@ import AdminPermissionsSection from '@/features/atlas2026/admin/components/Admin
 import { useAdminPanelActions } from '@/features/atlas2026/admin/components/useAdminPanelActions'
 import type { CombinedEnrolleeRow } from '@/features/atlas2026/admin/components/types'
 import {
-  ADMIN_ACTIVE_SECTION_KEY, ADMIN_SELECTED_ENROLLEE_KEY, ADMIN_SELECTED_ORGANIZATION_KEY,
+  ADMIN_ACTIVE_SECTION_KEY, ADMIN_PERMISSION_INTERACTION_KEY, ADMIN_PERMISSION_RECORD_KIND_KEY,
+  ADMIN_SELECTED_ENROLLEE_KEY, ADMIN_SELECTED_ORGANIZATION_KEY, ADMIN_SELECTED_PERMISSION_ROLE_KEY,
   ADMIN_SELECTED_PERSON_KEY, ADMIN_Z_CODE_OPTIONS, ADMIN_Z_CODE_PARENT_CODES,
   CUSTOM_ENROLLEE_STATUS_OPTIONS, ORG_TYPE_OPTIONS, ROLE_OPTIONS, buildBlankCustomEnrollee,
   buildBlankIntervalAssessmentRule, buildBlankOrganization, buildBlankPerson,
   createDefaultFeaturePolicy, createPortalId, formatDateLabel, formatMetricLabel,
-  readAdminSessionValue, toAtlasRoles, writeAdminSessionValue,
-  type AdminDataControlPanelProps, type AdminPortalSection,
+  isAdminMatrixSection, readAdminSessionValue, readPermissionInteraction, readPermissionRecordKind,
+  readStoredAdminPortalSection, toAtlasRoles, writeAdminSessionValue,
+  type AdminDataControlPanelProps, type AdminMatrixSection, type AdminPortalSection,
 } from '@/features/atlas2026/admin/components/adminDataControlPanelModel'
 import { Field, RecordTable, StatusPill, ZCodeParentFilterCircle } from '@/features/atlas2026/admin/components/AdminControlPanelPrimitives'
-import type { AdminPortalOrganizationRecord, AdminPortalPersonRecord, AdminPortalRegistry, IntervalAssessmentRule, RegulationReviewSettings } from '@/features/atlas2026/shared/contracts'
-import { ADMIN_POLICY_ACTION_KEYS, ADMIN_POLICY_CARD_KEYS, ADMIN_POLICY_SCREEN_KEYS, isCapabilityAllowedForAnyRole, toggleCapabilityOverride } from '@/features/atlas2026/shared/roleCapabilityPolicy'
+import LiveAccessMatrixPanel, { type LiveAccessMatrixSection } from '@/features/atlas2026/singlepane/components/LiveAccessMatrixPanel'
+import type { AdminPortalOrganizationRecord, AdminPortalPersonRecord, AdminPortalRegistry, AtlasRole, IntervalAssessmentRule, RegulationReviewSettings } from '@/features/atlas2026/shared/contracts'
+import { ATLAS_PERMISSION_ROLES, isCapabilityAllowedForAnyRole } from '@/features/atlas2026/shared/roleCapabilityPolicy'
+
+function toLiveAccessMatrixSection(section: AdminMatrixSection): LiveAccessMatrixSection {
+  switch (section) {
+    case 'matrix-person-roles':
+      return 'person-roles'
+    case 'matrix-navigator-enrollee':
+      return 'navigator-enrollee'
+    case 'matrix-supervisor-navigator':
+      return 'supervisor-navigator'
+    case 'matrix-partner-ownership':
+      return 'partner-ownership'
+    default: {
+      const unknownSection: never = section
+      return unknownSection
+    }
+  }
+}
 
 export default function AdminDataControlPanel(props: AdminDataControlPanelProps) {
   const {
@@ -58,18 +78,30 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
     requestedDomainSurveyZCode,
     onAcknowledgeRequestedDomainSurveyZCode,
     onSaveEnrollmentNavigators,
+    onSaveAccessMatrixPersonRoles,
+    onSaveAccessMatrixSupervisorAssignments,
+    onSaveAccessMatrixPartnerPrimaryContacts,
+    accessMatrixError,
+    isSavingAccessMatrix,
+    remoteSession,
+    partnerTroubleshootingGrants,
+    onStartTroubleshooting,
+    onStopTroubleshooting,
     onSaveIntervalAssessmentRule,
     onSaveIntake,
     onOverrideEnrolleeZCodes,
     onScribeMenuChanged,
   } = props
-  const [activeSection, setActiveSection] = useState<AdminPortalSection>(() => {
-    const stored = readAdminSessionValue(ADMIN_ACTIVE_SECTION_KEY)
-    return stored === 'overview' || stored === 'enrollees' || stored === 'directory' || stored === 'organizations' || stored === 'relationships' || stored === 'assessments' || stored === 'permissions' ? stored : 'overview'
-  })
+  const [activeSection, setActiveSection] = useState<AdminPortalSection>(() => readStoredAdminPortalSection(readAdminSessionValue(ADMIN_ACTIVE_SECTION_KEY)))
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string | null>(() => readAdminSessionValue(ADMIN_SELECTED_ENROLLEE_KEY) || selectedEnrollee?.id || null)
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(() => readAdminSessionValue(ADMIN_SELECTED_PERSON_KEY))
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string | null>(() => readAdminSessionValue(ADMIN_SELECTED_ORGANIZATION_KEY))
+  const [permissionInteraction, setPermissionInteraction] = useState(() => readPermissionInteraction(readAdminSessionValue(ADMIN_PERMISSION_INTERACTION_KEY)))
+  const [permissionRecordKind, setPermissionRecordKind] = useState(() => readPermissionRecordKind(readAdminSessionValue(ADMIN_PERMISSION_RECORD_KIND_KEY)))
+  const [selectedPermissionRole, setSelectedPermissionRole] = useState<AtlasRole>(() => {
+    const stored = readAdminSessionValue(ADMIN_SELECTED_PERMISSION_ROLE_KEY)
+    return ATLAS_PERMISSION_ROLES.find((role) => role === stored) || 'administrator'
+  })
   const [enrolleeDraft, setEnrolleeDraft] = useState<CombinedEnrolleeRow | null>(null)
   const [personDraft, setPersonDraft] = useState<AdminPortalPersonRecord | null>(null)
   const [organizationDraft, setOrganizationDraft] = useState<AdminPortalOrganizationRecord | null>(null)
@@ -86,7 +118,7 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
   const zCodeOverlayPanelRef = useRef<HTMLDivElement | null>(null)
   const zCodeOverlayListRef = useRef<HTMLDivElement | null>(null)
   const previousZCodeOverlayHeightRef = useRef<number | null>(null)
-  const { effectiveRegistry, combinedOrganizations, combinedPeople, visibleEnrollees, navigators, supervisors, navigatorCoverageOptions, permissionExceptionRows, totalPermissionExceptionCount } = useAdminRegistryViewModel({
+  const { effectiveRegistry, combinedOrganizations, combinedPeople, visibleEnrollees, navigators, supervisors, navigatorCoverageOptions } = useAdminRegistryViewModel({
     registry,
     accountSettings,
     accessMatrixDataset,
@@ -125,6 +157,18 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
   useEffect(() => {
     writeAdminSessionValue(ADMIN_SELECTED_ORGANIZATION_KEY, selectedOrganizationId)
   }, [selectedOrganizationId])
+
+  useEffect(() => {
+    writeAdminSessionValue(ADMIN_PERMISSION_INTERACTION_KEY, permissionInteraction)
+  }, [permissionInteraction])
+
+  useEffect(() => {
+    writeAdminSessionValue(ADMIN_PERMISSION_RECORD_KIND_KEY, permissionRecordKind)
+  }, [permissionRecordKind])
+
+  useEffect(() => {
+    writeAdminSessionValue(ADMIN_SELECTED_PERMISSION_ROLE_KEY, selectedPermissionRole)
+  }, [selectedPermissionRole])
 
   const selectedEnrolleeRow = useMemo(() => visibleEnrollees.find((row) => row.id === selectedEnrolleeId) || null, [selectedEnrolleeId, visibleEnrollees])
   const selectedDraftZCodes = useMemo(() => Array.from(new Set((enrolleeDraft ? (enrolleeDraft.kind === 'existing' ? enrolleeDraft.intake.zCodeTags : enrolleeDraft.record.zCodeTags) : []).map((value) => value.trim().toUpperCase()).filter(Boolean))), [enrolleeDraft])
@@ -189,7 +233,8 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
 
   const {
     toggleEnrolleeDraftZCode, openZCodePicker, toggleZCodeParentFilter, handleSaveEnrolleeDraft,
-    handleArchiveEnrollee, handleSavePersonDraft, handleDeletePerson, handleClearPersonPermissionExceptions,
+    handleArchiveEnrollee, handleSavePersonDraft, handleDeletePerson, handleSavePersonFeaturePolicy,
+    handleSaveRolePolicies, handleClearPersonPermissionExceptions,
     handleSaveOrganizationDraft, handleDeleteOrganization, handleNavigatorAssignment, handleNavigatorCoverageSelection,
     handlePersonSupervisorAssignment, handlePersonOrganizationAssignment, handleSaveIntervalRule,
     effectiveRegulationReview, regulationReviewRoster, updateRegulationReviewEnrolleeSetting,
@@ -205,6 +250,23 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
     onSaveRegulationReviewSettings, ADMIN_Z_CODE_PARENT_CODES, isCapabilityAllowedForAnyRole,
     toAtlasRoles, createDefaultFeaturePolicy,
   })
+
+  function openPersonPermissionRecord(personId: string) {
+    // Name clicks always open the person record. Navigate versus Edit decides
+    // whether that record can be changed, and is chosen on the permission desk.
+    setSelectedPersonId(personId)
+    setPermissionRecordKind('person')
+    setActiveSection('permissions')
+    const person = combinedPeople.find((entry) => entry.id === personId)
+    if (!person) return
+    setPersonDraft((current) => (current && current.id === person.id ? current : person))
+  }
+
+  function openRolePermissionRecord(role: AtlasRole) {
+    setSelectedPermissionRole(role)
+    setPermissionRecordKind('role')
+    setActiveSection('permissions')
+  }
 
   const overviewCards = useMemo(
     () => [
@@ -320,12 +382,7 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
             personDraft={personDraft}
             ROLE_OPTIONS={ROLE_OPTIONS}
             supervisors={supervisors}
-            isCapabilityAllowedForAnyRole={isCapabilityAllowedForAnyRole}
-            toAtlasRoles={toAtlasRoles}
-            toggleCapabilityOverride={toggleCapabilityOverride}
-            ADMIN_POLICY_SCREEN_KEYS={[...ADMIN_POLICY_SCREEN_KEYS]}
-            ADMIN_POLICY_CARD_KEYS={[...ADMIN_POLICY_CARD_KEYS]}
-            ADMIN_POLICY_ACTION_KEYS={[...ADMIN_POLICY_ACTION_KEYS]}
+            onOpenPerson={openPersonPermissionRecord}
             handleSavePersonDraft={handleSavePersonDraft}
             handleDeletePerson={handleDeletePerson}
             RecordTableComponent={RecordTable}
@@ -346,6 +403,7 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
             ORG_TYPE_OPTIONS={ORG_TYPE_OPTIONS}
             handleSaveOrganizationDraft={handleSaveOrganizationDraft}
             handleDeleteOrganization={handleDeleteOrganization}
+            onOpenPerson={openPersonPermissionRecord}
             RecordTableComponent={RecordTable}
             StatusPillComponent={StatusPill}
             FieldComponent={Field}
@@ -365,6 +423,7 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
             combinedPeople={combinedPeople}
             combinedOrganizations={combinedOrganizations}
             handlePersonOrganizationAssignment={handlePersonOrganizationAssignment}
+            onOpenPerson={openPersonPermissionRecord}
           />
         ) : null}
 
@@ -391,7 +450,42 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
             FieldComponent={Field}
           />
         ) : null}
-        {activeSection === 'permissions' ? <AdminPermissionsSection permissionExceptionRows={permissionExceptionRows} totalPermissionExceptionCount={totalPermissionExceptionCount} onClearPersonPermissionExceptions={handleClearPersonPermissionExceptions} onScribeMenuChanged={onScribeMenuChanged} /> : null}
+        {activeSection === 'permissions' ? (
+          <AdminPermissionsSection
+            people={combinedPeople}
+            rolePolicies={effectiveRegistry.rolePolicies}
+            recordKind={permissionRecordKind}
+            onRecordKindChange={setPermissionRecordKind}
+            interaction={permissionInteraction}
+            onInteractionChange={setPermissionInteraction}
+            selectedPersonId={selectedPersonId}
+            onSelectPerson={openPersonPermissionRecord}
+            selectedRole={selectedPermissionRole}
+            onSelectRole={openRolePermissionRecord}
+            isSaving={isSavingRegistry}
+            onSavePersonPolicy={handleSavePersonFeaturePolicy}
+            onSaveRolePolicies={handleSaveRolePolicies}
+            onClearPersonExceptions={handleClearPersonPermissionExceptions}
+            onScribeMenuChanged={onScribeMenuChanged}
+          />
+        ) : null}
+        {isAdminMatrixSection(activeSection) ? (
+          <LiveAccessMatrixPanel
+            section={toLiveAccessMatrixSection(activeSection)}
+            dataset={accessMatrixDataset}
+            error={accessMatrixError}
+            isSaving={isSavingAccessMatrix}
+            onSavePersonRoles={onSaveAccessMatrixPersonRoles}
+            onSaveEnrollmentNavigator={onSaveEnrollmentNavigators}
+            onSaveSupervisorAssignment={onSaveAccessMatrixSupervisorAssignments}
+            onSavePartnerPrimaryContact={onSaveAccessMatrixPartnerPrimaryContacts}
+            remoteSession={remoteSession}
+            partnerTroubleshootingGrants={partnerTroubleshootingGrants}
+            onStartTroubleshooting={onStartTroubleshooting}
+            onStopTroubleshooting={onStopTroubleshooting}
+            onOpenPerson={openPersonPermissionRecord}
+          />
+        ) : null}
       </AdminDataControlPanelFrame>
       {isZCodePickerOpen ? <AdminZCodePickerOverlay panelRef={zCodeOverlayPanelRef} listRef={zCodeOverlayListRef} activeParentFilters={activeZCodeParentFilters} selectedZCodes={selectedDraftZCodes} visibleOptions={visibleZCodeOptions} onClose={() => setIsZCodePickerOpen(false)} onToggleParentFilter={toggleZCodeParentFilter} onToggleZCode={toggleEnrolleeDraftZCode} /> : null}
     </>

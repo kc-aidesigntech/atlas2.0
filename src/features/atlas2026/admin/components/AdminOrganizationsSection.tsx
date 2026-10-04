@@ -1,5 +1,6 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import AdminPersonNameButton from '@/features/atlas2026/admin/components/AdminPersonNameButton'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
   AdminOrganizationsSectionDataProps,
@@ -18,6 +19,7 @@ interface AdminOrganizationsSectionProps {
   organizationDraft: AdminOrganizationsSectionDataProps['organizationDraft']
   handleSaveOrganizationDraft: AdminOrganizationsSectionDataProps['handleSaveOrganizationDraft']
   handleDeleteOrganization: AdminOrganizationsSectionDataProps['handleDeleteOrganization']
+  onOpenPerson: (personId: string) => void
   ORG_TYPE_OPTIONS: AdminOrganizationsSectionDataProps['organizationTypeOptions']
   RecordTableComponent: RecordTableComponentType
   StatusPillComponent: StatusPillComponentType
@@ -35,6 +37,7 @@ export default function AdminOrganizationsSection({
   ORG_TYPE_OPTIONS,
   handleSaveOrganizationDraft,
   handleDeleteOrganization,
+  onOpenPerson,
   RecordTableComponent,
   StatusPillComponent,
   FieldComponent
@@ -67,11 +70,19 @@ export default function AdminOrganizationsSection({
             if (!organization) return null
             const contact = combinedPeople.find((person) => person.id === organization.primaryContactPersonId)
             return (
-              <button
-                type="button"
-                className="grid w-full grid-cols-[1.3fr_repeat(3,minmax(0,1fr))] gap-3 px-4 py-3 text-left transition hover:bg-white/5"
+              <div
+                role="button"
+                tabIndex={0}
+                className="grid w-full cursor-pointer grid-cols-[1.3fr_repeat(3,minmax(0,1fr))] gap-3 px-4 py-3 text-left transition hover:bg-white/5"
                 style={selectedOrganizationId === organization.id ? { backgroundColor: 'rgba(252,192,26,0.08)' } : undefined}
                 onClick={() => {
+                  setSelectedOrganizationId(organization.id)
+                  setOrganizationDraft(organization)
+                }}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
                   setSelectedOrganizationId(organization.id)
                   setOrganizationDraft(organization)
                 }}
@@ -81,11 +92,17 @@ export default function AdminOrganizationsSection({
                   <small className="block text-[12px] text-[var(--foreground-secondary)]">{organization.countyName || 'county not set'}</small>
                 </div>
                 <div className="text-[13px] text-white">{organization.type}</div>
-                <div className="text-[13px] text-[var(--foreground-secondary)]">{contact?.fullName || 'unassigned'}</div>
+                <div className="text-[13px] text-[var(--foreground-secondary)]">
+                  {contact ? (
+                    <AdminPersonNameButton name={contact.fullName} onOpen={() => onOpenPerson(contact.id)} className="text-[13px]" />
+                  ) : (
+                    'unassigned'
+                  )}
+                </div>
                 <div>
                   <StatusPillComponent status={organization.status} />
                 </div>
-              </button>
+              </div>
             )
           }}
         />

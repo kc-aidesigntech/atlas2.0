@@ -7,7 +7,6 @@ import type {
   AdminPortalOrganizationRecord,
   AdminPortalPersonRecord,
   AdminPortalPersonRole,
-  AtlasRole,
   EnrolleeIntakeRecord,
   EnrolleeProfile,
   EnrollmentRequestRecord,
@@ -37,18 +36,6 @@ export interface NavigatorCoverageOption {
 export interface RegulationReviewRosterRow {
   enrolleeId: string
   enrolleeName: string
-}
-
-export interface PermissionExceptionEntry {
-  id: string
-  label: string
-  kind: 'allow' | 'block'
-}
-
-export interface PermissionExceptionRow {
-  person: AdminPortalPersonRecord
-  roles: AtlasRole[]
-  entries: PermissionExceptionEntry[]
 }
 
 export type SetState<T> = React.Dispatch<React.SetStateAction<T>>
@@ -103,21 +90,7 @@ export interface AdminDirectorySectionDataProps {
   personDraft: AdminPortalPersonRecord | null
   roleOptions: readonly AdminPortalPersonRole[]
   supervisors: AdminPortalPersonRecord[]
-  isCapabilityAllowedForAnyRole: (
-    roles: AtlasRole[],
-    scope: 'screenToggles' | 'cardToggles' | 'actionToggles',
-    key: string,
-    overrides: Record<string, boolean> | undefined
-  ) => boolean
-  toAtlasRoles: (roles: AdminPortalPersonRole[]) => AtlasRole[]
-  toggleCapabilityOverride: (
-    overrides: Record<string, boolean>,
-    roleDefaultsToAllowed: boolean,
-    key: string
-  ) => Record<string, boolean>
-  adminPolicyScreenKeys: readonly string[]
-  adminPolicyCardKeys: readonly string[]
-  adminPolicyActionKeys: readonly string[]
+  onOpenPerson: (personId: string) => void
   handleSavePersonDraft: () => Promise<void>
   handleDeletePerson: (person: AdminPortalPersonRecord) => Promise<void>
 }
@@ -133,6 +106,7 @@ export interface AdminOrganizationsSectionDataProps {
   organizationTypeOptions: readonly string[]
   handleSaveOrganizationDraft: () => Promise<void>
   handleDeleteOrganization: (organization: AdminPortalOrganizationRecord) => Promise<void>
+  onOpenPerson: (personId: string) => void
 }
 
 export interface AdminRelationshipsSectionDataProps {
@@ -147,6 +121,7 @@ export interface AdminRelationshipsSectionDataProps {
   combinedPeople: AdminPortalPersonRecord[]
   combinedOrganizations: AdminPortalOrganizationRecord[]
   handlePersonOrganizationAssignment: (personId: string, organizationId: string | null) => Promise<void>
+  onOpenPerson: (personId: string) => void
 }
 
 export interface AdminAssessmentsSectionDataProps {

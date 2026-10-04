@@ -22,7 +22,6 @@ import WorkspaceFrame from './WorkspaceFrame'
 import { isWarmLineMenu, openPrayPhoneAgentFromWorkspace } from '../data-access/prayphoneSubapp'
 
 const AdminDataControlPanel = React.lazy(() => import('../../admin/AdminDataControlPanel'))
-const LiveAccessMatrixPanel = React.lazy(() => import('../components/LiveAccessMatrixPanel'))
 const NavigatorMyProfilePanel = React.lazy(() => import('../components/NavigatorMyProfilePanel'))
 const NavigatorEnrollmentAssignmentsPanel = React.lazy(() => import('../components/NavigatorEnrollmentAssignmentsPanel'))
 const SupervisorMyProfilePanel = React.lazy(() => import('../components/SupervisorMyProfilePanel'))
@@ -1154,19 +1153,6 @@ export default function SinglePaneWorkspace() {
                   <div className="flex min-h-[220px] flex-1 items-start pt-1">
                     {viewerCanAccessAdminRegistryCards ? (
                       <div className="w-full space-y-4">
-                        <LiveAccessMatrixPanel
-                          dataset={accessMatrixDataset}
-                          error={accessMatrixError}
-                          isSaving={isSavingAccessMatrix}
-                          onSavePersonRoles={saveAccessMatrixPersonRoles}
-                          onSaveEnrollmentNavigator={saveAccessMatrixEnrollmentNavigators}
-                          onSaveSupervisorAssignment={saveAccessMatrixSupervisorAssignments}
-                          onSavePartnerPrimaryContact={saveAccessMatrixPartnerPrimaryContacts}
-                          remoteSession={remoteSession}
-                          partnerTroubleshootingGrants={partnerTroubleshootingGrants}
-                          onStartTroubleshooting={startTroubleshootingSession}
-                          onStopTroubleshooting={stopTroubleshootingSession}
-                        />
                         <AdminDataControlPanel
                           metrics={adminMetrics}
                           zCodeDomainSurveyHistorySummary={zCodeDomainSurveyHistorySummary}
@@ -1199,6 +1185,15 @@ export default function SinglePaneWorkspace() {
                           requestedDomainSurveyZCode={requestedAdminDomainSurveyZCode}
                           onAcknowledgeRequestedDomainSurveyZCode={() => setRequestedAdminDomainSurveyZCode(null)}
                           onSaveEnrollmentNavigators={saveAccessMatrixEnrollmentNavigators}
+                          onSaveAccessMatrixPersonRoles={saveAccessMatrixPersonRoles}
+                          onSaveAccessMatrixSupervisorAssignments={saveAccessMatrixSupervisorAssignments}
+                          onSaveAccessMatrixPartnerPrimaryContacts={saveAccessMatrixPartnerPrimaryContacts}
+                          accessMatrixError={accessMatrixError}
+                          isSavingAccessMatrix={isSavingAccessMatrix}
+                          remoteSession={remoteSession}
+                          partnerTroubleshootingGrants={partnerTroubleshootingGrants}
+                          onStartTroubleshooting={startTroubleshootingSession}
+                          onStopTroubleshooting={stopTroubleshootingSession}
                           onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
                           onSaveIntake={saveEnrolleeIntake}
                           onOverrideEnrolleeZCodes={overrideEnrolleeZCodes}

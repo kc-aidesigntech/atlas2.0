@@ -88,7 +88,14 @@ export function useSinglePaneViewerState(input: UseSinglePaneViewerStateInput) {
   const isViewerPolicyAllowed = (
     scope: 'screenToggles' | 'cardToggles' | 'actionToggles',
     key: string
-  ) => isCapabilityAllowedForRole(input.viewerRole, scope, key, viewerFeaturePolicy[scope])
+  ) =>
+    isCapabilityAllowedForRole(
+      input.viewerRole,
+      scope,
+      key,
+      viewerFeaturePolicy[scope],
+      input.adminPortalRegistry?.rolePolicies
+    )
 
   const viewerPerson = useMemo(() => {
     if (!input.accessMatrixDataset) return null
