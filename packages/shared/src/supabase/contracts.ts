@@ -775,6 +775,26 @@ export interface AtlasDatabase {
           email: string | null;
         };
       };
+      prayphone_inbound_rings: {
+        Row: {
+          id: string;
+          session_id: string;
+          state: "ringing" | "answered" | "cleared";
+          created_at: string;
+          cleared_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          session_id: string;
+          state?: "ringing" | "answered" | "cleared";
+          created_at?: string;
+          cleared_at?: string | null;
+        };
+        Update: Partial<{
+          state: "ringing" | "answered" | "cleared";
+          cleared_at: string | null;
+        }>;
+      };
     };
   };
 }

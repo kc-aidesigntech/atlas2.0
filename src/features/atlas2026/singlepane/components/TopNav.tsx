@@ -3,6 +3,7 @@ import { ChevronDown, Loader2, Menu } from 'lucide-react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AtlasRole, EnrolleeProfile, RoleMenuConfig } from '@/features/atlas2026/shared/contracts'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import PrayPhoneListenButton from './PrayPhoneListenButton'
 
 interface TopNavProps {
   role: AtlasRole
@@ -85,14 +86,17 @@ export default function TopNav({
             </>
           )}
         </div>
-        <AtlasTextButton
-          onClick={onOpenAccountSettings}
-          className="inline-flex items-center gap-2 px-4 py-1 text-[14px] text-white"
-          style={{ ['--button-border-color' as const]: SP_COLORS.border, backgroundColor: '#000000' } as React.CSSProperties}
-        >
-          <span>Account Settings</span>
-          <Menu size={18} color={SP_COLORS.white} />
-        </AtlasTextButton>
+        <div className="flex items-center gap-2">
+          <PrayPhoneListenButton role={role} />
+          <AtlasTextButton
+            onClick={onOpenAccountSettings}
+            className="inline-flex items-center gap-2 px-4 py-1 text-[14px] text-white"
+            style={{ ['--button-border-color' as const]: SP_COLORS.border, backgroundColor: '#000000' } as React.CSSProperties}
+          >
+            <span>Account Settings</span>
+            <Menu size={18} color={SP_COLORS.white} />
+          </AtlasTextButton>
+        </div>
       </div>
 
       <div className="atlas-shell-edge-buffer flex h-[54px] items-center overflow-x-auto text-white">

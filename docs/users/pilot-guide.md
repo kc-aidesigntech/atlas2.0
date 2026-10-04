@@ -43,6 +43,7 @@ Use the matching login **and** set the role switcher to the same role for the tr
 - Competency self-assessment
 - Intake / resolve Z-codes
 - Open **warm line** (Pray Phone agent) when that menu is present
+- Turn on the Pray Phone icon (left of Account Settings) to hear a kiosk `0` press, then press the lit icon to open the agent console
 
 ### Supervisor
 

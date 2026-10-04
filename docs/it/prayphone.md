@@ -5,6 +5,10 @@ Pray Phone stays its own application (SignalWire agent webpage + Raspberry Pi ki
 ## What Atlas does
 
 - Shows **warm line** in the navigator / supervisor / administrator top menu when `VITE_ATLAS_PRAYPHONE_URL` is set.
+- Shows a Pray Phone icon in the top bar, to the left of Account Settings, for those same profiles when the warm-line permission is true. Partners do not see it. Navigators see it only with the allow exception.
+- The icon is a listen toggle for that browser. Off, the account is not waiting on a kiosk. On, Atlas subscribes to `atlas.prayphone_inbound_rings`.
+- When a kiosk presses `0`, prayphone-server writes a ringing row after the call session is saved. The icon lights yellow and plays a phone ring. Pressing it opens `{VITE_ATLAS_PRAYPHONE_URL}/agent` with the same fragment handoff as the warm-line menu.
+- The ring clears when a staff member and the kiosk are both in the room, or when the call ends. Listening stays on in this browser until the person turns the icon off.
 - Navigates to `{VITE_ATLAS_PRAYPHONE_URL}/agent` and hands off the current Atlas session in the URL fragment (not sent to the server).
 - Authorizes the console with Remote Procedure Call (RPC) `atlas.fn_can_access_warmline_agent()`.
   Administrators and supervisors have `warmline_agent.access` by role. Navigators need a non-expiring
@@ -53,7 +57,7 @@ If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` /
 3. In Supabase **Authentication → URL configuration**, add:
    - `https://pray.<atlas-host>/agent`
    - the Heroku origin `/agent` if still used
-4. Apply Atlas migration `20260817090000_warmline_agent_access.sql`.
+4. Apply Atlas migrations `20260817090000_warmline_agent_access.sql` and `20261004200000_prayphone_inbound_rings.sql`. The second migration is the header relay. It enables Supabase Realtime on `atlas.prayphone_inbound_rings`. Until it is applied, the listen icon can still toggle, but a kiosk press will not light it.
 
 ## Verification
 
@@ -62,6 +66,7 @@ If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` /
 3. Open it — agent console loads without a second password prompt.
 4. Sign in as a partner — no warm-line menu; visiting `/agent` directly is denied.
 5. On the Pi, `/kiosk` still starts a call with no Atlas session.
+6. As a navigator, supervisor, or administrator with warm-line access, turn the Pray Phone icon on (left of Account Settings). Press `0` on a kiosk. The icon lights and rings. Press it and the existing agent console opens. A partner account has no icon.
 
 ## Related
 
