@@ -17,6 +17,7 @@ import type {
   RouteLogEvent,
   TimelineConfig,
 } from '@/features/atlas2026/shared/contracts'
+import { setScribeOnMenuList } from '@/features/atlas2026/scribe/scribeMenuVisibility'
 import {
   loadAdminDataQuality,
   loadAccountSettings,
@@ -104,6 +105,22 @@ const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
 const ROLE_PREFETCH_ORDER: AtlasRole[] = ['navigator', 'partner', 'supervisor', 'administrator']
 const bootstrapPayloadCache = new Map<AtlasRole, SinglePaneBootstrapPayload>()
 const bootstrapPayloadInFlight = new Map<AtlasRole, Promise<SinglePaneBootstrapPayload>>()
+
+function withScribeOnRole(roleConfigs: RoleMenuConfig[], role: AtlasRole, visible: boolean) {
+  return roleConfigs.map((config) =>
+    config.role === role ? { ...config, topMenus: setScribeOnMenuList(config.topMenus, visible) } : config
+  )
+}
+
+/** Keep prefetched role payloads aligned with an administrator's scribe menu toggle. */
+export function patchCachedScribeMenu(role: AtlasRole, visible: boolean) {
+  for (const [cachedRole, payload] of bootstrapPayloadCache) {
+    bootstrapPayloadCache.set(cachedRole, {
+      ...payload,
+      roleConfigs: withScribeOnRole(payload.roleConfigs, role, visible)
+    })
+  }
+}
 
 async function loadCriticalBootstrapPayload(role: AtlasRole): Promise<SinglePaneBootstrapPayload> {
   // Critical payload only: enough to paint and interact with the first role screen.

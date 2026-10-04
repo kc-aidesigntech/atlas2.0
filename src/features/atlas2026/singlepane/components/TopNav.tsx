@@ -60,6 +60,12 @@ export default function TopNav({
     return adminSpecific || roleConfig.topMenus[1] || firstMenu
   }, [firstMenu, role, roleConfig.topMenus])
   const isAdminControlsActive = role === 'administrator' && (activeMenu === adminControlsMenu || activeMenu === 'system operations' || activeMenu === 'governance')
+  // Admin chrome collapses every other entry into "admin controls". Scribe is a
+  // standalone subapp, so it stays its own item when this permission level has it on.
+  const administratorScribeMenu =
+    role === 'administrator' && firstMenu.trim().toLowerCase() !== 'scribe'
+      ? roleConfig.topMenus.find((menu) => menu.trim().toLowerCase() === 'scribe') || ''
+      : ''
 
   return (
     <header className="border-b bg-black" style={{ borderColor: '#ffffff70' }}>
@@ -166,13 +172,24 @@ export default function TopNav({
 
           {role === 'administrator'
             ? (
-              <button
-                className="atlas-font-body whitespace-nowrap text-[15px] font-medium text-white"
-                onClick={() => onMenuSelect(adminControlsMenu)}
-                style={{ textDecoration: isAdminControlsActive ? 'underline' : 'none' }}
-              >
-                admin controls
-              </button>
+              <>
+                <button
+                  className="atlas-font-body whitespace-nowrap text-[15px] font-medium text-white"
+                  onClick={() => onMenuSelect(adminControlsMenu)}
+                  style={{ textDecoration: isAdminControlsActive ? 'underline' : 'none' }}
+                >
+                  admin controls
+                </button>
+                {administratorScribeMenu ? (
+                  <button
+                    className="atlas-font-body whitespace-nowrap text-[15px] font-medium text-white"
+                    onClick={() => onMenuSelect(administratorScribeMenu)}
+                    style={{ textDecoration: activeMenu === administratorScribeMenu ? 'underline' : 'none' }}
+                  >
+                    {administratorScribeMenu}
+                  </button>
+                ) : null}
+              </>
               )
             : roleConfig.topMenus.slice(1).map((menu) => (
                 <button

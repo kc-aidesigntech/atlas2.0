@@ -1,22 +1,27 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasMetricPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
-import type { AdminPortalPersonRecord } from '@/features/atlas2026/shared/contracts'
+import type { AdminPortalPersonRecord, AtlasRole } from '@/features/atlas2026/shared/contracts'
 import type { PermissionExceptionRow } from '@/features/atlas2026/admin/components/types'
+import AdminScribeMenuCard from '@/features/atlas2026/admin/components/AdminScribeMenuCard'
 
 interface AdminPermissionsSectionProps {
   permissionExceptionRows: PermissionExceptionRow[]
   totalPermissionExceptionCount: number
   onClearPersonPermissionExceptions: (person: AdminPortalPersonRecord) => Promise<void>
+  onScribeMenuChanged?: (role: AtlasRole, visible: boolean) => void
 }
 
 export default function AdminPermissionsSection({
   permissionExceptionRows,
   totalPermissionExceptionCount,
-  onClearPersonPermissionExceptions
+  onClearPersonPermissionExceptions,
+  onScribeMenuChanged
 }: AdminPermissionsSectionProps) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+    <div className="space-y-4">
+      <AdminScribeMenuCard onChanged={onScribeMenuChanged} />
+      <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
       <AtlasInsetCard className="rounded-[22px] px-5 py-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -91,6 +96,7 @@ export default function AdminPermissionsSection({
           ) : null}
         </div>
       </AtlasInsetCard>
+      </div>
     </div>
   )
 }

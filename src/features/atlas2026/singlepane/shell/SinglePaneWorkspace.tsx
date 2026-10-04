@@ -189,7 +189,8 @@ export default function SinglePaneWorkspace() {
     deleteNavigatorRegulationTestDraft,
     deleteEnrolleeBurdenSurveyDraft,
     partnerStationSpecialties,
-    reloadEnrolleeBurdenSurveyHistoryForEnrollment
+    reloadEnrolleeBurdenSurveyHistoryForEnrollment,
+    applyScribeMenuVisibility
   } = useSinglePaneData()
   // Dropdown-only enrollee list: merge in optimistic self-assignment placeholders so a freshly
   // claimed enrollee shows in the navigator dropdown immediately. Kept separate from the
@@ -1201,6 +1202,7 @@ export default function SinglePaneWorkspace() {
                           onSaveIntervalAssessmentRule={saveIntervalAssessmentRule}
                           onSaveIntake={saveEnrolleeIntake}
                           onOverrideEnrolleeZCodes={overrideEnrolleeZCodes}
+                          onScribeMenuChanged={applyScribeMenuVisibility}
                         />
                       </div>
                     ) : (

@@ -28,6 +28,7 @@ import { mapZCodeToDomainBucket } from '@/features/atlas2026/singlepane/data-acc
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { resolveSessionPersonIdFromMetadata } from '@/features/atlas2026/singlepane/data-access/enrollmentAssignmentRepository'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
+import { menuListIncludesScribe, setScribeOnMenuList } from '@/features/atlas2026/scribe/scribeMenuVisibility'
 
 export interface SinglePaneBootstrapData {
   enrollees: EnrolleeProfile[]
@@ -79,7 +80,11 @@ function normalizeNavigatorTopMenus(menus: string[], canAccessWarmLine: boolean)
 
 function normalizeRoleTopMenus(roleKey: string, menus: string[], canAccessWarmLine: boolean) {
   if (roleKey === 'navigator') return normalizeNavigatorTopMenus(menus, canAccessWarmLine)
-  if (roleKey === 'partner') return ['referral portal', 'my station', 'service capacity']
+  // Partner chrome is a fixed shell. Scribe is the one optional item, so it
+  // follows the stored menu list instead of being dropped with the rest.
+  if (roleKey === 'partner') {
+    return setScribeOnMenuList(['referral portal', 'my station', 'service capacity'], menuListIncludesScribe(menus))
+  }
   if (roleKey === 'supervisor') {
     const normalized = hideUnconfiguredWarmLineMenu(
       hideDeferredCountyCommonsMenu(menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning')),
@@ -246,11 +251,17 @@ export async function loadSinglePaneBootstrap(
     actionMenus: item.actionMenus
   }))
   const adminSuperset = buildAdminSupersetMenus(normalizedRoleConfigs)
-  const roleConfigs = normalizedRoleConfigs.map((item) =>
-    item.role === 'administrator'
-      ? { ...item, topMenus: adminSuperset.topMenus, actionMenus: adminSuperset.actionMenus }
-      : item
+  // The administrator menu is a superset of every role, except scribe. Scribe
+  // stays on the administrator row alone so hiding it for administrators does
+  // not depend on whether another permission level still shows it.
+  const administratorHasScribe = menuListIncludesScribe(
+    normalizedRoleConfigs.find((item) => item.role === 'administrator')?.topMenus || []
   )
+  const roleConfigs = normalizedRoleConfigs.map((item) => {
+    if (item.role !== 'administrator') return item
+    const topMenus = setScribeOnMenuList(adminSuperset.topMenus, administratorHasScribe)
+    return { ...item, topMenus, actionMenus: adminSuperset.actionMenus }
+  })
 
   const loadBreakdownsByEnrolleeId = Object.fromEntries(
     uniqueVisibleProfiles.map((profile) => {

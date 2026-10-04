@@ -79,6 +79,7 @@ export interface AdminDataControlPanelProps {
     enrollmentId: string,
     input: { checkedZCodes: string[]; uncheckReasons: Array<{ zCode: string; reasonCode: string; reasonText?: string | null }> }
   ) => Promise<EnrolleeZCodeOverrideResult | null>
+  onScribeMenuChanged?: (role: AtlasRole, visible: boolean) => void
 }
 
 export const ADMIN_SECTIONS: Array<{ id: AdminPortalSection; label: string; description: string }> = [
@@ -88,7 +89,7 @@ export const ADMIN_SECTIONS: Array<{ id: AdminPortalSection; label: string; desc
   { id: 'organizations', label: 'Organizations', description: 'Partner and internal organization registry with contact ownership.' },
   { id: 'relationships', label: 'Assignments', description: 'Quickly manage one-to-many reporting and coverage relationships.' },
   { id: 'assessments', label: 'Assessments', description: 'Control interval rules, due generation, and navigator program monitoring.' },
-  { id: 'permissions', label: 'Permission exceptions', description: 'Audit and clear person-level overrides against role defaults.' }
+  { id: 'permissions', label: 'Permission exceptions', description: 'Show or hide scribe by permission level, and clear person-level overrides.' }
 ]
 
 export const ROLE_OPTIONS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']

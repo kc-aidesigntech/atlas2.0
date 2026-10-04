@@ -21,9 +21,15 @@ backends are intentionally tabled (see "Tabled follow-up work" below), so:
 ## Access
 
 - Path route: `https://<atlas-host>/scribe` (Supabase session required).
-- Workspace menu: a "scribe" top-menu entry is seeded for navigator,
-  supervisor, and administrator roles in `atlas.app_role_navigation`
-  (partner role intentionally excluded).
+- Workspace menu: each permission level's "scribe" entry is the `scribe`
+  label on `atlas.app_role_navigation.top_menus`. Administrators show or hide
+  it per role from Admin controls → Permission exceptions. Row-Level Security
+  (RLS) on that table lets only an administrator JSON Web Token (JWT)
+  (`app_metadata.atlas_role`) write the change. The administrator menu is a
+  superset of the other roles, except scribe, which follows only the
+  administrator row. Partner menus are otherwise a fixed shell; scribe is the
+  optional item. The original seed still includes scribe for navigator,
+  supervisor, and administrator until an administrator hides it.
 - Optional subdomain: set `VITE_ATLAS_SCRIBE_HOSTNAME` (e.g.
   `scribe.example.org`), add the custom domain to the Heroku app, and create a
   Domain Name System (DNS) CNAME. Without it, the path route is canonical.
@@ -79,7 +85,10 @@ environment variables exist. Contracts are documented in
 3. Reload and confirm the encounter appears in history; confirm a second
    account cannot see it.
 4. From the workspace, confirm the "scribe" menu entry navigates to the
-   subapp for navigator/supervisor/administrator roles.
+   subapp for any permission level that still has it shown. Hide it from
+   Admin controls → Permission exceptions and confirm that role's menu drops
+   the item after the next workspace load (the signed-in administrator's own
+   menu updates immediately).
 
 ## Troubleshooting
 

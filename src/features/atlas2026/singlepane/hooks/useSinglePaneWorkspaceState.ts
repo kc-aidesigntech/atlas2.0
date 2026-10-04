@@ -10,7 +10,8 @@ import {
   loadPartnerStationProfile, searchPartnerIdentifierRecordMatches,
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import { useAdminAccessMatrixState } from '@/features/atlas2026/singlepane/hooks/useAdminAccessMatrixState'
-import { useSinglePaneBootstrapState } from '@/features/atlas2026/singlepane/hooks/useSinglePaneBootstrapState'
+import { useSinglePaneBootstrapState, patchCachedScribeMenu } from '@/features/atlas2026/singlepane/hooks/useSinglePaneBootstrapState'
+import { setScribeOnMenuList } from '@/features/atlas2026/scribe/scribeMenuVisibility'
 import { useSinglePaneViewerState } from '@/features/atlas2026/singlepane/hooks/useSinglePaneViewerState'
 import { useSinglePaneWorkspaceDerivedState } from '@/features/atlas2026/singlepane/hooks/useSinglePaneWorkspaceDerivedState'
 import { useSinglePaneWorkspaceActions } from '@/features/atlas2026/singlepane/hooks/useSinglePaneWorkspaceActions'
@@ -280,6 +281,21 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
     [authoritativeAccountRoles],
   )
 
+  const applyScribeMenuVisibility = useCallback(
+    (targetRole: AtlasRole, visible: boolean) => {
+      // The open workspace and any prefetched role payloads both read these
+      // menus, so a toggle has to update both or a role switch restores the old list.
+      patchCachedScribeMenu(targetRole, visible)
+      setBootstrapState((current) => ({
+        ...current,
+        roleConfigs: current.roleConfigs.map((config) =>
+          config.role === targetRole ? { ...config, topMenus: setScribeOnMenuList(config.topMenus, visible) } : config
+        )
+      }))
+    },
+    [setBootstrapState]
+  )
+
   return {
     // Domain hooks expose matching names directly; aliases below preserve the
     // established facade names where internal projections are more explicit.
@@ -318,5 +334,6 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
     saveAccessMatrixSupervisorAssignments, toggleSupervisorManagedNavigator,
     saveAccessMatrixPartnerPrimaryContacts, saveEnrolleeIntake,
     reloadZCodeDomainSurveyHistory, reloadAdminDeletableServiceCapacitySubmissions,
+    applyScribeMenuVisibility,
   }
 }

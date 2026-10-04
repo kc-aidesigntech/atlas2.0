@@ -53,3 +53,4 @@ pilot-decks/capture/_*
 ~$*
 # Empty/local DB dump scratch
 verification/atlas_data_dump.sql
+.scribe-runbook/

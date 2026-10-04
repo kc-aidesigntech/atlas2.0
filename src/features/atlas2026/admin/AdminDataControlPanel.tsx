@@ -61,10 +61,11 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
     onSaveIntervalAssessmentRule,
     onSaveIntake,
     onOverrideEnrolleeZCodes,
+    onScribeMenuChanged,
   } = props
   const [activeSection, setActiveSection] = useState<AdminPortalSection>(() => {
     const stored = readAdminSessionValue(ADMIN_ACTIVE_SECTION_KEY)
-    return stored === 'overview' || stored === 'enrollees' || stored === 'directory' || stored === 'organizations' || stored === 'relationships' || stored === 'assessments' ? stored : 'overview'
+    return stored === 'overview' || stored === 'enrollees' || stored === 'directory' || stored === 'organizations' || stored === 'relationships' || stored === 'assessments' || stored === 'permissions' ? stored : 'overview'
   })
   const [selectedEnrolleeId, setSelectedEnrolleeId] = useState<string | null>(() => readAdminSessionValue(ADMIN_SELECTED_ENROLLEE_KEY) || selectedEnrollee?.id || null)
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(() => readAdminSessionValue(ADMIN_SELECTED_PERSON_KEY))
@@ -390,7 +391,7 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
             FieldComponent={Field}
           />
         ) : null}
-        {activeSection === 'permissions' ? <AdminPermissionsSection permissionExceptionRows={permissionExceptionRows} totalPermissionExceptionCount={totalPermissionExceptionCount} onClearPersonPermissionExceptions={handleClearPersonPermissionExceptions} /> : null}
+        {activeSection === 'permissions' ? <AdminPermissionsSection permissionExceptionRows={permissionExceptionRows} totalPermissionExceptionCount={totalPermissionExceptionCount} onClearPersonPermissionExceptions={handleClearPersonPermissionExceptions} onScribeMenuChanged={onScribeMenuChanged} /> : null}
       </AdminDataControlPanelFrame>
       {isZCodePickerOpen ? <AdminZCodePickerOverlay panelRef={zCodeOverlayPanelRef} listRef={zCodeOverlayListRef} activeParentFilters={activeZCodeParentFilters} selectedZCodes={selectedDraftZCodes} visibleOptions={visibleZCodeOptions} onClose={() => setIsZCodePickerOpen(false)} onToggleParentFilter={toggleZCodeParentFilter} onToggleZCode={toggleEnrolleeDraftZCode} /> : null}
     </>
