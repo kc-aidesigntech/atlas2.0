@@ -609,7 +609,41 @@ export async function fetchSinglePaneSurveyDefinition(
   } satisfies SinglePaneSurveyDefinitionRecord;
 }
 
-export async function fetchSinglePaneEnrolleeProfiles(client: AnySupabaseClient) {
+function mapActiveEnrollmentRosterRow(row: Record<string, unknown>): SinglePaneEnrolleeProfileRecord {
+  return {
+    enrolleeId: String(row.enrollee_id || ""),
+    enrollmentId: String(row.enrollment_id || ""),
+    fullName: String(row.enrollee_name || ""),
+    dob: String(row.dob || ""),
+    caseId: String(row.case_id || ""),
+    email: String(row.enrollee_email || ""),
+    avatarUrl: typeof row.avatar_url === "string" ? row.avatar_url : null,
+    assignedNavigator: String(row.assigned_navigator || ""),
+    zCodeTags: asStringArray(row.z_code_tags),
+    activeZCodeDetails: asEnrolleeActiveZCodeArray(row.active_z_code_details),
+    completedParentCodes: asStringArray(row.completed_parent_codes),
+    enrollmentStartIso: String(row.start_date || ""),
+    targetDurationMonths: Number(row.target_duration_months || 9),
+    currentPhase: row.current_phase === "readiness" || row.current_phase === "renewal" ? row.current_phase : "regulation",
+  };
+}
+
+export async function fetchSinglePaneEnrolleeProfiles(
+  client: AnySupabaseClient,
+  enrollmentIds?: string[],
+): Promise<SinglePaneEnrolleeProfileRecord[]> {
+  // A provided id list reads only those enrollments. An empty list is a
+  // deliberate no-op so a freshness check with nothing to patch does not
+  // download the full roster.
+  if (enrollmentIds) {
+    if (!enrollmentIds.length) return [];
+    const filteredResult = await (client as SupabaseClient<any>)
+      .schema("atlas")
+      .rpc("fn_list_active_enrollment_roster", { p_enrollment_ids: enrollmentIds });
+    if (filteredResult.error) throw filteredResult.error;
+    return (filteredResult.data || []).map((row: Record<string, unknown>) => mapActiveEnrollmentRosterRow(row));
+  }
+
   if (!canonicalEnrollmentRosterUnauthorized) {
     const canonicalResult = await (client as SupabaseClient<any>)
       .schema("atlas")
@@ -618,24 +652,7 @@ export async function fetchSinglePaneEnrolleeProfiles(client: AnySupabaseClient)
       .order("enrollee_name", { ascending: true });
 
     if (!canonicalResult.error) {
-      return (canonicalResult.data || []).map(
-        (row): SinglePaneEnrolleeProfileRecord => ({
-          enrolleeId: row.enrollee_id,
-          enrollmentId: row.enrollment_id,
-          fullName: row.enrollee_name,
-          dob: row.dob,
-          caseId: row.case_id || "",
-          email: row.enrollee_email || "",
-          avatarUrl: row.avatar_url,
-          assignedNavigator: row.assigned_navigator,
-          zCodeTags: asStringArray(row.z_code_tags),
-          activeZCodeDetails: asEnrolleeActiveZCodeArray(row.active_z_code_details),
-          completedParentCodes: asStringArray(row.completed_parent_codes),
-          enrollmentStartIso: row.start_date,
-          targetDurationMonths: Number(row.target_duration_months || 9),
-          currentPhase: row.current_phase,
-        }),
-      );
+      return (canonicalResult.data || []).map((row: Record<string, unknown>) => mapActiveEnrollmentRosterRow(row));
     }
 
     const fallbackCode = (canonicalResult.error as { code?: string } | null)?.code;

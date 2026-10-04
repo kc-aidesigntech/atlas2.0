@@ -168,3 +168,10 @@ and the inventory query in `verification/prod_commission_verify.sql` section F.
    scope set-based once instead of re-evaluating `fn_can_access_enrollment_as_staff`
    per joined row. Dependent assignment/load views may still need the same pattern
    if they show the same timeout signature.
+6. **Remembered workspace loads** — `20261004040625_workspace_record_revisions.sql`
+   adds `atlas.fn_workspace_record_revisions()` (same staff scope as the roster,
+   ids and revision hashes only) and `atlas.fn_list_active_enrollment_roster(uuid[])`
+   for enrollments whose hash changed. The shell keeps the last load for the
+   signed-in browser tab and skips a collection when its revisions match. Until
+   that migration is applied, a refresh still paints the remembered screen and
+   then runs a full reload.

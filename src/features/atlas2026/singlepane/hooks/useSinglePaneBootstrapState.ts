@@ -18,6 +18,18 @@ import type {
   TimelineConfig,
 } from '@/features/atlas2026/shared/contracts'
 import { setScribeOnMenuList } from '@/features/atlas2026/scribe/scribeMenuVisibility'
+import { fetchSinglePaneEnrolleeProfiles } from '@atlas/shared'
+import { supabase } from '@/lib/supabaseClient'
+import { applyIntakeOverrides } from '@/features/atlas2026/singlepane/data-access/intakeLocalState'
+import { describeRecordDelta, readRemembered, writeRemembered } from '@/features/atlas2026/singlepane/data-access/rememberedRecords'
+import { projectRememberedEnrollee } from '@/features/atlas2026/singlepane/data-access/singlePaneBootstrapRepository'
+import {
+  freshnessMatches,
+  readRememberedUserId,
+  readWorkspaceFreshness,
+  unchangedExceptEnrollments,
+  type WorkspaceFreshness
+} from '@/features/atlas2026/singlepane/data-access/workspaceFreshness'
 import {
   loadAdminDataQuality,
   loadAccountSettings,
@@ -105,6 +117,85 @@ const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
 const ROLE_PREFETCH_ORDER: AtlasRole[] = ['navigator', 'partner', 'supervisor', 'administrator']
 const bootstrapPayloadCache = new Map<AtlasRole, SinglePaneBootstrapPayload>()
 const bootstrapPayloadInFlight = new Map<AtlasRole, Promise<SinglePaneBootstrapPayload>>()
+const freshnessByRole = new Map<AtlasRole, WorkspaceFreshness>()
+
+type RememberedWorkspace = {
+  payload: SinglePaneBootstrapPayload
+  freshness: WorkspaceFreshness
+}
+
+function workspaceMemoryKey(role: AtlasRole) {
+  return `workspace:${role}`
+}
+
+function rememberWorkspace(userId: string | null, role: AtlasRole, payload: SinglePaneBootstrapPayload, freshness: WorkspaceFreshness) {
+  bootstrapPayloadCache.set(role, payload)
+  freshnessByRole.set(role, freshness)
+  if (!userId) return
+  writeRemembered<RememberedWorkspace>(userId, workspaceMemoryKey(role), { payload, freshness })
+}
+
+async function patchRememberedEnrollments(
+  payload: SinglePaneBootstrapPayload,
+  previous: WorkspaceFreshness,
+  next: WorkspaceFreshness
+): Promise<SinglePaneBootstrapPayload | null> {
+  const delta = describeRecordDelta(previous.enrollments, next.enrollments)
+  // A new enrollment can change who this role is allowed to see, so membership
+  // changes take the full load. Edits to enrollments already on screen patch in place.
+  if (delta.addedIds.length || !payload.timelineConfig || !supabase) return null
+  if (!delta.changedIds.length && !delta.removedIds.length) return null
+  if (delta.changedIds.length > 12) return null
+
+  const profiles = await fetchSinglePaneEnrolleeProfiles(supabase, delta.changedIds)
+  const returnedEnrollmentIds = new Set(profiles.map((profile) => profile.enrollmentId))
+  const removedEnrollmentIds = new Set(delta.removedIds)
+  for (const enrollmentId of delta.changedIds) {
+    if (!returnedEnrollmentIds.has(enrollmentId)) removedEnrollmentIds.add(enrollmentId)
+  }
+
+  const removedEnrolleeIds = new Set(
+    payload.enrollees
+      .filter((enrollee) => enrollee.enrollmentId && removedEnrollmentIds.has(enrollee.enrollmentId))
+      .map((enrollee) => enrollee.id)
+  )
+  const enrollees = payload.enrollees.filter((enrollee) => !removedEnrolleeIds.has(enrollee.id))
+  const loads = payload.loads.filter((load) => !removedEnrolleeIds.has(load.enrolleeId))
+  const loadBreakdownsByEnrolleeId = { ...payload.loadBreakdownsByEnrolleeId }
+  const timelineConfigsByEnrolleeId = { ...payload.timelineConfigsByEnrolleeId }
+  for (const enrolleeId of removedEnrolleeIds) {
+    delete loadBreakdownsByEnrolleeId[enrolleeId]
+    delete timelineConfigsByEnrolleeId[enrolleeId]
+  }
+
+  for (const profile of profiles) {
+    const projected = projectRememberedEnrollee(profile, payload.timelineConfig)
+    const [withIntake] = applyIntakeOverrides([projected.enrollee], payload.intakeFormsByEnrolleeId)
+    const enrollee = withIntake || projected.enrollee
+    const existingIndex = enrollees.findIndex((item) => item.id === enrollee.id)
+    if (existingIndex >= 0) enrollees[existingIndex] = enrollee
+    else enrollees.push(enrollee)
+
+    const existingBreakdown = loadBreakdownsByEnrolleeId[enrollee.id]
+    // Survey-weighted charts stay put when the survey revision did not change.
+    if (existingBreakdown?.sourceKind !== 'enrolleeSurvey') {
+      loadBreakdownsByEnrolleeId[enrollee.id] = projected.breakdown
+      const loadIndex = loads.findIndex((load) => load.enrolleeId === enrollee.id)
+      if (loadIndex >= 0) loads[loadIndex] = projected.load
+      else loads.push(projected.load)
+    }
+  }
+
+  const selectedStillVisible = enrollees.some((enrollee) => enrollee.id === payload.selectedEnrolleeId)
+  return {
+    ...payload,
+    enrollees,
+    loads,
+    loadBreakdownsByEnrolleeId,
+    timelineConfigsByEnrolleeId,
+    selectedEnrolleeId: selectedStillVisible ? payload.selectedEnrolleeId : enrollees[0]?.id || ''
+  }
+}
 
 function withScribeOnRole(roleConfigs: RoleMenuConfig[], role: AtlasRole, visible: boolean) {
   return roleConfigs.map((config) =>
@@ -348,12 +439,16 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
     let isMounted = true
 
     async function bootstrap() {
+      let paintedFromMemory = false
       try {
         workspaceLoadMetrics.markBootstrapStart(role)
-        const cachedPayload = bootstrapPayloadCache.get(role)
+        const userId = await readRememberedUserId()
+        const remembered = userId ? readRemembered<RememberedWorkspace>(userId, workspaceMemoryKey(role)) : null
+        const cachedPayload = bootstrapPayloadCache.get(role) || remembered?.payload || null
+        if (remembered) freshnessByRole.set(role, remembered.freshness)
         if (cachedPayload) {
-          // Cached role payload keeps role switches responsive while a background
-          // refresh silently syncs with remote updates.
+          paintedFromMemory = true
+          bootstrapPayloadCache.set(role, cachedPayload)
           if (isMounted) {
             setState((current) => ({
               ...current,
@@ -362,52 +457,72 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
               error: null
             }))
           }
-          const refreshedPayload = await loadBootstrapPayload(role, true)
-          if (!isMounted) return
-          setState((current) => ({
-            ...current,
-            ...refreshedPayload,
-            isLoading: false,
-            error: null
-          }))
+        }
+
+        const freshness = await readWorkspaceFreshness()
+        const previousFreshness = freshnessByRole.get(role) || null
+        if (cachedPayload && freshnessMatches(previousFreshness, freshness)) {
           workspaceLoadMetrics.markBootstrapEnd(role)
           return
         }
 
-        if (isMounted) {
+        if (cachedPayload && previousFreshness && unchangedExceptEnrollments(previousFreshness, freshness)) {
+          try {
+            const patched = await patchRememberedEnrollments(cachedPayload, previousFreshness, freshness)
+            if (patched) {
+              rememberWorkspace(userId, role, patched, freshness)
+              if (!isMounted) return
+              setState((current) => ({
+                ...current,
+                ...patched,
+                isLoading: false,
+                error: null
+              }))
+              workspaceLoadMetrics.markBootstrapEnd(role)
+              return
+            }
+          } catch (error) {
+            if (isSupabasePermissionError(error)) throw error
+            // A failed slice read falls through to the full workspace load.
+          }
+        }
+
+        if (!paintedFromMemory && isMounted) {
           setState((current) => ({ ...current, isLoading: true, error: null }))
         }
-        const criticalPayload = await loadCriticalBootstrapPayload(role)
+        if (!paintedFromMemory) {
+          const criticalPayload = await loadCriticalBootstrapPayload(role)
+          if (!isMounted) return
+          setState((current) => ({
+            ...current,
+            ...criticalPayload,
+            isLoading: false,
+            error: null
+          }))
+          workspaceLoadMetrics.markBootstrapEnd(role)
+        }
+        const payload = await loadBootstrapPayload(role, true)
         if (!isMounted) return
+        const freshnessAfterLoad = freshness.reliable ? freshness : await readWorkspaceFreshness()
+        rememberWorkspace(userId, role, payload, freshnessAfterLoad)
         setState((current) => ({
           ...current,
-          ...criticalPayload,
+          ...payload,
           isLoading: false,
           error: null
         }))
-        workspaceLoadMetrics.markBootstrapEnd(role)
-        // Non-blocking enrichment: once the first role screen is usable, merge in
-        // secondary datasets (admin metrics, assignment boards, history summaries).
-        void loadBootstrapPayload(role, true)
-          .then((payload) => {
-            if (!isMounted) return
-            setState((current) => ({
-              ...current,
-              ...payload,
-              isLoading: false,
-              error: null
-            }))
-          })
-          .catch(() => {
-            // Supplemental data failures should not re-block the rendered workspace.
-          })
+        if (paintedFromMemory) workspaceLoadMetrics.markBootstrapEnd(role)
       } catch (error) {
         // Fail loudly: a bootstrap failure (especially a grant/RLS denial) must not
-        // masquerade as a healthy-but-empty workspace. Clear role-scoped domain
-        // collections so stale or empty data cannot be mistaken for the truth, and
-        // surface an explicit error for the UI banner.
+        // masquerade as a healthy-but-empty workspace. A remembered screen stays up
+        // on a network miss; a permission denial still clears it.
         console.error('Failed to bootstrap single pane state.', error)
         if (!isMounted) return
+        if (paintedFromMemory && !isSupabasePermissionError(error)) {
+          setState((current) => ({ ...current, isLoading: false }))
+          workspaceLoadMetrics.markBootstrapEnd(role)
+          return
+        }
         setState((current) => ({
           ...current,
           isLoading: false,
@@ -424,24 +539,27 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
 
     bootstrap()
 
-    const rolePrefetchTimeout =
+    const roleHydrateTimeout =
       typeof window === 'undefined'
         ? null
         : window.setTimeout(() => {
-            // Stagger alternate-role prefetch so concurrent roster/bootstrap storms
-            // cannot reintroduce statement_timeout 500s right after first paint.
-            ROLE_PREFETCH_ORDER.forEach((candidateRole, index) => {
-              if (candidateRole === role) return
-              window.setTimeout(() => {
-                void loadBootstrapPayload(candidateRole).catch(() => null)
-              }, index * 400)
-            })
-          }, 1200)
+            void (async () => {
+              const userId = await readRememberedUserId()
+              if (!userId) return
+              for (const candidateRole of ROLE_PREFETCH_ORDER) {
+                if (candidateRole === role || bootstrapPayloadCache.has(candidateRole)) continue
+                const stored = readRemembered<RememberedWorkspace>(userId, workspaceMemoryKey(candidateRole))
+                if (!stored) continue
+                bootstrapPayloadCache.set(candidateRole, stored.payload)
+                freshnessByRole.set(candidateRole, stored.freshness)
+              }
+            })()
+          }, 0)
 
     return () => {
       isMounted = false
-      if (rolePrefetchTimeout !== null) {
-        window.clearTimeout(rolePrefetchTimeout)
+      if (roleHydrateTimeout !== null) {
+        window.clearTimeout(roleHydrateTimeout)
       }
     }
   }, [role, reloadNonce])

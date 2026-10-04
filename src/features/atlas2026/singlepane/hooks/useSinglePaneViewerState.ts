@@ -16,6 +16,31 @@ import type {
 import { isCapabilityAllowedForRole } from '@/features/atlas2026/shared/roleCapabilityPolicy'
 import { useScopedEnrolleeSelection } from '@/features/atlas2026/singlepane/hooks/useScopedEnrolleeSelection'
 
+function normalizeViewerEmail(value: string | null | undefined) {
+  return value?.trim().toLowerCase() || ''
+}
+
+/**
+ * The auth session email is the signed-in identity. Account settings email is an
+ * editable profile field and can belong to a different directory person. Prefer
+ * the session match so that other person's roles cannot clamp the active
+ * experience (an administrator selection would otherwise snap back).
+ */
+export function findViewerPerson(
+  people: AccessMatrixDataset['people'],
+  sessionEmail: string,
+  accountSettingsEmail: string
+) {
+  const sessionKey = normalizeViewerEmail(sessionEmail)
+  if (sessionKey) {
+    const sessionMatch = people.find((person) => normalizeViewerEmail(person.email) === sessionKey)
+    if (sessionMatch) return sessionMatch
+  }
+  const settingsKey = normalizeViewerEmail(accountSettingsEmail)
+  if (!settingsKey) return null
+  return people.find((person) => normalizeViewerEmail(person.email) === settingsKey) || null
+}
+
 interface UseSinglePaneViewerStateInput {
   role: AtlasRole
   viewerRole: AtlasRole
@@ -67,12 +92,7 @@ export function useSinglePaneViewerState(input: UseSinglePaneViewerStateInput) {
 
   const viewerPerson = useMemo(() => {
     if (!input.accessMatrixDataset) return null
-    const candidates = new Set(
-      [input.sessionEmail, input.accountSettings.email]
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean)
-    )
-    return input.accessMatrixDataset.people.find((person) => candidates.has(person.email.trim().toLowerCase())) || null
+    return findViewerPerson(input.accessMatrixDataset.people, input.sessionEmail, input.accountSettings.email)
   }, [input.accessMatrixDataset, input.accountSettings.email, input.sessionEmail])
 
   const viewerCanViewNavigatorAssignmentNames =

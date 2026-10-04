@@ -346,7 +346,10 @@ performance.getEntriesByType('measure')
 
 Primary gates:
 
-- `workspace-open:time-to-first-usable` — route open → role screen usable
+- `workspace-open:time-to-first-usable` — route open → role screen usable. A warm
+  refresh should paint the remembered workspace before the freshness check finishes.
+  If `fn_workspace_record_revisions` is deployed and nothing changed, bootstrap
+  should not download the roster again.
 - `workspace-open:bootstrap-duration` — critical bootstrap only
 
 Attribution helpers:

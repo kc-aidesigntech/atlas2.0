@@ -138,6 +138,80 @@ export type SinglePaneBootstrapLoadOptions = {
   criticalOnly?: boolean
 }
 
+type RosterProfile = Awaited<ReturnType<typeof fetchSinglePaneEnrolleeProfiles>>[number]
+
+/**
+ * Rebuild one enrollee's shell records from a roster profile. Used when that
+ * enrollment's revision changed and the rest of the remembered workspace can stay.
+ */
+export function projectRememberedEnrollee(profile: RosterProfile, timelineTemplate: TimelineConfig) {
+  const enrollee: EnrolleeProfile = {
+    id: profile.enrolleeId,
+    enrollmentId: profile.enrollmentId,
+    fullName: profile.fullName,
+    dob: profile.dob,
+    caseId: profile.caseId,
+    email: profile.email,
+    avatarUrl: profile.avatarUrl || undefined,
+    assignedNavigator: profile.assignedNavigator,
+    zCodeTags: profile.zCodeTags,
+    activeZCodeDetails: profile.activeZCodeDetails,
+    completedParentCodes: profile.completedParentCodes,
+    currentPhase: profile.currentPhase
+  }
+  const rows = profile.activeZCodeDetails.flatMap((detail) => {
+    const normalizedZCode = detail.zCode.trim().toUpperCase()
+    if (!normalizedZCode) return []
+    const parentCode = detail.parentCode.trim().toUpperCase()
+    return [
+      {
+        id: detail.enrolleeZCodeId,
+        zCodeGroup: normalizedZCode,
+        parentCode,
+        mappedDomain: mapZCodeToDomainBucket(parentCode, normalizedZCode),
+        rawCount: 1,
+        responseCount: 1,
+        drilldownTarget: {
+          kind: 'enrolleeZCode' as const,
+          enrolleeId: profile.enrolleeId,
+          enrollmentId: profile.enrollmentId,
+          enrolleeZCodeId: detail.enrolleeZCodeId,
+          normalizedZCode
+        }
+      }
+    ]
+  })
+  const totals = rows.reduce(
+    (accumulator, row) => {
+      if (row.mappedDomain === 'habitat') accumulator.habitatTotal += row.rawCount
+      if (row.mappedDomain === 'work') accumulator.workTotal += row.rawCount
+      if (row.mappedDomain === 'socialNetworks') accumulator.socialNetworksTotal += row.rawCount
+      return accumulator
+    },
+    { habitatTotal: 0, workTotal: 0, socialNetworksTotal: 0 }
+  )
+  const breakdown: DomainLoadBreakdown = {
+    subjectId: profile.enrolleeId,
+    subjectLabel: profile.fullName,
+    sourceKind: 'enrolleeRecords',
+    sourceLabel: 'Supabase enrollee z-codes',
+    ...totals,
+    rows
+  }
+  const load: DomainLoad = {
+    enrolleeId: profile.enrolleeId,
+    habitat: totals.habitatTotal,
+    work: totals.workTotal,
+    socialNetworks: totals.socialNetworksTotal
+  }
+  const timeline: TimelineConfig = {
+    ...timelineTemplate,
+    planStartIso: profile.enrollmentStartIso || timelineTemplate.planStartIso,
+    durationMonths: profile.targetDurationMonths || timelineTemplate.durationMonths
+  }
+  return { enrollee, load, breakdown, timeline }
+}
+
 export async function loadSinglePaneBootstrap(
   role: AtlasRole,
   options?: SinglePaneBootstrapLoadOptions
