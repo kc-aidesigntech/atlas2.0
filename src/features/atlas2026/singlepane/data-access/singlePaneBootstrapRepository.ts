@@ -87,7 +87,18 @@ function normalizeRoleTopMenus(roleKey: string, menus: string[], canAccessWarmLi
   }
   if (roleKey === 'supervisor') {
     const normalized = hideUnconfiguredWarmLineMenu(
-      hideDeferredCountyCommonsMenu(menus.filter((menu) => menu.trim().toLowerCase() !== 'route planning')),
+      hideDeferredCountyCommonsMenu(
+        menus
+          .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+          .map((menu) => {
+            const lower = menu.trim().toLowerCase()
+            // Older supervisor shells used these labels. Keep stored menus opening
+            // the same destinations after the profile and wallet rename.
+            if (lower === 'assigned navigators') return 'my profile'
+            if (lower === 'navigator assessments') return 'my wallet'
+            return menu
+          })
+      ),
       canAccessWarmLine
     )
     return normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]

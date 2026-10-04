@@ -22,6 +22,7 @@ import { mergeNavigatorProgramState } from '@/features/atlas2026/singlepane/doma
 import { buildPendingReferralAssignmentRows } from '@/features/atlas2026/singlepane/domain/enrollmentPickup'
 import { buildNavigatorRouteBoardLoadBreakdown, deriveNavigatorLoad, deriveNavigatorLoadBreakdown, deriveNavigatorLoadContributors } from '@/features/atlas2026/singlepane/domain/loadsRoutes'
 import { buildPartnerStripJourneyModel } from '@/features/atlas2026/singlepane/domain/partnerStripJourney'
+import { buildSupervisorTeamBurdenModel } from '@/features/atlas2026/singlepane/domain/supervisorTeamBurden'
 import { normalizeOrganizationKey } from '@/features/atlas2026/singlepane/domain/dates'
 import { dedupeMenus } from '@/features/atlas2026/singlepane/domain/roles'
 
@@ -123,6 +124,10 @@ export function useSinglePaneWorkspaceDerivedState(context: WorkspaceDerivedCont
       }))
       .sort((left, right) => left.navigatorName.localeCompare(right.navigatorName))
   }, [accessMatrixDataset, scopedEnrollees, viewerPerson])
+  const supervisorTeamBurden = useMemo(
+    () => buildSupervisorTeamBurdenModel(supervisorNavigatorDirectory, scopedEnrollees, logs),
+    [logs, scopedEnrollees, supervisorNavigatorDirectory]
+  )
   const mergedNavigatorProgramState = useMemo(() => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, currentSupervisorName, enrollees, enrollmentRequests, publicQueueRecords), [currentNavigatorName, currentSupervisorName, enrollees, enrollmentRequests, navigatorProgramState, publicQueueRecords])
   const partnerStripJourneyModel = useMemo(() => buildPartnerStripJourneyModel({
     isPartnerStationView, partnerOrganizationName: effectivePartnerOrganizationName,
@@ -215,7 +220,7 @@ export function useSinglePaneWorkspaceDerivedState(context: WorkspaceDerivedCont
     effectiveRegulationReviewSettings: regulation.regulationReviewSettings,
     ...regulation,
     partnerServiceCapacityDefaultHeader, currentNavigatorName, currentSupervisorName,
-    supervisorNavigatorCompetency, supervisorNavigatorDirectory, mergedNavigatorProgramState,
+    supervisorNavigatorCompetency, supervisorNavigatorDirectory, supervisorTeamBurden, mergedNavigatorProgramState,
     partnerStripJourneyModel, ...competency, ...reflection, ...pickup, ...troubleshooting, ...enrollment,
     navigatorAssignedCompetencySummary, navigatorAggregateLoad, navigatorLoadContributors,
     navigatorAggregateLoadBreakdown, pickupQueue, navigatorAssignmentBoardRows,

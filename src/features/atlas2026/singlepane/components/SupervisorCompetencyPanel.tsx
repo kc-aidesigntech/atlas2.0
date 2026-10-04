@@ -12,7 +12,6 @@ interface SupervisorNavigatorDirectoryEntry {
 interface SupervisorCompetencyPanelProps {
   mode: 'assigned-navigators' | 'navigator-assessments'
   navigatorDirectory: SupervisorNavigatorDirectoryEntry[]
-  onToggleManagedNavigator?: (navigatorPersonId: string, isManaged: boolean) => Promise<void> | void
   isSavingAssignments?: boolean
   competencyByNavigator: SupervisorNavigatorCompetencySummary[]
 }
@@ -20,7 +19,6 @@ interface SupervisorCompetencyPanelProps {
 export default function SupervisorCompetencyPanel({
   mode,
   navigatorDirectory,
-  onToggleManagedNavigator,
   isSavingAssignments = false,
   competencyByNavigator
 }: SupervisorCompetencyPanelProps) {
@@ -29,7 +27,7 @@ export default function SupervisorCompetencyPanel({
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
         <small className="mb-2 block text-[13px] text-white">assigned navigators</small>
         <small className="mb-3 block text-[11px] text-[#cfcfcf]">
-          Manage which navigators roll up to you as supervisor.
+          Navigators assigned to you, and the enrollees on each of their caseloads.
         </small>
         {navigatorDirectory.length ? (
           <div className="space-y-2">
@@ -44,28 +42,18 @@ export default function SupervisorCompetencyPanel({
                   <small className="text-[11px] text-[#cfcfcf]">{row.assignedEnrolleeCount} assigned enrollees</small>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <input
-                    type="checkbox"
-                    checked={row.isManagedByCurrentSupervisor}
-                    onChange={() => onToggleManagedNavigator?.(row.navigatorPersonId, !row.isManagedByCurrentSupervisor)}
-                    className="h-4 w-4 accent-white"
+                  <WarmLineAccessToggle
+                    personId={row.navigatorPersonId}
+                    personRoles={['navigator']}
+                    mode="supervisor"
                     disabled={isSavingAssignments}
-                    title="managed by you"
                   />
-                  {row.isManagedByCurrentSupervisor ? (
-                    <WarmLineAccessToggle
-                      personId={row.navigatorPersonId}
-                      personRoles={['navigator']}
-                      mode="supervisor"
-                      disabled={isSavingAssignments}
-                    />
-                  ) : null}
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <small className="block text-[12px] text-[#cfcfcf]">No navigator identities are available yet.</small>
+          <small className="block text-[12px] text-[#cfcfcf]">No navigators are assigned to you yet.</small>
         )}
       </div>
     )
@@ -74,7 +62,7 @@ export default function SupervisorCompetencyPanel({
   if (!competencyByNavigator.length) {
     return (
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
-        <small className="text-[13px] text-white">navigator assessments</small>
+        <small className="text-[13px] text-white">my wallet</small>
         <small className="mt-2 block text-[12px] text-[#cfcfcf]">No navigator assessments recorded yet.</small>
       </div>
     )
@@ -82,7 +70,7 @@ export default function SupervisorCompetencyPanel({
 
   return (
     <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
-      <small className="mb-2 block text-[13px] text-white">assigned navigators competency</small>
+      <small className="mb-2 block text-[13px] text-white">navigator competency</small>
       <small className="mb-3 block text-[11px] text-[#cfcfcf]">
         {/* Weighting is intentionally front-loaded so supervisors react to recent changes without discarding trend context. */}
         Rolling weighted average uses the last three assessments: 3x most recent, 2x previous, 1x third.

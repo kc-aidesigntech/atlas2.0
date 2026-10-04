@@ -1,5 +1,4 @@
 import React from 'react'
-import SupervisorCompetencyPanel from '@/features/atlas2026/singlepane/components/SupervisorCompetencyPanel'
 import type { AtlasRole, CountyHeatPoint, EnrollmentRequestRecord, SupervisorNavigatorCompetencySummary } from '@/features/atlas2026/shared/contracts'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
@@ -22,15 +21,10 @@ interface ContextPanelsProps {
 export default function ContextPanels({
   role,
   activeMenu,
-  enrollmentRequests,
-  countyHeatmap,
-  supervisorNavigatorCompetency,
-  supervisorNavigatorDirectory,
-  onToggleSupervisorManagedNavigator,
-  isSavingAccessMatrix = false
+  enrollmentRequests
 }: ContextPanelsProps) {
   // Non-navigator "my profile" intentionally surfaces enrollment intake requests instead of navigator-only profile data.
-  if (activeMenu === 'my profile' && role !== 'navigator') {
+  if (activeMenu === 'my profile' && role !== 'navigator' && role !== 'supervisor') {
     return (
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
         <small className="mb-2 block text-[13px] text-white">my profile</small>
@@ -52,18 +46,6 @@ export default function ContextPanels({
   if (activeMenu === 'county commons') {
     // County commons stays intentionally hidden while the experience is being rebuilt.
     return null
-  }
-
-  if (role === 'supervisor' && (activeMenu === 'navigator assessments' || activeMenu === 'assigned navigators')) {
-    return (
-      <SupervisorCompetencyPanel
-        mode={activeMenu === 'assigned navigators' ? 'assigned-navigators' : 'navigator-assessments'}
-        navigatorDirectory={supervisorNavigatorDirectory}
-        competencyByNavigator={supervisorNavigatorCompetency}
-        onToggleManagedNavigator={onToggleSupervisorManagedNavigator}
-        isSavingAssignments={isSavingAccessMatrix}
-      />
-    )
   }
 
   if (activeMenu === 'refer' || activeMenu === 'referral portal') {

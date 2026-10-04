@@ -30,6 +30,7 @@ const PartnerStripHistoryOverlay = React.lazy(() => import('../components/Partne
 const PartnerSpecialtyOverlay = React.lazy(() => import('../components/PartnerSpecialtyOverlay'))
 const PartnerStationProfilePanel = React.lazy(() => import('../components/PartnerStationProfilePanel'))
 const ProfilePanel = React.lazy(() => import('../components/ProfilePanel'))
+const SupervisorTeamBurdenPanel = React.lazy(() => import('../components/SupervisorTeamBurdenPanel'))
 // Keep recharts out of the workspace chunk so bootstrap can finish while the
 // chart graph downloads in parallel with first paint.
 const RadialLoadChart = React.lazy(() => import('../components/RadialLoadChart'))
@@ -117,6 +118,7 @@ export default function SinglePaneWorkspace() {
     navigatorSupervisionSessions,
     navigatorAssignedCompetencySummary,
     supervisorNavigatorDirectory,
+    supervisorTeamBurden,
     navigatorIntervalDueItems,
     regulationReviewSettings,
     regulationReviewDueItems,
@@ -482,9 +484,15 @@ export default function SinglePaneWorkspace() {
   const assignmentBoardError = viewerCanAccessAssignmentBoard
     ? navigatorEnrollmentAssignmentsError
     : 'Assignment board is hidden by administrator policy.'
-  const isSupervisorMyProfileView =
-    uiRole === 'supervisor' && (activeMenu === 'assigned navigators' || activeMenu === 'navigator assessments')
-  const isReady = isPartnerStationView ? true : isNavigatorMyProfile || isNavigatorEnrolleeMenu || isSupervisorMyProfileView ? true : Boolean(selectedEnrollee && timelineConfig)
+  const isSupervisorMyProfile = uiRole === 'supervisor' && activeMenu === 'my profile'
+  const isSupervisorMyWallet = uiRole === 'supervisor' && activeMenu === 'my wallet'
+  const isSupervisorTeamBurden = uiRole === 'supervisor' && activeMenu === 'team burden'
+  const isSupervisorMyProfileView = isSupervisorMyProfile || isSupervisorMyWallet
+  const isReady = isPartnerStationView
+    ? true
+    : isNavigatorMyProfile || isNavigatorEnrolleeMenu || isSupervisorMyProfileView || isSupervisorTeamBurden
+      ? true
+      : Boolean(selectedEnrollee && timelineConfig)
 
   React.useEffect(() => {
     if (isLoading || !isReady) return
@@ -1061,6 +1069,7 @@ export default function SinglePaneWorkspace() {
                   >
                     <div className="w-full">
                       <SupervisorMyProfilePanel
+                        mode={isSupervisorMyWallet ? 'wallet' : 'profile'}
                         currentSupervisorName={currentSupervisorName}
                         navigatorDirectory={supervisorNavigatorDirectory}
                         competencyByNavigator={supervisorNavigatorCompetency}
@@ -1093,6 +1102,12 @@ export default function SinglePaneWorkspace() {
                       />
                     </div>
                   </div>
+                ) : isSupervisorTeamBurden ? (
+                  <SupervisorTeamBurdenPanel
+                    navigators={supervisorTeamBurden.navigators}
+                    enrolleeCount={supervisorTeamBurden.enrollees.length}
+                    entryCount={supervisorTeamBurden.logs.length + supervisorTeamBurden.resolvedZCodeMarkers.length}
+                  />
                 ) : isNavigatorEnrolleeMenu && !selectedEnrollee ? (
                   <div
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
@@ -1230,7 +1245,27 @@ export default function SinglePaneWorkspace() {
                       accentColor="var(--atlas-signal-lucid-green)"
                     />
                   </div>
-                ) : isNavigatorMyProfile || isSupervisorMyProfileView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isPartnerStationView ? (
+                ) : isNavigatorMyProfile || isSupervisorMyProfileView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isSupervisorTeamBurden ? (
+                  // Read-only team strip: dragging would rewrite one enrollee's timeline, and station markers belong to a single person.
+                  <>
+                    <div className="hidden min-h-[220px] flex-1 items-start md:flex">
+                      <StripMapTimeline
+                        events={supervisorTeamBurden.logs}
+                        timelineConfig={supervisorTeamBurden.timelineConfig}
+                        completedParentCodes={supervisorTeamBurden.completedParentCodes}
+                        resolvedZCodeMarkers={supervisorTeamBurden.resolvedZCodeMarkers}
+                      />
+                    </div>
+                    <div className="flex min-h-[220px] flex-1 items-start md:hidden">
+                      <VerticalStripMapTimeline
+                        events={supervisorTeamBurden.logs}
+                        timelineConfig={supervisorTeamBurden.timelineConfig}
+                        completedParentCodes={supervisorTeamBurden.completedParentCodes}
+                        resolvedZCodeMarkers={supervisorTeamBurden.resolvedZCodeMarkers}
+                      />
+                    </div>
+                  </>
+                ) : isPartnerStationView ? (
                   <>
                     {timelineConfig ? (
                       <>
@@ -1429,9 +1464,16 @@ function menuToHash(menu: string) {
     .replace(/^-+|-+$/g, '')
 }
 
+const LEGACY_SUPERVISOR_MENU_HASHES: Record<string, string> = {
+  'assigned-navigators': 'my profile',
+  'navigator-assessments': 'my wallet'
+}
+
 function hashToMenu(hashValue: string, menus: string[]) {
   const normalizedHash = hashValue.replace(/^#/, '').trim().toLowerCase()
   if (!normalizedHash) return null
+  const renamed = LEGACY_SUPERVISOR_MENU_HASHES[normalizedHash]
+  if (renamed && menus.includes(renamed)) return renamed
   return menus.find((menu) => menuToHash(menu) === normalizedHash) || null
 }
 

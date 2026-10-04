@@ -5,12 +5,14 @@ import type {
   SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/shared/contracts'
 import ProfileNavigationCard from './ProfileNavigationCard'
+import SupervisorCompetencyPanel from './SupervisorCompetencyPanel'
 import SupervisorProfileOverlay, {
   type SupervisorNavigatorDirectoryEntry,
   type SupervisorProfileOverlayKey
 } from './supervisorProfile/SupervisorProfileOverlay'
 
 interface SupervisorMyProfilePanelProps {
+  mode: 'profile' | 'wallet'
   currentSupervisorName: string
   navigatorDirectory: SupervisorNavigatorDirectoryEntry[]
   competencyByNavigator: SupervisorNavigatorCompetencySummary[]
@@ -41,30 +43,50 @@ const CARD_DEFS: Array<{
 
 export default function SupervisorMyProfilePanel(props: SupervisorMyProfilePanelProps) {
   const [activeOverlay, setActiveOverlay] = React.useState<SupervisorProfileOverlayKey | null>(null)
+  const { mode, ...overlayProps } = props
+  const walletCards = CARD_DEFS.filter((card) => card.overlayId !== 'section_2_assigned_navigators')
+  // Profile lists the supervisor's navigators. Wallet keeps the assessment tools.
+  const assignedNavigators = props.navigatorDirectory.filter((row) => row.isManagedByCurrentSupervisor)
 
   return (
     <div className="relative flex flex-col gap-4">
       <div className="atlas-surface-panel px-5 py-4">
-        <div className="atlas-h4 text-[24px] font-medium text-white">supervisor my profile</div>
+        <div className="atlas-h4 text-[24px] font-medium text-white">{mode === 'profile' ? 'my profile' : 'my wallet'}</div>
         <small className="mt-1 block text-[#9eacb9]">{props.currentSupervisorName}</small>
       </div>
-      <div className="atlas-profile-nav-grid">
-        {CARD_DEFS.map((card) => (
-          <ProfileNavigationCard
-            key={card.overlayId}
-            sequenceNumber={Number(card.overlayId.replace('section_', '').split('_')[0])}
-            title={card.cardTitle}
-            subtitle={card.cardSubtitle}
-            actionLabel={card.actionLabel}
-            variant={card.variant}
-            illustration={card.illustration}
-            onClick={() => setActiveOverlay(card.overlayId)}
+      {mode === 'profile' ? (
+        <SupervisorCompetencyPanel
+          mode="assigned-navigators"
+          navigatorDirectory={assignedNavigators}
+          competencyByNavigator={props.competencyByNavigator}
+          isSavingAssignments={props.isSavingAssignments ?? false}
+        />
+      ) : (
+        <>
+          <SupervisorCompetencyPanel
+            mode="navigator-assessments"
+            navigatorDirectory={assignedNavigators}
+            competencyByNavigator={props.competencyByNavigator}
           />
-        ))}
-      </div>
+          <div className="atlas-profile-nav-grid">
+            {walletCards.map((card, index) => (
+              <ProfileNavigationCard
+                key={card.overlayId}
+                sequenceNumber={index + 1}
+                title={card.cardTitle}
+                subtitle={card.cardSubtitle}
+                actionLabel={card.actionLabel}
+                variant={card.variant}
+                illustration={card.illustration}
+                onClick={() => setActiveOverlay(card.overlayId)}
+              />
+            ))}
+          </div>
+        </>
+      )}
       {activeOverlay ? (
         <SupervisorProfileOverlay
-          {...props}
+          {...overlayProps}
           activeOverlay={activeOverlay}
           title={CARD_DEFS.find((card) => card.overlayId === activeOverlay)?.title || 'section'}
           isSavingAssignments={props.isSavingAssignments ?? false}
