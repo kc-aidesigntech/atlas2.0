@@ -15,6 +15,7 @@ const PublicAtlasLandingPage = React.lazy(() => import('@/features/atlas2026/pub
 const PublicAtlasDemoPage = React.lazy(() => import('@/features/atlas2026/public/PublicAtlasDemoPage'))
 const StandaloneZCodeSurveysPage = React.lazy(() => import('@/features/atlas2026/singlepane/StandaloneZCodeSurveysPage'))
 const StandaloneScribePage = React.lazy(() => import('@/features/atlas2026/scribe/StandaloneScribePage'))
+const StandaloneFleetPage = React.lazy(() => import('@/features/atlas2026/fleet/StandaloneFleetPage'))
 
 function ShellFallback({ message }) {
   return (
@@ -57,6 +58,11 @@ function isScribePath(pathname) {
   return normalizedPath === '/scribe' || normalizedPath.startsWith('/scribe/')
 }
 
+function isFleetPath(pathname) {
+  const normalizedPath = normalizePathname(pathname)
+  return normalizedPath === '/fleet' || normalizedPath.startsWith('/fleet/')
+}
+
 /**
  * Subdomain mount for the Scribe subapp: when the page is served from the
  * configured scribe hostname (e.g. scribe.<domain>), the whole origin renders
@@ -66,6 +72,17 @@ function isScribePath(pathname) {
  */
 function isScribeHost(hostname) {
   const configured = String(import.meta.env.VITE_ATLAS_SCRIBE_HOSTNAME || '').trim().toLowerCase()
+  if (!configured || !hostname) return false
+  return hostname.toLowerCase() === configured
+}
+
+/**
+ * Subdomain mount for the fleet subapp. When VITE_ATLAS_FLEET_HOSTNAME is set
+ * (for example fleet.example.org), that origin renders fleet at every path.
+ * /fleet on the primary domain is the fallback when DNS is not configured yet.
+ */
+function isFleetHost(hostname) {
+  const configured = String(import.meta.env.VITE_ATLAS_FLEET_HOSTNAME || '').trim().toLowerCase()
   if (!configured || !hostname) return false
   return hostname.toLowerCase() === configured
 }
@@ -90,12 +107,14 @@ function RootAppInner() {
   // Scribe mounts on its dedicated hostname (subdomain) or the /scribe path.
   const isScribeRoute =
     typeof window !== 'undefined' && (isScribeHost(window.location.hostname) || isScribePath(pathname))
+  const isFleetRoute =
+    typeof window !== 'undefined' && (isFleetHost(window.location.hostname) || isFleetPath(pathname))
   const needsSupabaseSession =
     typeof window !== 'undefined' &&
     hasSupabaseConfig &&
     Boolean(supabase) &&
     isSinglePaneSupabaseBootstrapEnabled &&
-    (isWorkspaceRoute || isStandaloneZCodeSurveysRoute || isScribeRoute)
+    (isWorkspaceRoute || isStandaloneZCodeSurveysRoute || isScribeRoute || isFleetRoute)
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return
@@ -125,6 +144,26 @@ function RootAppInner() {
     nextUrl.hash = nextHash
     window.location.replace(nextUrl.toString())
     return <ShellFallback message="Redirecting to z-code surveys…" />
+  }
+
+  // Fleet wins on its own hostname so '/' there is the fleet app. /fleet on
+  // the primary domain is the same screen without a custom domain.
+  if (isFleetRoute) {
+    if (needsSupabaseSession && isLoading) {
+      return <ShellFallback message="Checking sign-in…" />
+    }
+    if (needsSupabaseSession && !session) {
+      return (
+        <React.Suspense fallback={<ShellFallback message="Loading sign-in…" />}>
+          <AtlasAuthScreen />
+        </React.Suspense>
+      )
+    }
+    return (
+      <React.Suspense fallback={<ShellFallback message="Loading fleet…" />}>
+        <StandaloneFleetPage />
+      </React.Suspense>
+    )
   }
 
   // Scribe wins over path routes so the dedicated hostname always renders the

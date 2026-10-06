@@ -24,6 +24,8 @@ Pray Phone stays its own application (SignalWire agent webpage + Raspberry Pi ki
 
 Production origin today: `https://prayphone-68d333045316.herokuapp.com`. Prefer a subdomain of the Atlas host (`pray.<atlas-domain>`) as a Heroku custom domain on the **prayphone** app (not `atlas-simplified`).
 
+Fleet monitoring (online status, session reports, street address, and Wi-Fi login) is an Atlas subapp, not a page on the conferencer. See [fleet.md](./fleet.md).
+
 ## Atlas environment (`atlas-simplified`)
 
 ```dotenv

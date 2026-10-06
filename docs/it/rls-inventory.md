@@ -153,6 +153,8 @@ This is the currently observed policy set in `atlas` (high-level):
 - `public_referral_intake_events`: public insert + staff select
 - `referrals` / `route_plans` / `route_plan_stops` / `timeline_settings`: admin + staff enrollment scope
 - `scribe_encounters`: owner-only CRUD (`created_by = auth.uid()`)
+- `prayphone_devices`, `prayphone_device_logs`, `prayphone_call_sessions`, `prayphone_call_events`, `prayphone_kiosk_collections`: warm-line select (see `20260817130000_prayphone_fleet_sessions.sql`). Street address is a column on `prayphone_devices`.
+- `prayphone_device_network`: RLS enabled, no policies, no grant to `authenticated`. Wi-Fi passphrase is service-role only. Fleet managers use `fn_list_prayphone_device_network` and `fn_save_prayphone_device_config` (`20261004223000_prayphone_fleet_management.sql`). Runbook: [fleet.md](./fleet.md).
 - `station_metric_snapshots`: authenticated SELECT
 - `user_permission_exceptions`: administrator SELECT
 - `z_code_*` reference tables: public or authenticated SELECT as previously configured

@@ -275,6 +275,16 @@ export default function SinglePaneWorkspace() {
     if (typeof window === 'undefined') return '/scribe'
     return new URL('/scribe', window.location.origin).toString()
   }, [])
+  // Fleet is a standalone subapp. Prefer fleet.<domain> when configured, and
+  // otherwise stay on this origin at /fleet.
+  const fleetUrl = React.useMemo(() => {
+    const configuredHost = String(import.meta.env.VITE_ATLAS_FLEET_HOSTNAME || '').trim()
+    if (configuredHost && typeof window !== 'undefined') {
+      return `${window.location.protocol}//${configuredHost}/`
+    }
+    if (typeof window === 'undefined') return '/fleet'
+    return new URL('/fleet', window.location.origin).toString()
+  }, [])
 
   React.useEffect(() => {
     if (activeMenu !== 'route planning' && activeMenu !== 'referral portal' && activeMenu !== 'refer') {
@@ -599,6 +609,10 @@ export default function SinglePaneWorkspace() {
       // Navigate away to the standalone scribe subapp (same pattern as the
       // partner service-capacity survey) instead of rendering a shell pane.
       window.location.assign(scribeUrl)
+      return
+    }
+    if (menu === 'fleet') {
+      window.location.assign(fleetUrl)
       return
     }
     if (isWarmLineMenu(menu)) {
