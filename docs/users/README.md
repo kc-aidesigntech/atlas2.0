@@ -6,15 +6,17 @@ Guides for people who use Atlas day to day: navigators, partners, supervisors, a
 
 | Role | Primary guide | Also read |
 |------|---------------|-----------|
-| Navigator | [navigator-guide.md](./navigator-guide.md) | [journey-phases.md](./journey-phases.md) |
+| Navigator | [navigator-guide.md](./navigator-guide.md) | [journey-phases.md](./journey-phases.md). Warm line and the header phone icon are in that guide. |
 | Partner | [partner-guide.md](./partner-guide.md) | Service-capacity survey in the app |
 | Supervisor | [navigator-guide.md](./navigator-guide.md) (competency / C.R.E.A.T.E.) | [pilot-guide.md](./pilot-guide.md) supervisor checklist |
-| Administrator | [pilot-guide.md](./pilot-guide.md) admin checklist | Ask IT for [../it/security.md](../it/security.md) |
+| Administrator | [pilot-guide.md](./pilot-guide.md) admin checklist | Ask Information Technology (IT) for [../it/security.md](../it/security.md) |
 | Pilot facilitator | [pilot-guide.md](./pilot-guide.md) | Full procedures in linked Pilot Guide |
 
 ## Journey model (all clinical roles)
 
 Atlas moves enrollees through **Regulation → Readiness → Renewal**. Gates, regression, and the strip map are documented in [journey-phases.md](./journey-phases.md).
+
+Navigator, supervisor, and administrator accounts that can open the warm line also get a Pray Phone icon in the top bar, left of Account Settings, on every menu. The green number is kiosks online. A press opens the agent console. A kiosk call turns the icon red and rings the browser. It stays hidden until IT sets the Pray Phone origin on the Atlas build. Partners do not get the icon or the menu. Day-to-day steps are in [navigator-guide.md](./navigator-guide.md). The IT runbook is [../it/prayphone.md](../it/prayphone.md).
 
 ## Important access rule
 

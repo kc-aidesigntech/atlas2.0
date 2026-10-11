@@ -71,6 +71,15 @@ export function isDeviceOnline(lastSeenIso: string, nowMs = Date.now()): boolean
   return nowMs - seen >= 0 && nowMs - seen <= FLEET_ONLINE_WINDOW_MS
 }
 
+/**
+ * Header badge and the fleet screen share one rule: a heartbeat inside the
+ * online window. The stored status string stays "online" after a phone stops
+ * posting, so it is not the count.
+ */
+export function countOnlineDevices(devices: Array<{ lastSeenIso: string }>, nowMs = Date.now()): number {
+  return devices.reduce((total, device) => total + (isDeviceOnline(device.lastSeenIso, nowMs) ? 1 : 0), 0)
+}
+
 export function sortDevicesForFleet(devices: FleetDevice[], nowMs = Date.now()): FleetDevice[] {
   return [...devices].sort((left, right) => {
     const onlineDelta = Number(isDeviceOnline(right.lastSeenIso, nowMs)) - Number(isDeviceOnline(left.lastSeenIso, nowMs))

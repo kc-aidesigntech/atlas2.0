@@ -9,7 +9,7 @@ Start here if you commission environments, manage identity and access, enforce s
 3. [Security](./security.md) — database-first model, Row-Level Security (RLS), compliance, production gates.
 4. [Database](./database.md) — schema map, RPCs, source-of-truth matrix.
 5. [MCP consumer](./mcp-consumer.md) — Atlas ↔ Model Context Protocol (MCP) handshake (inference / reflection).
-6. [Pray Phone warm line](./prayphone.md) — navigator portal entry to the SignalWire agent console (Pi kiosk stays on `prayphone-server`).
+6. [Pray Phone warm line](./prayphone.md) — staff menu and header phone icon into the SignalWire agent console (the Raspberry Pi kiosk stays on `prayphone-server`). The icon shows a live online count and turns red when a kiosk starts a call. [Fleet](./fleet.md) is the administrator and supervisor screen for which phones are online.
 7. [Warehouse and Power BI](./warehouse-and-powerbi.md) — extract contracts and semantic model.
 8. Go-live: [production-go-live-hard-gates.md](../production-go-live-hard-gates.md) and [partner-go-live-checklist.md](../partner-go-live-checklist.md).
 
@@ -24,6 +24,8 @@ Start here if you commission environments, manage identity and access, enforce s
 | Compliance policy (full) | [executive-compliance-security-policy.md](../executive-compliance-security-policy.md) |
 | Control owners | [compliance-control-owner-checklist.md](../compliance-control-owner-checklist.md) |
 | Atlas Scribe (point-of-care notes) | [scribe.md](./scribe.md) |
+| Pray Phone warm line and header icon | [prayphone.md](./prayphone.md) |
+| Pray Phone fleet | [fleet.md](./fleet.md) |
 | Pilot accounts (non-production only) | [../users/pilot-guide.md](../users/pilot-guide.md) |
 | Supabase migration notes | [`supabase/README.md`](../../supabase/README.md) |
 

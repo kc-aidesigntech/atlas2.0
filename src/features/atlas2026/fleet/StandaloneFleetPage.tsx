@@ -12,6 +12,7 @@ import {
   AtlasTextButton
 } from '@/features/atlas2026/components/AtlasPrimitives'
 import AtlasArrowIcon from '@/features/atlas2026/components/AtlasArrowIcon'
+import PrayPhoneListenButton from '@/features/atlas2026/singlepane/components/PrayPhoneListenButton'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import {
   fetchCanManagePrayphoneFleet,
@@ -239,7 +240,11 @@ export default function StandaloneFleetPage() {
           >
             ATLAS
           </a>
-          <AtlasOverline className="text-[#9eacb9]">fleet</AtlasOverline>
+          <div className="flex items-center gap-3">
+            <AtlasOverline className="text-[#9eacb9]">fleet</AtlasOverline>
+            {/* Not the partner shell. The warm-line permission still decides whether the icon renders. */}
+            <PrayPhoneListenButton role="supervisor" />
+          </div>
         </div>
         <div className="atlas-shell-edge-buffer flex min-h-[54px] items-center py-2">
           <AtlasTextButton

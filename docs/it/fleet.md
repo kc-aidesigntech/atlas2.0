@@ -15,7 +15,7 @@ In Supabase **Authentication → URL configuration**, add the fleet origin (`htt
 
 ## What the screen shows
 
-- **Online / offline.** A phone is online when `prayphone_devices.last_seen` is within three minutes. The kiosk posts a heartbeat about once a minute from `src/kiosk2.py` (`fleet_presence_loop`). Two missed posts still count as online.
+- **Online / offline.** A phone is online when `prayphone_devices.last_seen` is within three minutes. The kiosk posts a heartbeat about once a minute from `src/kiosk2.py` (`fleet_presence_loop` → `POST /api/upsert-device`). Two missed posts still count as online. The Pray Phone icon in the Atlas top bar uses this same window for its green count. Supabase Realtime on `prayphone_devices` (`20261009150000_prayphone_devices_realtime.sql`) pushes each heartbeat to that badge.
 - **Sessions.** Rows come from `atlas.prayphone_call_sessions`. A session is tied to a phone when that phone's `hook_session` device log includes `call_session_id`. Keyword counts come from `atlas.prayphone_kiosk_collections`.
 - **Address.** `prayphone_devices.location_address`. Record-keeping only; the kiosk does not display it.
 - **Wi-Fi username and password.** The username is the network name (Service Set Identifier (SSID)). The password is the passphrase. The phone pulls both and runs `nmcli` only when it is not in a call.

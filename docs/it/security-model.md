@@ -67,9 +67,11 @@ declared `STABLE` so the planner can cache argument-free calls
     `warmline_agent.access`; administrators and supervisors by role, navigators
     only with an exception). The Raspberry Pi kiosk is not authenticated through Atlas.
     `atlas.prayphone_inbound_rings` (`20261004200000_prayphone_inbound_rings.sql`)
-    is the header listen relay: the prayphone-server service role inserts a ringing
+    is the header call relay: the prayphone-server service role inserts a ringing
     row when a kiosk opens a call, and authenticated warm-line staff may select it.
-    Supabase Realtime is enabled on that table. Authenticated callers have no insert or update.
+    Supabase Realtime is enabled on that table and on `atlas.prayphone_devices`
+    (`20261009150000_prayphone_devices_realtime.sql`) so the header online count
+    follows kiosk heartbeats. Authenticated callers have no insert or update.
   - Assignment tables (`navigator_assignments`, `supervisor_navigator_assignments`)
     got scoped-read RLS (writes already flow through assignment RPCs).
 - **Phase 4** — locked the data-warehouse export contract (`v_dw_*`) and pipeline

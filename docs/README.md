@@ -38,6 +38,8 @@ docs/
 | [MAKE_APP_ALIVE.md](./MAKE_APP_ALIVE.md) | Historical execution spec (prefer `it/` + `users/` for ops) |
 | [QA.md](./QA.md) | Quality / release checklist (verify against current Supabase runtime) |
 | [atlas-branding-style-specification.md](./atlas-branding-style-specification.md) | Visual system |
+| [it/prayphone.md](./it/prayphone.md) | Pray Phone warm line, header phone icon, online count, and agent handoff |
+| [it/fleet.md](./it/fleet.md) | Pray Phone fleet screen (online status, sessions, address, Wi-Fi) |
 | [repository-organization-standards.md](./repository-organization-standards.md) | Paths and naming |
 | [writing-standards.md](./writing-standards.md) | Acronym and writing rules |
 

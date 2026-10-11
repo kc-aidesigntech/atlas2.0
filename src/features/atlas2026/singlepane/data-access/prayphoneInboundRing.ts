@@ -1,8 +1,5 @@
 import { supabase } from '@/lib/supabaseClient'
 
-/** Browser preference for the header listen control. Not a server role. */
-export const PRAYPHONE_LISTEN_STORAGE_KEY = 'atlas.prayphone.listen'
-
 /**
  * The kiosk ends a stuck call after one hour. Ignore a ring that is still
  * marked ringing well past that, so a missed clear cannot ring all day.

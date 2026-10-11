@@ -78,6 +78,8 @@ flowchart TD
 - Supabase/Postgres is active for survey and capacity workflows
 - Authorization foundation is now in place (roles, permissions, user exceptions, Row-Level Security (RLS) toggles)
 - Runtime data path is Supabase/Postgres
+- Pray Phone is live as an Atlas staff door, not as a page inside the call engine. Navigator, supervisor, and administrator shells show a **warm line** menu and a phone icon in the top bar, to the left of Account Settings, on every menu, when `VITE_ATLAS_PRAYPHONE_URL` was set at build time and the account passes `warmline_agent.access`. Partners do not see either control. A press of the icon always opens the agent console on prayphone-server. A green count on the icon is how many kiosks have a fresh heartbeat. A kiosk `0` press turns the icon red and plays a ring. Runbook: [`docs/it/prayphone.md`](./docs/it/prayphone.md).
+- Fleet (which phones are online, call sessions, street address, Wi-Fi login) is an Atlas screen for administrators and supervisors: [`docs/it/fleet.md`](./docs/it/fleet.md).
 
 Documentation hub: [`docs/README.md`](./docs/README.md).
 
@@ -98,6 +100,7 @@ The User Interface (UI) is intentionally dark and operational, not pastel/civic-
   - route planning with z-code-aware partner ranking
   - symbolic mobile route board for narrow-screen route inspection
   - station and county context
+  - **warm line** and the header phone icon when this account has the navigator allow exception and the Atlas build includes the Pray Phone origin
 - **Partner**
   - service-capacity survey and burden/capability updates
   - station profile context
@@ -106,11 +109,13 @@ The User Interface (UI) is intentionally dark and operational, not pastel/civic-
   - navigator assessments aligned to Z-code parent themes
   - rolling weighted competency average using last three assessments (`3x most recent + 2x prior + 1x previous`)
   - supervisor shell parity: milestone strip-map and team-level radial burden view
+  - **warm line**, the header phone icon, and the **fleet** menu
 - **Administrator**
   - admin-only operations panels
   - data controls, governance scaffolding, and policy toggles
+  - **warm line**, the header phone icon, and the **fleet** menu
 
-Detailed behavior spec: [`docs/users/README.md`](./docs/users/README.md) (users) and [`docs/it/README.md`](./docs/it/README.md) (IT)
+Detailed behavior spec: [`docs/users/README.md`](./docs/users/README.md) (users) and [`docs/it/README.md`](./docs/it/README.md) (Information Technology (IT))
 
 ## Technical Setup
 
@@ -154,6 +159,8 @@ Frontend runtime (required for Supabase-connected paths):
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+- `VITE_ATLAS_PRAYPHONE_URL` — origin of the Pray Phone agent app, no trailing slash. Until this is set on the Atlas build and the app is redeployed, the warm-line menu and the header phone icon stay hidden. See [`docs/it/prayphone.md`](./docs/it/prayphone.md).
+- `VITE_ATLAS_FLEET_HOSTNAME` — optional hostname for the fleet screen. Unset, fleet stays at `/fleet`. See [`docs/it/fleet.md`](./docs/it/fleet.md).
 
 Security rule:
 
@@ -224,6 +231,8 @@ This scenario is intended to make the mobile route board and readiness routing o
 | Audience | Entry |
 |----------|-------|
 | IT / Information Systems (IS) | [`docs/it/README.md`](./docs/it/README.md) |
+| Pray Phone warm line and header icon | [`docs/it/prayphone.md`](./docs/it/prayphone.md) |
+| Pray Phone fleet | [`docs/it/fleet.md`](./docs/it/fleet.md) |
 | End users | [`docs/users/README.md`](./docs/users/README.md) |
 | Pilot (full procedures) | [`PILOT.md`](./PILOT.md) |
 | Archive (obsolete) | [`docs/archive/README.md`](./docs/archive/README.md) |

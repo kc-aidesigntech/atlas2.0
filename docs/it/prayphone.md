@@ -5,10 +5,10 @@ Pray Phone stays its own application (SignalWire agent webpage + Raspberry Pi ki
 ## What Atlas does
 
 - Shows **warm line** in the navigator / supervisor / administrator top menu when `VITE_ATLAS_PRAYPHONE_URL` is set.
-- Shows a Pray Phone icon in the top bar, to the left of Account Settings, for those same profiles when the warm-line permission is true. Partners do not see it. Navigators see it only with the allow exception.
-- The icon is a listen toggle for that browser. Off, the account is not waiting on a kiosk. On, Atlas subscribes to `atlas.prayphone_inbound_rings`.
-- When a kiosk presses `0`, prayphone-server writes a ringing row after the call session is saved. The icon lights yellow and plays a phone ring. Pressing it opens `{VITE_ATLAS_PRAYPHONE_URL}/agent` with the same fragment handoff as the warm-line menu.
-- The ring clears when a staff member and the kiosk are both in the room, or when the call ends. Listening stays on in this browser until the person turns the icon off.
+- Shows a Pray Phone icon in the top bar, to the left of Account Settings, on every workspace menu for those same profiles when the warm-line permission is true. The same icon is on the fleet and scribe shells. Partners do not see it. Navigators see it only with the allow exception. Pressing the icon always opens the agent console.
+- The icon carries a green count of kiosks whose `prayphone_devices.last_seen` is inside the three-minute online window. The Pi posts that heartbeat about once a minute (`fleet_presence_loop` → `POST /api/upsert-device`). Atlas reads the same rows, refreshes on Supabase Realtime, and drops a phone from the count after the window with no new post.
+- When a kiosk presses `0`, prayphone-server writes a ringing row after the call session is saved. The icon turns red and plays a phone ring. Pressing it opens `{VITE_ATLAS_PRAYPHONE_URL}/agent` with the same fragment handoff as the warm-line menu.
+- The ring clears when a staff member and the kiosk are both in the room, or when the call ends. The icon stays in the bar.
 - Navigates to `{VITE_ATLAS_PRAYPHONE_URL}/agent` and hands off the current Atlas session in the URL fragment (not sent to the server).
 - Authorizes the console with Remote Procedure Call (RPC) `atlas.fn_can_access_warmline_agent()`.
   Administrators and supervisors have `warmline_agent.access` by role. Navigators need a non-expiring
@@ -59,7 +59,7 @@ If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` /
 3. In Supabase **Authentication → URL configuration**, add:
    - `https://pray.<atlas-host>/agent`
    - the Heroku origin `/agent` if still used
-4. Apply Atlas migrations `20260817090000_warmline_agent_access.sql` and `20261004200000_prayphone_inbound_rings.sql`. The second migration is the header relay. It enables Supabase Realtime on `atlas.prayphone_inbound_rings`. Until it is applied, the listen icon can still toggle, but a kiosk press will not light it.
+4. Apply Atlas migrations `20260817090000_warmline_agent_access.sql`, `20261004200000_prayphone_inbound_rings.sql`, and `20261009150000_prayphone_devices_realtime.sql`. The second enables Supabase Realtime on `atlas.prayphone_inbound_rings`. Until it is applied, a kiosk press will not turn the icon red. The third enables Realtime on `atlas.prayphone_devices` so the green online count updates when a heartbeat lands. Until it is applied, the count still refreshes on the header poll.
 
 ## Verification
 
@@ -68,7 +68,7 @@ If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` /
 3. Open it — agent console loads without a second password prompt.
 4. Sign in as a partner — no warm-line menu; visiting `/agent` directly is denied.
 5. On the Pi, `/kiosk` still starts a call with no Atlas session.
-6. As a navigator, supervisor, or administrator with warm-line access, turn the Pray Phone icon on (left of Account Settings). Press `0` on a kiosk. The icon lights and rings. Press it and the existing agent console opens. A partner account has no icon.
+6. As a navigator, supervisor, or administrator with warm-line access, confirm the Pray Phone icon is in the top bar on every menu, with a green online count. Press it and the agent console opens. Press `0` on a kiosk. The icon turns red and this browser rings. A partner account has no icon.
 
 ## Related
 

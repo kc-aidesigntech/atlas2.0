@@ -2,8 +2,8 @@ const RING_ON_MS = 2000
 const RING_OFF_MS = 4000
 
 /**
- * Two-tone phone ring played only after the staff member turns listening on.
- * Browsers block sound until that gesture, so the toggle primes the context.
+ * Two-tone phone ring for an inbound kiosk call.
+ * Browsers block sound until the page has had a pointer gesture, so the header primes the context.
  */
 function createPrayPhoneRingtone() {
   let ctx: AudioContext | null = null
