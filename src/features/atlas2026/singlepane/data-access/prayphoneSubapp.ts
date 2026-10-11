@@ -2,13 +2,24 @@
  * Pray Phone warm-line subapp: Atlas portal entry to the agent webpage.
  * The kiosk Raspberry Pi and SignalWire stack stay on prayphone-server;
  * Atlas only owns navigation, session handoff, and role gating.
+ *
+ * Both apps use the same Supabase project. They are different sites, so the
+ * agent cannot read the Atlas browser session. The click creates a 60-second
+ * code and the agent signs that same user in. The session token stays out of
+ * the address bar.
  */
 import { supabase } from '@/lib/supabaseClient'
 
 const WARM_LINE_MENU = 'warm line'
 
+/** Live conferencer. The agent console is this origin plus /agent. */
+export const PRAYPHONE_AGENT_ORIGIN = 'https://prayphone-68d333045316.herokuapp.com'
+
 function configuredPrayPhoneOrigin(): string {
-  return String(import.meta.env.VITE_ATLAS_PRAYPHONE_URL || '').trim().replace(/\/+$/, '')
+  // A set env value can point at a future custom domain. An empty value still
+  // opens the live conferencer, so the phone icon is not compiled out.
+  const override = String(import.meta.env.VITE_ATLAS_PRAYPHONE_URL || '').trim().replace(/\/+$/, '')
+  return override || PRAYPHONE_AGENT_ORIGIN
 }
 
 /** True when the workspace should show the warm-line menu. */
@@ -21,10 +32,10 @@ export function isWarmLineMenu(menu: string): boolean {
 }
 
 /**
- * Open the Pray Phone agent console on its own origin, carrying the current
- * Atlas JSON Web Token (JWT) in the URL fragment so the agent page can
- * `setSession` without a second password prompt. Fragments are not sent to
- * the server. The agent page must strip them immediately after consume.
+ * Open the Pray Phone agent on its own origin, already aimed at the signed-in
+ * Atlas user. The address bar receives a one-time code, which the agent page
+ * removes immediately. A failed code still opens the console so the person
+ * can sign in with the same Atlas account.
  */
 export async function openPrayPhoneAgentFromWorkspace(): Promise<void> {
   const origin = configuredPrayPhoneOrigin()
@@ -32,14 +43,10 @@ export async function openPrayPhoneAgentFromWorkspace(): Promise<void> {
 
   const agentUrl = new URL('/agent', `${origin}/`)
   if (supabase) {
-    const { data } = await supabase.auth.getSession()
-    const accessToken = data.session?.access_token
-    const refreshToken = data.session?.refresh_token
-    if (accessToken && refreshToken) {
-      agentUrl.hash = new URLSearchParams({
-        atlas_access_token: accessToken,
-        atlas_refresh_token: refreshToken
-      }).toString()
+    const { data, error } = await supabase.schema('atlas').rpc('fn_create_prayphone_handoff')
+    const code = typeof data === 'string' ? data : ''
+    if (!error && /^[0-9a-f]{64}$/.test(code)) {
+      agentUrl.hash = new URLSearchParams({ atlas_handoff: code }).toString()
     }
   }
   window.location.assign(agentUrl.toString())

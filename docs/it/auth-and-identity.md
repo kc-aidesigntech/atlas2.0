@@ -52,7 +52,7 @@ Every production login needs:
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable (or legacy anon) key — **never** service role |
 | `VITE_SUPABASE_AUTH_REDIRECT_URL` | Optional absolute OAuth/email callback |
 | `VITE_ENABLE_SINGLEPANE_SUPABASE_BOOTSTRAP` | When true, shell requires a session before loading the workspace |
-| `VITE_ATLAS_PRAYPHONE_URL` | Origin of the Pray Phone agent app; enables the **warm line** portal item — [prayphone.md](./prayphone.md) |
+| `VITE_ATLAS_PRAYPHONE_URL` | Optional replacement for the built-in Pray Phone agent origin. Unset, the phone icon opens `https://prayphone-68d333045316.herokuapp.com/agent`. See [prayphone.md](./prayphone.md) |
 
 The Vite client uses Proof Key for Code Exchange (PKCE) and session detection from the URL (`src/lib/supabaseClient.ts`).
 

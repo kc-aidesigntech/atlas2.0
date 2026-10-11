@@ -83,6 +83,7 @@ Source of truth: live metadata queries against Postgres system catalogs (`pg_cla
 
 - `legacy_decommission_registry` — internal registry; revoked from `anon`/`authenticated`
 - `dw_export_watermarks` — warehouse Extract Transform Load (ETL) cursor state; `service_role` only
+- `prayphone_auth_handoffs` — one-time Atlas-to-agent sign-in codes; `service_role` consumes them (`20261010210000_prayphone_auth_handoff.sql`)
 
 ## Remediation History
 
@@ -154,6 +155,7 @@ This is the currently observed policy set in `atlas` (high-level):
 - `referrals` / `route_plans` / `route_plan_stops` / `timeline_settings`: admin + staff enrollment scope
 - `scribe_encounters`: owner-only CRUD (`created_by = auth.uid()`)
 - `prayphone_devices`, `prayphone_device_logs`, `prayphone_call_sessions`, `prayphone_call_events`, `prayphone_kiosk_collections`: warm-line select (see `20260817130000_prayphone_fleet_sessions.sql`). Street address is a column on `prayphone_devices`. The header online count reads `last_seen` on `prayphone_devices`. Supabase Realtime for that table is `20261009150000_prayphone_devices_realtime.sql`.
+- `prayphone_auth_handoffs`: RLS enabled, no policies, no grant to `authenticated`. Staff create a code through `fn_create_prayphone_handoff`. The Pray Phone server consumes it through `fn_consume_prayphone_handoff` (`20261010210000_prayphone_auth_handoff.sql`).
 - `prayphone_device_network`: RLS enabled, no policies, no grant to `authenticated`. Wi-Fi passphrase is service-role only. Fleet managers use `fn_list_prayphone_device_network` and `fn_save_prayphone_device_config` (`20261004223000_prayphone_fleet_management.sql`). Runbook: [fleet.md](./fleet.md).
 - `station_metric_snapshots`: authenticated SELECT
 - `user_permission_exceptions`: administrator SELECT

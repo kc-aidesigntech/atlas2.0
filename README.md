@@ -78,7 +78,7 @@ flowchart TD
 - Supabase/Postgres is active for survey and capacity workflows
 - Authorization foundation is now in place (roles, permissions, user exceptions, Row-Level Security (RLS) toggles)
 - Runtime data path is Supabase/Postgres
-- Pray Phone is live as an Atlas staff door, not as a page inside the call engine. Navigator, supervisor, and administrator shells show a **warm line** menu and a phone icon in the top bar, to the left of Account Settings, on every menu, when `VITE_ATLAS_PRAYPHONE_URL` was set at build time and the account passes `warmline_agent.access`. Partners do not see either control. A press of the icon always opens the agent console on prayphone-server. A green count on the icon is how many kiosks have a fresh heartbeat. A kiosk `0` press turns the icon red and plays a ring. Runbook: [`docs/it/prayphone.md`](./docs/it/prayphone.md).
+- Pray Phone is live as an Atlas staff door, not as a page inside the call engine. Navigator, supervisor, and administrator shells show a **warm line** menu and a phone icon in the top bar, to the left of Account Settings, on every menu, when the account passes `warmline_agent.access`. The icon opens `https://prayphone-68d333045316.herokuapp.com/agent` and signs in that same Supabase user. The session token is not put in the address bar. Partners do not see either control. A press of the icon always opens the agent console on prayphone-server. A green count on the icon is how many kiosks have a fresh heartbeat. A kiosk `0` press turns the icon red and plays a ring. Runbook: [`docs/it/prayphone.md`](./docs/it/prayphone.md).
 - Fleet (which phones are online, call sessions, street address, Wi-Fi login) is an Atlas screen for administrators and supervisors: [`docs/it/fleet.md`](./docs/it/fleet.md).
 
 Documentation hub: [`docs/README.md`](./docs/README.md).
@@ -159,7 +159,7 @@ Frontend runtime (required for Supabase-connected paths):
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
-- `VITE_ATLAS_PRAYPHONE_URL` — origin of the Pray Phone agent app, no trailing slash. Until this is set on the Atlas build and the app is redeployed, the warm-line menu and the header phone icon stay hidden. See [`docs/it/prayphone.md`](./docs/it/prayphone.md).
+- `VITE_ATLAS_PRAYPHONE_URL` — optional. Unset, the phone icon opens `https://prayphone-68d333045316.herokuapp.com/agent`. Set it only if that conferencer moves, then redeploy. See [`docs/it/prayphone.md`](./docs/it/prayphone.md).
 - `VITE_ATLAS_FLEET_HOSTNAME` — optional hostname for the fleet screen. Unset, fleet stays at `/fleet`. See [`docs/it/fleet.md`](./docs/it/fleet.md).
 
 Security rule:

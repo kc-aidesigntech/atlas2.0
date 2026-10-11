@@ -22,6 +22,8 @@
 | --- | --- | --- | --- |
 | `atlas.fn_access_matrix_save_person_roles` | `target_person_id`, `target_role_keys[]` | Reconciles role assignments and related enrollment/person consistency hooks | `authenticated`, admin claim enforced |
 | `atlas.fn_can_access_warmline_agent` | none | none (read-only) | `authenticated`; `fn_has_permission('warmline_agent.access')` — admin/supervisor by role, navigator only with an exception |
+| `atlas.fn_create_prayphone_handoff` | none | inserts a 60-second single-use code | `authenticated`; caller must pass `fn_can_access_warmline_agent` |
+| `atlas.fn_consume_prayphone_handoff` | `target_code` | marks that code used and returns the user id | `service_role` only |
 | `atlas.fn_admin_set_warmline_access` | `target_person_id`, `next_effect` (`allow`/`deny`/`clear`) | writes `permission_exceptions` | `authenticated`, admin claim |
 | `atlas.fn_supervisor_set_navigator_warmline_access` | `target_navigator_person_id`, `enabled` | allow/clear exception on roster navigator | `authenticated`, supervisor roster-scoped |
 | `atlas.fn_list_warmline_access` | `target_person_ids[]` | none (read-only) | `authenticated`; admin or supervisor |
