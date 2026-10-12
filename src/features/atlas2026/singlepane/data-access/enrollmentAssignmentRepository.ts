@@ -183,6 +183,58 @@ export async function unassignNavigatorEnrollmentFromSelf(enrollmentId: string) 
   if (error) throw error
 }
 
+export interface SupervisorNavigatorClaimCard {
+  personId: string
+  displayName: string
+  isMine: boolean
+}
+
+/** Every navigator, plus whether the signed-in supervisor already claims them. */
+export async function loadSupervisorNavigatorClaimCards(): Promise<SupervisorNavigatorClaimCard[]> {
+  if (!hasSupabaseConfig || !supabase) return []
+  const { data, error } = await (supabase as any).schema('atlas').rpc('fn_wallet_navigator_claim_cards')
+  if (error) throw error
+  return (data || []).map((row: Record<string, unknown>) => ({
+    personId: String(row.person_id || ''),
+    displayName: String(row.display_name || 'navigator').trim() || 'navigator',
+    isMine: Boolean(row.is_mine)
+  }))
+}
+
+export async function claimSupervisorNavigator(navigatorPersonId: string) {
+  if (!navigatorPersonId || !hasSupabaseConfig || !supabase) return
+  const { error } = await (supabase as any).schema('atlas').rpc('fn_supervisor_claim_navigator', {
+    target_navigator_person_id: navigatorPersonId
+  })
+  if (error) throw error
+}
+
+export async function releaseSupervisorNavigator(navigatorPersonId: string) {
+  if (!navigatorPersonId || !hasSupabaseConfig || !supabase) return
+  const { error } = await (supabase as any).schema('atlas').rpc('fn_supervisor_release_navigator', {
+    target_navigator_person_id: navigatorPersonId
+  })
+  if (error) throw error
+}
+
+export interface EnrolleeClaimCard {
+  enrollmentId: string
+  displayName: string
+  isMine: boolean
+}
+
+/** Every active enrollee, plus whether the signed-in navigator already claims them. */
+export async function loadEnrolleeClaimCards(): Promise<EnrolleeClaimCard[]> {
+  if (!hasSupabaseConfig || !supabase) return []
+  const { data, error } = await (supabase as any).schema('atlas').rpc('fn_wallet_enrollee_claim_cards')
+  if (error) throw error
+  return (data || []).map((row: Record<string, unknown>) => ({
+    enrollmentId: String(row.enrollment_id || ''),
+    displayName: String(row.display_name || 'enrollee').trim() || 'enrollee',
+    isMine: Boolean(row.is_mine)
+  }))
+}
+
 export async function materializeClaimedReferralIntoEnrollment(record: UnassignedEnrolleePickupRecord) {
   if (!record.id || !hasSupabaseConfig || !supabase) return null
   const payload = {

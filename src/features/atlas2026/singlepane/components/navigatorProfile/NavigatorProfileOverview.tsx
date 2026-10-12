@@ -1,13 +1,14 @@
 import React from 'react'
 import { CalendarDays } from 'lucide-react'
-import { AtlasIconButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import { AtlasIconButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import AtlasImageUploadTile from '@/features/atlas2026/components/AtlasImageUploadTile'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import { loadEnrolleeClaimCards } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import type {
   AccountSettings,
   NavigatorEnrollmentAssignmentRecord
 } from '@/features/atlas2026/shared/contracts'
-import NavigatorEnrollmentAssignmentsPanel from '../NavigatorEnrollmentAssignmentsPanel'
+import WalletClaimCircles from '../WalletClaimCircles'
 import { ACTIVE_NAVIGATOR_PROFILE_CARDS } from './model'
 
 interface NavigatorProfileOverviewProps {
@@ -45,7 +46,6 @@ export default function NavigatorProfileOverview({
   assignmentsError,
   isLoadingAssignments,
   assigningEnrollmentId,
-  canViewAssignmentNames,
   canToggleAssignments,
   canOpenReferral,
   isUploadingAvatar,
@@ -55,6 +55,33 @@ export default function NavigatorProfileOverview({
   onOpenReferral,
   onToggleAssignment
 }: NavigatorProfileOverviewProps) {
+  const [claimCards, setClaimCards] = React.useState<Array<{ id: string; label: string; selected: boolean }>>([])
+  const [claimError, setClaimError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let cancelled = false
+    void loadEnrolleeClaimCards()
+      .then((rows) => {
+        if (cancelled) return
+        setClaimCards(rows.map((row) => ({ id: row.enrollmentId, label: row.displayName, selected: row.isMine })))
+        setClaimError(null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        // The assignment board is the fallback when the claim list is not deployed yet.
+        setClaimCards(
+          assignments.map((row) => ({
+            id: row.enrollmentId,
+            label: row.enrolleeName || row.caseId || 'enrollee',
+            selected: row.isAssignedToViewer
+          }))
+        )
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [assignments])
+
   return (
     <div className="atlas-surface-panel relative flex h-full min-h-0 w-full flex-1 flex-col px-5 py-4">
       {openReviewCount ? (
@@ -111,20 +138,27 @@ export default function NavigatorProfileOverview({
       ) : null}
       {/* Assignment board fills remaining pane height so the rail can stretch even with this surface. */}
       <section ref={assignmentBoardRef} className="mt-4 flex-1">
-        <div className="mb-3">
-          <small className="atlas-overline block text-[#9eacb9]">navigator workflow</small>
-          <div className="text-[18px] font-medium text-white">enrollment assignment board</div>
-        </div>
-        <NavigatorEnrollmentAssignmentsPanel
-          rows={assignments}
-          isLoading={isLoadingAssignments}
-          error={assignmentsError}
-          assigningEnrollmentId={assigningEnrollmentId}
-          canViewNavigatorAssignmentNames={canViewAssignmentNames}
-          canToggleAssignments={canToggleAssignments}
-          canOpenReferralComposer={canOpenReferral}
-          onOpenReferralComposer={onOpenReferral}
-          onToggleAssignment={onToggleAssignment}
+        {canOpenReferral && onOpenReferral ? (
+          <div className="mb-3 flex justify-end">
+            <AtlasTextButton onClick={onOpenReferral} className="px-3 py-1 text-[12px]">
+              add a referral
+            </AtlasTextButton>
+          </div>
+        ) : null}
+        <WalletClaimCircles
+          title="enrollees"
+          description="Tap a circle, then assign yourself or remove yourself."
+          emptyLabel={isLoadingAssignments ? 'Loading enrollees…' : 'No enrollees are available to claim yet.'}
+          error={claimError || assignmentsError}
+          busyId={assigningEnrollmentId}
+          cards={claimCards}
+          onToggle={(enrollmentId, nextSelected) => {
+            if (!canToggleAssignments) return
+            setClaimCards((current) =>
+              current.map((card) => (card.id === enrollmentId ? { ...card, selected: nextSelected } : card))
+            )
+            void onToggleAssignment(enrollmentId, nextSelected ? 'assign' : 'unassign')
+          }}
         />
       </section>
     </div>

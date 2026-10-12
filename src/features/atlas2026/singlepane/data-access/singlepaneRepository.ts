@@ -10,10 +10,14 @@ export type {
 
 export {
   assignNavigatorEnrollmentToSelf,
+  claimSupervisorNavigator,
   loadDemoTaggedEnrollmentIds,
   loadEnrollmentRequests,
+  loadEnrolleeClaimCards,
   loadNavigatorEnrollmentAssignments,
+  loadSupervisorNavigatorClaimCards,
   materializeClaimedReferralIntoEnrollment,
+  releaseSupervisorNavigator,
   unassignNavigatorEnrollmentFromSelf,
   upsertEnrollmentInferredZCodes
 } from '@/features/atlas2026/singlepane/data-access/enrollmentAssignmentRepository'
