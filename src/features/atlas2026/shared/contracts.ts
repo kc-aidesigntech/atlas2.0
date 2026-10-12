@@ -608,10 +608,17 @@ export type IpsccCompetencyKey =
   | 'competency_9_feedback'
   | 'competency_10_co_reflection'
 
+export interface IpsccCompetencyFacet {
+  label: string
+  itemIndexes: number[]
+}
+
 export interface IpsccCompetencyDefinition {
   key: IpsccCompetencyKey
   label: string
   itemIndexes: number[]
+  /** Named slices of the parent competency. Mutuality uses these as correlation rows. */
+  facets?: IpsccCompetencyFacet[]
 }
 
 export interface IpsccEncounterSubmissionRecord {
@@ -623,6 +630,12 @@ export interface IpsccEncounterSubmissionRecord {
   submittedAtIso: string
   submittedBy: string
   itemScores: number[]
+  /**
+   * Which item bank `itemScores` uses.
+   * `legacy-competency-aligned` is one score per self-assessment competency.
+   * `ips-competency-scale-v1` is the 10-item point-of-care agreement scale.
+   */
+  instrument: string
   note: string
 }
 
@@ -675,6 +688,8 @@ export interface IpsccSelfAwarenessCorrelationRow {
   /** Absolute perception gap — higher means more care-disruption risk on that competency. */
   strain: number | null
   alignmentScore: number | null
+  /** Set on secondary rows such as mutuality's responsibility and shared-risk slices. */
+  facetLabel?: string | null
 }
 
 export interface IpsccSelfAwarenessSummary {
@@ -685,12 +700,20 @@ export interface IpsccSelfAwarenessSummary {
   averageStrain: number | null
 }
 
+export type CreateSessionStatus = 'open' | 'closed'
+
 export interface CreateSessionRecord {
   id: string
   navigatorName: string
   supervisorName: string
   sessionAtIso: string
   submittedAtIso: string
+  /** Open sessions still accept a form. Closed sessions are history for both people. */
+  status: CreateSessionStatus
+  openedByRole: 'navigator' | 'supervisor'
+  openedByName: string
+  closedAtIso: string | null
+  closedByName: string
   supervisionMode: 'in_person' | 'online' | 'phone_call'
   sessionDurationMinutes: number | null
   connectFocusedListening: boolean

@@ -16,7 +16,7 @@ Guides for people who use Atlas day to day: navigators, partners, supervisors, a
 
 Atlas moves enrollees through **Regulation → Readiness → Renewal**. Gates, regression, and the strip map are documented in [journey-phases.md](./journey-phases.md).
 
-Navigator, supervisor, and administrator accounts that can open the warm line also get a Pray Phone icon in the top bar, left of Account Settings, on every menu. The green number is kiosks online. A press opens the agent console. A kiosk call turns the icon red and rings the browser. It stays hidden until IT sets the Pray Phone origin on the Atlas build. Partners do not get the icon or the menu. Day-to-day steps are in [navigator-guide.md](./navigator-guide.md). The IT runbook is [../it/prayphone.md](../it/prayphone.md).
+Navigator, supervisor, and administrator accounts that can open the warm line also get a Pray Phone icon in the top bar, left of Account Settings, on every menu. The green number is kiosks online (a check-in inside three minutes). A press opens the agent console. A kiosk call turns the icon red and rings the browser. The icon is shown when the account passes warm-line access. The conferencer address is built in. Partners do not get the icon or the menu. Day-to-day steps are in [navigator-guide.md](./navigator-guide.md). Training steps are in [../prayphone/interaction-procedures.md](../prayphone/interaction-procedures.md). The IT runbook is [../it/prayphone.md](../it/prayphone.md).
 
 ## Important access rule
 

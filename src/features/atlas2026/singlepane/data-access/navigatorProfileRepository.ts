@@ -1,11 +1,13 @@
 import type {
   CreateSessionRecord,
+  CreateSessionStatus,
   IpsCompetencySelfAssessmentRecord,
   IpsccCompetencyKey,
   IpsccEncounterSubmissionRecord,
   NavigatorCreateReflectionRecord,
   SupervisorIpsAssessmentRecord
 } from '@/features/atlas2026/shared/contracts'
+import { LEGACY_COMPETENCY_ALIGNED_INSTRUMENT } from '@/features/atlas2026/singlepane/data/intentionalPeerSupportCatalog'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 
@@ -56,6 +58,7 @@ export async function loadNavigatorIpsccEncounterSubmissions(
         submittedAtIso: String(row.submitted_at || row.created_at || new Date().toISOString()),
         submittedBy: String(row.submitted_by || 'service user'),
         itemScores: normalizeItemScores(row.item_scores),
+        instrument: String(row.instrument || LEGACY_COMPETENCY_ALIGNED_INSTRUMENT),
         note: String(row.note || '')
       }))
       .filter((row) => !normalizedNavigatorName || row.navigatorName.trim().toLowerCase() === normalizedNavigatorName)
@@ -68,7 +71,8 @@ export async function saveNavigatorIpsccEncounterSubmission(
   if (!hasSupabaseConfig || !supabase) {
     return {
       ...record,
-      itemScores: normalizeItemScores(record.itemScores)
+      itemScores: normalizeItemScores(record.itemScores),
+      instrument: record.instrument || LEGACY_COMPETENCY_ALIGNED_INSTRUMENT
     }
   }
   const hasPersistedId = isUuid(record.id)
@@ -81,6 +85,7 @@ export async function saveNavigatorIpsccEncounterSubmission(
     submitted_at: record.submittedAtIso,
     submitted_by: record.submittedBy,
     item_scores: normalizeItemScores(record.itemScores),
+    instrument: record.instrument || LEGACY_COMPETENCY_ALIGNED_INSTRUMENT,
     note: record.note
   }
   // Insert when the client id is not a UUID so Postgres can allocate one; upsert only for real ids.
@@ -98,6 +103,7 @@ export async function saveNavigatorIpsccEncounterSubmission(
     submittedAtIso: String(data.submitted_at || data.created_at || new Date().toISOString()),
     submittedBy: String(data.submitted_by || 'service user'),
     itemScores: normalizeItemScores(data.item_scores),
+    instrument: String(data.instrument || LEGACY_COMPETENCY_ALIGNED_INSTRUMENT),
     note: String(data.note || '')
   }
 }
@@ -216,11 +222,76 @@ export async function saveSupervisorIpsAssessment(
   }
 }
 
-export async function loadNavigatorCreateSessions(
+export interface SupervisionEdge {
+  navigatorPersonId: string
   navigatorName: string
+  supervisorPersonId: string
+  supervisorName: string
+}
+
+/** Active supervisor–navigator pairs. Empty when this identity cannot read the assignment view. */
+export async function loadSupervisionEdges(): Promise<SupervisionEdge[]> {
+  if (!hasSupabaseConfig || !supabase) return []
+  try {
+    const { data, error } = await supabase
+      .schema('atlas')
+      .from('v_active_supervisor_assignment_edges')
+      .select('navigator_person_id, navigator_name, supervisor_person_id, supervisor_name')
+    if (error) throw error
+    return (data || []).map((row) => ({
+      navigatorPersonId: String(row.navigator_person_id || ''),
+      navigatorName: String(row.navigator_name || '').trim(),
+      supervisorPersonId: String(row.supervisor_person_id || ''),
+      supervisorName: String(row.supervisor_name || '').trim()
+    }))
+  } catch (error) {
+    console.warn('Unable to read supervisor assignment edges for C.R.E.A.T.E.', error)
+    return []
+  }
+}
+
+function mapCreateSessionRow(row: Record<string, unknown>): CreateSessionRecord {
+  const status: CreateSessionStatus = row.status === 'open' ? 'open' : 'closed'
+  const openedByRole = row.opened_by_role === 'supervisor' ? 'supervisor' : 'navigator'
+  return {
+    id: String(row.id || ''),
+    navigatorName: String(row.navigator_name || '').trim(),
+    supervisorName: String(row.supervisor_name || '').trim(),
+    sessionAtIso: String(row.session_at || row.submitted_at || new Date().toISOString()),
+    submittedAtIso: String(row.submitted_at || row.created_at || new Date().toISOString()),
+    // Rows saved before open/close existed were finished forms, so they stay closed.
+    status,
+    openedByRole,
+    openedByName: String(row.opened_by_name || ''),
+    closedAtIso: row.closed_at ? String(row.closed_at) : null,
+    closedByName: String(row.closed_by_name || ''),
+    supervisionMode:
+      row.supervision_mode === 'online' || row.supervision_mode === 'phone_call' ? row.supervision_mode : 'in_person',
+    sessionDurationMinutes: typeof row.session_duration_minutes === 'number' ? row.session_duration_minutes : null,
+    connectFocusedListening: Boolean(row.connect_focused_listening),
+    recognizeNotes: String(row.recognize_notes || ''),
+    encourageNotes: String(row.encourage_notes || ''),
+    acknowledgeNotes: String(row.acknowledge_notes || ''),
+    trainNotes: String(row.train_notes || ''),
+    empowerNotes: String(row.empower_notes || ''),
+    createActionPlan: String(row.create_action_plan || ''),
+    supervisorSubmission: String(row.supervisor_submission || ''),
+    superviseeSubmission: String(row.supervisee_submission || ''),
+    peerSpecialistSignature: String(row.peer_specialist_signature || ''),
+    peerSpecialistSignedAtIso: row.peer_specialist_signed_at ? String(row.peer_specialist_signed_at) : null,
+    supervisorSignature: String(row.supervisor_signature || ''),
+    supervisorSignedAtIso: row.supervisor_signed_at ? String(row.supervisor_signed_at) : null
+  }
+}
+
+export async function loadNavigatorCreateSessions(
+  party: string | { navigatorName?: string; supervisorName?: string }
 ): Promise<CreateSessionRecord[]> {
   if (!hasSupabaseConfig || !supabase) return []
+  const navigatorName = typeof party === 'string' ? party : party.navigatorName || ''
+  const supervisorName = typeof party === 'string' ? '' : party.supervisorName || ''
   const normalizedNavigatorName = navigatorName.trim().toLowerCase()
+  const normalizedSupervisorName = supervisorName.trim().toLowerCase()
   return withOptionalSupabaseFallback('singlepane.navigatorCreateSessions', async () => {
     const { data, error } = await supabase
       .schema('atlas')
@@ -229,30 +300,13 @@ export async function loadNavigatorCreateSessions(
       .order('session_at', { ascending: false })
     if (error) throw error
     return (data || [])
-      .map((row) => ({
-        id: String(row.id),
-        navigatorName: String(row.navigator_name || '').trim(),
-        supervisorName: String(row.supervisor_name || '').trim(),
-        sessionAtIso: String(row.session_at || row.submitted_at || new Date().toISOString()),
-        submittedAtIso: String(row.submitted_at || row.created_at || new Date().toISOString()),
-        supervisionMode:
-          row.supervision_mode === 'online' || row.supervision_mode === 'phone_call' ? row.supervision_mode : 'in_person',
-        sessionDurationMinutes: typeof row.session_duration_minutes === 'number' ? row.session_duration_minutes : null,
-        connectFocusedListening: Boolean(row.connect_focused_listening),
-        recognizeNotes: String(row.recognize_notes || ''),
-        encourageNotes: String(row.encourage_notes || ''),
-        acknowledgeNotes: String(row.acknowledge_notes || ''),
-        trainNotes: String(row.train_notes || ''),
-        empowerNotes: String(row.empower_notes || ''),
-        createActionPlan: String(row.create_action_plan || ''),
-        supervisorSubmission: String(row.supervisor_submission || ''),
-        superviseeSubmission: String(row.supervisee_submission || ''),
-        peerSpecialistSignature: String(row.peer_specialist_signature || ''),
-        peerSpecialistSignedAtIso: row.peer_specialist_signed_at ? String(row.peer_specialist_signed_at) : null,
-        supervisorSignature: String(row.supervisor_signature || ''),
-        supervisorSignedAtIso: row.supervisor_signed_at ? String(row.supervisor_signed_at) : null
-      }))
-      .filter((row) => !normalizedNavigatorName || row.navigatorName.trim().toLowerCase() === normalizedNavigatorName)
+      .map((row) => mapCreateSessionRow(row as Record<string, unknown>))
+      .filter((row) => {
+        const matchesNavigator = normalizedNavigatorName && row.navigatorName.trim().toLowerCase() === normalizedNavigatorName
+        const matchesSupervisor = normalizedSupervisorName && row.supervisorName.trim().toLowerCase() === normalizedSupervisorName
+        if (!normalizedNavigatorName && !normalizedSupervisorName) return true
+        return Boolean(matchesNavigator || matchesSupervisor)
+      })
   }, [])
 }
 
@@ -281,36 +335,19 @@ export async function saveNavigatorCreateSession(record: CreateSessionRecord): P
     peer_specialist_signature: record.peerSpecialistSignature,
     peer_specialist_signed_at: record.peerSpecialistSignedAtIso,
     supervisor_signature: record.supervisorSignature,
-    supervisor_signed_at: record.supervisorSignedAtIso
+    supervisor_signed_at: record.supervisorSignedAtIso,
+    status: record.status === 'open' ? 'open' : 'closed',
+    opened_by_role: record.openedByRole === 'supervisor' ? 'supervisor' : 'navigator',
+    opened_by_name: record.openedByName || '',
+    closed_at: record.closedAtIso,
+    closed_by_name: record.closedByName || ''
   }
   const writer = hasPersistedId
     ? supabase.schema('atlas').from('navigator_create_sessions').upsert(payload)
     : supabase.schema('atlas').from('navigator_create_sessions').insert(payload)
   const { data, error } = await writer.select('*').single()
   if (error) throw error
-  return {
-    id: String(data.id),
-    navigatorName: String(data.navigator_name || '').trim(),
-    supervisorName: String(data.supervisor_name || '').trim(),
-    sessionAtIso: String(data.session_at || data.submitted_at || new Date().toISOString()),
-    submittedAtIso: String(data.submitted_at || data.created_at || new Date().toISOString()),
-    supervisionMode:
-      data.supervision_mode === 'online' || data.supervision_mode === 'phone_call' ? data.supervision_mode : 'in_person',
-    sessionDurationMinutes: typeof data.session_duration_minutes === 'number' ? data.session_duration_minutes : null,
-    connectFocusedListening: Boolean(data.connect_focused_listening),
-    recognizeNotes: String(data.recognize_notes || ''),
-    encourageNotes: String(data.encourage_notes || ''),
-    acknowledgeNotes: String(data.acknowledge_notes || ''),
-    trainNotes: String(data.train_notes || ''),
-    empowerNotes: String(data.empower_notes || ''),
-    createActionPlan: String(data.create_action_plan || ''),
-    supervisorSubmission: String(data.supervisor_submission || ''),
-    superviseeSubmission: String(data.supervisee_submission || ''),
-    peerSpecialistSignature: String(data.peer_specialist_signature || ''),
-    peerSpecialistSignedAtIso: data.peer_specialist_signed_at ? String(data.peer_specialist_signed_at) : null,
-    supervisorSignature: String(data.supervisor_signature || ''),
-    supervisorSignedAtIso: data.supervisor_signed_at ? String(data.supervisor_signed_at) : null
-  }
+  return mapCreateSessionRow(data as Record<string, unknown>)
 }
 
 function mapCreateReflectionRow(row: Record<string, unknown>): NavigatorCreateReflectionRecord {

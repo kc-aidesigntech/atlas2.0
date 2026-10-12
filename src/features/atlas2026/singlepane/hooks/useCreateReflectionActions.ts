@@ -24,6 +24,8 @@ import {
 interface UseCreateReflectionActionsInput {
   currentNavigatorName: string
   currentSupervisorName: string
+  viewerRole: string
+  activeMenu: string
   managedNavigatorNames: string[]
   mergedNavigatorProgramState: NavigatorProgramState
   setNavigatorProgramState: Dispatch<SetStateAction<NavigatorProgramState>>
@@ -39,6 +41,8 @@ interface UseCreateReflectionActionsInput {
 export function useCreateReflectionActions({
   currentNavigatorName,
   currentSupervisorName,
+  viewerRole,
+  activeMenu,
   managedNavigatorNames,
   mergedNavigatorProgramState,
   setNavigatorProgramState,
@@ -53,16 +57,21 @@ export function useCreateReflectionActions({
   >([])
 
   useEffect(() => {
+    // Wallet is the only screen that reads these supervision records.
+    if (activeMenu !== 'my wallet') return
     let isMounted = true
     // Load Intentional Peer Support Core Competencies (IPSCC) rows and the reflection as one
     // snapshot so the profile never mixes records from different navigators.
     setNavigatorCreateReflection(null)
+    const sessionParty = viewerRole === 'supervisor'
+      ? { supervisorName: currentSupervisorName }
+      : { navigatorName: currentNavigatorName }
     Promise.all([
       loadNavigatorIpsccEncounterSubmissions(currentNavigatorName),
       loadNavigatorIpsSelfAssessments(currentNavigatorName),
-      loadNavigatorCreateSessions(currentNavigatorName),
+      loadNavigatorCreateSessions(sessionParty),
       loadSupervisorIpsAssessments(),
-      loadNavigatorCreateReflection(currentNavigatorName)
+      loadNavigatorCreateReflection(viewerRole === 'supervisor' ? '' : currentNavigatorName)
     ])
       .then(
         ([
@@ -96,7 +105,7 @@ export function useCreateReflectionActions({
     return () => {
       isMounted = false
     }
-  }, [currentNavigatorName, setNavigatorProgramError, setNavigatorProgramState])
+  }, [activeMenu, currentNavigatorName, currentSupervisorName, setNavigatorProgramError, setNavigatorProgramState, viewerRole])
 
   const managedNavigatorNamesKey = managedNavigatorNames.join('|')
   useEffect(() => {

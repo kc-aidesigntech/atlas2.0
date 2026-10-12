@@ -14,9 +14,15 @@ import type {
 import IpsCompetencySurvey, {
   isIpsCompetencySurveyComplete,
   scoresMapToCompetencyRecord,
-  scoresMapToItemArray,
   type IpsCompetencyScoreMap
 } from '../IpsCompetencySurvey'
+import IpsPointOfCareSurvey, {
+  emptyPointOfCareScores,
+  isPointOfCareSurveyComplete,
+  pointOfCareScoresToItemArray,
+  type PointOfCareScoreList
+} from '../IpsPointOfCareSurvey'
+import { IPS_COMPETENCY_SCALE_INSTRUMENT } from '@/features/atlas2026/singlepane/data/intentionalPeerSupportCatalog'
 import {
   CREATE_HISTORY_FIELDS,
   createRecordId,
@@ -61,7 +67,7 @@ export function NavigatorIpsccFeedbackSection({
 }) {
   const [selectedId, setSelectedId] = React.useState(assignedEnrollees[0]?.id || '')
   const [handoffActive, setHandoffActive] = React.useState(false)
-  const [scores, setScores] = React.useState<IpsCompetencyScoreMap>({})
+  const [scores, setScores] = React.useState<PointOfCareScoreList>(emptyPointOfCareScores)
   const [note, setNote] = React.useState('')
   const [saveState, setSaveState] = React.useState<OverlaySaveState>('idle')
   const [message, setMessage] = React.useState<string | null>(null)
@@ -71,19 +77,17 @@ export function NavigatorIpsccFeedbackSection({
   }, [assignedEnrollees, selectedId])
 
   return (
-    <IpsCompetencySurvey
+    <IpsPointOfCareSurvey
       scores={scores}
-      onChangeScore={(key, score) => setScores((current) => ({ ...current, [key]: score }))}
-      assignmentLabel={handoffActive ? 'how did this encounter show the competency?' : 'rate how this encounter showed the competency'}
-      accentColor={SP_COLORS.green}
+      onChangeScore={(index, score) => setScores((current) => current.map((value, itemIndex) => (itemIndex === index ? score : value)))}
       headerSlot={
         <div className="space-y-3">
           <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
-            <div className="font-medium">{handoffActive ? 'Enrollee feedback — Intentional Peer Support Core Competencies (IPSCC)' : 'Pass-the-tablet IPSCC encounter survey'}</div>
+            <div className="font-medium">{handoffActive ? 'Enrollee feedback — Intentional Peer Support (IPS) Competency Scale' : 'Point-of-care Intentional Peer Support Core Competencies (IPSCC) survey'}</div>
             <div className="mt-1 text-[#9eacb9]">
               {handoffActive
-                ? 'Tap a number for each competency. When finished, submit and hand the tablet back to your navigator. Your answers stay anonymous in group averages.'
-                : `Select an enrollee, start handoff, then pass the tablet. Navigators see only accumulated averages after about ${privacy.minEntriesToRevealAverages} entries.`}
+                ? 'Ten statements. 1 strongly disagree, 2 disagree, 3 unsure, 4 agree, 5 strongly agree. Submit, then hand the tablet back.'
+                : `Select an enrollee and hand over the tablet at the end of the interaction. Averages stay hidden until about ${privacy.minEntriesToRevealAverages} entries.`}
             </div>
           </div>
           {!handoffActive ? (
@@ -108,7 +112,7 @@ export function NavigatorIpsccFeedbackSection({
             <div className="flex flex-wrap items-center gap-2">
               {handoffActive ? <AtlasTextButton onClick={() => setHandoffActive(false)} className="px-4 py-2 text-[12px]">cancel handoff</AtlasTextButton> : null}
               <AtlasTextButton
-                disabled={saveState === 'saving' || !assignedEnrollees.length || !isIpsCompetencySurveyComplete(scores) || (!handoffActive && !selectedId)}
+                disabled={saveState === 'saving' || !assignedEnrollees.length || !isPointOfCareSurveyComplete(scores) || (!handoffActive && !selectedId)}
                 onClick={() => void runSave(async () => {
                   const enrollee = assignedEnrollees.find((item) => item.id === selectedId)
                   if (!enrollee) throw new Error('Select an enrollee before saving IPSCC feedback.')
@@ -116,12 +120,14 @@ export function NavigatorIpsccFeedbackSection({
                     id: createRecordId(), navigatorName: currentNavigatorName, enrolleeId: enrollee.id,
                     enrolleeName: enrollee.fullName, enrollmentId: enrollee.enrollmentId || null,
                     submittedAtIso: new Date().toISOString(), submittedBy: 'enrollee',
-                    itemScores: scoresMapToItemArray(scores), note: handoffActive ? '' : note
+                    itemScores: pointOfCareScoresToItemArray(scores),
+                    instrument: IPS_COMPETENCY_SCALE_INSTRUMENT,
+                    note: handoffActive ? '' : note
                   })
-                  setScores({})
+                  setScores(emptyPointOfCareScores())
                   setNote('')
                   setHandoffActive(false)
-                }, handoffActive ? 'Thank you. Please hand the tablet back to your navigator.' : 'IPSCC encounter survey saved.', setSaveState, setMessage)}
+                }, handoffActive ? 'Thank you. Please hand the tablet back to your navigator.' : 'Point-of-care survey saved.', setSaveState, setMessage)}
                 className="px-4 py-2 text-[12px]"
               >{saveState === 'saving' ? 'saving...' : handoffActive ? 'submit feedback' : 'save IPSCC survey'}</AtlasTextButton>
             </div>
@@ -197,7 +203,7 @@ export function NavigatorSelfAwarenessSection({
           <MetricCard label="alignment" value={summary.overallAlignmentScore == null ? '—' : summary.overallAlignmentScore.toFixed(2)} />
         </div>
         {!privacy.averagesRevealed ? <div className="mt-2 text-[12px] text-[#9eacb9]">Enrollee averages remain locked until {privacy.minEntriesToRevealAverages} encounter submissions protect anonymity.</div> : (
-          <div className="mt-2 space-y-2">{correlationRows.map((row) => <div key={row.key} className="atlas-surface-raised grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 px-3 py-2 text-[12px]"><span className="text-white">{row.label}</span><span className="text-[var(--status-danger)]">Enrollee {row.ipsccAverage?.toFixed(2) || '—'}</span><span style={{ color: SP_COLORS.blue }}>Self {row.selfAverage?.toFixed(2) || '—'}</span><span className="text-[#d7e0e9]">Strain {row.strain?.toFixed(2) || '—'}</span></div>)}</div>
+          <div className="mt-2 space-y-2">{correlationRows.map((row) => <div key={`${row.key}:${row.facetLabel || 'competency'}`} className="atlas-surface-raised grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-2 px-3 py-2 text-[12px]"><span className="text-white">{row.facetLabel ? `${row.label} · ${row.facetLabel}` : row.label}</span><span className="text-[var(--status-danger)]">Enrollee {row.ipsccAverage?.toFixed(2) || '—'}</span><span style={{ color: SP_COLORS.blue }}>Self {row.selfAverage?.toFixed(2) || '—'}</span><span className="text-[#d7e0e9]">Strain {row.strain?.toFixed(2) || '—'}</span></div>)}</div>
         )}
       </div>
     </div>
@@ -213,7 +219,7 @@ export function NavigatorCreateHistorySection({ sessions }: { sessions: CreateSe
         const expanded = expandedId === session.id
         return <div key={session.id} className="atlas-surface-raised space-y-2 px-3 py-3 text-[12px]">
           <button type="button" className="flex w-full items-start justify-between gap-3 text-left" onClick={() => setExpandedId((current) => current === session.id ? null : session.id)} aria-expanded={expanded}>
-            <div><div className="font-medium text-white">{formatDateLabel(session.sessionAtIso)} · {session.supervisorName}</div><small className="atlas-meta text-[#9eacb9]">{formatSupervisionMode(session.supervisionMode)}{session.sessionDurationMinutes != null ? ` · ${session.sessionDurationMinutes} min` : ''}{session.connectFocusedListening ? ' · focused listening' : ''}</small></div>
+            <div><div className="font-medium text-white">{formatDateLabel(session.sessionAtIso)} · {session.supervisorName}</div><small className="atlas-meta text-[#9eacb9]">{session.status === 'open' ? 'open' : 'closed'} · {formatSupervisionMode(session.supervisionMode)}{session.sessionDurationMinutes != null ? ` · ${session.sessionDurationMinutes} min` : ''}{session.connectFocusedListening ? ' · focused listening' : ''}</small></div>
             <small className="shrink-0 text-[#9eacb9]">{expanded ? 'click to collapse' : 'click to expand'}</small>
           </button>
           {expanded ? <div className="space-y-2 border-t border-white/10 pt-2">{CREATE_HISTORY_FIELDS.map((field) => {

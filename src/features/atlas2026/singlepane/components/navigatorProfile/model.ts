@@ -21,10 +21,10 @@ export const NAVIGATOR_PROFILE_CARDS: Array<{
   actionLabel: string
   variant: 'green' | 'blue'
   illustration: 'feedback' | 'reflection' | 'create'
-  // Only the three-prong supervision cards ship on My Profile for now.
+  // Only the three supervision cards ship on My Wallet for now.
   isActiveOnProfileRail: boolean
 }> = [
-  { overlayId: 'section_1_ipscc', title: 'Section 1: IPSCC ratings and reviews', cardTitle: 'enrollee', cardSubtitle: 'ipscc', actionLabel: 'view feedback', variant: 'green', illustration: 'feedback', isActiveOnProfileRail: true },
+  { overlayId: 'section_1_ipscc', title: 'Section 1: IPSCC point-of-care survey', cardTitle: 'enrollee', cardSubtitle: 'ipscc', actionLabel: 'start survey', variant: 'green', illustration: 'feedback', isActiveOnProfileRail: true },
   { overlayId: 'section_2_awareness', title: 'Section 2: Self-awareness correlation', cardTitle: 'self-reflection', cardSubtitle: 'ips', actionLabel: 'start reflection', variant: 'blue', illustration: 'reflection', isActiveOnProfileRail: true },
   { overlayId: 'section_3_create', title: 'Section 3: C.R.E.A.T.E. supervision history', cardTitle: 'c.r.e.a.t.e', cardSubtitle: 'session history', actionLabel: 'view history', variant: 'green', illustration: 'create', isActiveOnProfileRail: true },
   { overlayId: 'section_4_assignments', title: 'Section 4: Enrollment assignment board', cardTitle: 'assignment board', cardSubtitle: 'enrollment', actionLabel: 'view board', variant: 'blue', illustration: 'feedback', isActiveOnProfileRail: false },

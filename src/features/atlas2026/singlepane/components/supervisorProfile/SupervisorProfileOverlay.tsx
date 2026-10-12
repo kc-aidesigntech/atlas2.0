@@ -2,10 +2,12 @@ import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
+  CreateSessionRecord,
   NavigatorCreateReflectionRecord,
   SupervisorIpsAssessmentRecord,
   SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/shared/contracts'
+import CreateSessionDesk from '../CreateSessionDesk'
 import IpsCompetencySurvey, {
   isIpsCompetencySurveyComplete,
   scoresMapToCompetencyRecord,
@@ -39,6 +41,8 @@ interface SupervisorProfileOverlayProps {
   onSaveSupervisorIpsAssessment: (record: SupervisorIpsAssessmentRecord) => Promise<unknown> | unknown
   onSaveCreateReflectionOverride: (input: { navigatorName: string; reflectionText: string }) => Promise<unknown> | unknown
   onRestoreCreateReflectionGenerated: (navigatorName: string) => Promise<unknown> | unknown
+  createSessions?: CreateSessionRecord[]
+  onSaveCreateSession?: (record: CreateSessionRecord) => Promise<unknown> | unknown
 }
 
 function formatDateLabel(value: string | null | undefined) {
@@ -61,7 +65,9 @@ export default function SupervisorProfileOverlay({
   onToggleManagedNavigator,
   onSaveSupervisorIpsAssessment,
   onSaveCreateReflectionOverride,
-  onRestoreCreateReflectionGenerated
+  onRestoreCreateReflectionGenerated,
+  createSessions = [],
+  onSaveCreateSession
 }: SupervisorProfileOverlayProps) {
   const [selectedNavigatorName, setSelectedNavigatorName] = React.useState('')
   const [assessmentNote, setAssessmentNote] = React.useState('')
@@ -207,9 +213,20 @@ export default function SupervisorProfileOverlay({
 
         {activeOverlay === 'section_4_create_reflections' ? (
           <div className="space-y-3">
+            {onSaveCreateSession ? (
+              <CreateSessionDesk
+                role="supervisor"
+                selfName={currentSupervisorName}
+                counterparts={navigatorDirectory
+                  .filter((row) => row.isManagedByCurrentSupervisor)
+                  .map((row) => ({ id: row.navigatorPersonId, name: row.navigatorName }))}
+                sessions={createSessions}
+                onSave={onSaveCreateSession}
+              />
+            ) : null}
             <div className="atlas-surface-raised px-3 py-3 text-[12px] text-white">
               <div className="font-medium">Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) reflections</div>
-              <div className="mt-1 text-[#9eacb9]">Review the auto-generated supervisor-to-navigator narrative for each managed navigator. Edit and save to override what appears on the navigator My Profile card.</div>
+              <div className="mt-1 text-[#9eacb9]">Review the auto-generated supervisor-to-navigator narrative for each managed navigator. Edit and save to override what appears on the navigator my wallet card.</div>
             </div>
             {managedNavigators.length ? managedNavigators.map((row) => {
               const reflection = reflectionByName.get(row.navigatorName.trim().toLowerCase())

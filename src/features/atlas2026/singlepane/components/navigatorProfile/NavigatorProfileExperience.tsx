@@ -35,6 +35,7 @@ import {
   formatDateLabel,
   type NavigatorProfileOverlayKey
 } from './model'
+import CreateSessionDesk from '../CreateSessionDesk'
 import {
   NavigatorCreateHistorySection,
   NavigatorIpsccFeedbackSection,
@@ -78,6 +79,7 @@ export interface NavigatorMyProfilePanelProps {
   onToggleEnrollmentAssignment: (enrollmentId: string, mode: 'accept' | 'archive' | 'assign' | 'unassign') => Promise<void> | void
   onSaveIpsSelfAssessment: (record: IpsCompetencySelfAssessmentRecord) => Promise<unknown> | unknown
   onSaveIpsccEncounterSubmission: (record: IpsccEncounterSubmissionRecord) => Promise<unknown> | unknown
+  onSaveCreateSession: (record: CreateSessionRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
 }
 
@@ -116,6 +118,7 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
     onToggleEnrollmentAssignment,
     onSaveIpsSelfAssessment,
     onSaveIpsccEncounterSubmission,
+    onSaveCreateSession,
     onSaveSupervisionSession
   } = props
   const [activeOverlay, setActiveOverlay] = React.useState<NavigatorProfileOverlayKey | null>(null)
@@ -259,6 +262,13 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
                     </div>
                   )}
                 </div>
+                <CreateSessionDesk
+                  role="navigator"
+                  selfName={currentNavigatorName}
+                  counterparts={[]}
+                  sessions={createSessions}
+                  onSave={onSaveCreateSession}
+                />
                 <NavigatorCreateHistorySection sessions={createSessions} />
               </div>
             ) : null}

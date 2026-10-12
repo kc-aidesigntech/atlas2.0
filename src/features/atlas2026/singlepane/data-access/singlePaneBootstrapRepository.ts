@@ -27,6 +27,7 @@ import { loadLocalLogs } from '@/features/atlas2026/singlepane/data-access/route
 import { mapZCodeToDomainBucket } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { resolveSessionPersonIdFromMetadata } from '@/features/atlas2026/singlepane/data-access/enrollmentAssignmentRepository'
+import { dedupeMenus } from '@/features/atlas2026/singlepane/domain/roles'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 import { menuListIncludesScribe, setScribeOnMenuList } from '@/features/atlas2026/scribe/scribeMenuVisibility'
 
@@ -66,7 +67,7 @@ function normalizeNavigatorTopMenus(menus: string[], canAccessWarmLine: boolean)
         .map((menu) => {
           const lower = menu.trim().toLowerCase()
           if (lower === 'assigned enrollees') return 'enrollees'
-          if (lower === 'requests to enroll') return 'my profile'
+          if (lower === 'requests to enroll' || lower === 'my profile') return 'my wallet'
           if (lower === 'referral portal') return 'refer'
           return menu
         })
@@ -75,7 +76,7 @@ function normalizeNavigatorTopMenus(menus: string[], canAccessWarmLine: boolean)
     canAccessWarmLine
   )
   if (!normalized.some((menu) => menu.trim().toLowerCase() === 'enrollees')) normalized.unshift('enrollees')
-  return normalized
+  return dedupeMenus(normalized)
 }
 
 function normalizeRoleTopMenus(roleKey: string, menus: string[], canAccessWarmLine: boolean) {
@@ -92,16 +93,16 @@ function normalizeRoleTopMenus(roleKey: string, menus: string[], canAccessWarmLi
           .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
           .map((menu) => {
             const lower = menu.trim().toLowerCase()
-            // Older supervisor shells used these labels. Keep stored menus opening
-            // the same destinations after the profile and wallet rename.
-            if (lower === 'assigned navigators') return 'my profile'
-            if (lower === 'navigator assessments') return 'my wallet'
+            // Older supervisor shells used separate profile and assessment labels.
+            // Both open the one wallet page: assigned navigators, then the cards.
+            if (lower === 'assigned navigators' || lower === 'navigator assessments' || lower === 'my profile') return 'my wallet'
             return menu
           })
       ),
       canAccessWarmLine
     )
-    return normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]
+    const withReferral = normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]
+    return dedupeMenus(withReferral)
   }
   return hideUnconfiguredWarmLineMenu(hideDeferredCountyCommonsMenu(menus), canAccessWarmLine)
 }

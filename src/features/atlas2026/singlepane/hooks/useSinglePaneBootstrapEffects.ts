@@ -205,6 +205,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
   }, [input.authoritativeAccountRoles, input.sessionEmail])
 
   useEffect(() => {
+    if (input.viewerRole === 'partner') return
     let isMounted = true
     void loadNavigatorProgramState()
       .then((state) => {
@@ -220,9 +221,10 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
     return () => {
       isMounted = false
     }
-  }, [input.setNavigatorProgramError, input.setNavigatorProgramState])
+  }, [input.setNavigatorProgramError, input.setNavigatorProgramState, input.viewerRole])
 
   useEffect(() => {
+    if (input.viewerRole !== 'administrator' && input.viewerRole !== 'partner') return
     let isMounted = true
     void loadPartnerTroubleshootingGrants()
       .then((grants) => {
@@ -232,7 +234,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
     return () => {
       isMounted = false
     }
-  }, [input.setPartnerTroubleshootingGrants])
+  }, [input.setPartnerTroubleshootingGrants, input.viewerRole])
 
   useEffect(() => {
     if (input.remoteSession || !input.viewerPerson) return

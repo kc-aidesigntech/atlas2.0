@@ -34,6 +34,7 @@ async function measureRun(label, { freshContext }) {
       const hasFirstUsable = performance.getEntriesByName('workspace-open:first-usable', 'mark').length > 0
       const hasBootstrapEnd = performance.getEntriesByName('workspace-open:bootstrap-end', 'mark').length > 0
       const hasWorkspaceChrome =
+        text.includes('my wallet') ||
         text.includes('my profile') ||
         text.includes('assignment') ||
         text.includes('route planning') ||

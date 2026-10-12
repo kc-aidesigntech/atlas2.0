@@ -1,4 +1,5 @@
 import type {
+  IpsccCompetencyDefinition,
   IpsccCompetencyKey,
   PartnerServiceCapacityScaleOption,
   ZCodeSurveyPrompt
@@ -341,12 +342,64 @@ export const IPSCC_COMPETENCY_CATALOG: IpsccCompetencyCatalogEntry[] = [
   }
 ]
 
-/** One score per competency — the PDF rates competencies, not free-floating item banks. */
+/** One score per competency — the self-assessment rates competencies, not the point-of-care items. */
 export const IPSCC_COMPETENCY_DEFINITIONS = IPSCC_COMPETENCY_CATALOG.map((entry) => ({
   key: entry.key,
   label: entry.shortLabel,
   itemIndexes: [entry.number]
 }))
+
+/** Older encounter rows stored one score per self-assessment competency, in catalog order. */
+export const LEGACY_COMPETENCY_ALIGNED_INSTRUMENT = 'legacy-competency-aligned'
+/** Enrollee point-of-care agreement scale. Item numbers match the IPS Competency Scale. */
+export const IPS_COMPETENCY_SCALE_INSTRUMENT = 'ips-competency-scale-v1'
+
+export const IPSCC_AGREEMENT_LABELS = [
+  'strongly disagree',
+  'disagree',
+  'unsure',
+  'agree',
+  'strongly agree'
+] as const
+
+export const IPSCC_POINT_OF_CARE_ITEMS: Array<{ number: number; prompt: string }> = [
+  { number: 1, prompt: 'I feel like the peer staff person and I are building a real connection.' },
+  { number: 2, prompt: 'The peer staff person makes an effort to get to know me.' },
+  { number: 3, prompt: 'The peer staff person wants to learn from me.' },
+  { number: 4, prompt: 'The relationship between the peer staff person and me is beneficial to both of us.' },
+  { number: 5, prompt: 'The peer staff person uses everyday language to talk about mental health issues.' },
+  { number: 6, prompt: 'The peer staff person encourages me to try new things.' },
+  { number: 7, prompt: 'I feel safe working through disagreements in my relationship with the peer staff person.' },
+  { number: 8, prompt: 'The peer staff person encourages me to think about things in new ways.' },
+  { number: 9, prompt: 'The peer staff person and I talk about how to make our relationship work for both of us.' },
+  { number: 10, prompt: 'Conversations with the peer staff person leave me feeling hopeful.' }
+]
+
+/**
+ * Point-of-care items that roll up into each self-assessment competency.
+ * Worldview's power-of-language and listening-differently notes both sit on item 5,
+ * so they are not extra questions. Mutuality's two facets are secondary correlation rows.
+ */
+export const IPSCC_POINT_OF_CARE_CROSSWALK: IpsccCompetencyDefinition[] = [
+  { key: 'competency_1_connection', label: 'Connection', itemIndexes: [1, 2, 3, 4, 9, 10] },
+  { key: 'competency_2_learning_together', label: 'Learning together', itemIndexes: [3] },
+  { key: 'competency_3_worldview_awareness', label: 'Worldview awareness', itemIndexes: [5] },
+  { key: 'competency_4_relationship_focus', label: 'Relationship focus', itemIndexes: [2, 4, 9] },
+  {
+    key: 'competency_5_mutuality',
+    label: 'Mutuality',
+    itemIndexes: [4, 5, 7, 9],
+    facets: [
+      { label: 'mutual responsibility', itemIndexes: [7, 9] },
+      { label: 'shared risk', itemIndexes: [4, 5, 7] }
+    ]
+  },
+  { key: 'competency_6_hope_and_possibility', label: 'Hope and possibility', itemIndexes: [4, 10] },
+  { key: 'competency_7_moving_towards', label: 'Moving towards', itemIndexes: [6, 8, 10] },
+  { key: 'competency_8_self_reflection', label: 'Self-reflection', itemIndexes: [1, 2] },
+  { key: 'competency_9_feedback', label: 'Feedback', itemIndexes: [3, 7] },
+  { key: 'competency_10_co_reflection', label: 'Co-reflection', itemIndexes: [9, 10] }
+]
 
 export function getIpsccCompetencyByKey(key: IpsccCompetencyKey) {
   return IPSCC_COMPETENCY_CATALOG.find((entry) => entry.key === key) || null

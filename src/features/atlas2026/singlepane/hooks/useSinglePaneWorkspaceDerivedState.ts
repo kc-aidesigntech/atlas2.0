@@ -125,8 +125,10 @@ export function useSinglePaneWorkspaceDerivedState(context: WorkspaceDerivedCont
       .sort((left, right) => left.navigatorName.localeCompare(right.navigatorName))
   }, [accessMatrixDataset, scopedEnrollees, viewerPerson])
   const supervisorTeamBurden = useMemo(
-    () => buildSupervisorTeamBurdenModel(supervisorNavigatorDirectory, scopedEnrollees, logs),
-    [logs, scopedEnrollees, supervisorNavigatorDirectory]
+    () => role === 'supervisor' && activeMenu === 'team burden'
+      ? buildSupervisorTeamBurdenModel(supervisorNavigatorDirectory, scopedEnrollees, logs)
+      : buildSupervisorTeamBurdenModel([], [], []),
+    [activeMenu, logs, role, scopedEnrollees, supervisorNavigatorDirectory]
   )
   const mergedNavigatorProgramState = useMemo(() => mergeNavigatorProgramState(navigatorProgramState, currentNavigatorName, currentSupervisorName, enrollees, enrollmentRequests, publicQueueRecords), [currentNavigatorName, currentSupervisorName, enrollees, enrollmentRequests, navigatorProgramState, publicQueueRecords])
   const partnerStripJourneyModel = useMemo(() => buildPartnerStripJourneyModel({
@@ -135,9 +137,15 @@ export function useSinglePaneWorkspaceDerivedState(context: WorkspaceDerivedCont
     regulationTestHistory: regulation.regulationTestHistory, routeAssignmentsByEnrolleeId,
     scopedEnrollees, serviceCapacityPromptByNormalizedZCode,
   }), [effectivePartnerOrganizationName, isPartnerStationView, logs, mergedNavigatorProgramState.pickupQueue, regulation.regulationTestHistory, routeAssignmentsByEnrolleeId, scopedEnrolleeIdSet, scopedEnrollees, serviceCapacityPromptByNormalizedZCode])
-  const competency = useNavigatorCompetencyDerived({ currentNavigatorName, mergedNavigatorProgramState, navigatorCompetencyAssessments })
+  const competency = useNavigatorCompetencyDerived({
+    currentNavigatorName,
+    currentSupervisorName,
+    viewerRole,
+    mergedNavigatorProgramState,
+    navigatorCompetencyAssessments
+  })
   const reflection = useCreateReflectionActions({
-    currentNavigatorName, currentSupervisorName,
+    currentNavigatorName, currentSupervisorName, viewerRole, activeMenu,
     managedNavigatorNames: supervisorNavigatorDirectory.filter((row) => row.isManagedByCurrentSupervisor).map((row) => row.navigatorName),
     mergedNavigatorProgramState, setNavigatorProgramState, setNavigatorProgramError, ensureWriteAllowed,
     saveNavigatorProgramState: (state) => pickup.saveNavigatorProgramState(state),

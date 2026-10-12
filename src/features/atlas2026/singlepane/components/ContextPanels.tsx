@@ -23,7 +23,8 @@ export default function ContextPanels({
   activeMenu,
   enrollmentRequests
 }: ContextPanelsProps) {
-  // Non-navigator "my profile" intentionally surfaces enrollment intake requests instead of navigator-only profile data.
+  // Enrollment intake stays off my wallet. This branch only remains for a stored menu label
+  // that normalization did not rewrite.
   if (activeMenu === 'my profile' && role !== 'navigator' && role !== 'supervisor') {
     return (
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>

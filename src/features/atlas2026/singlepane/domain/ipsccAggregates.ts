@@ -10,8 +10,12 @@ import type {
   NavigatorSelfAssessmentRecord,
   NavigatorSelfAssessmentSummary
 } from '@/features/atlas2026/shared/contracts'
-import { IPSCC_COMPETENCY_DEFINITIONS } from '@/features/atlas2026/singlepane/data/intentionalPeerSupportCatalog'
-import { mapItemScoresToCompetencyScores } from '@/features/atlas2026/singlepane/domain/ipsccSeeds'
+import {
+  IPS_COMPETENCY_SCALE_INSTRUMENT,
+  IPSCC_COMPETENCY_DEFINITIONS,
+  IPSCC_POINT_OF_CARE_CROSSWALK
+} from '@/features/atlas2026/singlepane/data/intentionalPeerSupportCatalog'
+import { averagePointOfCareItems, mapItemScoresToCompetencyScores } from '@/features/atlas2026/singlepane/domain/ipsccSeeds'
 
 // Intentional Peer Support Core Competencies (IPSCC) aggregates preserve privacy and comparison semantics.
 export function buildNavigatorSelfAssessmentSummary(records: NavigatorSelfAssessmentRecord[]): NavigatorSelfAssessmentSummary {
@@ -54,7 +58,7 @@ export function buildNavigatorSelfAssessmentSummary(records: NavigatorSelfAssess
 export function buildIpsccCompetencyAggregates(records: IpsccEncounterSubmissionRecord[]): IpsccCompetencyAggregate[] {
   return IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
     const perEncounter = records
-      .map((record) => mapItemScoresToCompetencyScores(record.itemScores)[definition.key])
+      .map((record) => mapItemScoresToCompetencyScores(record.itemScores, record.instrument)[definition.key])
       .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
     const averageScore = perEncounter.length
       ? Number((perEncounter.reduce((sum, value) => sum + value, 0) / perEncounter.length).toFixed(2))
@@ -129,10 +133,11 @@ export function buildIpsccVsSelfAwarenessCorrelation(
       selfAverage,
       gap,
       strain,
-      alignmentScore
+      alignmentScore,
+      facetLabel: null
     }
   })
-  const comparableRows = rows.filter((row) => typeof row.gap === 'number' && typeof row.alignmentScore === 'number')
+  const comparableRows = rows.filter((row) => !row.facetLabel && typeof row.gap === 'number' && typeof row.alignmentScore === 'number')
   const averageGap = comparableRows.length
     ? Number((comparableRows.reduce((sum, row) => sum + Math.abs(row.gap || 0), 0) / comparableRows.length).toFixed(2))
     : null
@@ -149,6 +154,61 @@ export function buildIpsccVsSelfAwarenessCorrelation(
       averageStrain
     }
   }
+}
+
+function correlationFromPair(ipsccAverage: number | null, selfAverage: number | null) {
+  const hasPair = typeof ipsccAverage === 'number' && typeof selfAverage === 'number'
+  const gap = hasPair ? Number((selfAverage - ipsccAverage).toFixed(2)) : null
+  const strain = hasPair ? Number(Math.abs(gap || 0).toFixed(2)) : null
+  const alignmentScore = hasPair ? Number((Math.max(0, 1 - Math.abs(gap || 0) / 4)).toFixed(2)) : null
+  return { gap, strain, alignmentScore }
+}
+
+/**
+ * Mutuality's responsibility and shared-risk slices, scored only from
+ * Intentional Peer Support Core Competencies (IPSCC) point-of-care submissions.
+ * The self-assessment score is the parent mutuality rating.
+ */
+export function buildPocFacetCorrelationRows(
+  records: IpsccEncounterSubmissionRecord[],
+  selfAverages: Record<IpsccCompetencyKey, number | null>
+): IpsccSelfAwarenessCorrelationRow[] {
+  const scaleRecords = records.filter((record) => record.instrument === IPS_COMPETENCY_SCALE_INSTRUMENT)
+  return IPSCC_POINT_OF_CARE_CROSSWALK.flatMap((definition) => {
+    if (!definition.facets?.length) return []
+    const selfAverage = selfAverages[definition.key] ?? null
+    return definition.facets.map((facet) => {
+      const perEncounter = scaleRecords
+        .map((record) => averagePointOfCareItems(record.itemScores, facet.itemIndexes))
+        .filter((value): value is number => typeof value === 'number')
+      const ipsccAverage = perEncounter.length
+        ? Number((perEncounter.reduce((sum, value) => sum + value, 0) / perEncounter.length).toFixed(2))
+        : null
+      return {
+        key: definition.key,
+        label: definition.label,
+        facetLabel: facet.label,
+        ipsccAverage,
+        selfAverage,
+        ...correlationFromPair(ipsccAverage, selfAverage)
+      }
+    })
+  })
+}
+
+/** Keep facet rows directly under the competency they slice. */
+export function insertFacetCorrelationRows(
+  rows: IpsccSelfAwarenessCorrelationRow[],
+  facetRows: IpsccSelfAwarenessCorrelationRow[]
+) {
+  if (!facetRows.length) return rows
+  const byKey = new Map<string, IpsccSelfAwarenessCorrelationRow[]>()
+  facetRows.forEach((row) => {
+    const current = byKey.get(row.key) || []
+    current.push(row)
+    byKey.set(row.key, current)
+  })
+  return rows.flatMap((row) => [row, ...(byKey.get(row.key) || [])])
 }
 
 export function buildCreateInsights(records: CreateSessionRecord[]): CreateInsightRow[] {

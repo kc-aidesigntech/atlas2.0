@@ -11,12 +11,16 @@ import {
   buildIpsccCompetencyAggregates,
   buildIpsccVsSelfAwarenessCorrelation,
   buildNavigatorSelfAssessmentSummary,
-  gateIpsccAggregatesForNavigatorPrivacy
+  buildPocFacetCorrelationRows,
+  gateIpsccAggregatesForNavigatorPrivacy,
+  insertFacetCorrelationRows
 } from '@/features/atlas2026/singlepane/domain/ipsccAggregates'
 import { buildIntervalDueItems } from '@/features/atlas2026/singlepane/domain/loadsRoutes'
 
 interface UseNavigatorCompetencyDerivedInput {
   currentNavigatorName: string
+  currentSupervisorName: string
+  viewerRole: string
   mergedNavigatorProgramState: NavigatorProgramState
   navigatorCompetencyAssessments: NavigatorCompetencyAssessmentRecord[]
 }
@@ -28,6 +32,8 @@ interface UseNavigatorCompetencyDerivedInput {
  */
 export function useNavigatorCompetencyDerived({
   currentNavigatorName,
+  currentSupervisorName,
+  viewerRole,
   mergedNavigatorProgramState,
   navigatorCompetencyAssessments
 }: UseNavigatorCompetencyDerivedInput) {
@@ -70,14 +76,17 @@ export function useNavigatorCompetencyDerived({
     () => allSupervisorIpsAssessments.filter((record) => record.navigatorName === currentNavigatorName),
     [allSupervisorIpsAssessments, currentNavigatorName]
   )
-  const navigatorCreateSessions = useMemo(
-    () =>
-      mergedNavigatorProgramState.createSessions
-        .filter((record) => record.navigatorName === currentNavigatorName)
-        .slice()
-        .sort((left, right) => new Date(right.sessionAtIso).getTime() - new Date(left.sessionAtIso).getTime()),
-    [currentNavigatorName, mergedNavigatorProgramState.createSessions]
-  )
+  const navigatorCreateSessions = useMemo(() => {
+    const selfName = (viewerRole === 'supervisor' ? currentSupervisorName : currentNavigatorName).trim().toLowerCase()
+    return mergedNavigatorProgramState.createSessions
+      .filter((record) => {
+        // Each person sees the sessions they are a party to, open and closed.
+        if (viewerRole === 'supervisor') return record.supervisorName.trim().toLowerCase() === selfName
+        return record.navigatorName.trim().toLowerCase() === selfName
+      })
+      .slice()
+      .sort((left, right) => new Date(right.sessionAtIso).getTime() - new Date(left.sessionAtIso).getTime())
+  }, [currentNavigatorName, currentSupervisorName, mergedNavigatorProgramState.createSessions, viewerRole])
   const navigatorIpsccCompetencyAggregatesRaw = useMemo(
     () => buildIpsccCompetencyAggregates(navigatorIpsccEncounterSubmissions),
     [navigatorIpsccEncounterSubmissions]
@@ -104,10 +113,11 @@ export function useNavigatorCompetencyDerived({
     () => buildIpsSelfAssessmentAverages(navigatorIpsSelfAssessments),
     [navigatorIpsSelfAssessments]
   )
-  const navigatorSelfAwarenessCorrelation = useMemo(
-    () => buildIpsccVsSelfAwarenessCorrelation(navigatorIpsccCompetencyAggregates, navigatorIpsSelfAverages),
-    [navigatorIpsccCompetencyAggregates, navigatorIpsSelfAverages]
-  )
+  const navigatorSelfAwarenessCorrelation = useMemo(() => {
+    const base = buildIpsccVsSelfAwarenessCorrelation(navigatorIpsccCompetencyAggregates, navigatorIpsSelfAverages)
+    const facets = buildPocFacetCorrelationRows(navigatorIpsccEncounterSubmissions, navigatorIpsSelfAverages)
+    return { ...base, rows: insertFacetCorrelationRows(base.rows, facets) }
+  }, [navigatorIpsccCompetencyAggregates, navigatorIpsSelfAverages, navigatorIpsccEncounterSubmissions])
   const navigatorCreateInsights = useMemo(
     () => buildCreateInsights(navigatorCreateSessions),
     [navigatorCreateSessions]

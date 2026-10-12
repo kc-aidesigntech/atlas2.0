@@ -69,7 +69,9 @@ export default function IpsccStrainRadarChart({
   className
 }: IpsccStrainRadarChartProps) {
   const averagesRevealed = enrolleeFeedbackPrivacy.averagesRevealed
-  const chartData = correlationRows.map((row) => ({
+  // Facet rows repeat a parent competency. The radar stays one spoke per competency.
+  const competencyRows = correlationRows.filter((row) => !row.facetLabel)
+  const chartData = competencyRows.map((row) => ({
     axis: row.key,
     // Full IPSCC catalog short labels (e.g. "Learning together"), not chart abbreviations.
     label: row.label,
@@ -89,7 +91,7 @@ export default function IpsccStrainRadarChart({
   )
   const hasAnySelf = chartData.some((point) => point.hasSelf)
   const topStrain = averagesRevealed
-    ? correlationRows
+    ? competencyRows
         .filter((row) => typeof row.strain === 'number' && (row.strain || 0) > 0)
         .slice()
         .sort((left, right) => (right.strain || 0) - (left.strain || 0))[0]

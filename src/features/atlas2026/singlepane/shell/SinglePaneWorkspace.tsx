@@ -20,6 +20,7 @@ import { useWorkspaceOverlayRouter } from './useWorkspaceOverlayRouter'
 import { LazyPanelFallback, WorkspaceLoadingShell, WorkspaceLoadingSpinner } from './WorkspaceLoadingStates'
 import WorkspaceFrame from './WorkspaceFrame'
 import { isWarmLineMenu, openPrayPhoneAgentFromWorkspace } from '../data-access/prayphoneSubapp'
+import { navigateWorkspace, workspaceMenuFromLocation } from '../pages/workspaceRoutes'
 
 const AdminDataControlPanel = React.lazy(() => import('../../admin/AdminDataControlPanel'))
 const NavigatorMyProfilePanel = React.lazy(() => import('../components/NavigatorMyProfilePanel'))
@@ -113,6 +114,7 @@ export default function SinglePaneWorkspace() {
     navigatorSelfAwarenessCorrelationRows,
     navigatorSelfAwarenessSummary,
     navigatorCreateSessions,
+    saveNavigatorCreateSession,
     navigatorCreateReflection,
     supervisorManagedCreateReflections,
     navigatorSupervisionSessions,
@@ -337,19 +339,14 @@ export default function SinglePaneWorkspace() {
   React.useEffect(() => {
     if (typeof window === 'undefined') return
     if (!selectedRoleConfig.topMenus.length) return
-    const hashTarget = hashToMenu(window.location.hash, selectedRoleConfig.topMenus)
-    const fallbackMenu = hashTarget || selectedRoleConfig.topMenus[0]
+    const locatedMenu = workspaceMenuFromLocation(window.location.pathname, window.location.hash, selectedRoleConfig.topMenus)
+    const fallbackMenu = locatedMenu || selectedRoleConfig.topMenus[0]
     if (!fallbackMenu) return
     if (fallbackMenu !== activeMenu) {
       setActiveMenu(fallbackMenu)
       return
     }
-    const fallbackHash = menuToHash(fallbackMenu)
-    if (!fallbackHash) return
-    const currentHash = window.location.hash.replace(/^#/, '')
-    if (currentHash !== fallbackHash) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${fallbackHash}`)
-    }
+    navigateWorkspace(fallbackMenu, 'replace')
     hashSyncBootstrappedRef.current = true
   }, [selectedRoleConfig.topMenus, setActiveMenu])
 
@@ -387,18 +384,8 @@ export default function SinglePaneWorkspace() {
     if (typeof window === 'undefined') return
     if (!selectedRoleConfig.topMenus.length) return
     if (!selectedRoleConfig.topMenus.includes(activeMenu)) return
-    const nextHash = menuToHash(activeMenu)
-    if (!nextHash) return
-    const currentHash = window.location.hash.replace(/^#/, '')
-    if (currentHash === nextHash) return
-
-    const nextUrl = `${window.location.pathname}${window.location.search}#${nextHash}`
-    if (!hashSyncBootstrappedRef.current) {
-      window.history.replaceState(null, '', nextUrl)
-      hashSyncBootstrappedRef.current = true
-      return
-    }
-    window.history.pushState(null, '', nextUrl)
+    navigateWorkspace(activeMenu, hashSyncBootstrappedRef.current ? 'push' : 'replace')
+    hashSyncBootstrappedRef.current = true
   }, [activeMenu])
 
   React.useEffect(() => {
@@ -406,9 +393,9 @@ export default function SinglePaneWorkspace() {
     if (!selectedRoleConfig.topMenus.length) return
 
     function syncMenuFromLocation() {
-      const hashTarget = hashToMenu(window.location.hash, selectedRoleConfig.topMenus)
-      if (hashTarget && hashTarget !== activeMenu) {
-        setActiveMenu(hashTarget)
+      const locatedMenu = workspaceMenuFromLocation(window.location.pathname, window.location.hash, selectedRoleConfig.topMenus)
+      if (locatedMenu && locatedMenu !== activeMenu) {
+        setActiveMenu(locatedMenu)
       }
     }
 
@@ -484,7 +471,7 @@ export default function SinglePaneWorkspace() {
   const isServiceCapacitySection = uiRole === 'partner' && activeMenu === 'service capacity'
   const isReferralPortalMenu = activeMenu === 'referral portal' || activeMenu === 'refer'
   const canUseReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
-  const isNavigatorMyProfile = uiRole === 'navigator' && activeMenu === 'my profile'
+  const isNavigatorMyWallet = uiRole === 'navigator' && activeMenu === 'my wallet'
   const isNavigatorEnrolleeMenu = uiRole === 'navigator' && activeMenu === 'enrollees'
   const canOpenNavigatorAssignmentReferral = uiRole === 'navigator' && viewerCanAddAssignmentBoardReferral
   // Hide the referral CTA on the standard enrollee page so that profile and care
@@ -494,13 +481,11 @@ export default function SinglePaneWorkspace() {
   const assignmentBoardError = viewerCanAccessAssignmentBoard
     ? navigatorEnrollmentAssignmentsError
     : 'Assignment board is hidden by administrator policy.'
-  const isSupervisorMyProfile = uiRole === 'supervisor' && activeMenu === 'my profile'
   const isSupervisorMyWallet = uiRole === 'supervisor' && activeMenu === 'my wallet'
   const isSupervisorTeamBurden = uiRole === 'supervisor' && activeMenu === 'team burden'
-  const isSupervisorMyProfileView = isSupervisorMyProfile || isSupervisorMyWallet
   const isReady = isPartnerStationView
     ? true
-    : isNavigatorMyProfile || isNavigatorEnrolleeMenu || isSupervisorMyProfileView || isSupervisorTeamBurden
+    : isNavigatorMyWallet || isNavigatorEnrolleeMenu || isSupervisorMyWallet || isSupervisorTeamBurden
       ? true
       : Boolean(selectedEnrollee && timelineConfig)
 
@@ -569,8 +554,8 @@ export default function SinglePaneWorkspace() {
   const highlightedStationName = isRoutePlanningOpen
     ? selectedRouteCandidate?.stationName || selectedRouteAssignment?.stationName || null
     : selectedRouteAssignment?.stationName || null
-  const displayLoad = isNavigatorMyProfile ? navigatorAggregateLoad : selectedLoad
-  const displayLoadBreakdown = isNavigatorMyProfile ? navigatorAggregateLoadBreakdown : selectedLoadBreakdown
+  const displayLoad = isNavigatorMyWallet ? navigatorAggregateLoad : selectedLoad
+  const displayLoadBreakdown = isNavigatorMyWallet ? navigatorAggregateLoadBreakdown : selectedLoadBreakdown
   // Partner traversal controls are always rendered for partner-station overlays; navigation
   // enables when more than one organization is present in the available survey history scope.
   const partnerOverlayOrganizations = React.useMemo(
@@ -953,7 +938,7 @@ export default function SinglePaneWorkspace() {
             isOpen={isLoadTableOpen}
             load={displayLoad}
             breakdown={displayLoadBreakdown}
-            navigatorContributors={isNavigatorMyProfile ? navigatorLoadContributors : []}
+            navigatorContributors={isNavigatorMyWallet ? navigatorLoadContributors : []}
             partnerSurveyHistory={isPartnerStationView ? partnerServiceCapacitySurveyHistory : []}
             onOpenTrueRecord={handleOpenTrueRecord}
             onSelectPreviousPartner={isPartnerStationView ? () => undefined : undefined}
@@ -1037,7 +1022,7 @@ export default function SinglePaneWorkspace() {
                       </React.Suspense>
                     </div>
                   </div>
-                ) : isNavigatorMyProfile ? (
+                ) : isNavigatorMyWallet ? (
                   <NavigatorMyProfilePanel
                     accountSettings={accountSettings}
                     currentNavigatorName={currentNavigatorName}
@@ -1074,21 +1059,23 @@ export default function SinglePaneWorkspace() {
                     onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
                     onSaveIpsSelfAssessment={saveNavigatorIpsSelfAssessment}
                     onSaveIpsccEncounterSubmission={saveNavigatorIpsccEncounterSubmission}
+                    onSaveCreateSession={saveNavigatorCreateSession}
                     onSaveSupervisionSession={saveSupervisionSession}
                   />
-                ) : isSupervisorMyProfileView ? (
+                ) : isSupervisorMyWallet ? (
                   <div
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
                   >
                     <div className="w-full">
                       <SupervisorMyProfilePanel
-                        mode={isSupervisorMyWallet ? 'wallet' : 'profile'}
                         currentSupervisorName={currentSupervisorName}
                         navigatorDirectory={supervisorNavigatorDirectory}
                         competencyByNavigator={supervisorNavigatorCompetency}
                         allSupervisorIpsAssessments={allSupervisorIpsAssessments}
                         managedCreateReflections={supervisorManagedCreateReflections}
+                        createSessions={navigatorCreateSessions}
+                        onSaveCreateSession={saveNavigatorCreateSession}
                         onToggleManagedNavigator={toggleSupervisorManagedNavigator}
                         isSavingAssignments={isSavingAccessMatrix}
                         onSaveSupervisorIpsAssessment={saveSupervisorIpsAssessment}
@@ -1259,7 +1246,7 @@ export default function SinglePaneWorkspace() {
                       accentColor="var(--atlas-signal-lucid-green)"
                     />
                   </div>
-                ) : isNavigatorMyProfile || isSupervisorMyProfileView || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isSupervisorTeamBurden ? (
+                ) : isNavigatorMyWallet || isSupervisorMyWallet || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isSupervisorTeamBurden ? (
                   // Read-only team strip: dragging would rewrite one enrollee's timeline, and station markers belong to a single person.
                   <>
                     <div className="hidden min-h-[220px] flex-1 items-start md:flex">
@@ -1470,24 +1457,4 @@ function deriveEnrolleeParentCodes(
   return Array.from(new Set(source)).sort((left, right) => left.localeCompare(right, undefined, { numeric: true }))
 }
 
-function menuToHash(menu: string) {
-  return menu
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
-const LEGACY_SUPERVISOR_MENU_HASHES: Record<string, string> = {
-  'assigned-navigators': 'my profile',
-  'navigator-assessments': 'my wallet'
-}
-
-function hashToMenu(hashValue: string, menus: string[]) {
-  const normalizedHash = hashValue.replace(/^#/, '').trim().toLowerCase()
-  if (!normalizedHash) return null
-  const renamed = LEGACY_SUPERVISOR_MENU_HASHES[normalizedHash]
-  if (renamed && menus.includes(renamed)) return renamed
-  return menus.find((menu) => menuToHash(menu) === normalizedHash) || null
-}
 

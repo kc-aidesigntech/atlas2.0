@@ -1,5 +1,6 @@
 import React from 'react'
 import type {
+  CreateSessionRecord,
   NavigatorCreateReflectionRecord,
   SupervisorIpsAssessmentRecord,
   SupervisorNavigatorCompetencySummary
@@ -12,7 +13,6 @@ import SupervisorProfileOverlay, {
 } from './supervisorProfile/SupervisorProfileOverlay'
 
 interface SupervisorMyProfilePanelProps {
-  mode: 'profile' | 'wallet'
   currentSupervisorName: string
   navigatorDirectory: SupervisorNavigatorDirectoryEntry[]
   competencyByNavigator: SupervisorNavigatorCompetencySummary[]
@@ -23,6 +23,8 @@ interface SupervisorMyProfilePanelProps {
   onSaveSupervisorIpsAssessment: (record: SupervisorIpsAssessmentRecord) => Promise<unknown> | unknown
   onSaveCreateReflectionOverride: (input: { navigatorName: string; reflectionText: string }) => Promise<unknown> | unknown
   onRestoreCreateReflectionGenerated: (navigatorName: string) => Promise<unknown> | unknown
+  createSessions?: CreateSessionRecord[]
+  onSaveCreateSession?: (record: CreateSessionRecord) => Promise<unknown> | unknown
 }
 
 const CARD_DEFS: Array<{
@@ -43,50 +45,44 @@ const CARD_DEFS: Array<{
 
 export default function SupervisorMyProfilePanel(props: SupervisorMyProfilePanelProps) {
   const [activeOverlay, setActiveOverlay] = React.useState<SupervisorProfileOverlayKey | null>(null)
-  const { mode, ...overlayProps } = props
   const walletCards = CARD_DEFS.filter((card) => card.overlayId !== 'section_2_assigned_navigators')
-  // Profile lists the supervisor's navigators. Wallet keeps the assessment tools.
+  // One wallet: the assigned-navigator roster, then the assessment cards.
   const assignedNavigators = props.navigatorDirectory.filter((row) => row.isManagedByCurrentSupervisor)
 
   return (
     <div className="relative flex flex-col gap-4">
       <div className="atlas-surface-panel px-5 py-4">
-        <div className="atlas-h4 text-[24px] font-medium text-white">{mode === 'profile' ? 'my profile' : 'my wallet'}</div>
+        <div className="atlas-h4 text-[24px] font-medium text-white">my wallet</div>
         <small className="mt-1 block text-[#9eacb9]">{props.currentSupervisorName}</small>
       </div>
-      {mode === 'profile' ? (
-        <SupervisorCompetencyPanel
-          mode="assigned-navigators"
-          navigatorDirectory={assignedNavigators}
-          competencyByNavigator={props.competencyByNavigator}
-          isSavingAssignments={props.isSavingAssignments ?? false}
-        />
-      ) : (
-        <>
-          <SupervisorCompetencyPanel
-            mode="navigator-assessments"
-            navigatorDirectory={assignedNavigators}
-            competencyByNavigator={props.competencyByNavigator}
+      <SupervisorCompetencyPanel
+        mode="assigned-navigators"
+        navigatorDirectory={assignedNavigators}
+        competencyByNavigator={props.competencyByNavigator}
+        isSavingAssignments={props.isSavingAssignments ?? false}
+      />
+      <SupervisorCompetencyPanel
+        mode="navigator-assessments"
+        navigatorDirectory={assignedNavigators}
+        competencyByNavigator={props.competencyByNavigator}
+      />
+      <div className="atlas-profile-nav-grid">
+        {walletCards.map((card, index) => (
+          <ProfileNavigationCard
+            key={card.overlayId}
+            sequenceNumber={index + 1}
+            title={card.cardTitle}
+            subtitle={card.cardSubtitle}
+            actionLabel={card.actionLabel}
+            variant={card.variant}
+            illustration={card.illustration}
+            onClick={() => setActiveOverlay(card.overlayId)}
           />
-          <div className="atlas-profile-nav-grid">
-            {walletCards.map((card, index) => (
-              <ProfileNavigationCard
-                key={card.overlayId}
-                sequenceNumber={index + 1}
-                title={card.cardTitle}
-                subtitle={card.cardSubtitle}
-                actionLabel={card.actionLabel}
-                variant={card.variant}
-                illustration={card.illustration}
-                onClick={() => setActiveOverlay(card.overlayId)}
-              />
-            ))}
-          </div>
-        </>
-      )}
+        ))}
+      </div>
       {activeOverlay ? (
         <SupervisorProfileOverlay
-          {...overlayProps}
+          {...props}
           activeOverlay={activeOverlay}
           title={CARD_DEFS.find((card) => card.overlayId === activeOverlay)?.title || 'section'}
           isSavingAssignments={props.isSavingAssignments ?? false}

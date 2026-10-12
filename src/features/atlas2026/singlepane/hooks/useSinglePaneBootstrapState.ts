@@ -1,4 +1,11 @@
 import { useEffect, useState } from 'react'
+import {
+  needsEnrolleeStrip,
+  needsPartnerStation,
+  useWorkspaceDataScopes,
+  workspaceScopesInclude,
+  type WorkspaceDataScope
+} from '@/features/atlas2026/singlepane/pages/workspaceRoutes'
 import type {
   AccountSettings,
   AdminDataQualityMetric,
@@ -10,6 +17,7 @@ import type {
   EnrolleeProfile,
   EnrollmentRequestRecord,
   NavigatorCompetencyAssessmentRecord,
+  PartnerServiceCapacitySubmissionRecord,
   PartnerStationSpecialtyGroup,
   PartnerStationProfile,
   RoleMenuConfig,
@@ -296,7 +304,11 @@ function mergeWeightedSurveyBreakdowns(
   }
 }
 
-async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Promise<SinglePaneBootstrapPayload> {
+async function loadBootstrapPayload(
+  role: AtlasRole,
+  forceRefresh = false,
+  scopes: WorkspaceDataScope[] = ['wallet', 'enrollee-strip', 'team-burden', 'partner-station', 'service-capacity', 'admin', 'referral']
+): Promise<SinglePaneBootstrapPayload> {
   if (!forceRefresh) {
     const cached = bootstrapPayloadCache.get(role)
     if (cached) return cached
@@ -311,6 +323,11 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
     // the partner-station linkage in a single concurrent batch. None of these depend on
     // one another, so collapsing them from sequential awaits into one Promise.all removes
     // several serial round-trips and is the dominant lever on first-login latency.
+    const includeStrip = needsEnrolleeStrip(scopes)
+    const includeAdmin = workspaceScopesInclude(scopes, 'admin')
+    const includePartner = needsPartnerStation(scopes)
+    const includeWallet = workspaceScopesInclude(scopes, 'wallet') || includeAdmin
+    const includeReferral = workspaceScopesInclude(scopes, 'referral') || includeWallet || includeStrip
     const [
       data,
       requests,
@@ -324,19 +341,20 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
       latestEnrolleeSurveySubmissions,
       navigatorStationContext
     ] = await Promise.all([
-      loadSinglePaneBootstrap(role),
-      loadEnrollmentRequests(role),
-      loadCountyHeatmap(),
-      loadAdminDataQuality(),
+      // Strip pages need route logs. Wallet and admin pages do not.
+      loadSinglePaneBootstrap(role, { criticalOnly: !includeStrip }),
+      includeReferral ? loadEnrollmentRequests(role) : Promise.resolve([]),
+      includeAdmin ? loadCountyHeatmap() : Promise.resolve([]),
+      includeAdmin ? loadAdminDataQuality() : Promise.resolve([]),
       loadAccountSettings(),
-      loadEnrolleeIntakes(),
-      loadRouteAssignments(),
-      loadNavigatorCompetencyAssessments(),
-      loadPartnerRadialLoadBreakdown(),
-      loadLatestEnrolleeBurdenSurveySubmissions(),
+      includeStrip ? loadEnrolleeIntakes() : Promise.resolve({}),
+      includeStrip ? loadRouteAssignments() : Promise.resolve({}),
+      includeWallet ? loadNavigatorCompetencyAssessments() : Promise.resolve([]),
+      includePartner ? loadPartnerRadialLoadBreakdown() : Promise.resolve(null),
+      includeStrip ? loadLatestEnrolleeBurdenSurveySubmissions() : Promise.resolve([]),
       // Navigator station resolves from explicit navigator->partner linkage; other roles
       // resolve their station from the account organization below, so skip the call entirely.
-      role === 'navigator' ? loadNavigatorStationContext() : Promise.resolve(null)
+      role === 'navigator' && includePartner ? loadNavigatorStationContext() : Promise.resolve(null)
     ])
 
     const weightedEnrolleeBreakdowns = latestEnrolleeSurveySubmissions.map((record) =>
@@ -361,13 +379,15 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
       nextAccountSettings.organization
     // Survey history and station profile depend only on the resolved organization (not on each
     // other), so resolve them together rather than back-to-back.
-    const [partnerSurveyHistory, stationProfile] = await Promise.all([
-      loadPartnerServiceCapacitySurveyHistory(stationOrganizationName),
-      loadPartnerStationProfile(stationOrganizationName, {
-        fullName: nextAccountSettings.fullName,
-        email: nextAccountSettings.email
-      })
-    ])
+    const [partnerSurveyHistory, stationProfile] = includePartner
+      ? await Promise.all([
+          loadPartnerServiceCapacitySurveyHistory(stationOrganizationName),
+          loadPartnerStationProfile(stationOrganizationName, {
+            fullName: nextAccountSettings.fullName,
+            email: nextAccountSettings.email
+          })
+        ])
+      : [[] as PartnerServiceCapacitySubmissionRecord[], null as PartnerStationProfile | null]
     const completedPartnerSurveyHistory = selectCompletedPartnerSurveysNewestFirst(partnerSurveyHistory)
     const latestCompletedPartnerSurvey = completedPartnerSurveyHistory[0] || null
     const partnerStationSpecialties = derivePartnerStationSpecialtyGroups(latestCompletedPartnerSurvey)
@@ -409,7 +429,36 @@ async function loadBootstrapPayload(role: AtlasRole, forceRefresh = false): Prom
   return request
 }
 
+function mergeScopedBootstrap(
+  current: SinglePaneBootstrapState,
+  payload: SinglePaneBootstrapPayload,
+  scopes: WorkspaceDataScope[]
+): SinglePaneBootstrapPayload {
+  const includeStrip = needsEnrolleeStrip(scopes)
+  const includeAdmin = workspaceScopesInclude(scopes, 'admin')
+  const includePartner = needsPartnerStation(scopes)
+  const includeWallet = workspaceScopesInclude(scopes, 'wallet') || includeAdmin
+  const includeReferral = workspaceScopesInclude(scopes, 'referral') || includeWallet || includeStrip
+  // Keep datasets already loaded for other pages. A wallet visit must not wipe the strip.
+  return {
+    ...payload,
+    logs: includeStrip ? payload.logs : current.logs,
+    enrollmentRequests: includeReferral ? payload.enrollmentRequests : current.enrollmentRequests,
+    countyHeatmap: includeAdmin ? payload.countyHeatmap : current.countyHeatmap,
+    adminMetrics: includeAdmin ? payload.adminMetrics : current.adminMetrics,
+    intakeFormsByEnrolleeId: includeStrip ? payload.intakeFormsByEnrolleeId : current.intakeFormsByEnrolleeId,
+    routeAssignmentsByEnrolleeId: includeStrip ? payload.routeAssignmentsByEnrolleeId : current.routeAssignmentsByEnrolleeId,
+    navigatorCompetencyAssessments: includeWallet ? payload.navigatorCompetencyAssessments : current.navigatorCompetencyAssessments,
+    partnerLoad: includePartner ? payload.partnerLoad : current.partnerLoad,
+    partnerLoadBreakdown: includePartner ? payload.partnerLoadBreakdown : current.partnerLoadBreakdown,
+    partnerStationSpecialties: includePartner ? payload.partnerStationSpecialties : current.partnerStationSpecialties,
+    partnerStationProfile: includePartner ? payload.partnerStationProfile : current.partnerStationProfile
+  }
+}
+
 export function useSinglePaneBootstrapState(role: AtlasRole) {
+  const scopes = useWorkspaceDataScopes()
+  const scopesKey = scopes.join('|')
   const [reloadNonce, setReloadNonce] = useState(0)
   const [state, setState] = useState<SinglePaneBootstrapState>({
     isLoading: true,
@@ -488,7 +537,12 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
         }
 
         if (!paintedFromMemory && isMounted) {
-          setState((current) => ({ ...current, isLoading: true, error: null }))
+          setState((current) => ({
+            ...current,
+            // Page changes refetch only their scope. Keep the shell up instead of blanking it.
+            isLoading: current.roleConfigs.length ? false : true,
+            error: null
+          }))
         }
         if (!paintedFromMemory) {
           const criticalPayload = await loadCriticalBootstrapPayload(role)
@@ -501,16 +555,19 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
           }))
           workspaceLoadMetrics.markBootstrapEnd(role)
         }
-        const payload = await loadBootstrapPayload(role, true)
+        const payload = await loadBootstrapPayload(role, true, scopes)
         if (!isMounted) return
         const freshnessAfterLoad = freshness.reliable ? freshness : await readWorkspaceFreshness()
-        rememberWorkspace(userId, role, payload, freshnessAfterLoad)
-        setState((current) => ({
-          ...current,
-          ...payload,
-          isLoading: false,
-          error: null
-        }))
+        setState((current) => {
+          const merged = mergeScopedBootstrap(current, payload, scopes)
+          rememberWorkspace(userId, role, merged, freshnessAfterLoad)
+          return {
+            ...current,
+            ...merged,
+            isLoading: false,
+            error: null
+          }
+        })
         if (paintedFromMemory) workspaceLoadMetrics.markBootstrapEnd(role)
       } catch (error) {
         // Fail loudly: a bootstrap failure (especially a grant/RLS denial) must not
@@ -562,7 +619,7 @@ export function useSinglePaneBootstrapState(role: AtlasRole) {
         window.clearTimeout(roleHydrateTimeout)
       }
     }
-  }, [role, reloadNonce])
+  }, [role, reloadNonce, scopesKey])
 
   return {
     state,

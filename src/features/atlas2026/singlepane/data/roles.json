@@ -11,7 +11,7 @@
   },
   {
     "role": "supervisor",
-    "topMenus": ["my profile", "my wallet", "referral portal", "route planning", "team burden"],
+    "topMenus": ["my wallet", "referral portal", "route planning", "team burden"],
     "actionMenus": []
   },
   {

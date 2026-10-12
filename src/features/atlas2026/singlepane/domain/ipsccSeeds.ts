@@ -12,7 +12,12 @@ import type {
   SupervisionSessionRecord,
   UnassignedEnrolleePickupRecord
 } from '@/features/atlas2026/shared/contracts'
-import { IPSCC_COMPETENCY_DEFINITIONS } from '@/features/atlas2026/singlepane/data/intentionalPeerSupportCatalog'
+import {
+  IPS_COMPETENCY_SCALE_INSTRUMENT,
+  IPSCC_COMPETENCY_DEFINITIONS,
+  IPSCC_POINT_OF_CARE_CROSSWALK,
+  LEGACY_COMPETENCY_ALIGNED_INSTRUMENT
+} from '@/features/atlas2026/singlepane/data/intentionalPeerSupportCatalog'
 import { getWeekStartIso, toMidnightIso } from '@/features/atlas2026/singlepane/domain/dates'
 
 // Intentional Peer Support Core Competencies (IPSCC) seed data supports stable pilot demonstrations.
@@ -28,19 +33,35 @@ export function clampLikertScore(value: number) {
 }
 
 /**
- * Encounter submissions store one score per Intentional Peer Support Core Competencies
- * (IPSCC) competency in catalog order (index 0 = competency 1). Older rows that used a
- * guessed multi-item mapping still reduce to one score per competency via itemIndexes.
+ * Average encounter item scores onto the ten self-assessment competencies.
+ * Legacy rows are one score per competency. Point-of-care rows use the IPS
+ * Competency Scale crosswalk, where several items can feed one competency.
  */
-export function mapItemScoresToCompetencyScores(itemScores: number[]): Partial<Record<IpsccCompetencyKey, number>> {
+export function mapItemScoresToCompetencyScores(
+  itemScores: number[],
+  instrument: string = LEGACY_COMPETENCY_ALIGNED_INSTRUMENT
+): Partial<Record<IpsccCompetencyKey, number>> {
+  const definitions = instrument === IPS_COMPETENCY_SCALE_INSTRUMENT
+    ? IPSCC_POINT_OF_CARE_CROSSWALK
+    : IPSCC_COMPETENCY_DEFINITIONS
   const normalized = Array.from({ length: IPSCC_ITEM_COUNT }, (_, index) => clampLikertScore(itemScores[index] ?? 3))
   return Object.fromEntries(
-    IPSCC_COMPETENCY_DEFINITIONS.map((definition) => {
+    definitions.map((definition) => {
       const values = definition.itemIndexes.map((itemIndex) => normalized[itemIndex - 1]).filter(Number.isFinite)
       const average = values.length ? Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2)) : null
       return [definition.key, average]
     })
   ) as Partial<Record<IpsccCompetencyKey, number>>
+}
+
+/** Average one facet's point-of-care items. Legacy rows have no facet slices. */
+export function averagePointOfCareItems(itemScores: number[], itemIndexes: number[]) {
+  const values = itemIndexes
+    .map((itemIndex) => itemScores[itemIndex - 1])
+    .filter((value) => Number.isFinite(value))
+    .map((value) => clampLikertScore(value))
+  if (!values.length) return null
+  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(2))
 }
 
 /**
@@ -75,6 +96,7 @@ export function buildSeedIpsccEncounterSubmissions(
       submittedAtIso: submittedAt.toISOString(),
       submittedBy: 'enrollee',
       itemScores,
+      instrument: LEGACY_COMPETENCY_ALIGNED_INSTRUMENT,
       note:
         index === 0
           ? 'Pilot enrollee early encounter — cautious ratings.'
@@ -163,6 +185,11 @@ export function buildSeedCreateSessions(navigatorName: string): CreateSessionRec
       supervisorName: 'peer supervisor',
       sessionAtIso: sessionAt.toISOString(),
       submittedAtIso: sessionAt.toISOString(),
+      status: 'closed',
+      openedByRole: 'navigator',
+      openedByName: navigatorName,
+      closedAtIso: sessionAt.toISOString(),
+      closedByName: 'peer supervisor',
       supervisionMode: 'in_person',
       sessionDurationMinutes: 50,
       connectFocusedListening: true,
