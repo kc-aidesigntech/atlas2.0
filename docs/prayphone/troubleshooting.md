@@ -35,7 +35,7 @@ Already cloned:
 
 The script creates user `ppadmin` if needed, adds groups `gpio`, `video`, `audio`, and `render` when those groups exist, and clones `kc-aidesigntech/prayphone-device` over SSH with the deploy key.
 
-Clips are not copied onto the SD card as the way to commission the screen. They are committed under `videos/` in that same repo. STEP 6 of the install script runs `git lfs pull` and `scripts/publish_videos.sh`, which copies real MP4s into `/home/ppadmin/Videos/mp4s/`. The laptop steps are in [Replace LOOP.mp4 and clips on the device](#replace-loopmp4-and-clips-on-the-device). `~/Videos/mp4s/` is not a git checkout.
+Clips are commissioned by committing them under `videos/` in that same repo. STEP 6 of the install script runs `git lfs pull` and `scripts/publish_videos.sh`, which copies real MP4s into `/home/ppadmin/Videos/mp4s/`. The laptop steps are in [Replace LOOP.mp4 and clips on the device](#replace-loopmp4-and-clips-on-the-device). The player folder is a plain directory.
 
 Bootstrap packages, before the repo exists:
 
