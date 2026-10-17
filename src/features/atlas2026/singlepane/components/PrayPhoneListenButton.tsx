@@ -24,8 +24,10 @@ interface PrayPhoneListenButtonProps {
  * Navigator, supervisor, and administrator profiles that pass the warm-line
  * permission see it on every workspace menu, and on the fleet and scribe
  * shells. Partners do not. A press always opens the
- * agent console. The green count is phones whose heartbeat is still inside
- * the fleet online window. A kiosk key 0 turns the control red and rings.
+ * agent console. The green count is hardware kiosks whose heartbeat is
+ * still inside the fleet online window. Phone-app rows (model mobile)
+ * are not in that count. A kiosk key 0 turns the control red and rings.
+ * Phone-app calls do not.
  */
 export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonProps) {
   const eligibleRole = role === 'navigator' || role === 'supervisor' || role === 'administrator'

@@ -107,19 +107,27 @@ When the kiosk page is ready it creates a session with `POST /api/signalwire/cal
 2. Asks `POST /api/signalwire/room-token` for a SignalWire video room token.
 3. Joins that room and publishes the camera at `/dev/video8` and the microphone.
 
-The agent page is `/agent`. It uses the same `BackendIntercom` component in agent mode. The console lists active sessions. Staff press a session row, then **answer call**, which joins that session id.
+The agent page is `/agent`. It uses the same `BackendIntercom` component in agent mode. The console lists active sessions in four queues. Staff press a session row, then **answer call**, which joins that session id. The console does not answer by itself, and one console still answers one session at a time.
 
 When both the kiosk participant and the agent participant are recorded as joined, the session state becomes `joined`.
 
 Phase 6, a design for six concurrent calls with agent identities `agent-1` through `agent-6`, is parked. It is not what this code runs.
 
+## Caller classes
+
+Each inbound session stores `caller_class` and `caller_label` on `atlas.prayphone_call_sessions`. Left to right on the agent console the classes are kiosk (white), anonymous (grey), enrollee (deep green), and prospective (yellow). A kiosk is an enabled `prayphone_devices` row whose `model` is not `mobile`: that call rings the Atlas header and that device's heartbeat counts on the phone icon. The class is taken from the device that requested the call, not from `calls_as_device_id`, so `prayphone-mobile-001` stays a phone call even while its caller address is `prayphone-device-001`. With no Atlas login that call is anonymous and only appears in the grey queue. A signed-in user whose id matches `atlas.people.external_ref` is an enrollee and the button shows `display_name`, or email when the display name is empty. A signed-in user with no people row is prospective and the button shows the auth email. Those three do not ring the header and do not count as an online device. The console still answers one session at a time.
+
 ## Mobile caller
 
-The phone app lives in the workspace at `prayphone/mobile`. It is one Expo project for iPhone and Android. An Atlas participant signs in with the same Supabase account as the web app, sees keys `1`–`9`, and presses `0` to call the agency.
+The phone app lives in the workspace at `prayphone/mobile`. It is one Expo project for iPhone and Android. The keypad is available without an account. Signing in uses the same Supabase account as the web app. Keys `1`–`9` mark a topic. Key `0` calls the agency either way.
 
-Key `0` does not open `/kiosk/call` and does not use the Pi bridge. The app sends `POST /api/signalwire/mobile-calls` with the signed-in user's bearer token. The conferencer creates a session whose address starts with `mobile:`, rings the same inbound row the kiosk uses, and returns a 60-second code. The call screen injects that code into `/mobile/call`. The code is not a session token and is not placed in the address bar. The page trades it once for a SignalWire room token and joins with the phone camera and microphone.
+Key `0` does not open `/kiosk/call` and does not use the Pi bridge. The app sends `POST /api/signalwire/mobile-calls` with a bearer token when someone is signed in, and with no bearer when they are not. A missing bearer still creates the call. The body includes the device id (`EXPO_PUBLIC_DEVICE_ID`, otherwise `prayphone-mobile-001`). The conferencer loads that requesting row from `atlas.prayphone_devices`. `calls_as_device_id` sets the caller address (`from_aor`) from the other phone's `signalwire_identity`. It does not choose the queue. The live call is a SignalWire video room. `signalwire_identity` is not a Session Initiation Protocol (SIP) password and it is not a separate SIP registration. The queue button shows `caller_label`.
 
-Staff still answer on `/agent`. The console row shows `mobile:<email>`. The phone joins under a `kiosk-` room name so the existing answer path can mark the room joined. Keys `1`–`9` only record which topic was pressed. Clip playback is later work.
+`prayphone-mobile-001` is seeded with its own `signalwire_identity` and with `calls_as_device_id` set to `prayphone-device-001`. Key `0` on the phone therefore uses that kiosk's caller address, and the queue class stays anonymous, enrollee, or prospective because the requesting row's model is `mobile`. Clear `calls_as_device_id` to use `prayphone-mobile-001` as the caller address. `MOBILE_PROXY_DEVICE_ID` on the conferencer is the device id used when the app omits one.
+
+The conferencer returns a 60-second code. It inserts an inbound ring only when the class is kiosk. The call screen injects that code into `/mobile/call`. The code is not a session token and is not placed in the address bar. The page trades it once for a SignalWire room token and joins with the phone camera and microphone.
+
+Staff still answer on `/agent`, in the queue for that class. The phone joins under a `kiosk-` room name so the existing answer path can mark the room joined. Keys `1`–`9` only record which topic was pressed. Clip playback is later work.
 
 ## Atlas identity handoff
 
@@ -143,7 +151,7 @@ The server application logs that upsert path only on failure: `API /upsert-devic
 
 Rows appear when a kiosk posts. Until the first successful post, `prayphone_devices` has no row for that phone.
 
-Atlas fleet (`/fleet`) and the green count on the phone icon use `FLEET_ONLINE_WINDOW_MS` in `src/features/atlas2026/fleet/fleetPresence.ts`: three minutes. A phone is online only when `last_seen` parses and is inside that window. An empty `last_seen` does not count. The stored `status` string is not the count. Two missed one-minute posts can still fall inside three minutes.
+Atlas fleet (`/fleet`) and the green count on the phone icon use `FLEET_ONLINE_WINDOW_MS` in `src/features/atlas2026/fleet/fleetPresence.ts`: three minutes. A phone is online only when `last_seen` parses and is inside that window. An empty `last_seen` does not count. The stored `status` string is not the count. Two missed one-minute posts can still fall inside three minutes. The icon count also skips rows whose `model` is `mobile`. The fleet screen still lists those rows.
 
 `GET /api/devices` on the conferencer selects `last_seen` (`app/api/devices/route.ts`). The conferencer page `app/devices/page.tsx` then badges a phone online with its own five-minute window. That page is not the Atlas rule. Use Atlas `/fleet` and the green count for the three-minute rule.
 
@@ -155,7 +163,7 @@ Supabase Realtime is enabled in migrations for `prayphone_devices` (`20261009150
 
 ## Inbound ring
 
-When a kiosk creates a call, `relayKioskInboundRing` inserts a row in `atlas.prayphone_inbound_rings` with `state = 'ringing'` after the session is saved. A staff browser that already has warm-line access turns the phone icon red and starts a ring tone. Browsers block that sound until the page has had a click or a tap. The icon still turns red.
+When a kiosk creates a call, `relayKioskInboundRing` inserts a row in `atlas.prayphone_inbound_rings` with `state = 'ringing'` after the session is saved. Anonymous, enrollee, and prospective sessions do not insert that row. A staff browser that already has warm-line access turns the phone icon red and starts a ring tone. Browsers block that sound until the page has had a click or a tap. The icon still turns red.
 
 The ring stops when the session becomes `joined` and an agent participant is recorded as joined (`answered`), or when the session is `ended`, `failed`, or `rejected` (`cleared`). Atlas ignores a `ringing` row older than two hours so a missed clear cannot ring all day.
 

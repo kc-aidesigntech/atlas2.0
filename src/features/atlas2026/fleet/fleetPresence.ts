@@ -72,12 +72,20 @@ export function isDeviceOnline(lastSeenIso: string, nowMs = Date.now()): boolean
 }
 
 /**
- * Header badge and the fleet screen share one rule: a heartbeat inside the
- * online window. The stored status string stays "online" after a phone stops
- * posting, so it is not the count.
+ * Header badge and the fleet screen share the heartbeat window below.
+ * The stored status string stays "online" after a phone stops posting, so
+ * it is not the count. A row whose model is mobile is the phone app and
+ * stays out of this count. Kiosk heartbeats still count. The fleet screen
+ * uses isDeviceOnline directly and still lists those phone-app rows.
  */
-export function countOnlineDevices(devices: Array<{ lastSeenIso: string }>, nowMs = Date.now()): number {
-  return devices.reduce((total, device) => total + (isDeviceOnline(device.lastSeenIso, nowMs) ? 1 : 0), 0)
+export function countOnlineDevices(
+  devices: Array<{ lastSeenIso: string; model?: string | null }>,
+  nowMs = Date.now()
+): number {
+  return devices.reduce((total, device) => {
+    if ((device.model || '').trim().toLowerCase() === 'mobile') return total
+    return total + (isDeviceOnline(device.lastSeenIso, nowMs) ? 1 : 0)
+  }, 0)
 }
 
 export function sortDevicesForFleet(devices: FleetDevice[], nowMs = Date.now()): FleetDevice[] {
