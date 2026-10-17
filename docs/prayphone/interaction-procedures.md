@@ -36,12 +36,12 @@ A call that starts while the handset is already down is ended by the kiosk, beca
 
 ## When the call is from the phone app
 
-Key `0` calls the warm line with or without an Atlas account. The call does not turn this icon red and does not count as an online kiosk. On the agent console it sits in its own queue: grey when nobody is signed in, deep green with the person's name when their account matches a person record, or yellow with the account email when they are signed in and have no person record. Answer and end it the same way as a kiosk call. Keys `1`–`9` on the phone do not call.
+Key `0` calls the warm line with or without an Atlas account. The call turns this icon red while that class is enabled in `atlas.prayphone_ring_sources`. It does not count as an online kiosk. On the agent console it sits in its own queue: grey when nobody is signed in, deep green with the person's name when their account matches a person record, or yellow with the account email when they are signed in and have no person record. Answer and end it the same way as a kiosk call. Keys `1`–`9` on the phone do not call.
 
 ## When a call starts
 
-1. The conferencer accepts four sources: kiosk, anonymous, enrollee, and prospective. Only a kiosk call turns the Atlas phone icon red and pulses. The other three are present and left off, so they do not change the icon.
-2. For that kiosk call, this browser plays a calm recorded chime. The sound starts only after the person has clicked or tapped the Atlas page at least once. The icon still turns red if the sound is blocked.
+1. The conferencer accepts four sources: kiosk, anonymous, enrollee, and prospective. Each source whose `atlas.prayphone_ring_sources.enabled` row is true turns the Atlas phone icon red. All four start enabled.
+2. This browser plays a calm recorded chime for an enabled source. The sound starts only after the person has clicked or tapped the Atlas page at least once. The icon still turns red if the sound is blocked.
 3. Press the icon, or open **warm line**. The agent console opens for the same Atlas user. The address bar does not keep a session token.
 4. The console shows four queues: kiosk, anonymous, enrollee, and prospective. Press a session in one of them. **answer call** and **reject call** then show for the session you pressed. The console does not answer a session by itself.
 5. Press **answer call**. The room status moves to joined. The kiosk screen changes to "connecting video…" and "someone answered — video is starting."

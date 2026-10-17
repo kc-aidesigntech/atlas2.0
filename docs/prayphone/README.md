@@ -36,7 +36,7 @@ The phone app opens on a keypad. Signing in is optional. Keys `1` through `9` ma
 
 People who may sit the warm line see a phone icon in the top bar, to the left of Account Settings. A green number on that icon is how many kiosks have checked in recently. Pressing the icon opens the agent console and signs in the same Atlas person.
 
-When someone at a kiosk presses `0`, the icon turns red and the browser plays a calm recorded chime. Anonymous, enrollee, and prospective calls are present on the agent console and left off, so they do not ring this icon. Staff open the console, press **answer call**, and join the same video room. They press **end call** when they are done. They can press **reject call** before they answer.
+When a kiosk, an anonymous caller, a signed-in enrollee, or a prospective caller presses `0`, the icon turns red and the browser plays a calm recorded chime. A class stops ringing when its row in `atlas.prayphone_ring_sources` has `enabled` set to false. Staff open the console, press **answer call**, and join the same video room. They press **end call** when they are done. They can press **reject call** before they answer.
 
 The words a staff member should say, the escalation phone tree, and shift rules are ________.
 

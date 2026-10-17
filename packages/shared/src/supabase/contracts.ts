@@ -782,7 +782,7 @@ export interface AtlasDatabase {
           state: "ringing" | "answered" | "cleared";
           created_at: string;
           cleared_at: string | null;
-          // The conferencer stores every class. The header enables only kiosk until a source is turned on.
+          // The conferencer stores every class. atlas.prayphone_ring_sources decides which ones ring.
           caller_class: "kiosk" | "anonymous" | "enrollee" | "prospective";
         };
         Insert: {
@@ -797,6 +797,19 @@ export interface AtlasDatabase {
           state: "ringing" | "answered" | "cleared";
           cleared_at: string | null;
           caller_class: "kiosk" | "anonymous" | "enrollee" | "prospective";
+        }>;
+      };
+      prayphone_ring_sources: {
+        Row: {
+          source: "kiosk" | "anonymous" | "enrollee" | "prospective";
+          enabled: boolean;
+        };
+        Insert: {
+          source: "kiosk" | "anonymous" | "enrollee" | "prospective";
+          enabled?: boolean;
+        };
+        Update: Partial<{
+          enabled: boolean;
         }>;
       };
     };
