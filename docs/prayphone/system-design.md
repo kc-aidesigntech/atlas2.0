@@ -115,7 +115,7 @@ Phase 6, a design for six concurrent calls with agent identities `agent-1` throu
 
 ## Caller classes
 
-Each inbound session stores `caller_class` and `caller_label` on `atlas.prayphone_call_sessions`. Left to right on the agent console the classes are kiosk (white), anonymous (grey), enrollee (deep green), and prospective (yellow). A kiosk is an enabled `prayphone_devices` row whose `model` is not `mobile`: that call rings the Atlas header and that device's heartbeat counts on the phone icon. The class is taken from the device that requested the call, not from `calls_as_device_id`, so `prayphone-mobile-001` stays a phone call even while its caller address is `prayphone-device-001`. With no Atlas login that call is anonymous and only appears in the grey queue. A signed-in user whose id matches `atlas.people.external_ref` is an enrollee and the button shows `display_name`, or email when the display name is empty. A signed-in user with no people row is prospective and the button shows the auth email. Those three do not ring the header and do not count as an online device. The console still answers one session at a time.
+Each inbound session stores `caller_class` and `caller_label` on `atlas.prayphone_call_sessions`. Left to right on the agent console the classes are kiosk (white), anonymous (grey), enrollee (deep green), and prospective (yellow). A kiosk is an enabled `prayphone_devices` row whose `model` is not `mobile`: that call rings the Atlas header and that device's heartbeat counts on the phone icon. The class is taken from the device that requested the call, not from `calls_as_device_id`, so `prayphone-mobile-001` stays a phone call even while its caller address is `prayphone-device-001`. With no Atlas login that call is anonymous and only appears in the grey queue. A signed-in user whose id matches `atlas.people.external_ref` is an enrollee and the button shows `display_name`, or email when the display name is empty. A signed-in user with no people row is prospective and the button shows the auth email. Those three are stored and left off, so they do not ring the header, and they do not count as an online device. The console still answers one session at a time.
 
 ## Mobile caller
 
@@ -125,7 +125,7 @@ Key `0` does not open `/kiosk/call` and does not use the Pi bridge. The app send
 
 `prayphone-mobile-001` is seeded with its own `signalwire_identity` and with `calls_as_device_id` set to `prayphone-device-001`. Key `0` on the phone therefore uses that kiosk's caller address, and the queue class stays anonymous, enrollee, or prospective because the requesting row's model is `mobile`. Clear `calls_as_device_id` to use `prayphone-mobile-001` as the caller address. `MOBILE_PROXY_DEVICE_ID` on the conferencer is the device id used when the app omits one.
 
-The conferencer returns a 60-second code. It inserts an inbound ring only when the class is kiosk. The call screen injects that code into `/mobile/call`. The code is not a session token and is not placed in the address bar. The page trades it once for a SignalWire room token and joins with the phone camera and microphone.
+The conferencer returns a 60-second code. It inserts an inbound ring for every new session and stores that session's caller class. Atlas plays the chime and turns the icon red only for kiosk. The call screen injects that code into `/mobile/call`. The code is not a session token and is not placed in the address bar. The page trades it once for a SignalWire room token and joins with the phone camera and microphone.
 
 Staff still answer on `/agent`, in the queue for that class. The phone joins under a `kiosk-` room name so the existing answer path can mark the room joined. Keys `1`–`9` only record which topic was pressed. Clip playback is later work.
 
@@ -163,11 +163,11 @@ Supabase Realtime is enabled in migrations for `prayphone_devices` (`20261009150
 
 ## Inbound ring
 
-When a kiosk creates a call, `relayKioskInboundRing` inserts a row in `atlas.prayphone_inbound_rings` with `state = 'ringing'` after the session is saved. Anonymous, enrollee, and prospective sessions do not insert that row. A staff browser that already has warm-line access turns the phone icon red and starts a ring tone. Browsers block that sound until the page has had a click or a tap. The icon still turns red.
+When a session is created, `relayInboundRing` inserts a row in `atlas.prayphone_inbound_rings` with `state = 'ringing'` and that session's `caller_class`, after the session is saved. The header accepts kiosk, anonymous, enrollee, and prospective. A missing class is stored as kiosk. A staff browser that already has warm-line access turns the phone icon red and plays a calm recorded chime only for a class Atlas has enabled. Today that is kiosk. The other three are stored and left off, so they do not turn the icon red or play. The clip is `public/audio/prayphone-ring.ogg`, with a few seconds of silence between passes. Browsers block that sound until the page has had a click or a tap. The icon still turns red.
 
-The ring stops when the session becomes `joined` and an agent participant is recorded as joined (`answered`), or when the session is `ended`, `failed`, or `rejected` (`cleared`). Atlas ignores a `ringing` row older than two hours so a missed clear cannot ring all day.
+The ring stops when the session becomes `joined` and an agent participant is recorded as joined (`answered`), or when the session is `ended`, `failed`, or `rejected` (`cleared`). Atlas ignores a `ringing` row older than two hours so a missed clear cannot ring all day. A newer row from a class that is turned off does not hide an older kiosk ring that is still inside that window.
 
-If the table is missing, the browser reports that `prayphone_inbound_rings` is not in the schema cache.
+If the table is missing, the browser reports that `prayphone_inbound_rings` is not in the schema cache. If `caller_class` is not on the table yet, the header read fails and the icon will not turn red.
 
 ## Subjects and call interactions
 

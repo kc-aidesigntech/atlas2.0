@@ -172,9 +172,9 @@ The timer fires five minutes after every boot, including the midnight reboot. A 
 
 ## Inbound ring table missing
 
-Symptom in the Atlas browser console: a 404 or "Could not find the table in the schema cache" for `prayphone_inbound_rings`. The phone icon will not turn red.
+Symptom in the Atlas browser console: a 404 or "Could not find the table in the schema cache" for `prayphone_inbound_rings`, or a failed read once the header asks for `caller_class`. The phone icon will not turn red.
 
-The migration in this repo is `supabase/migrations/20261004200000_prayphone_inbound_rings.sql`. It also adds the table to the `supabase_realtime` publication. The Atlas project ref named in this repo is `qjsaedamqaqxobslboni`. Apply that migration on the project the Atlas app uses, then reload the staff session. Device heartbeats use `prayphone_devices` (`20261009150000_prayphone_devices_realtime.sql`) and are a separate table. A missing devices publication delays the green count until the next poll. It does not by itself block the red ring.
+The table migration in this repo is `supabase/migrations/20261004200000_prayphone_inbound_rings.sql`. It also adds the table to the `supabase_realtime` publication. `supabase/migrations/20261017180000_prayphone_inbound_ring_caller_class.sql` adds `caller_class`. The Atlas project ref named in this repo is `qjsaedamqaqxobslboni`. Apply the table migration on the project the Atlas app uses if the table is missing. Apply `20261017180000_prayphone_inbound_ring_caller_class.sql` on project `qjsaedamqaqxobslboni` before `caller_class` is readable. Until then the header read can fail and the icon will not turn red. Then reload the staff session. Device heartbeats use `prayphone_devices` (`20261009150000_prayphone_devices_realtime.sql`) and are a separate table. A missing devices publication delays the green count until the next poll. It does not by itself block the red ring.
 
 ## Replace LOOP.mp4 and clips on the device
 

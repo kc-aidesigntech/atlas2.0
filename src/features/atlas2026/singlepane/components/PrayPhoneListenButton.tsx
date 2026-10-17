@@ -27,7 +27,8 @@ interface PrayPhoneListenButtonProps {
  * agent console. The green count is hardware kiosks whose heartbeat is
  * still inside the fleet online window. Phone-app rows (model mobile)
  * are not in that count. A kiosk key 0 turns the control red and rings.
- * Phone-app calls do not.
+ * Anonymous, enrollee, and prospective calls are stored and left off, so
+ * they do not change this icon.
  */
 export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonProps) {
   const eligibleRole = role === 'navigator' || role === 'supervisor' || role === 'administrator'

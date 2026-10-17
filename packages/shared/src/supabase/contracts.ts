@@ -782,6 +782,8 @@ export interface AtlasDatabase {
           state: "ringing" | "answered" | "cleared";
           created_at: string;
           cleared_at: string | null;
+          // The conferencer stores every class. The header enables only kiosk until a source is turned on.
+          caller_class: "kiosk" | "anonymous" | "enrollee" | "prospective";
         };
         Insert: {
           id?: string;
@@ -789,10 +791,12 @@ export interface AtlasDatabase {
           state?: "ringing" | "answered" | "cleared";
           created_at?: string;
           cleared_at?: string | null;
+          caller_class?: "kiosk" | "anonymous" | "enrollee" | "prospective";
         };
         Update: Partial<{
           state: "ringing" | "answered" | "cleared";
           cleared_at: string | null;
+          caller_class: "kiosk" | "anonymous" | "enrollee" | "prospective";
         }>;
       };
     };

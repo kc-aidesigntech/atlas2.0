@@ -40,8 +40,8 @@ Key `0` calls the warm line with or without an Atlas account. The call does not 
 
 ## When a call starts
 
-1. For a kiosk call, the Atlas phone icon turns red and pulses. A phone-app call does not change the icon.
-2. This browser plays a ring. The sound starts only after the person has clicked or tapped the Atlas page at least once. The icon still turns red if the sound is blocked.
+1. The conferencer accepts four sources: kiosk, anonymous, enrollee, and prospective. Only a kiosk call turns the Atlas phone icon red and pulses. The other three are present and left off, so they do not change the icon.
+2. For that kiosk call, this browser plays a calm recorded chime. The sound starts only after the person has clicked or tapped the Atlas page at least once. The icon still turns red if the sound is blocked.
 3. Press the icon, or open **warm line**. The agent console opens for the same Atlas user. The address bar does not keep a session token.
 4. The console shows four queues: kiosk, anonymous, enrollee, and prospective. Press a session in one of them. **answer call** and **reject call** then show for the session you pressed. The console does not answer a session by itself.
 5. Press **answer call**. The room status moves to joined. The kiosk screen changes to "connecting video…" and "someone answered — video is starting."
