@@ -22,7 +22,7 @@ Pray Phone stays its own application (SignalWire agent webpage + Raspberry Pi ki
 
 - `/kiosk` — Raspberry Pi Chromium session. **No Atlas login.** Press `0` starts the warm-line conference.
 - `/agent` — staff console. Gated by Atlas Auth when Atlas env is configured.
-- `/mobile/call` — phone-app caller. An Atlas account signs in inside the Expo app (`prayphone/mobile`), then key `0` posts `POST /api/signalwire/mobile-calls`. That route rings the same inbound row and opens a room the existing agent console answers. It does not use the kiosk ingest token or the Pi bridge. The one-time code is injected into the page and is not a session token in the address bar.
+- `/mobile/call` — phone-app caller. The Expo keypad (`prayphone/mobile`) can call with or without an Atlas account. Key `0` posts `POST /api/signalwire/mobile-calls`. A missing bearer still creates the call. The queue class comes from the requesting device and, when a bearer is present, from `atlas.people`. It does not ring the header and it does not use the kiosk ingest token or the Pi bridge. The one-time code is injected into the page and is not a session token in the address bar.
 - SignalWire room tokens, SignalWire Markup Language (SWML), and call commands stay on `prayphone-server`.
 
 Production origin today: `https://prayphone-68d333045316.herokuapp.com`. Prefer a subdomain of the Atlas host (`pray.<atlas-domain>`) as a Heroku custom domain on the **prayphone** app (not `atlas-simplified`).

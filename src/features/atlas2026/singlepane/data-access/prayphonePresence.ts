@@ -3,17 +3,22 @@ import { supabase } from '@/lib/supabaseClient'
 export type PrayPhonePresenceRow = {
   deviceId: string
   lastSeenIso: string
+  model: string
 }
 
 /**
  * Device heartbeats land on atlas.prayphone_devices.last_seen.
  * The header counts those rows; it does not invent a second presence channel.
+ * model is selected so the badge can skip the phone app.
  */
 export async function fetchPrayPhoneDevicePresence(): Promise<
   { ok: true; devices: PrayPhonePresenceRow[] } | { ok: false }
 > {
   if (!supabase) return { ok: false }
-  const { data, error } = await supabase.schema('atlas').from('prayphone_devices').select('device_id, last_seen')
+  const { data, error } = await supabase
+    .schema('atlas')
+    .from('prayphone_devices')
+    .select('device_id, last_seen, model')
   if (error) {
     console.warn('Pray Phone presence read failed', error.message)
     return { ok: false }
@@ -22,7 +27,8 @@ export async function fetchPrayPhoneDevicePresence(): Promise<
     ok: true,
     devices: (data ?? []).map((row) => ({
       deviceId: String(row.device_id || ''),
-      lastSeenIso: row.last_seen ? String(row.last_seen) : ''
+      lastSeenIso: row.last_seen ? String(row.last_seen) : '',
+      model: String(row.model || '')
     }))
   }
 }
