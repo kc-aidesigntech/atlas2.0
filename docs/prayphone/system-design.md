@@ -49,7 +49,7 @@ Parts named in the device repository:
 
 `prayphone.service` runs `src/kiosk2.py` as user `ppadmin`.
 
-On boot the process starts a loopback bridge (`src/kiosk_bridge.py`, port 8765) and opens Chromium on `http://127.0.0.1:8765/`. That page is `src/player.html`. It plays `LOOP.mp4` from the device video directory. The default directory in `config/config.json` is `~/Videos/mp4s/`. Idle playback does not need the network.
+On boot the process starts a loopback bridge (`src/kiosk_bridge.py`, port 8765) and opens Chromium on `http://127.0.0.1:8765/`. That page is `src/player.html`. It plays `LOOP.mp4` from the device video directory. The default directory in `config/config.json` is `~/Videos/mp4s/`. Over-the-air updates copy `videos/` from the device repo into that directory. Idle playback does not need the network.
 
 `LOOP.mp4` plays at startup, after every `1`–`9` clip (and after `*` / `#` when those files exist), and after every call. The local player stays. Key `0` is the only path into the hosted call.
 
@@ -197,7 +197,7 @@ Hook-to-hook logs are how Atlas fleet ties a call session to a device: payload f
 
 ## Over-the-air updates
 
-`prayphone-ota.timer` runs `scripts/ota_update.sh` five minutes after boot, then hourly (`OnBootSec=5min`, `OnUnitActiveSec=1h`). The script fetches `origin/<channel>` (default `main`) and runs `git reset --hard` to that ref, then restarts `prayphone.service` and the camera service. Local edits inside the git checkout are discarded. Video files under `~/Videos/mp4s/` are outside that checkout.
+`prayphone-ota.timer` runs `scripts/ota_update.sh` five minutes after boot, then hourly (`OnBootSec=5min`, `OnUnitActiveSec=1h`). The script fetches `origin/<channel>` (default `main`). When that tip differs from HEAD, it runs `git reset --hard` to that ref. Local edits inside the git checkout are discarded. It then runs `git lfs pull`, including when the revision is already current, so a failed download is retried on the next hour. Clips committed under `videos/` are stored with Git Large File Storage (LFS). A valid `videos/LOOP.mp4` is copied, with `1.mp4`–`9.mp4`, `star.mp4`, and `hash.mp4`, into `~/Videos/mp4s/` (`/home/ppadmin/Videos/mp4s/` for user `ppadmin`). The player keeps reading that directory. If `LOOP.mp4` is missing or is not an MP4, that directory is left unchanged. The script restarts `prayphone.service` and the camera service when the git revision changed or a live clip changed. A retry that does not change a live file does not restart the kiosk.
 
 `prayphone-reboot.timer` reboots at 00:00 local time. `Persistent=false` is set so a missed midnight does not reboot on every boot. The boot starts another over-the-air (OTA) run five minutes later. Leave both timers as they are.
 

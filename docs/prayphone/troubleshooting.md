@@ -160,7 +160,7 @@ The ceiling defaults to 3600 seconds. The clock starts when the call page posts 
 
 ## OTA reset surprises
 
-`scripts/ota_update.sh` runs `git reset --hard` to `origin/<channel>` (default `main`). Uncommitted edits under `/home/ppadmin/live/prayphone-device` are discarded, and the kiosk plus camera services restart. That can interrupt a call. Clips in `~/Videos/mp4s/` are outside the git checkout and are not replaced by this reset.
+`scripts/ota_update.sh` runs `git reset --hard` to `origin/<channel>` (default `main`) when that tip differs from HEAD. Uncommitted edits under `/home/ppadmin/live/prayphone-device` are discarded, and the kiosk plus camera services restart. That can interrupt a call. The same run downloads clips with Git Large File Storage (LFS) and copies them from `videos/` into `~/Videos/mp4s/`. A video commit changes the git revision, so it takes the same restart. When the revision is already current, a failed LFS download is retried on the next hour and the kiosk restarts only if a live clip changed.
 
 The timer fires five minutes after every boot, including the midnight reboot. A change merged to `main` can land on the device at the next hourly run without a site visit.
 
@@ -187,9 +187,22 @@ Default directory from `config/config.json`:
 | `star.mp4` | `*` |
 | `hash.mp4` | `#` |
 
-The player serves them from the loopback bridge as `/media/<filename>`. Copy the file into that directory on the Pi. The bridge reads the directory at request time (`kiosk_bridge.py` builds the clip map from the folder). Codec, resolution, and frame rate for those MP4 files are ________. Do not use a guessed export preset.
+The player serves them from the loopback bridge as `/media/<filename>`. The bridge reads the directory at request time (`kiosk_bridge.py` builds the clip map from the folder).
 
-A remote video-replace service is not built. A future approach would ________. Do not invent a deploy hook for it. Until that exists, replace files on the Pi, in the directory above. OTA git reset will not do it.
+Ship a replacement from a clone of `prayphone-device` on a machine where Git LFS is installed (`git lfs install` once). Commit the file under `videos/` and push the branch the Pi tracks (`main` by default):
+
+```bash
+cp /path/to/new-loop.mp4 videos/LOOP.mp4
+git add videos/LOOP.mp4
+git commit -m "Update idle loop"
+git push origin main
+```
+
+The next OTA run publishes it into the directory above. `sudo systemctl start prayphone-ota.service` on the Pi applies it immediately and restarts the kiosk, which can interrupt a call.
+
+`videos/LOOP.mp4` has to be a real MP4. A Git LFS pointer left on disk does not replace the live folder. After a valid `LOOP.mp4` is in the repo, an optional clip that is not in `videos/` is removed from the Pi. Include every keypad clip you want to keep in that push. Copying a file straight into `~/Videos/mp4s/` still changes what plays until that next successful publish.
+
+Codec, resolution, and frame rate for those MP4 files are ________. Do not use a guessed export preset.
 
 ## Atlas phone-icon origin
 
