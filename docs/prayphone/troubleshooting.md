@@ -35,6 +35,8 @@ Already cloned:
 
 The script creates user `ppadmin` if needed, adds groups `gpio`, `video`, `audio`, and `render` when those groups exist, and clones `kc-aidesigntech/prayphone-device` over SSH with the deploy key.
 
+Clips are not copied onto the SD card as the way to commission the screen. They are committed under `videos/` in that same repo. STEP 6 of the install script runs `git lfs pull` and `scripts/publish_videos.sh`, which copies real MP4s into `/home/ppadmin/Videos/mp4s/`. The laptop steps are in [Replace LOOP.mp4 and clips on the device](#replace-loopmp4-and-clips-on-the-device). `~/Videos/mp4s/` is not a git checkout.
+
 Bootstrap packages, before the repo exists:
 
 ```bash
@@ -189,18 +191,34 @@ Default directory from `config/config.json`:
 
 The player serves them from the loopback bridge as `/media/<filename>`. The bridge reads the directory at request time (`kiosk_bridge.py` builds the clip map from the folder).
 
-Ship a replacement from a clone of `prayphone-device` on a machine where Git LFS is installed (`git lfs install` once). Commit the file under `videos/` and push the branch the Pi tracks (`main` by default):
+Ship a replacement from a clone of `prayphone-device`. Git Large File Storage (LFS) for that GitHub repo holds the MP4 bytes. Git holds a pointer. There is no second video repository.
+
+Once in that clone:
 
 ```bash
-cp /path/to/new-loop.mp4 videos/LOOP.mp4
-git add videos/LOOP.mp4
-git commit -m "Update idle loop"
+git lfs install
+```
+
+`Updated Git hooks` means the next push uploads the video bytes. Copy the files into `videos/` under the names in the table. The first push that contains a valid `LOOP.mp4` should include every keypad clip the kiosk should keep.
+
+```bash
+git add .gitattributes .gitignore videos/*.mp4
+git lfs ls-files
+```
+
+Each line should show an asterisk before the path, for example `0b994a790f * videos/LOOP.mp4`. The asterisk means the staged file is a pointer: `version https://git-lfs.github.com/spec/v1`, an `oid sha256:` line, and a `size` line. The MP4 bytes are in `.git/lfs/objects/` on that laptop until `git push`. Leave `.DS_Store` unstaged.
+
+Commit that set, then:
+
+```bash
 git push origin main
 ```
 
-The next OTA run publishes it into the directory above. `sudo systemctl start prayphone-ota.service` on the Pi applies it immediately and restarts the kiosk, which can interrupt a call.
+`scripts/publish_videos.sh` and the `scripts/ota_update.sh` that calls it have to already be on the Pi, or in that same commit. If they arrive together, the first OTA resets the checkout and the next OTA copies the clips into `~/Videos/mp4s/`.
 
-`videos/LOOP.mp4` has to be a real MP4. A Git LFS pointer left on disk does not replace the live folder. After a valid `LOOP.mp4` is in the repo, an optional clip that is not in `videos/` is removed from the Pi. Include every keypad clip you want to keep in that push. Copying a file straight into `~/Videos/mp4s/` still changes what plays until that next successful publish.
+`sudo systemctl start prayphone-ota.service` on a Pi that already has the publish script applies the push immediately and restarts the kiosk, which can interrupt a call.
+
+`videos/LOOP.mp4` has to be a real MP4 (`ftyp` at byte 4). A pointer left on disk does not replace the live folder. After a valid `LOOP.mp4` is in the repo, an optional clip that is not in `videos/` is removed from the Pi. Copying a file straight into `~/Videos/mp4s/` still changes what plays until that next successful publish.
 
 Codec, resolution, and frame rate for those MP4 files are ________. Do not use a guessed export preset.
 

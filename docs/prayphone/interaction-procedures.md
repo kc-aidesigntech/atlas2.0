@@ -27,7 +27,7 @@ The count can stay up for about three minutes after a phone stops posting.
 
 The person at the kiosk does not sign in.
 
-- Keys `1`–`9` play a clip, then the looping video returns. `*` and `#` do the same when those clip files are on the device. No staff alert.
+- Keys `1`–`9` play a clip, then the looping video returns. `*` and `#` do the same when those clip files are on the device. No staff alert. An operator replaces those files by pushing `videos/` in the device repository. Atlas has no clip upload. The commands are in [troubleshooting.md](./troubleshooting.md).
 - Key `0` starts the live call. The kiosk screen says "calling the warmline…" and "please stay on the line."
 - Lifting the handset restarts the loop from the beginning and opens a handset session.
 - Replacing the handset returns the screen to the loop and ends a call if one is open.

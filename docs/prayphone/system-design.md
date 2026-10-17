@@ -199,6 +199,8 @@ Hook-to-hook logs are how Atlas fleet ties a call session to a device: payload f
 
 `prayphone-ota.timer` runs `scripts/ota_update.sh` five minutes after boot, then hourly (`OnBootSec=5min`, `OnUnitActiveSec=1h`). The script fetches `origin/<channel>` (default `main`). When that tip differs from HEAD, it runs `git reset --hard` to that ref. Local edits inside the git checkout are discarded. It then runs `git lfs pull`, including when the revision is already current, so a failed download is retried on the next hour. Clips committed under `videos/` are stored with Git Large File Storage (LFS). A valid `videos/LOOP.mp4` is copied, with `1.mp4`–`9.mp4`, `star.mp4`, and `hash.mp4`, into `~/Videos/mp4s/` (`/home/ppadmin/Videos/mp4s/` for user `ppadmin`). The player keeps reading that directory. If `LOOP.mp4` is missing or is not an MP4, that directory is left unchanged. The script restarts `prayphone.service` and the camera service when the git revision changed or a live clip changed. A retry that does not change a live file does not restart the kiosk.
 
+Git stores a pointer for each clip. The MP4 bytes are in GitHub LFS for the same `prayphone-device` repository. On the laptop that ran `git add`, those bytes sit in `.git/lfs/objects/` until `git push`. The player directory is not a checkout. `scripts/publish_videos.sh` is what copies a validated file into it. The laptop commands are in [troubleshooting.md](./troubleshooting.md).
+
 `prayphone-reboot.timer` reboots at 00:00 local time. `Persistent=false` is set so a missed midnight does not reboot on every boot. The boot starts another over-the-air (OTA) run five minutes later. Leave both timers as they are.
 
 ## Watchdog

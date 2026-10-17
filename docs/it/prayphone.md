@@ -68,6 +68,10 @@ If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` /
 5. On the Pi, `/kiosk` still starts a call with no Atlas session.
 6. As a navigator, supervisor, or administrator with warm-line access, confirm the Pray Phone icon is in the top bar on every menu, with a green online count. Press it and the agent console opens. Press `0` on a kiosk. The icon turns red and this browser rings. A partner account has no icon.
 
+## Clips
+
+Idle and keypad videos are files in `prayphone-device` under `videos/`, stored with Git Large File Storage (LFS) on that same GitHub repository. The Pi copies them into `~/Videos/mp4s/` during over-the-air (OTA) update. Atlas has no screen for uploading a clip. Laptop commands, the pointer check (`git lfs ls-files`), and the publish rules are in [../prayphone/troubleshooting.md](../prayphone/troubleshooting.md).
+
 ## Related
 
 - Sibling repos: `prayphone-server` (agent + APIs), `prayphone-device` (Pi kiosk)
