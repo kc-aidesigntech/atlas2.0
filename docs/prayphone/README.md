@@ -34,9 +34,9 @@ The phone app opens on a keypad. Signing in is optional. Keys `1` through `9` ma
 
 ## What a staff member in Atlas experiences
 
-People who may sit the warm line see a phone icon in the top bar, to the left of Account Settings. A green number on that icon is how many kiosks have checked in recently. Pressing the icon opens the agent console and signs in the same Atlas person.
+People who may sit the warm line see a phone icon in the top bar, to the left of Account Settings. A green number on that icon is how many kiosks have checked in recently. Phone calls (model `mobile`) do not count in that online-device badge. Pressing the icon opens the agent console and signs in the same Atlas person.
 
-When a kiosk, an anonymous caller, a signed-in enrollee, or a prospective caller presses `0`, the icon turns red and the browser plays a calm recorded chime. A class stops ringing when its row in `atlas.prayphone_ring_sources` has `enabled` set to false. Staff open the console, press **answer call**, and join the same video room. They press **end call** when they are done. They can press **reject call** before they answer.
+When a kiosk (white), an anonymous caller (grey), a signed-in enrollee (deep green), or a prospective caller (yellow) presses `0`, the icon turns red and the browser plays a calm recorded chime when that class is enabled. `atlas.prayphone_ring_sources.enabled` controls which classes ring. All four start enabled. Set `enabled` false in Supabase to silence one class. The chime file is `sounds/ringtone.mp3`, stored with Git Large File Storage (LFS). Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. Staff open the console, press **answer call**, and join the same SignalWire video room. They press **end call** when they are done. They can press **reject call** before they answer.
 
 The words a staff member should say, the escalation phone tree, and shift rules are ________.
 

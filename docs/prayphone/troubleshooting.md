@@ -102,7 +102,7 @@ Silence on `POST /api/upsert-device` means no Pi is posting.
 
 ## Phone stays offline, or the green count stays 0
 
-Atlas counts a phone online only when `atlas.prayphone_devices.last_seen` is inside three minutes (`FLEET_ONLINE_WINDOW_MS`). The table stays empty until a kiosk posts. There is no network scan.
+Atlas counts a kiosk online only when `atlas.prayphone_devices.last_seen` is inside three minutes (`FLEET_ONLINE_WINDOW_MS`). Phone calls (model `mobile`) do not count in the online-device badge. The table stays empty until a kiosk posts. There is no network scan.
 
 Check, in order:
 
@@ -174,7 +174,11 @@ The timer fires five minutes after every boot, including the midnight reboot. A 
 
 Symptom in the Atlas browser console: a 404 or "Could not find the table in the schema cache" for `prayphone_inbound_rings`, or a failed read once the header asks for `caller_class`. The phone icon will not turn red.
 
-The table migration in this repo is `supabase/migrations/20261004200000_prayphone_inbound_rings.sql`. It also adds the table to the `supabase_realtime` publication. `supabase/migrations/20261017180000_prayphone_inbound_ring_caller_class.sql` adds `caller_class`. The Atlas project ref named in this repo is `qjsaedamqaqxobslboni`. Apply the table migration on the project the Atlas app uses if the table is missing. Apply `20261017180000_prayphone_inbound_ring_caller_class.sql` on project `qjsaedamqaqxobslboni` before `caller_class` is readable. Until then the header read can fail and the icon will not turn red. `20261017193000_prayphone_ring_sources.sql` adds `prayphone_ring_sources`. A failed read of that table rings every known class. Set `enabled` to false on a row to silence one class. Then reload the staff session. Device heartbeats use `prayphone_devices` (`20261009150000_prayphone_devices_realtime.sql`) and are a separate table. A missing devices publication delays the green count until the next poll. It does not by itself block the red ring.
+The table migration in this repo is `supabase/migrations/20261004200000_prayphone_inbound_rings.sql`. It also adds the table to the `supabase_realtime` publication. `supabase/migrations/20261017180000_prayphone_inbound_ring_caller_class.sql` adds `caller_class`. The Atlas project ref named in this repo is `qjsaedamqaqxobslboni`. Apply the table migration on the project the Atlas app uses if the table is missing. Apply `20261017180000_prayphone_inbound_ring_caller_class.sql` on project `qjsaedamqaqxobslboni` before `caller_class` is readable. Until then the header read can fail and the icon will not turn red. `20261017193000_prayphone_ring_sources.sql` adds `prayphone_ring_sources`. All four rows start enabled. `atlas.prayphone_ring_sources.enabled` controls which classes ring: kiosk (white), anonymous (grey), enrollee (deep green), and prospective (yellow). A failed read of that table rings every known class. Set `enabled` to false in Supabase to silence one class. The open header reads that flag on its next ring check. Device heartbeats use `prayphone_devices` (`20261009150000_prayphone_devices_realtime.sql`) and are a separate table. A missing devices publication delays the green count until the next poll. It does not by itself block the red ring.
+
+## Header chime is silent
+
+The ringtone in this repository is `sounds/ringtone.mp3`, stored with LFS. `scripts/copy-ringtone.mjs` runs before dev and before the production build. It copies that file to `public/audio/ringtone.mp3` and stops when the source is a Git LFS pointer. The header requests `audio/ringtone.mp3`. Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. Three seconds of silence sit between passes. Browsers block the sound until the page has had a click or a tap. The icon can still turn red.
 
 ## Replace LOOP.mp4 and clips on the device
 
@@ -191,7 +195,7 @@ Default directory from `config/config.json`:
 
 The player serves them from the loopback bridge as `/media/<filename>`. The bridge reads the directory at request time (`kiosk_bridge.py` builds the clip map from the folder).
 
-Ship a replacement from a clone of `prayphone-device`. Git Large File Storage (LFS) for that GitHub repo holds the MP4 bytes. Git holds a pointer. There is no second video repository.
+Ship a replacement from a clone of `prayphone-device`. LFS for that GitHub repo holds the MP4 bytes. Git holds a pointer. There is no second video repository.
 
 Once in that clone:
 

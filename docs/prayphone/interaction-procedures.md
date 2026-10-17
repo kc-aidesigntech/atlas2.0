@@ -19,9 +19,9 @@ A navigator with the allow exception still does not get the fleet menu. Fleet is
 
 ## Green count
 
-The green number is how many kiosks have a `last_seen` time inside three minutes. The kiosk posts about once a minute. A kiosk that has never checked in is not in the count. Zero is a real reading when no phone has posted inside that window. It is not a network search.
+The green number is how many kiosks have a `last_seen` time inside three minutes. Phone calls (model `mobile`) do not count in the online-device badge. The kiosk posts about once a minute. A kiosk that has never checked in is not in the count. Zero is a real reading when no kiosk has posted inside that window. It is not a network search.
 
-The count can stay up for about three minutes after a phone stops posting.
+The count can stay up for about three minutes after a kiosk stops posting.
 
 ## Keys at the kiosk
 
@@ -40,8 +40,8 @@ Key `0` calls the warm line with or without an Atlas account. The call turns thi
 
 ## When a call starts
 
-1. The conferencer accepts four sources: kiosk, anonymous, enrollee, and prospective. Each source whose `atlas.prayphone_ring_sources.enabled` row is true turns the Atlas phone icon red. All four start enabled.
-2. This browser plays a calm recorded chime for an enabled source. The sound starts only after the person has clicked or tapped the Atlas page at least once. The icon still turns red if the sound is blocked.
+1. The conferencer accepts four sources: kiosk (white), anonymous (grey), enrollee (deep green), and prospective (yellow). `atlas.prayphone_ring_sources.enabled` controls which classes ring. All four start enabled. Set `enabled` false in Supabase to silence one class. Each enabled class turns the Atlas phone icon red.
+2. This browser plays a calm recorded chime for an enabled source, with three seconds of silence between passes. The clip is `sounds/ringtone.mp3`, stored with Git Large File Storage (LFS). The build copies it to `public/audio/ringtone.mp3`. Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. The sound starts only after the person has clicked or tapped the Atlas page at least once. The icon still turns red if the sound is blocked.
 3. Press the icon, or open **warm line**. The agent console opens for the same Atlas user. The address bar does not keep a session token.
 4. The console shows four queues: kiosk, anonymous, enrollee, and prospective. Press a session in one of them. **answer call** and **reject call** then show for the session you pressed. The console does not answer a session by itself.
 5. Press **answer call**. The room status moves to joined. The kiosk screen changes to "connecting video…" and "someone answered — video is starting."

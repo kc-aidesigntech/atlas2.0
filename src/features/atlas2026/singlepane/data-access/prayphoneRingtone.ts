@@ -1,10 +1,7 @@
 const RING_GAP_MS = 3000
 const RING_VOLUME = 0.35
 
-/**
- * Vite serves atlas/public at the app base path. Local dev is "/".
- * A production build uses VITE_BASE_PATH, exposed here as BASE_URL.
- */
+/** Vite serves files in public/ under BASE_URL ("/" locally, VITE_BASE_PATH in a production build). */
 function ringSrc(): string {
   const base = import.meta.env.BASE_URL || '/'
   const prefix = base.endsWith('/') ? base : `${base}/`
@@ -12,10 +9,8 @@ function ringSrc(): string {
 }
 
 /**
- * ringtone.mp3 for an inbound call whose source is enabled.
- * The build copies it from sounds/ringtone.mp3, which is stored with Git Large File Storage (LFS).
- * Browsers block sound until the page has had a pointer gesture, so the header primes this clip.
- * A stop during the quiet gap bumps the generation so that pass does not start again.
+ * sounds/ringtone.mp3 is stored with Git Large File Storage (LFS). The build copies it to public/audio/ringtone.mp3.
+ * stop() during the quiet gap bumps the generation so that pass does not start again.
  */
 function createPrayPhoneRingtone() {
   let audio: HTMLAudioElement | null = null
@@ -82,7 +77,6 @@ function createPrayPhoneRingtone() {
       // A gesture-started play is what later allows the chime. Pause unless a ring is sounding.
       void el.play().then(() => {
         unlocked = true
-        // A ring that started during this gesture owns the element. Otherwise pause the unlock.
         if (playing) {
           clearGap()
           return
