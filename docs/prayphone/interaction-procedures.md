@@ -36,14 +36,14 @@ A call that starts while the handset is already down is ended by the kiosk, beca
 
 ## When the call is from the phone app
 
-A signed-in Atlas participant can press `0` in the Pray Phone app. That rings this same icon. The console row address starts with `mobile:` and the person's email. Answer and end it the same way as a kiosk call. Keys `1`–`9` on the phone do not ring.
+Key `0` calls the warm line with or without an Atlas account. The call does not turn this icon red and does not count as an online kiosk. On the agent console it sits in its own queue: grey when nobody is signed in, deep green with the person's name when their account matches a person record, or yellow with the account email when they are signed in and have no person record. Answer and end it the same way as a kiosk call. Keys `1`–`9` on the phone do not call.
 
 ## When a call starts
 
-1. The Atlas phone icon turns red and pulses.
+1. For a kiosk call, the Atlas phone icon turns red and pulses. A phone-app call does not change the icon.
 2. This browser plays a ring. The sound starts only after the person has clicked or tapped the Atlas page at least once. The icon still turns red if the sound is blocked.
 3. Press the icon, or open **warm line**. The agent console opens for the same Atlas user. The address bar does not keep a session token.
-4. The console lists each open session. Press that row. **answer call** and **reject call** then show, and the status reads "incoming call — answer or reject." Press the row for the session you are taking. The console does not answer a session by itself.
+4. The console shows four queues: kiosk, anonymous, enrollee, and prospective. Press a session in one of them. **answer call** and **reject call** then show for the session you pressed. The console does not answer a session by itself.
 5. Press **answer call**. The room status moves to joined. The kiosk screen changes to "connecting video…" and "someone answered — video is starting."
 6. When the kiosk camera is not on the agent screen yet, the console says "waiting for kiosk camera…".
 7. The red icon clears once staff are recorded in the room with the kiosk, or when the call ends. A ringing row older than two hours is ignored.
