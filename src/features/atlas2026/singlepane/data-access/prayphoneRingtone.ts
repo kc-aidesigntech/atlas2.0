@@ -8,11 +8,12 @@ const RING_VOLUME = 0.35
 function ringSrc(): string {
   const base = import.meta.env.BASE_URL || '/'
   const prefix = base.endsWith('/') ? base : `${base}/`
-  return `${prefix}audio/prayphone-ring.ogg`
+  return `${prefix}audio/ringtone.mp3`
 }
 
 /**
- * Recorded glass chime for an inbound call whose source is enabled.
+ * ringtone.mp3 for an inbound call whose source is enabled.
+ * The build copies it from sounds/ringtone.mp3, which is stored with Git Large File Storage (LFS).
  * Browsers block sound until the page has had a pointer gesture, so the header primes this clip.
  * A stop during the quiet gap bumps the generation so that pass does not start again.
  */

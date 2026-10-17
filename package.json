@@ -8,8 +8,10 @@
     "packages/*"
   ],
   "scripts": {
+    "predev": "node scripts/copy-ringtone.mjs",
     "dev": "vite",
     "dev:web": "vite",
+    "prebuild": "node scripts/copy-ringtone.mjs",
     "dev:mobile": "npm run start --workspace @atlas/mobile",
     "build": "vite build",
     "build:web": "vite build",

@@ -27,6 +27,9 @@ apps/mobile/.expo-shared
 *.sln
 *.sw?
 
+# Generated from sounds/ringtone.mp3. The source file is Git Large File Storage (LFS).
+public/audio/ringtone.mp3
+
 # Environment variables
 .env
 .env.local
