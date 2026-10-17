@@ -117,9 +117,13 @@ Phase 6, a design for six concurrent calls with agent identities `agent-1` throu
 
 The phone app lives in the workspace at `prayphone/mobile`. It is one Expo project for iPhone and Android. An Atlas participant signs in with the same Supabase account as the web app, sees keys `1`–`9`, and presses `0` to call the agency.
 
-Key `0` does not open `/kiosk/call` and does not use the Pi bridge. The app sends `POST /api/signalwire/mobile-calls` with the signed-in user's bearer token. The conferencer creates a session whose address starts with `mobile:`, rings the same inbound row the kiosk uses, and returns a 60-second code. The call screen injects that code into `/mobile/call`. The code is not a session token and is not placed in the address bar. The page trades it once for a SignalWire room token and joins with the phone camera and microphone.
+Key `0` does not open `/kiosk/call` and does not use the Pi bridge. The app sends `POST /api/signalwire/mobile-calls` with the signed-in user's bearer token and its device id (`EXPO_PUBLIC_DEVICE_ID`, otherwise `prayphone-mobile-001`). The conferencer loads that row from `atlas.prayphone_devices`. `calls_as_device_id` places the call as another enabled phone. The caller address is `signalwire_identity` on the phone it is calling as. The live call is a SignalWire video room. That column is the address the agent console shows. It is not a Session Initiation Protocol (SIP) password and it is not a separate SIP registration.
 
-Staff still answer on `/agent`. The console row shows `mobile:<email>`. The phone joins under a `kiosk-` room name so the existing answer path can mark the room joined. Keys `1`–`9` only record which topic was pressed. Clip playback is later work.
+`prayphone-mobile-001` is seeded with its own `signalwire_identity` and with `calls_as_device_id` set to `prayphone-device-001`. Key `0` on the phone therefore rings as the field kiosk. Clear `calls_as_device_id` to make the same install ring as `prayphone-mobile-001`. `MOBILE_PROXY_DEVICE_ID` on the conferencer is the device id used when the app omits one.
+
+The conferencer rings the same inbound row the kiosk uses and returns a 60-second code. The call screen injects that code into `/mobile/call`. The code is not a session token and is not placed in the address bar. The page trades it once for a SignalWire room token and joins with the phone camera and microphone.
+
+Staff still answer on `/agent`. The console row shows the caller address. The phone joins under a `kiosk-` room name so the existing answer path can mark the room joined. Keys `1`–`9` only record which topic was pressed. Clip playback is later work.
 
 ## Atlas identity handoff
 

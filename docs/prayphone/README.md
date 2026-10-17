@@ -30,7 +30,7 @@ If staff reject the call, the screen says "agent not available" and "please try 
 
 ## What a person with the phone app experiences
 
-The phone app is for an Atlas participant who signs in. After sign-in the screen is a keypad. Keys `1` through `9` mark a topic. Key `0` starts a live video call with staff, the same warm line a kiosk reaches with key `0`. The kiosk itself does not change.
+The phone app is for an Atlas participant who signs in. After sign-in the screen is a keypad. Keys `1` through `9` mark a topic. Key `0` starts a live video call with staff, the same warm line a kiosk reaches with key `0`. Until the phone is given its own caller address, staff see the same phone as the field kiosk. The kiosk itself does not change.
 
 ## What a staff member in Atlas experiences
 
