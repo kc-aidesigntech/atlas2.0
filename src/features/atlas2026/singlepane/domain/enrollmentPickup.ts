@@ -17,6 +17,7 @@ export function buildOptimisticEnrolleeFromAssignmentRow(row: NavigatorEnrollmen
     dob: '',
     caseId: row.caseId,
     email: '',
+    phones: [],
     assignedNavigator: '',
     zCodeTags: [],
     activeZCodeDetails: [],

@@ -47,6 +47,7 @@ const DEMO_SAMPLE_ENROLLEE: EnrolleeProfile = {
   dob: '04/22/1996',
   caseId: 'DEMO-MR-02',
   email: 'morgan.r@demo.atlas',
+  phones: ['555-014-0196'],
   assignedNavigator: 'taylor h.',
   zCodeTags: ['z59.0', 'z60.4', 'z56.0'],
   activeZCodeDetails: [

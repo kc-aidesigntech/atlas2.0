@@ -94,6 +94,8 @@ export interface EnrolleeProfile {
   dob: string
   caseId: string
   email: string
+  /** Phone numbers shown under email on the enrollee header. */
+  phones: string[]
   avatarUrl?: string
   assignedNavigator: string
   zCodeTags: string[]

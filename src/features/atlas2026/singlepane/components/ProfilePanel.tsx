@@ -185,6 +185,12 @@ export default function ProfilePanel({
         <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
           E: {enrollee.email}
         </small>
+        {/* Phone sits on the next line so staff can dial without leaving the enrollee header. */}
+        {(enrollee.phones?.length ? enrollee.phones : ['not recorded']).map((phone, index) => (
+          <small key={`${index}-${phone}`} className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
+            P: {phone}
+          </small>
+        ))}
         <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
           N: {enrollee.assignedNavigator || 'unassigned'}
         </small>

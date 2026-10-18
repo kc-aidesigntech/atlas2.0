@@ -59,6 +59,8 @@ export interface SinglePaneEnrolleeProfileRecord {
   dob: string;
   caseId: string;
   email: string;
+  /** Numbers from atlas.people.phone, split when more than one is stored. */
+  phones: string[];
   avatarUrl: string | null;
   assignedNavigator: string;
   zCodeTags: string[];
@@ -609,7 +611,70 @@ export async function fetchSinglePaneSurveyDefinition(
   } satisfies SinglePaneSurveyDefinitionRecord;
 }
 
-function mapActiveEnrollmentRosterRow(row: Record<string, unknown>): SinglePaneEnrolleeProfileRecord {
+/**
+ * atlas.people.phone is one text value. Staff sometimes store more than one
+ * number in that field, separated by a comma, semicolon, slash, or new line.
+ */
+export function splitStoredPhoneNumbers(value: string): string[] {
+  return value
+    .split(/[\n,;|/]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+const PHONE_LOOKUP_CHUNK = 80;
+
+/**
+ * The enrollment roster does not return phone. Read atlas.people.phone for the
+ * person ids already on the roster. Row-Level Security (RLS) still applies, so
+ * a caller only receives numbers for people they may already open. A failed
+ * read leaves the list empty; the workspace roster must still load.
+ */
+async function fetchPhonesByPersonId(
+  client: AnySupabaseClient,
+  personIds: string[],
+): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(personIds.map((id) => id.trim()).filter(Boolean))];
+  const phones = new Map<string, string>();
+  if (!uniqueIds.length) return phones;
+
+  for (let index = 0; index < uniqueIds.length; index += PHONE_LOOKUP_CHUNK) {
+    const chunk = uniqueIds.slice(index, index + PHONE_LOOKUP_CHUNK);
+    const { data, error } = await (client as SupabaseClient<any>)
+      .schema("atlas")
+      .from("people")
+      .select("id, phone")
+      .in("id", chunk);
+    if (error) {
+      console.warn("Enrollee phone read failed", error.message);
+      return phones;
+    }
+    for (const row of data || []) {
+      const id = String((row as { id?: string }).id || "");
+      const phone = String((row as { phone?: string | null }).phone || "").trim();
+      if (id && phone) phones.set(id, phone);
+    }
+  }
+  return phones;
+}
+
+async function mapRosterRowsWithPhones(
+  client: AnySupabaseClient,
+  rows: Record<string, unknown>[],
+): Promise<SinglePaneEnrolleeProfileRecord[]> {
+  const phoneByPersonId = await fetchPhonesByPersonId(
+    client,
+    rows.map((row) => String(row.enrollee_person_id || "")),
+  );
+  return rows.map((row) => mapActiveEnrollmentRosterRow(row, phoneByPersonId));
+}
+
+function mapActiveEnrollmentRosterRow(
+  row: Record<string, unknown>,
+  phoneByPersonId: Map<string, string>,
+): SinglePaneEnrolleeProfileRecord {
+  const personId = String(row.enrollee_person_id || "");
+  const storedPhone = String(row.enrollee_phone || row.phone || phoneByPersonId.get(personId) || "");
   return {
     enrolleeId: String(row.enrollee_id || ""),
     enrollmentId: String(row.enrollment_id || ""),
@@ -617,6 +682,7 @@ function mapActiveEnrollmentRosterRow(row: Record<string, unknown>): SinglePaneE
     dob: String(row.dob || ""),
     caseId: String(row.case_id || ""),
     email: String(row.enrollee_email || ""),
+    phones: splitStoredPhoneNumbers(storedPhone),
     avatarUrl: typeof row.avatar_url === "string" ? row.avatar_url : null,
     assignedNavigator: String(row.assigned_navigator || ""),
     zCodeTags: asStringArray(row.z_code_tags),
@@ -641,7 +707,7 @@ export async function fetchSinglePaneEnrolleeProfiles(
       .schema("atlas")
       .rpc("fn_list_active_enrollment_roster", { p_enrollment_ids: enrollmentIds });
     if (filteredResult.error) throw filteredResult.error;
-    return (filteredResult.data || []).map((row: Record<string, unknown>) => mapActiveEnrollmentRosterRow(row));
+    return mapRosterRowsWithPhones(client, filteredResult.data || []);
   }
 
   if (!canonicalEnrollmentRosterUnauthorized) {
@@ -652,7 +718,7 @@ export async function fetchSinglePaneEnrolleeProfiles(
       .order("enrollee_name", { ascending: true });
 
     if (!canonicalResult.error) {
-      return (canonicalResult.data || []).map((row: Record<string, unknown>) => mapActiveEnrollmentRosterRow(row));
+      return mapRosterRowsWithPhones(client, canonicalResult.data || []);
     }
 
     const fallbackCode = (canonicalResult.error as { code?: string } | null)?.code;
@@ -676,6 +742,7 @@ export async function fetchSinglePaneEnrolleeProfiles(
       dob: row.dob,
       caseId: row.case_id,
       email: row.email,
+      phones: splitStoredPhoneNumbers(String(row.phone || "")),
       avatarUrl: row.avatar_url,
       assignedNavigator: row.assigned_navigator,
       zCodeTags: asStringArray(row.z_code_tags),

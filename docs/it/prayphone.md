@@ -63,7 +63,7 @@ If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` /
 
 1. Sign in to Atlas `/app` as a navigator.
 2. Confirm **warm line** is in the top menu.
-3. Open it — agent console loads without a second password prompt.
+3. Open it — agent console loads without a second password prompt. The X in the conferencer header returns to Atlas `/app`.
 4. Sign in as a partner — no warm-line menu; visiting `/agent` directly is denied.
 5. On the Pi, `/kiosk` still starts a call with no Atlas session.
 6. As a navigator, supervisor, or administrator with warm-line access, confirm the Pray Phone icon is in the top bar on every menu, with a green online count. Press it and the agent console opens. Press `0` on a kiosk. The icon turns red and this browser rings. A partner account has no icon.

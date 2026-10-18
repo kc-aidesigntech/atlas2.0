@@ -10,7 +10,7 @@ Three repositories:
 | `prayphone-server` | Conferencer. Heroku app `prayphone`, origin `https://prayphone-68d333045316.herokuapp.com` |
 | `atlas` | Staff sign-in, phone icon, fleet screen, Supabase data |
 
-The conferencer stays on prayphone-server. Atlas does not host the call page.
+The conferencer stays on prayphone-server. Atlas does not host the call page. The X on the conferencer header returns staff to the Atlas workspace at `/app` on `NEXT_PUBLIC_ATLAS_APP_ORIGIN`.
 
 ```mermaid
 flowchart LR
