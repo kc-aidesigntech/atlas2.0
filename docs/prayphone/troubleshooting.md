@@ -145,8 +145,9 @@ Rows BCM (Broadcom pin numbering) 25, 12, 13, 16. Columns BCM 22, 17, 4. On-hook
 Journal lines:
 
 - `Key '…' published to kiosk shell` — a key was seen.
-- `Receiver off-hook; LOOP restart published` — handset lifted.
-- `Receiver on-hook; reset published` — handset replaced.
+- `unHook; LOOP restart published` — handset lifted. The session latch is set.
+- `hangUp; reset published` — handset replaced. LOOP is already requested. The session save follows in the background.
+- `Key '…' ignored; handset is on hook` — the latch is reset, so the keypad does not start a clip or a call.
 
 No key lines while someone is pressing means the matrix is not being read (wiring, GPIO permission, or `prayphone.service` not running as `ppadmin`). A call that dies immediately after key `0` is often the handset still down: the poll ends any session while the on-hook contact is made.
 

@@ -86,7 +86,7 @@ End it in one of these ways. Each one is what the software already does.
 
 - Staff press **end call** on the agent console. That sends end for this session.
 - Staff press **reject call** before answering. The kiosk shows "agent not available" and "please try again later," then returns to the loop.
-- The person at the kiosk replaces the handset. The kiosk ends this session and returns to the loop.
+- The person at the kiosk replaces the handset. The screen returns to LOOP immediately. The hook-to-hook record is still saved in the background, and the kiosk ends this session.
 - A clip key, key `0`, or the on-hook signal during the call also leaves the call page and ends this session, then the local loop plays.
 - If the call is still open after the device ceiling (one hour unless that setting was changed), the kiosk ends the session it created.
 

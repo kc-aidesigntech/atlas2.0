@@ -91,7 +91,7 @@ The hook switch, from `config/config.json`:
 
 Lift: start a hook session and restart `LOOP.mp4` from the beginning.
 
-Replace: save the hook-to-hook session (start, end, duration, keys, and the call id if one exists) and return to the loop. If a call session id is present, the device asks the conferencer to end that session (`receiver_on_hook`).
+Replace: the screen returns to `LOOP.mp4` immediately. The hook-to-hook session (start, end, duration, keys, and the call id if one exists) is saved in the background. If a call session id is present, the device asks the conferencer to end that session (`receiver_on_hook`) on that same background path.
 
 If the handset is already down and a call session id appears, the same hang-up runs. A call stays up while the off-hook contact is the one that is grounded.
 
