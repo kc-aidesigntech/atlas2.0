@@ -1,12 +1,7 @@
 /**
- * Pray Phone warm-line subapp: Atlas portal entry to the agent webpage.
- * The kiosk Raspberry Pi and SignalWire stack stay on prayphone-server;
- * Atlas only owns navigation, session handoff, and role gating.
- *
- * Both apps use the same Supabase project. They are different sites, so the
- * agent cannot read the Atlas browser session. The click creates a 60-second
- * code and the agent signs that same user in. The session token stays out of
- * the address bar.
+ * openPrayPhoneAgentFromWorkspace calls atlas.fn_create_prayphone_handoff
+ * and assigns window.location to the conferencer /agent Uniform Resource Locator (URL)
+ * with that code in the hash. An empty code still assigns the /agent URL.
  */
 import { supabase } from '@/lib/supabaseClient'
 
@@ -16,13 +11,13 @@ const WARM_LINE_MENU = 'warm line'
 export const PRAYPHONE_AGENT_ORIGIN = 'https://prayphone-68d333045316.herokuapp.com'
 
 function configuredPrayPhoneOrigin(): string {
-  // A set env value can point at a future custom domain. An empty value still
-  // opens the live conferencer, so the phone icon is not compiled out.
+  // A non-empty VITE_ATLAS_PRAYPHONE_URL is returned with trailing slashes removed.
+  // An empty value returns PRAYPHONE_AGENT_ORIGIN.
   const override = String(import.meta.env.VITE_ATLAS_PRAYPHONE_URL || '').trim().replace(/\/+$/, '')
   return override || PRAYPHONE_AGENT_ORIGIN
 }
 
-/** True when the workspace should show the warm-line menu. */
+/** Returns Boolean(configuredPrayPhoneOrigin()). */
 export function isPrayPhoneWarmLineConfigured(): boolean {
   return Boolean(configuredPrayPhoneOrigin())
 }
@@ -32,10 +27,9 @@ export function isWarmLineMenu(menu: string): boolean {
 }
 
 /**
- * Open the Pray Phone agent on its own origin, already aimed at the signed-in
- * Atlas user. The address bar receives a one-time code, which the agent page
- * removes immediately. A failed code still opens the console so the person
- * can sign in with the same Atlas account.
+ * Builds /agent on configuredPrayPhoneOrigin. When fn_create_prayphone_handoff
+ * returns 64 hex characters, those characters are written into the URL hash
+ * as atlas_handoff. window.location.assign is called with that URL.
  */
 export async function openPrayPhoneAgentFromWorkspace(): Promise<void> {
   const origin = configuredPrayPhoneOrigin()

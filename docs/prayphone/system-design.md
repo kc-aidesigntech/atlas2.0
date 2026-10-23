@@ -81,19 +81,13 @@ BCM (Broadcom pin numbering) in `src/kiosk2.py`. Rows are outputs. Columns are i
 [*] [0] [#]
 ```
 
-The hook switch, from `config/config.json`:
+`config/config.json` stores `receiver_on_hook_bcm` and `receiver_off_hook_bcm`. The current file has 7 and 6. `read_hook_contact` in `src/kiosk2.py` reads those two pins. A pin at 0 is closed.
 
-- On-hook (handset down) grounds BCM 7.
-- Off-hook (handset up) grounds BCM 6.
-- Both contacts use pull-up. A made contact reads low.
-- Both high means the switch is between contacts and is ignored.
-- Both low is treated as a wiring fault and is ignored.
+- Only the on-hook number closed returns `reset`.
+- Only the off-hook number closed returns `set`.
+- Both open or both closed returns nothing. `poll_receiver_switch` leaves `session_active` unchanged.
 
-Lift: start a hook session and restart `LOOP.mp4` from the beginning.
-
-Replace: the screen returns to `LOOP.mp4` immediately. The hook-to-hook session (start, end, duration, keys, and the call id if one exists) is saved in the background. If a call session id is present, the device asks the conferencer to end that session (`receiver_on_hook`) on that same background path.
-
-If the handset is already down and a call session id appears, the same hang-up runs. A call stays up while the off-hook contact is the one that is grounded.
+`poll_receiver_switch` stores `session_active` from that result. The first `set` or `reset` only stores the relay. A later change to `set` calls `unhook`, which publishes `offhook`. A later change to `reset` calls `hang_up`. `hang_up` copies the session fields, calls `publish_key("hook")`, then starts `_save_session_async` and `end_kiosk_call_session` for the session id that was on the bridge. A held `reset` or `set` does not call `hang_up` or `unhook` again. A session id posted while the relay is already dropped does not call `hang_up`.
 
 Every key press is stored in the local catalog and posted to the device-log Application Programming Interface (API), `POST /api/device-logs`, with subject `keypad_press`.
 

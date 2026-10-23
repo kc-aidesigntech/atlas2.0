@@ -17,7 +17,7 @@ export function isPrayPhoneRingSourceEnabled(
   return Boolean(source && enabled.has(source))
 }
 
-/** Every known class. A failed settings read uses this so a blip does not mute a live call. */
+/** Returns a set containing every value in PRAYPHONE_RING_SOURCES. */
 export function allRingSourcesEnabled(): Set<string> {
   return new Set(PRAYPHONE_RING_SOURCES)
 }

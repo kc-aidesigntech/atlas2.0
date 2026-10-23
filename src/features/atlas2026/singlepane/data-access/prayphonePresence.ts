@@ -7,9 +7,7 @@ export type PrayPhonePresenceRow = {
 }
 
 /**
- * Device heartbeats land on atlas.prayphone_devices.last_seen.
- * The header counts those rows; it does not invent a second presence channel.
- * model is selected so the badge can skip the phone app.
+ * Selects device_id, last_seen, and model from atlas.prayphone_devices.
  */
 export async function fetchPrayPhoneDevicePresence(): Promise<
   { ok: true; devices: PrayPhonePresenceRow[] } | { ok: false }

@@ -1,28 +1,29 @@
 ---
-description: Require maintainability-focused code comments
+description: Comments describe the event the code performs
 alwaysApply: true
 ---
 
-# Commenting And Maintainability Standard
+# Comments Describe The Event
 
-All production code changes must include maintainability-oriented comments.
+A comment reports what the adjacent code does on this run. It does not state a purpose the code is then changed to match.
 
-- Document intent and reasoning, not obvious syntax.
-- Add comments for:
-  - Non-trivial business rules, data transforms, and fallback logic
-  - Async flows, side effects, cleanup, and state transitions
-  - Cross-system mappings (UI <-> API <-> persistence contracts)
-  - Temporary constraints and known follow-up work
-- Keep comments close to the code they explain.
-- Update comments whenever behavior changes.
-- Do not leave undocumented complex logic.
+## In code
+
+- Name the event: the branch taken, the value written, the request sent, the row read.
+- Keep the comment next to that event.
+- Change the comment when the code changes.
+- A comment that disagrees with the code is wrong. Edit the comment.
+
+## Outside the code
+
+Product rules and process steps live in docs. Those docs are rewritten from the code. They are not a source the code is edited to satisfy.
 
 ## Examples
 
 ```ts
-// Normalize partner identity with safe fallbacks so referrals remain actionable.
+// Empty partnerName stores account.organization, then 'community partner'.
 const partnerName = input.partnerName.trim() || account.organization || 'community partner'
 
-// Revoke object URLs on unmount to avoid leaking browser memory.
+// The unmount function revokes previewUrl.
 return () => URL.revokeObjectURL(previewUrl)
 ```

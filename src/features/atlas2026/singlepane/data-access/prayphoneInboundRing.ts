@@ -6,12 +6,11 @@ import {
 } from './prayphoneRingSources'
 
 /**
- * The kiosk ends a stuck call after one hour. Ignore a ring that is still
- * marked ringing well past that, so a missed clear cannot ring all day.
+ * Returns false when createdAt does not parse, is after nowMs, or is more than two hours before nowMs.
  */
 const RING_MAX_AGE_MS = 2 * 60 * 60 * 1000
 
-/** Enough recent ringing rows to see a kiosk behind newer classes that are turned off. */
+/** Passed as limit to the ringing-row select. */
 const RING_SCAN_LIMIT = 20
 
 export type PrayPhoneInboundRing = {
@@ -27,9 +26,8 @@ export function isLiveInboundRing(createdAt: string, nowMs: number): boolean {
 }
 
 /**
- * Newest ringing row inside the two-hour window whose caller class is enabled in
- * atlas.prayphone_ring_sources. A newer row that is turned off does not hide an older one that is on.
- * A failed read leaves the header on its last state so a live ring is not cleared by a blip.
+ * Returns the first ringing row in the newest-20 list that is inside two hours
+ * and whose caller_class is in the enabled set. A failed query returns ok: false.
  */
 export async function fetchLiveInboundRing(): Promise<
   { ok: true; ring: PrayPhoneInboundRing | null } | { ok: false }
@@ -46,7 +44,7 @@ export async function fetchLiveInboundRing(): Promise<
     console.warn('Pray Phone inbound ring read failed', error.message)
     return { ok: false }
   }
-  // A failed settings read rings every known class. A successful read honors enabled = false.
+  // fetchEnabledRingSources null is replaced with allRingSourcesEnabled().
   const enabled = (await fetchEnabledRingSources()) ?? allRingSourcesEnabled()
   const now = Date.now()
   const ring =

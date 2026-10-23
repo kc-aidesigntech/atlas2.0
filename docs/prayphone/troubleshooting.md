@@ -140,16 +140,16 @@ Profile locks live under `~/.cache/prayphone-kiosk-chromium`. The process clears
 
 ## Hook and keypad
 
-Rows BCM (Broadcom pin numbering) 25, 12, 13, 16. Columns BCM 22, 17, 4. On-hook BCM 7. Off-hook BCM 6. See [system-design.md](./system-design.md).
+Rows BCM (Broadcom pin numbering) 25, 12, 13, 16. Columns BCM 22, 17, 4. `config/config.json` currently sets the reset contact to BCM 7 and the set contact to BCM 6. See [system-design.md](./system-design.md).
 
-Journal lines:
+Journal lines from `src/kiosk2.py`:
 
-- `Key '…' published to kiosk shell` — a key was seen.
-- `unHook; LOOP restart published` — handset lifted. The session latch is set.
-- `hangUp; reset published` — handset replaced. LOOP is already requested. The session save follows in the background.
-- `Key '…' ignored; handset is on hook` — the latch is reset, so the keypad does not start a clip or a call.
+- `Key '…' published to kiosk shell` — `handle_key_press` called `publish_key`.
+- `unHook; LOOP restart published` — `unhook` ran.
+- `hangUp; reset published` — `hang_up` called `publish_key("hook")`. `_save_session_async` starts after that print.
+- `Key '…' ignored; session latch is not set` — `session_active` was not true, so `handle_key_press` returned before `publish_key`.
 
-No key lines while someone is pressing means the matrix is not being read (wiring, GPIO permission, or `prayphone.service` not running as `ppadmin`). A call that dies immediately after key `0` is often the handset still down: the poll ends any session while the on-hook contact is made.
+No key lines while someone is pressing means the matrix loop is not reading a column high. `handle_key_press` also returns before `publish_key` while `session_active` is not true. A held reset contact does not call `hang_up` again.
 
 ## SignalWire join
 
