@@ -49,7 +49,7 @@ Qualitative insights from paired C.R.E.A.T.E. notes (participants, mode, date/du
 2. When regulation is cleared, use **route planning** for Z-code remediation.
 3. Capture burden / IPSCC / assessment work from the enrollee surfaces as prompted.
 4. Complete weekly self-assessment before supervision; participate in C.R.E.A.T.E. sessions.
-5. When the warm line is enabled, the Pray Phone icon left of Account Settings is on every menu. The green number is how many kiosks are online. Press the icon to open the Pray Phone agent console (same Atlas sign-in). The kiosk device does not need a login. A kiosk press of `0` turns that icon red and rings this browser. **warm line** in the top menu opens the same console.
+5. When the warm line is enabled, the Pray Phone icon left of Account Settings is on every menu. The green number is how many calls are waiting in the conferencer queue. It is zero when that queue is empty. Press the icon to open the Pray Phone agent console (same Atlas sign-in). The kiosk device does not need a login. A kiosk press of `0` turns that icon red and rings this browser. **warm line** in the top menu opens the same console.
 
 ## Profile navigation cards
 

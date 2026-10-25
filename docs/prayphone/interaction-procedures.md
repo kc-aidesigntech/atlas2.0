@@ -19,9 +19,7 @@ A navigator with the allow exception still does not get the fleet menu. Fleet is
 
 ## Green count
 
-The green number is how many kiosks have a `last_seen` time inside three minutes. Phone calls (model `mobile`) do not count in the online-device badge. The kiosk posts about once a minute. A kiosk that has never checked in is not in the count. Zero is a real reading when no kiosk has posted inside that window. It is not a network search.
-
-The count can stay up for about three minutes after a kiosk stops posting.
+The green number is how many calls are waiting in the conferencer queue. A waiting call has session state initiated, dialing, or ringing. A joined call is not in the number. Zero means those queues are empty. A kiosk can be powered on and checked in while the number stays zero.
 
 ## Keys at the kiosk
 
@@ -36,7 +34,7 @@ A call that starts while the handset is already down is ended by the kiosk, beca
 
 ## When the call is from the phone app
 
-Key `0` calls the warm line with or without an Atlas account. The call turns this icon red while that class is enabled in `atlas.prayphone_ring_sources`. It does not count as an online kiosk. On the agent console it sits in its own queue: grey when nobody is signed in, deep green with the person's name when their account matches a person record, or yellow with the account email when they are signed in and have no person record. Answer and end it the same way as a kiosk call. Keys `1`–`9` on the phone do not call.
+Key `0` calls the warm line with or without an Atlas account. The call turns this icon red while that class is enabled in `atlas.prayphone_ring_sources`. While that call is waiting, it counts in the green number. On the agent console it sits in its own queue: grey when nobody is signed in, deep green with the person's name when their account matches a person record, or yellow with the account email when they are signed in and have no person record. Answer and end it the same way as a kiosk call. Keys `1`–`9` on the phone do not call.
 
 ## When a call starts
 
@@ -68,7 +66,7 @@ What to tell the person at the kiosk while you wait is ________.
 
 ## If the green count stays 0
 
-The count is check-ins, not a scan. Zero means Atlas has no `last_seen` inside three minutes. The phone may be powered off, the check-in token may be rejected, or no kiosk has posted yet. Fleet (administrator or supervisor) shows the same rule. A navigator does not open fleet to debug this. Ask an operator. Commands are in [troubleshooting.md](./troubleshooting.md).
+Zero means no call is waiting in the conferencer. A kiosk that is online still shows zero until someone is in that queue. The number rises for a session in initiated, dialing, or ringing, and returns to zero when that session is answered, ended, rejected, or fails. Fleet (administrator or supervisor) is the screen for which phones are online. A navigator does not open fleet to read this number.
 
 ## If the person at the kiosk cannot hear you
 

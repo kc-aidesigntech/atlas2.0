@@ -100,9 +100,9 @@ Silence on `POST /api/upsert-device` means no Pi is posting.
 
 `POST /api/upsert-device` and `POST /api/device-logs` require header `x-ingest-token` equal to the server `INGEST_TOKEN`. A mismatch returns 401. The Pi heartbeat does not print that failure. Check the Heroku router status for those posts, then compare `config/.env` on the Pi with the Heroku config. Restart `prayphone.service` after fixing the file so the process reads it.
 
-## Phone stays offline, or the green count stays 0
+## Phone stays offline
 
-Atlas counts a kiosk online only when `atlas.prayphone_devices.last_seen` is inside three minutes (`FLEET_ONLINE_WINDOW_MS`). Phone calls (model `mobile`) do not count in the online-device badge. The table stays empty until a kiosk posts. There is no network scan.
+Atlas fleet counts a kiosk online only when `atlas.prayphone_devices.last_seen` is inside three minutes (`FLEET_ONLINE_WINDOW_MS`). The table stays empty until a kiosk posts. There is no network scan. The green number on the phone icon is not this check. That number is waiting conferencer sessions (`initiated`, `dialing`, `ringing`). It stays 0 while the conferencer queues are empty, including when a kiosk is online.
 
 Check, in order:
 
@@ -110,7 +110,7 @@ Check, in order:
 2. That line is not status 401.
 3. `FLEET_API_BASE` on the Pi is `https://prayphone-68d333045316.herokuapp.com`.
 4. The Pi has a working network. A Wi-Fi change is skipped during a call and is not retried every minute after a failed join. Subject `network_apply` in device logs says `nmcli missing`, a failed join, or a successful join. The passphrase is not in that log.
-5. You are looking at Atlas `/fleet` or the green count. The conferencer page `/devices` still badges "online" with a five-minute window in `app/devices/page.tsx`. That is not the Atlas rule. `GET /api/devices` does return `last_seen`.
+5. You are looking at Atlas `/fleet`. The conferencer page `/devices` still badges "online" with a five-minute window in `app/devices/page.tsx`. That is not the Atlas fleet rule. `GET /api/devices` does return `last_seen`. The phone icon's green number is the conferencer queue, not either online window.
 
 ## No upsert-device lines
 

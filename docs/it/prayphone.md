@@ -8,7 +8,7 @@ Pray Phone stays its own application (SignalWire agent webpage + Raspberry Pi ki
 
 - Shows **warm line** in the navigator / supervisor / administrator top menu when the account may sit the warm line. The phone icon uses the same rule. The agent link is built in: `https://prayphone-68d333045316.herokuapp.com/agent`.
 - Shows a Pray Phone icon in the top bar, to the left of Account Settings, on every workspace menu for those same profiles when the warm-line permission is true. The same icon is on the fleet and scribe shells. Partners do not see it. Navigators see it only with the allow exception. Pressing the icon always opens the agent console.
-- The icon carries a green count of kiosks whose `prayphone_devices.last_seen` is inside the three-minute online window. The Pi posts that heartbeat about once a minute (`fleet_presence_loop` → `POST /api/upsert-device`). Atlas reads the same rows, refreshes on Supabase Realtime, and drops a phone from the count after the window with no new post.
+- The icon carries a green count of conferencer sessions whose state is `initiated`, `dialing`, or `ringing`. An empty queue shows zero. Atlas reads `atlas.prayphone_call_sessions` on the same four-second poll as the inbound ring. A kiosk heartbeat is the fleet online window, not this number.
 - When a kiosk presses `0`, prayphone-server writes a ringing row after the call session is saved. The icon turns red and plays a phone ring. Pressing it opens the agent console for the same Supabase user.
 - The ring clears when a staff member and the kiosk are both in the room, or when the call ends. The icon stays in the bar.
 - Navigation stays on the Atlas login. Atlas asks Supabase for a 60-second code (`atlas.fn_create_prayphone_handoff`). The agent page trades that code for a normal Supabase session (`POST /api/atlas-handoff`) and removes the code from the address bar. The session token is not placed in the Uniform Resource Locator (URL). A copied phone link cannot be reused to sign in. A direct visit to `/agent` uses the same Atlas email, Google, or Apple sign-in.
@@ -57,7 +57,7 @@ If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` /
 3. In Supabase **Authentication → URL configuration**, add:
    - `https://pray.<atlas-host>/agent`
    - the Heroku origin `/agent` if still used
-4. Apply Atlas migrations `20260817090000_warmline_agent_access.sql`, `20261004200000_prayphone_inbound_rings.sql`, `20261009150000_prayphone_devices_realtime.sql`, and `20261010210000_prayphone_auth_handoff.sql`. The inbound-ring migration enables Supabase Realtime on `atlas.prayphone_inbound_rings`. Until it is applied, a kiosk press will not turn the icon red. The devices migration enables Realtime on `atlas.prayphone_devices` so the green online count updates when a heartbeat lands. Until it is applied, the count still refreshes on the header poll. The handoff migration is what lets a click on the phone icon sign the same person into the agent without putting a session token in the URL. Until it is applied, the agent page asks for the Atlas password.
+4. Apply Atlas migrations `20260817090000_warmline_agent_access.sql`, `20261004200000_prayphone_inbound_rings.sql`, `20261009150000_prayphone_devices_realtime.sql`, and `20261010210000_prayphone_auth_handoff.sql`. The inbound-ring migration enables Supabase Realtime on `atlas.prayphone_inbound_rings`. Until it is applied, a kiosk press will not turn the icon red. The devices migration enables Realtime on `atlas.prayphone_devices`. The header green number does not read that table. It counts waiting rows on `atlas.prayphone_call_sessions`. The handoff migration is what lets a click on the phone icon sign the same person into the agent without putting a session token in the URL. Until it is applied, the agent page asks for the Atlas password.
 
 ## Verification
 
@@ -66,7 +66,7 @@ If the fleet database is already the Atlas project, `NEXT_PUBLIC_SUPABASE_URL` /
 3. Open it — agent console loads without a second password prompt. The X in the conferencer header returns to Atlas `/app`.
 4. Sign in as a partner — no warm-line menu; visiting `/agent` directly is denied.
 5. On the Pi, `/kiosk` still starts a call with no Atlas session.
-6. As a navigator, supervisor, or administrator with warm-line access, confirm the Pray Phone icon is in the top bar on every menu, with a green online count. Press it and the agent console opens. Press `0` on a kiosk. The icon turns red and this browser rings. A partner account has no icon.
+6. As a navigator, supervisor, or administrator with warm-line access, confirm the Pray Phone icon is in the top bar on every menu. The green number is 0 when the conferencer queues are empty, and it rises when a call is waiting. Press it and the agent console opens. Press `0` on a kiosk. The icon turns red and this browser rings. A partner account has no icon.
 
 ## Clips
 

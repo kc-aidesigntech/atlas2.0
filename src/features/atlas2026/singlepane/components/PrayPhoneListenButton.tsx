@@ -3,17 +3,14 @@ import { Phone } from 'lucide-react'
 import { AtlasIconButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AtlasRole } from '@/features/atlas2026/shared/contracts'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
-import { countOnlineDevices } from '@/features/atlas2026/fleet/fleetPresence'
 import { supabase } from '@/lib/supabaseClient'
 import { fetchLiveInboundRing } from '../data-access/prayphoneInboundRing'
-import { fetchPrayPhoneDevicePresence, type PrayPhonePresenceRow } from '../data-access/prayphonePresence'
+import { fetchQueuedCallCount } from '../data-access/prayphoneQueueCount'
 import { prayPhoneRingtone } from '../data-access/prayphoneRingtone'
 import { isPrayPhoneWarmLineConfigured, openPrayPhoneAgentFromWorkspace } from '../data-access/prayphoneSubapp'
 import { fetchCanAccessWarmLineAgent } from '../data-access/warmlineAccess'
 
 const RING_POLL_MS = 4000
-const PRESENCE_POLL_MS = 20000
-const PRESENCE_AGE_MS = 15000
 
 interface PrayPhoneListenButtonProps {
   role: AtlasRole
@@ -24,19 +21,17 @@ interface PrayPhoneListenButtonProps {
  * Navigator, supervisor, and administrator profiles that pass the warm-line
  * permission see it on every workspace menu, and on the fleet and scribe
  * shells. Partners do not. A press always opens the
- * agent console. The green count is hardware kiosks whose heartbeat is
- * still inside the fleet online window. Phone-app rows (model mobile)
- * are not in that count. An inbound call turns the control red and rings
- * when that class is enabled in atlas.prayphone_ring_sources. All four
- * classes start enabled.
+ * agent console. The green count is conferencer sessions whose state is
+ * initiated, dialing, or ringing. An empty queue shows zero. An inbound
+ * call turns the control red and rings when that class is enabled in
+ * atlas.prayphone_ring_sources. All four classes start enabled.
  */
 export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonProps) {
   const eligibleRole = role === 'navigator' || role === 'supervisor' || role === 'administrator'
   const configured = isPrayPhoneWarmLineConfigured()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [incoming, setIncoming] = React.useState(false)
-  const [onlineCount, setOnlineCount] = React.useState(0)
-  const presenceRows = React.useRef<PrayPhonePresenceRow[]>([])
+  const [queuedCount, setQueuedCount] = React.useState(0)
 
   React.useEffect(() => {
     if (!eligibleRole || !configured) return
@@ -52,12 +47,15 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
   React.useEffect(() => {
     if (!hasAccess || !supabase) {
       setIncoming(false)
+      setQueuedCount(0)
       return
     }
     let cancelled = false
     const refresh = async () => {
       const read = await fetchLiveInboundRing()
       if (!cancelled && read.ok) setIncoming(Boolean(read.ring))
+      const queued = await fetchQueuedCallCount()
+      if (!cancelled && queued.ok) setQueuedCount(queued.count)
     }
     void refresh()
     const poll = window.setInterval(() => {
@@ -82,43 +80,6 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
   }, [hasAccess])
 
   React.useEffect(() => {
-    if (!hasAccess || !supabase) return
-    let cancelled = false
-    const publishCount = () => {
-      if (!cancelled) setOnlineCount(countOnlineDevices(presenceRows.current))
-    }
-    const refresh = async () => {
-      const read = await fetchPrayPhoneDevicePresence()
-      if (!read.ok || cancelled) return
-      presenceRows.current = read.devices
-      publishCount()
-    }
-    void refresh()
-    // Heartbeats arrive about once a minute. Realtime refreshes on each post.
-    // The age timer drops a phone after the online window with no new row.
-    const poll = window.setInterval(() => {
-      void refresh()
-    }, PRESENCE_POLL_MS)
-    const age = window.setInterval(publishCount, PRESENCE_AGE_MS)
-    const channel = supabase
-      .channel(`prayphone-device-presence-${crypto.randomUUID()}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'atlas', table: 'prayphone_devices' },
-        () => {
-          void refresh()
-        }
-      )
-      .subscribe()
-    return () => {
-      cancelled = true
-      window.clearInterval(poll)
-      window.clearInterval(age)
-      void supabase.removeChannel(channel)
-    }
-  }, [hasAccess])
-
-  React.useEffect(() => {
     if (incoming) prayPhoneRingtone.start()
     else prayPhoneRingtone.stop()
     return () => prayPhoneRingtone.stop()
@@ -135,8 +96,8 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
   if (!eligibleRole || !configured || !hasAccess) return null
 
   const label = incoming
-    ? `Incoming Pray Phone call. ${onlineCount} devices online. Press to open the agent console.`
-    : `Pray Phone. ${onlineCount} devices online. Press to open the agent console.`
+    ? `Incoming Pray Phone call. ${queuedCount} in queue. Press to open the agent console.`
+    : `Pray Phone. ${queuedCount} in queue. Press to open the agent console.`
   const borderColor = incoming ? SP_COLORS.red : '#ffffff70'
 
   function onPress() {
@@ -164,7 +125,7 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
           style={{ backgroundColor: SP_COLORS.green }}
           aria-hidden
         >
-          {onlineCount}
+          {queuedCount}
         </span>
       </span>
     </>

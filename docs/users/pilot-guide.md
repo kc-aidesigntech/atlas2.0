@@ -43,7 +43,7 @@ Use the matching login **and** set the role switcher to the same role for the tr
 - Competency self-assessment
 - Intake / resolve Z-codes
 - Open **warm line** (Pray Phone agent) when that menu is present
-- Use the Pray Phone icon (left of Account Settings) on any menu. The green number is kiosks online. A press opens the agent console. A kiosk `0` press turns the icon red and rings this browser.
+- Use the Pray Phone icon (left of Account Settings) on any menu. The green number is calls waiting in the conferencer queue, and it is zero when that queue is empty. A press opens the agent console. A kiosk `0` press turns the icon red and rings this browser.
 
 ### Supervisor
 
