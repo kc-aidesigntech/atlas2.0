@@ -140,7 +140,7 @@ Profile locks live under `~/.cache/prayphone-kiosk-chromium`. The process clears
 
 ## Hook and keypad
 
-Rows BCM (Broadcom pin numbering) 25, 12, 13, 16. Columns BCM 22, 17, 4. `config/config.json` currently sets the reset contact to BCM 7 and the set contact to BCM 6. See [system-design.md](./system-design.md).
+Rows BCM (Broadcom pin numbering) 25, 12, 13, 16. Columns BCM 22, 17, 4. `config/config.json` currently sets `receiver_on_hook_bcm` to 7 and `receiver_off_hook_bcm` to 6. Picked up is 7 closed alone. Down is 6 closed alone. See [system-design.md](./system-design.md).
 
 Journal lines from `src/kiosk2.py`:
 
@@ -179,7 +179,7 @@ The table migration in this repo is `supabase/migrations/20261004200000_prayphon
 
 ## Header chime is silent
 
-The ringtone in this repository is `sounds/ringtone.mp3`, stored with LFS. `scripts/copy-ringtone.mjs` runs before dev and before the production build. It copies that file to `public/audio/ringtone.mp3` and stops when the source is a Git LFS pointer. The header requests `audio/ringtone.mp3`. Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. Three seconds of silence sit between passes. Browsers block the sound until the page has had a click or a tap. The icon can still turn red.
+The ringtone in this repository is `sounds/ringtone.mp3`, stored with LFS. `scripts/copy-ringtone.mjs` runs before dev and before the production build. It copies that file to `public/audio/ringtone.mp3` and stops when the source is a Git LFS pointer. The header requests `audio/ringtone.mp3`. Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. Three seconds of silence sit between passes. The first click or keypress on the Atlas tab arms the chime until that tab is closed or reloaded. After it is armed, a waiting call plays the chime without another click, including while the tab is in the background. The same click asks for notification permission. If the clip is blocked and permission was allowed, the system notification sound plays instead. An inbound call does not reload the tab, because a reload clears that arming. The icon still turns red when no sound is allowed yet.
 
 ## Replace LOOP.mp4 and clips on the device
 

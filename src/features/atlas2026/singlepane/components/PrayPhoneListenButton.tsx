@@ -25,6 +25,9 @@ interface PrayPhoneListenButtonProps {
  * initiated, dialing, or ringing. An empty queue shows zero. An inbound
  * call turns the control red and rings when that class is enabled in
  * atlas.prayphone_ring_sources. All four classes start enabled.
+ * The first pointer or key on this tab arms the clip. Later calls play it
+ * without another click. A reload is not used: it clears that arming.
+ * When the clip is blocked, a granted notification plays the system alert.
  */
 export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonProps) {
   const eligibleRole = role === 'navigator' || role === 'supervisor' || role === 'administrator'
@@ -32,6 +35,9 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
   const [hasAccess, setHasAccess] = React.useState(false)
   const [incoming, setIncoming] = React.useState(false)
   const [queuedCount, setQueuedCount] = React.useState(0)
+  const incomingRef = React.useRef(false)
+  const noticeRef = React.useRef<Notification | null>(null)
+  incomingRef.current = incoming
 
   React.useEffect(() => {
     if (!eligibleRole || !configured) return
@@ -53,14 +59,26 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
     let cancelled = false
     const refresh = async () => {
       const read = await fetchLiveInboundRing()
-      if (!cancelled && read.ok) setIncoming(Boolean(read.ring))
+      if (cancelled) return
+      if (read.ok) {
+        const ringing = Boolean(read.ring)
+        setIncoming(ringing)
+        if (ringing) prayPhoneRingtone.start()
+      }
       const queued = await fetchQueuedCallCount()
       if (!cancelled && queued.ok) setQueuedCount(queued.count)
+    }
+    const onWake = () => {
+      void refresh()
+      if (incomingRef.current) prayPhoneRingtone.start()
     }
     void refresh()
     const poll = window.setInterval(() => {
       void refresh()
     }, RING_POLL_MS)
+    document.addEventListener('visibilitychange', onWake)
+    window.addEventListener('focus', onWake)
+    window.addEventListener('pageshow', onWake)
     // Supabase Realtime is the relay. The poll covers a missed socket event.
     const channel = supabase
       .channel(`prayphone-inbound-rings-${crypto.randomUUID()}`)
@@ -75,22 +93,71 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
     return () => {
       cancelled = true
       window.clearInterval(poll)
+      document.removeEventListener('visibilitychange', onWake)
+      window.removeEventListener('focus', onWake)
+      window.removeEventListener('pageshow', onWake)
       void supabase.removeChannel(channel)
     }
   }, [hasAccess])
 
   React.useEffect(() => {
-    if (incoming) prayPhoneRingtone.start()
-    else prayPhoneRingtone.stop()
-    return () => prayPhoneRingtone.stop()
+    if (!incoming) {
+      prayPhoneRingtone.stop()
+      noticeRef.current?.close()
+      noticeRef.current = null
+      return
+    }
+    prayPhoneRingtone.start()
+    let notified = false
+    const showNotice = () => {
+      if (notified) return
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+      if (prayPhoneRingtone.isAudible()) return
+      try {
+        const notice = new Notification('Incoming Pray Phone call', {
+          body: 'A caller is waiting in the conferencer.',
+          tag: 'prayphone-inbound'
+        })
+        notified = true
+        noticeRef.current = notice
+        notice.onclick = () => {
+          window.focus()
+          notice.close()
+          prayPhoneRingtone.stop()
+          void openPrayPhoneAgentFromWorkspace()
+        }
+        notice.onclose = () => {
+          if (noticeRef.current === notice) noticeRef.current = null
+        }
+      } catch {
+        // The browser refused the notice. The icon stays red.
+      }
+    }
+    const noticeTimer = window.setTimeout(showNotice, 700)
+    const retry = window.setInterval(() => {
+      prayPhoneRingtone.start()
+      showNotice()
+    }, 2000)
+    return () => {
+      window.clearInterval(retry)
+      window.clearTimeout(noticeTimer)
+      prayPhoneRingtone.stop()
+      noticeRef.current?.close()
+      noticeRef.current = null
+    }
   }, [incoming])
 
   React.useEffect(() => {
     if (!hasAccess) return
-    // Browsers block the ring until this page has had a user gesture.
+    prayPhoneRingtone.prepare()
     const prime = () => prayPhoneRingtone.prime()
-    window.addEventListener('pointerdown', prime)
-    return () => window.removeEventListener('pointerdown', prime)
+    const primeAndAsk = () => prayPhoneRingtone.prime({ askNotification: true })
+    window.addEventListener('pointerdown', primeAndAsk)
+    window.addEventListener('keydown', prime)
+    return () => {
+      window.removeEventListener('pointerdown', primeAndAsk)
+      window.removeEventListener('keydown', prime)
+    }
   }, [hasAccess])
 
   if (!eligibleRole || !configured || !hasAccess) return null
