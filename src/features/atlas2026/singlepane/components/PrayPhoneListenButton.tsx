@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { fetchLiveInboundRing } from '../data-access/prayphoneInboundRing'
 import { fetchQueuedCallCount } from '../data-access/prayphoneQueueCount'
 import { prayPhoneRingtone } from '../data-access/prayphoneRingtone'
-import { isPrayPhoneWarmLineConfigured, openPrayPhoneAgentFromWorkspace } from '../data-access/prayphoneSubapp'
+import { configuredPrayPhoneOrigin, isPrayPhoneWarmLineConfigured, openPrayPhoneAgentFromWorkspace } from '../data-access/prayphoneSubapp'
 import { fetchCanAccessWarmLineAgent } from '../data-access/warmlineAccess'
 
 const RING_POLL_MS = 4000
@@ -37,6 +37,8 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
   const [queuedCount, setQueuedCount] = React.useState(0)
   const incomingRef = React.useRef(false)
   const noticeRef = React.useRef<Notification | null>(null)
+  const silencedRef = React.useRef(false)
+  const openedRef = React.useRef<Window | null>(null)
   incomingRef.current = incoming
 
   React.useEffect(() => {
@@ -63,14 +65,15 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
       if (read.ok) {
         const ringing = Boolean(read.ring)
         setIncoming(ringing)
-        if (ringing) prayPhoneRingtone.start()
+        if (!ringing) silencedRef.current = false
+        if (ringing && !silencedRef.current) prayPhoneRingtone.start()
       }
       const queued = await fetchQueuedCallCount()
       if (!cancelled && queued.ok) setQueuedCount(queued.count)
     }
     const onWake = () => {
       void refresh()
-      if (incomingRef.current) prayPhoneRingtone.start()
+      if (incomingRef.current && !silencedRef.current) prayPhoneRingtone.start()
     }
     void refresh()
     const poll = window.setInterval(() => {
@@ -101,10 +104,28 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
   }, [hasAccess])
 
   React.useEffect(() => {
+    const onAnswered = (event: MessageEvent) => {
+      if (event.data?.type !== 'prayphone-answered') return
+      const expected = configuredPrayPhoneOrigin()
+      const fromOpened = Boolean(openedRef.current) && event.source === openedRef.current
+      if (!fromOpened && expected && event.origin !== expected) return
+      silencedRef.current = true
+      prayPhoneRingtone.stop()
+    }
+    window.addEventListener('message', onAnswered)
+    return () => window.removeEventListener('message', onAnswered)
+  }, [])
+
+  React.useEffect(() => {
     if (!incoming) {
+      silencedRef.current = false
       prayPhoneRingtone.stop()
       noticeRef.current?.close()
       noticeRef.current = null
+      return
+    }
+    if (silencedRef.current) {
+      prayPhoneRingtone.stop()
       return
     }
     prayPhoneRingtone.start()
@@ -123,8 +144,9 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
         notice.onclick = () => {
           window.focus()
           notice.close()
-          prayPhoneRingtone.stop()
-          void openPrayPhoneAgentFromWorkspace()
+          const popup = window.open('', 'prayphone-agent')
+          openedRef.current = popup
+          void openPrayPhoneAgentFromWorkspace(popup)
         }
         notice.onclose = () => {
           if (noticeRef.current === notice) noticeRef.current = null
@@ -135,6 +157,7 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
     }
     const noticeTimer = window.setTimeout(showNotice, 700)
     const retry = window.setInterval(() => {
+      if (silencedRef.current) return
       prayPhoneRingtone.start()
       showNotice()
     }, 2000)
@@ -168,8 +191,9 @@ export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonPro
   const borderColor = incoming ? SP_COLORS.red : '#ffffff70'
 
   function onPress() {
-    prayPhoneRingtone.stop()
-    void openPrayPhoneAgentFromWorkspace()
+    const popup = window.open('', 'prayphone-agent')
+    openedRef.current = popup
+    void openPrayPhoneAgentFromWorkspace(popup)
   }
 
   return (

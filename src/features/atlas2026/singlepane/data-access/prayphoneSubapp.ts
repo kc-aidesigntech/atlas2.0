@@ -10,7 +10,7 @@ const WARM_LINE_MENU = 'warm line'
 /** Live conferencer. The agent console is this origin plus /agent. */
 export const PRAYPHONE_AGENT_ORIGIN = 'https://prayphone-68d333045316.herokuapp.com'
 
-function configuredPrayPhoneOrigin(): string {
+export function configuredPrayPhoneOrigin(): string {
   // A non-empty VITE_ATLAS_PRAYPHONE_URL is returned with trailing slashes removed.
   // An empty value returns PRAYPHONE_AGENT_ORIGIN.
   const override = String(import.meta.env.VITE_ATLAS_PRAYPHONE_URL || '').trim().replace(/\/+$/, '')
@@ -29,9 +29,10 @@ export function isWarmLineMenu(menu: string): boolean {
 /**
  * Builds /agent on configuredPrayPhoneOrigin. When fn_create_prayphone_handoff
  * returns 64 hex characters, those characters are written into the URL hash
- * as atlas_handoff. window.location.assign is called with that URL.
+ * as atlas_handoff. The passed window receives that URL. With no window,
+ * this page is assigned the URL.
  */
-export async function openPrayPhoneAgentFromWorkspace(): Promise<void> {
+export async function openPrayPhoneAgentFromWorkspace(target?: Window | null): Promise<void> {
   const origin = configuredPrayPhoneOrigin()
   if (!origin || typeof window === 'undefined') return
 
@@ -43,5 +44,11 @@ export async function openPrayPhoneAgentFromWorkspace(): Promise<void> {
       agentUrl.hash = new URLSearchParams({ atlas_handoff: code }).toString()
     }
   }
-  window.location.assign(agentUrl.toString())
+  const href = agentUrl.toString()
+  if (target && !target.closed) {
+    target.location.href = href
+    target.focus()
+    return
+  }
+  window.location.assign(href)
 }
