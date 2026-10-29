@@ -4,6 +4,8 @@ Pray Phone is a kiosk a person can walk up to, watch a short video, and place a 
 
 This page is for prospective customers, clients, and partners. Staff steps are in [interaction-procedures.md](./interaction-procedures.md). How the pieces are built is in [system-design.md](./system-design.md).
 
+Two words are used throughout: the **agent** is the staff member who monitors the warm line and receives calls. Everyone who places a call is a **caller**: a person at a kiosk, or a person on the phone app.
+
 ## Who it is for
 
 A person at the kiosk does not sign in. They use the handset and the keypad.
@@ -22,11 +24,13 @@ The screen shows a looping video named `LOOP.mp4` when the kiosk starts, after e
 
 Keys `1` through `9` play a matching clip, then the loop returns. `*` and `#` play their own clips when those files are on the device.
 
-Key `0` is the only key that starts a live call. The screen then says "calling the warmline…" and "please stay on the line." When a staff member answers, it says "connecting video…" and "someone answered — video is starting."
+Key `0` is the only key that starts a live call. The kiosk camera opens at once and the caller's own picture appears small in the bottom-right corner. The screen says "calling the warmline…" and "please stay on the line." When the agent answers, it says "connecting video…" and "someone answered — video is starting." Then the main picture becomes the agent's camera, and only the agent's camera. The caller's own camera stays in the corner.
 
 Lifting the handset starts the loop again from the beginning. Replacing the handset returns the screen to the loop. If a call is in progress, replacing the handset ends that call.
 
-If staff reject the call, the screen says "agent not available" and "please try again later," then returns to the loop.
+If the agent rejects the call, the screen says "agent not available" and "please try again later," then returns to the loop.
+
+The kiosk does not store a staff password or an Atlas login. The call it creates is tied to the kiosk's own registered device id, and the kiosk can only act on that one call.
 
 ## What a person with the phone app experiences
 
@@ -34,9 +38,9 @@ The phone app opens on a keypad. Signing in is optional. Keys `1` through `9` ma
 
 ## What a staff member in Atlas experiences
 
-People who may sit the warm line see a phone icon in the top bar, to the left of Account Settings. A green number on that icon is how many calls are waiting in the conferencer queue. Zero means that queue is empty. Pressing the icon opens the agent console and signs in the same Atlas person.
+People who may sit the warm line see a phone icon in the top bar, to the left of Account Settings. A green number on that icon is how many calls are waiting in the conferencer queue. Zero means that queue is empty. Pressing the icon opens the agent console in its own window and signs in the same Atlas person.
 
-When a kiosk (white), an anonymous caller (grey), a signed-in enrollee (deep green), or a prospective caller (yellow) presses `0`, the icon turns red and the browser plays a calm recorded chime when that class is enabled. The first click or keypress on the Atlas tab arms that chime until the tab is closed or reloaded. Later calls play it without another click. If the clip is blocked, an allowed notification plays the system alert instead. An inbound call does not reload the tab. `atlas.prayphone_ring_sources.enabled` controls which classes ring. All four start enabled. Set `enabled` false in Supabase to silence one class. The chime file is `sounds/ringtone.mp3`, stored with Git Large File Storage (LFS). Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. Staff open the console, press **answer call**, and join the same SignalWire video room. They press **end call** when they are done. They can press **reject call** before they answer.
+When a kiosk (white), an anonymous caller (grey), a signed-in enrollee (deep green), or a prospective caller (yellow) presses `0`, the icon turns red and the browser plays a calm recorded chime when that class is enabled. The first click or keypress on the Atlas tab arms that chime until the tab is closed or reloaded. Later calls play it without another click. If the clip is blocked, an allowed notification plays the system alert instead. An inbound call does not reload the tab. `atlas.prayphone_ring_sources.enabled` controls which classes ring. All four start enabled. Set `enabled` false in Supabase to silence one class. The chime file is `sounds/ringtone.mp3`, stored with Git Large File Storage (LFS). Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. The agent opens the console, presses the waiting call in its queue, then presses **answer call** and joins the same SignalWire video room. Pressing **answer call** stops the ring in Atlas. The console opened from Atlas does not ring on its own; a console opened directly rings until **answer call**. On the console the main picture is the caller's camera only, and the agent's own camera is small in the bottom-right corner. The agent presses **end call** when they are done. They can press **reject call** before they answer, or **clear queue** to reject every waiting call at once.
 
 The words a staff member should say, the escalation phone tree, and shift rules are ________.
 

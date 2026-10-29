@@ -134,7 +134,7 @@ SignalWire delivers one composite video (the Multipoint Control Unit (MCU) canva
 
 ## Room tokens
 
-`POST /api/signalwire/room-token` (`app/api/signalwire/room-token/route.ts`) and `mintMobileRoomToken` (`lib/mobileCallGate.ts`) call SignalWire `POST https://<space>/api/video/room_tokens` with HTTP Basic auth `SIGNALWIRE_PROJECT_ID:SIGNALWIRE_TOKEN`. The body is:
+`POST /api/signalwire/room-token` (`app/api/signalwire/room-token/route.ts`) and `mintMobileRoomToken` (`lib/mobileCallGate.ts`) call SignalWire `POST https://<space>/api/video/room_tokens` with Hypertext Transfer Protocol (HTTP) Basic auth `SIGNALWIRE_PROJECT_ID:SIGNALWIRE_TOKEN`. The body is:
 
 | Field | Value |
 | --- | --- |
@@ -145,7 +145,7 @@ SignalWire delivers one composite video (the Multipoint Control Unit (MCU) canva
 | `end_room_session_on_leave` | `true` for role `kiosk` (Pi kiosk and mobile). `false` for the agent |
 | `remove_after_seconds_elapsed` | `3600` (`ROOM_MEMBER_MAX_SECONDS`) |
 
-A caller leaving ends the SignalWire room session. An agent leaving does not. Any member is removed by SignalWire after one hour, which matches the device watchdog default.
+A caller's token asks SignalWire to end the room session when that caller leaves. The agent's token does not. Every token asks SignalWire to remove that member after 3600 seconds, the same figure as the device watchdog default (`kiosk_max_call_seconds`).
 
 ## Who may call which route
 

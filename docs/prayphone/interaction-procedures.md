@@ -2,6 +2,8 @@
 
 Training for Atlas representatives. What the product does is in [system-design.md](./system-design.md). Customer language is in [README.md](./README.md).
 
+Words used here: you are the **agent**. The agent monitors the warm line and only receives calls, on the agent console (`/agent`). The person who pressed `0` is the **caller**, whether they are at a kiosk or on the phone app.
+
 The script to say to the caller, the escalation phone tree, and shift rules are ________.
 
 ## Who sees the phone icon and the warm line menu
@@ -40,17 +42,30 @@ Key `0` calls the warm line with or without an Atlas account. The call turns thi
 
 1. The conferencer accepts four sources: kiosk (white), anonymous (grey), enrollee (deep green), and prospective (yellow). `atlas.prayphone_ring_sources.enabled` controls which classes ring. All four start enabled. Set `enabled` false in Supabase to silence one class. Each enabled class turns the Atlas phone icon red.
 2. This browser plays a calm recorded chime for an enabled source, with three seconds of silence between passes. The clip is `sounds/ringtone.mp3`, stored with Git Large File Storage (LFS). The build copies it to `public/audio/ringtone.mp3`. Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. The first click or keypress on this Atlas tab arms the chime for as long as that tab stays open, and asks for notification permission. After that, a waiting call plays the chime without another click, including while the tab is in the background. If the clip is blocked and notification permission was allowed, the system notification sound plays instead. An inbound call does not reload the tab, because a reload clears that arming. The icon still turns red when no sound is allowed yet.
-3. Press the icon, or open **warm line**. The agent console opens for the same Atlas user. The address bar does not keep a session token. The X at the top right of the conferencer is the same close control used on Atlas menus. It returns this browser to the Atlas workspace.
-4. The console shows four queues: kiosk, anonymous, enrollee, and prospective. Press a session in one of them. **answer call** and **reject call** then show for the session you pressed. The console does not answer a session by itself. **clear queue** rejects every waiting call in those four columns. A connected call stays.
-5. Press **answer call**. The room status moves to joined. The kiosk screen changes to "connecting video…" and "someone answered — video is starting."
-6. When the kiosk camera is not on the agent screen yet, the console says "waiting for kiosk camera…".
-7. The red icon clears once staff are recorded in the room with the kiosk, or when the call ends. A ringing row older than two hours is ignored.
+3. Press the icon, or open **warm line**. The agent console opens in its own window, named `prayphone-agent`, for the same Atlas user. The address bar does not keep a session token. The X at the top right of the conferencer is the same close control used on Atlas menus. It returns this browser to the Atlas workspace.
+4. The console does not ring on its own when it was opened from Atlas; the Atlas tab is already ringing. A console opened by typing `/agent` into the address bar plays its own ringtone (`public/audio/ringtone.mp3` on the conferencer, three seconds of silence between passes) while a call is waiting and you have not pressed **answer call**.
+5. The console shows four queues: kiosk (white), anonymous (grey), enrollee (deep green), and prospective (yellow). Each row shows the session state and the caller label (kiosk name, person's name, or account email). Press a row. **answer call** and **reject call** then show for the session you pressed. The console does not answer a session by itself. The list refreshes every three seconds; **refresh** reloads it now.
+6. Press **answer call**. The ring stops at once: the console ringtone stops, and the console tells the Atlas tab that opened it (`prayphone-answered`) so the Atlas chime stops too. The Atlas icon stays red until the room is joined. Your browser asks for camera and microphone once. The console joins only the session you pressed. If the camera is refused it joins with microphone only; if the microphone is refused too it joins receive-only.
+7. The room status moves to joined once both you and the caller are recorded in the room. The kiosk screen changes to "connecting video…" and "someone answered — video is starting." until your picture reaches it.
+8. While the caller's camera is not on your screen yet, the console says "waiting for kiosk camera…".
+9. The red icon clears once you are recorded in the room with the caller, or when the call ends. A ringing row older than two hours is ignored.
+
+## Reject and clear queue
+
+- **reject call** shows next to **answer call** for the session you pressed. It ends that one waiting call with reason `agent_rejected`. The caller's screen shows "agent not available" and "please try again later," then the kiosk returns to the loop.
+- **clear queue** is at the bottom of the console. It asks you to confirm, then rejects every call that is still waiting in the four queues with reason `queue_cleared`. A connected call stays.
 
 ## During the call
 
-Both sides are in one SignalWire video room. The kiosk publishes its camera and microphone. The agent publishes the computer camera and microphone. The kiosk picture is the remote view the agent should see. The agent's picture is what the kiosk should see.
+You and the caller are in one SignalWire video room.
 
-The console can show session state `Connected` when the room is joined.
+What you see: the main pane is the caller's picture only. Your own camera is a small picture in the bottom-right corner. The console never shows your own camera in the main pane, and it never shows a second agent.
+
+What the caller sees: the main pane is your picture only. The kiosk's own camera is a small picture in the bottom-right corner, from the moment the call page opened. Until your picture arrives the caller sees "calling the warmline…" with "please stay on the line," then "connecting video…" once you have answered.
+
+The kiosk publishes the Pi camera and microphone. You publish the computer camera and microphone. The caller's picture is the view you should see; your picture is what the caller should see.
+
+The console shows session state `Connected` when the room is joined.
 
 There is no second product inside Atlas for the video. Stay on the agent console until the call ends.
 
@@ -72,9 +87,9 @@ Zero means no call is waiting in the conferencer. A kiosk that is online still s
 
 1. Confirm you pressed **answer call** and the room says joined, not only that the icon turned red.
 2. Confirm your browser allowed the microphone. The console shows a mic line when it has one.
-3. On the kiosk, the camera device is `/dev/video8`. If that device is missing, they may not see you and you may not see them. Hearing depends on the handset audio device the browser selected. The exact handset sound card name is ________.
-4. Ask them to stay off-hook. Replacing the handset ends the call.
-5. End the call and have them press `0` again if the room never shows the other person.
+3. On the kiosk, the camera device is `/dev/video8`. If that device is missing, the caller may not see you and you may not see the caller. Hearing depends on the handset audio device the browser selected. The exact handset sound card name is ________.
+4. Ask the caller to stay off-hook. Replacing the handset ends the call.
+5. End the call and have the caller press `0` again if the main pane never shows the caller. If the console says the room is joined but the main pane stays on "waiting for kiosk camera…", the operator steps are in [troubleshooting.md](./troubleshooting.md) under "Kiosk rings in but no video".
 
 Do not send them to a phone number that is not in your local staff instructions. That number is ________.
 
@@ -82,10 +97,11 @@ Do not send them to a phone number that is not in your local staff instructions.
 
 End it in one of these ways. Each one is what the software already does.
 
-- Staff press **end call** on the agent console. That sends end for this session.
-- Staff press **reject call** before answering. The kiosk shows "agent not available" and "please try again later," then returns to the loop.
+- The agent presses **end call** on the agent console. It shows only after you have answered. That sends end for this session, then the console leaves the room. The caller's kiosk returns to the loop.
+- The agent presses **reject call** before answering. The kiosk shows "agent not available" and "please try again later," then returns to the loop.
+- The agent presses **clear queue**. Every waiting call is rejected the same way. The call you are on stays.
 - The person at the kiosk replaces the handset. The screen returns to LOOP immediately. The hook-to-hook record is still saved in the background, and the kiosk ends this session.
 - A clip key, key `0`, or the on-hook signal during the call also leaves the call page and ends this session, then the local loop plays.
 - If the call is still open after the device ceiling (one hour unless that setting was changed), the kiosk ends the session it created.
 
-After the call, the kiosk loop is on screen again. The Atlas icon returns to the white phone with the green count. You can close the agent tab or leave it. The next kiosk `0` rings the icon again.
+After the call, the kiosk loop is on screen again. The Atlas icon returns to the white phone with the green count. You can close the agent window or leave it open. The next kiosk `0` rings the Atlas icon again, and the agent window rings only if it was not opened from Atlas.

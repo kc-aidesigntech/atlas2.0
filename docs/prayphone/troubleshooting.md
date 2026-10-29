@@ -4,6 +4,10 @@ Operator notes. Staff-facing steps are in [interaction-procedures.md](./interact
 
 Do not change `prayphone-ota.timer` or `prayphone-reboot.timer` to "fix" a one-off. The hourly update and the midnight reboot are product behavior.
 
+## Which Supabase project is live
+
+The Atlas project the kiosk, the conferencer, and the header all read is `qjsaedamqaqxobslboni` (schema `atlas`). That is the project named in this repository's migrations and docs. The conferencer reads it through `NEXT_PUBLIC_ATLAS_SUPABASE_URL` (falling back to `NEXT_PUBLIC_SUPABASE_URL`) and the service-role key `ATLAS_SUPABASE_SERVICE_ROLE_KEY` (falling back to `SUPABASE_SERVICE_ROLE_KEY`) in `lib/serverSupabase.ts`. When a `prayphone_devices` row, an inbound ring, or a call session is "missing" while the Heroku app is healthy, compare the project ref in the client's Supabase Uniform Resource Locator (URL) with this one before anything else. See [Local development: 403 `Unknown device`](#local-development-403-unknown-device).
+
 ## Secure Shell (SSH) into the Pi
 
 The service user in the device repo is `ppadmin`. The install notes use this shape and say to adjust the host. They show `PrayPhonePi` only as a sample name.
@@ -100,6 +104,10 @@ Silence on `POST /api/upsert-device` means no Pi is posting.
 
 `POST /api/upsert-device` and `POST /api/device-logs` require header `x-ingest-token` equal to the server `INGEST_TOKEN`. A mismatch returns 401. The Pi heartbeat does not print that failure. Check the Heroku router status for those posts, then compare `config/.env` on the Pi with the Heroku config. Restart `prayphone.service` after fixing the file so the process reads it.
 
+The same token is sent by `end_kiosk_call_session` in `src/kiosk2.py` when the handset is replaced or the watchdog fires: `POST /api/signalwire/calls/{sessionId}/commands` with `{ action: "end" }`. A wrong token there gets a silent 401 (`Call end failed` is printed only when the request itself throws) and the conferencer keeps the session open until the kiosk page's own `return_loop` end (sent with the call key) or the agent's **end call** closes it.
+
+The kiosk call page in Chromium does not use this token. It creates the call with its `deviceId` and then sends `x-prayphone-call-key`. See [Kiosk rings in but no video](#kiosk-rings-in-but-no-video).
+
 ## Phone stays offline
 
 Atlas fleet counts a kiosk online only when `atlas.prayphone_devices.last_seen` is inside three minutes (`FLEET_ONLINE_WINDOW_MS`). The table stays empty until a kiosk posts. There is no network scan. The green number on the phone icon is not this check. That number is waiting conferencer sessions (`initiated`, `dialing`, `ringing`). It stays 0 while the conferencer queues are empty, including when a kiosk is online.
@@ -153,9 +161,32 @@ No key lines while someone is pressing means the matrix loop is not reading a co
 
 ## SignalWire join
 
-The kiosk creates `POST /api/signalwire/calls`, posts the session id to `http://127.0.0.1:8765/session`, then joins with a room token. Failures show on the kiosk as a stuck "calling the warmline…" screen, or "agent not available" after a reject.
+Words used in this section: the **agent** is the staff member on `/agent`; the **caller** is the kiosk or the phone app.
 
-On the agent console, press **answer call** for the listed session. The page joins that session id. Heroku logs for app `prayphone` are where room-token and call-command errors land. The exact SignalWire project id and token names belong in the server environment, not in this file. Which dashboard fields to open at SignalWire is ________.
+The kiosk page creates `POST /api/signalwire/calls` with its `deviceId`, stores the `callKey` from the response, posts the session id to `http://127.0.0.1:8765/session`, then asks `POST /api/signalwire/room-token` with header `x-prayphone-call-key` and joins. Failures show on the kiosk as a stuck "calling the warmline…" screen, or "agent not available" after a reject.
+
+On the agent console, press the session row, then **answer call**. The page joins that session id. Heroku logs for app `prayphone` are where room-token and call-command errors land (`heroku logs --tail -a prayphone`). The exact SignalWire project id and token values belong in the server environment, not in this file. Which dashboard fields to open at SignalWire is ________.
+
+### Kiosk rings in but no video
+
+The call is in the agent queue, the Atlas icon turned red, **answer call** works, but the kiosk never leaves "calling the warmline…" or the agent pane stays on "waiting for kiosk camera…".
+
+1. Check Heroku logs for `POST /api/signalwire/room-token` returning 401. `requireSessionCaller` in `lib/requestAuth.ts` accepts the kiosk only when `x-prayphone-call-key` is a key issued for that exact session id. The kiosk has no call key when the create did not carry a `deviceId` (the create then used an ingest token or was open) or when the Heroku build is older than `lib/prayphoneApiHeaders.ts` with `setKioskCallKey`. Check that the kiosk call address in `journalctl -u prayphone.service` carries `deviceId=`. The key lives two hours (`CALL_KEY_TTL_MS` in `lib/mobileCallGate.ts`) and is held in process memory on the web dyno; a dyno restart between the create and the room-token request also returns 401, and the caller must press `0` again.
+2. A 502 from the same route means SignalWire refused the token request. Check `SIGNALWIRE_SPACE_URL` (or `SIGNALWIRE_SPACE_HOST`), `SIGNALWIRE_PROJECT_ID`, and `SIGNALWIRE_TOKEN` on the Heroku app. Do not paste the values into a ticket.
+3. If the token was issued and the room is joined, the kiosk main pane stays hidden until a member whose name starts `agent-` is on the SignalWire layout. The agent console sends `participantLabel: "agent-<first 8 of sessionId>"`. An agent who joined receive-only (camera and microphone refused) still has a tile; a pane that stays empty after that is a camera problem on the agent side, not on the kiosk.
+4. On the kiosk, a missing `/dev/video8` is a separate fault: see [Camera `/dev/video8` missing](#camera-devvideo8-missing).
+
+### Kiosk shows itself, or the agent sees an agent
+
+`REMOTE_ROLE_PREFIX` in `components/BackendIntercom.tsx` crops the kiosk page to the member named `agent-…` and the agent page to the member named `kiosk-…`. A page that shows its own picture in the main pane means the member names are not those prefixes. Both labels are built as `${mode}-${sessionId.slice(0, 8)}` in `joinRoom`; the mobile page uses `mobileRoomLabel` (`kiosk-<8>`). A build that sends a different `participantLabel` to `POST /api/signalwire/room-token` breaks the crop. Read the `user_name` in the room-token request (SignalWire dashboard, room session members) and compare the prefix. A stale `kiosk-` member left over from an earlier join is not shown as the agent; a second `agent-` member is not shown either.
+
+### SignalWire room session stuck "In Progress"
+
+The room token for role `kiosk` (Pi kiosk and mobile) is minted with `end_room_session_on_leave: true` and every token with `remove_after_seconds_elapsed: 3600` (`app/api/signalwire/room-token/route.ts`, `lib/mobileCallGate.ts`). A room session that stays "In Progress" at SignalWire after the caller left means the caller's browser never sent `leave` (the kiosk page sends it on `pagehide` and when the session polls back `ended`, `failed`, or `rejected`). Each token asks SignalWire to remove that member at 3600 seconds; what SignalWire does to the room session at that removal is on the SignalWire side, and is ________. The device watchdog uses the same 3600-second default (`kiosk_max_call_seconds`) and posts `end` for the session it created, which marks the session ended on the conferencer and makes the kiosk page leave. The agent's token has `end_room_session_on_leave: false`, so an agent leaving does not close the room while the caller is still in it. Do not change these two values as a one-off fix.
+
+### Local development: 403 `Unknown device`
+
+`npm run dev` on port 3000 in `prayphone-server`. A kiosk create with a `deviceId` reads `atlas.prayphone_devices` through the service-role client (`resolveKioskCaller` in `lib/registeredKiosk.ts`). When that read fails for any reason the route returns 403 `Unknown device`. The repo `.env.local` sets `NEXT_PUBLIC_SUPABASE_URL` to a Supabase host that does not resolve in Domain Name System (DNS) (`NXDOMAIN`), so every device lookup fails locally. The live Atlas project is `qjsaedamqaqxobslboni`; set `NEXT_PUBLIC_ATLAS_SUPABASE_URL`, `NEXT_PUBLIC_ATLAS_SUPABASE_ANON_KEY`, and `ATLAS_SUPABASE_SERVICE_ROLE_KEY` for that project in a local env file to test a device create. Do not commit those values. The Pi loads the Heroku build, not a laptop, so a change reaches the kiosk only after a deploy of Heroku app `prayphone`.
 
 ## Watchdog
 
@@ -180,6 +211,8 @@ The table migration in this repo is `supabase/migrations/20261004200000_prayphon
 ## Header chime is silent
 
 The ringtone in this repository is `sounds/ringtone.mp3`, stored with LFS. `scripts/copy-ringtone.mjs` runs before dev and before the production build. It copies that file to `public/audio/ringtone.mp3` and stops when the source is a Git LFS pointer. The header requests `audio/ringtone.mp3`. Heroku app `atlas-simplified` needs the Git LFS buildpack ahead of `heroku/nodejs`, plus `BUILDPACK_GIT_LFS_REPO`, or the copy is a pointer and will not play. Three seconds of silence sit between passes. The first click or keypress on the Atlas tab arms the chime until that tab is closed or reloaded. After it is armed, a waiting call plays the chime without another click, including while the tab is in the background. The same click asks for notification permission. If the clip is blocked and permission was allowed, the system notification sound plays instead. An inbound call does not reload the tab, because a reload clears that arming. The icon still turns red when no sound is allowed yet.
+
+The agent console on prayphone-server has a second ringtone (`lib/agentRingtone.ts`, `public/audio/ringtone.mp3`, three-second gap). It is silent on purpose when the console was opened from the Atlas icon, because `window.opener` is set and the Atlas tab rings. It plays only on a console opened directly at `/agent`. Pressing **answer call** stops it and posts `prayphone-answered` to the Atlas tab, which stops the Atlas chime. An Atlas chime that keeps ringing after **answer call** means the message was not accepted: `PrayPhoneListenButton` takes it from the window it opened or from `configuredPrayPhoneOrigin()`; the conferencer posts it to `NEXT_PUBLIC_ATLAS_APP_ORIGIN`, or to `*` when that variable is unset.
 
 ## Replace LOOP.mp4 and clips on the device
 
