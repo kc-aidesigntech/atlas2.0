@@ -38,10 +38,20 @@ governs them.
 
 - `atlas.fn_current_person_id()` — resolves the caller's `people.id` from
   `auth.uid()`.
-- `atlas.fn_can_access_enrollment_as_staff(enrollment_id)` — true for an
+- `atlas.fn_is_system_admin()` — true when the JavaScript Object Notation (JSON) Web Token (JWT) claim
+  `app_metadata.atlas_role` normalizes to `t4plus` (legacy `administrator` is
+  accepted) or the caller holds an active `t4plus` assignment. Every admin
+  predicate in policies and functions calls this one function
+  (`20261104190100_tier_admin_fastpath.sql`).
+- `atlas.fn_can_access_enrollment_as_staff(enrollment_id)` — true for a system
   administrator, the assigned navigator, or a supervisor over that navigator. The
-  body uses a `CASE` administrator fast-path (see Phase 7) so admin callers skip
-  the per-row assignment/supervisor lookups.
+  body returns on `fn_is_system_admin()` first so admin callers skip the per-row
+  assignment/supervisor lookups.
+
+Staff roles are the seven Residency tiers (`t1` … `t4plus`); `partner` and
+`enrollee` remain. "Supervisor" in the functions below is `t4` / `t4plus` and
+"navigator" is `t3a` / `t2b` (`20261104190200_tier_role_literals.sql`). Keys and
+tiers are listed in [../tiers.md](../tiers.md).
 
 These are `SECURITY DEFINER` so they can read assignment tables without being
 re-subjected to the RLS policies that call them (prevents recursion). They are
@@ -64,8 +74,9 @@ declared `STABLE` so the planner can cache argument-free calls
     packet so survey-only users need no scoped read-back), `fn_ensure_partner_identifier`,
     `fn_delete_partner_service_capacity_draft`, `fn_set_partner_survey_answer_nullification`
   - Warm-line agent console — `fn_can_access_warmline_agent` (permission
-    `warmline_agent.access`; administrators and supervisors by role, navigators
-    only with an exception). The Raspberry Pi kiosk is not authenticated through Atlas.
+    `warmline_agent.access`; seeded on `t2b`, `t3a`, `t4`, `t4plus`; `t4plus`
+    also passes through `fn_is_system_admin()`; other tiers only with an allow
+    exception). The Raspberry Pi kiosk is not authenticated through Atlas.
     `atlas.prayphone_inbound_rings` (`20261004200000_prayphone_inbound_rings.sql`)
     is the header call relay: the prayphone-server service role inserts a ringing
     row when a kiosk opens a call, and authenticated warm-line staff may select it.
@@ -121,8 +132,9 @@ declared `STABLE` so the planner can cache argument-free calls
     a blanket authenticated all-write policy. Authenticated writes are constrained to
     explicit single-pane keys/prefixes, while administrators retain full write
     coverage for governed operations.
-  - **Canonical referral status updates**: authenticated staff (administrator,
-    navigator, supervisor) can update `public_referral_intake_events` status payloads
+  - **Canonical referral status updates**: system administrators and `t2b` / `t3a` /
+    `t4` / `t4plus` callers (`public_referral_intake_events_update_staff`,
+    `20261104190200`) can update `public_referral_intake_events` status payloads
     for `public_landing` referral and partner-inquiry events, so queue state changes
     are persisted in the durable intake source rather than only local/session state.
   - **Regulation command validation**: `fn_save_regulation_test_submission` now

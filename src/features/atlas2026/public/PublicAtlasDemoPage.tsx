@@ -6,12 +6,14 @@ import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { buildReferralQueueUpdate } from '@/features/atlas2026/singlepane/referralWorkflowUtils'
 import { enqueuePublicReferralQueueRecord, loadPublicReferralQueueRecords } from '@/features/atlas2026/singlepane/data-access/publicReferralRepository'
 import type {
+  AtlasRole,
   DomainLoad,
   EnrolleeProfile,
   NavigatorProgramState,
   PartnerReferralSubmissionInput,
   UnassignedEnrolleePickupRecord
 } from '@/features/atlas2026/shared/contracts'
+import { isSystemAdmin, normalizeAtlasRoleKey } from '@/features/atlas2026/singlepane/domain/roles'
 import { useSupabaseAuth } from '@/auth/SupabaseAuthProvider'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
@@ -140,8 +142,8 @@ export default function PublicAtlasDemoPage() {
   const [recentPublicReferrals, setRecentPublicReferrals] = React.useState<UnassignedEnrolleePickupRecord[]>([])
 
   const expectedPasscode = (import.meta.env.VITE_ATLAS_DEMO_PASSCODE || '').trim()
-  const roleClaim = String(session?.user?.app_metadata?.atlas_role || '').toLowerCase()
-  const isAdministrator = roleClaim === 'administrator'
+  // The JWT claim may still carry `administrator`; normalization maps it onto t4plus.
+  const isAdministrator = isSystemAdmin(normalizeAtlasRoleKey(session?.user?.app_metadata?.atlas_role))
   const hasConfiguredPasscode = expectedPasscode.length > 0
 
   React.useEffect(() => {
@@ -179,12 +181,12 @@ export default function PublicAtlasDemoPage() {
     void logDemoAccessEvent('passcode', session?.user?.email || null)
   }
 
-  function setSinglePaneRole(role: 'navigator' | 'partner') {
+  function setSinglePaneRole(role: AtlasRole) {
     if (typeof window === 'undefined') return
     window.sessionStorage.setItem(SINGLE_PANE_ROLE_SESSION_KEY, role)
   }
 
-  function setSinglePaneWorkspace(role: 'navigator' | 'partner', activeMenu: string) {
+  function setSinglePaneWorkspace(role: AtlasRole, activeMenu: string) {
     if (typeof window === 'undefined') return
     // Keep demo modal launch deterministic so step workspaces always mirror the real app role/menu.
     window.sessionStorage.setItem(SINGLE_PANE_ROLE_SESSION_KEY, role)
@@ -198,7 +200,7 @@ export default function PublicAtlasDemoPage() {
     if (workspace === 'station') {
       setSinglePaneWorkspace('partner', 'my station')
     } else if (workspace === 'referral') {
-      setSinglePaneRole('navigator')
+      setSinglePaneRole('t3a')
     }
     setActiveWorkspace(workspace)
   }

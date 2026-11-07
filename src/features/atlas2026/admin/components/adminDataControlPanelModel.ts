@@ -21,10 +21,13 @@ import type {
   RegulationReviewDueItem,
   RegulationReviewSettings,
   SupervisorNavigatorCompetencySummary,
+  TierDesignation,
+  TierKey,
   TroubleshootingSessionState,
   ZCodeDomainSurveyHistorySummary,
   ZCodeSurveyPrompt
 } from '@/features/atlas2026/shared/contracts'
+import { ADMIN_PORTAL_PERSON_ROLE_KEYS, isAtlasRole } from '@/features/atlas2026/singlepane/domain/roles'
 
 export type AdminPortalSection =
   | 'overview'
@@ -92,6 +95,14 @@ export interface AdminDataControlPanelProps {
   onAcknowledgeRequestedDomainSurveyZCode?: () => void
   onSaveEnrollmentNavigators: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<unknown> | unknown
   onSaveAccessMatrixPersonRoles: (personId: string, roleKeys: AdminPortalPersonRole[]) => Promise<unknown> | unknown
+  /** `fn_set_person_tier`: one active tier per person. */
+  onSaveAccessMatrixPersonTier: (personId: string, tierKey: TierKey) => Promise<unknown> | unknown
+  /** `fn_mark_tier_alum`. */
+  onMarkAccessMatrixPersonTierAlum: (personId: string) => Promise<unknown> | unknown
+  /** `people_tiers.is_lucid_employee`. */
+  onSaveAccessMatrixPersonLucidEmployee: (personId: string, isLucidEmployee: boolean) => Promise<unknown> | unknown
+  /** `fn_grant_designation` when granted is true, `fn_revoke_designation` otherwise. */
+  onSaveAccessMatrixPersonDesignation: (personId: string, designation: TierDesignation, granted: boolean) => Promise<unknown> | unknown
   onSaveAccessMatrixSupervisorAssignments: (navigatorPersonId: string, supervisorPersonIds: string[]) => Promise<unknown> | unknown
   onSaveAccessMatrixPartnerPrimaryContacts: (partnerId: string, primaryContactPersonIds: string[]) => Promise<unknown> | unknown
   accessMatrixError: string | null
@@ -116,10 +127,10 @@ export const ADMIN_SECTIONS: AdminNavEntry[] = [
   { id: 'enrollees', label: 'Enrollees', description: 'Edit records, create drafts, archive, and reassign.' },
   {
     id: 'directory',
-    label: 'People & roles',
-    description: 'Manage administrators, supervisors, navigators, and partner users.',
+    label: 'People & tiers',
+    description: 'Manage tier standing (T1 through T4+), partner users, and enrollees.',
     children: [
-      { id: 'matrix-person-roles', label: 'Person-to-role matrix', description: 'Grant roles and open troubleshooting.' }
+      { id: 'matrix-person-roles', label: 'Person-to-tier matrix', description: 'Set tiers, designations, and roles; open troubleshooting.' }
     ]
   },
   {
@@ -162,7 +173,8 @@ export function parentAdminSectionId(section: AdminPortalSection): AdminPortalSe
   return parent?.id || null
 }
 
-export const ROLE_OPTIONS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
+/** The seven tiers in ladder order, then partner and enrollee. */
+export const ROLE_OPTIONS: readonly AdminPortalPersonRole[] = ADMIN_PORTAL_PERSON_ROLE_KEYS
 export const ORG_TYPE_OPTIONS: AdminPortalOrganizationType[] = ['partner', 'internal', 'public_agency', 'community']
 export const CUSTOM_ENROLLEE_STATUS_OPTIONS: AdminPortalCustomEnrolleeRecord['status'][] = ['draft', 'active']
 export const ADMIN_ACTIVE_SECTION_KEY = 'atlas2026.admin.session.active-section'
@@ -188,11 +200,9 @@ export function createDefaultFeaturePolicy(): AdminPortalPersonRecord['featurePo
   return { screenToggles: {}, cardToggles: {}, actionToggles: {} }
 }
 
+/** Drops `enrollee`, leaving the tier keys and partner. */
 export function toAtlasRoles(roles: AdminPortalPersonRole[]): AtlasRole[] {
-  return roles.filter(
-    (role): role is AtlasRole =>
-      role === 'administrator' || role === 'supervisor' || role === 'navigator' || role === 'partner'
-  )
+  return roles.filter(isAtlasRole)
 }
 
 // Normalize the survey catalog once so every admin editor uses the same canonical
@@ -326,7 +336,7 @@ export function buildBlankPerson(): AdminPortalPersonRecord {
     fullName: '',
     email: '',
     title: '',
-    roles: ['navigator'],
+    roles: ['t1'],
     canViewNavigatorAssignmentNames: false,
     approvalState: 'pending',
     identityGroupId: id,

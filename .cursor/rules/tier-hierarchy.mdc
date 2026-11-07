@@ -1,0 +1,28 @@
+---
+description: Residency tiers are the role keys; gate by permission key, not by role literal
+alwaysApply: true
+---
+
+# Atlas tiers — keys, gating, and who writes them
+
+The seven Residency tiers are the staff `role_key`s in `atlas.roles`: `t1` Candidate, `t2` Apprentice, `t2b` Peer Resident, `t3` Travel Peer, `t3a` Peer Navigator, `t4` Supervisor, `t4plus` Coordinator. `partner` and `enrollee` remain. Legacy claims `administrator` / `supervisor` / `navigator` normalize to `t4plus` / `t4` / `t3a` (`atlas.fn_normalize_role_key` in Structured Query Language (SQL), `normalizeRoleKey` in `singlepane/domain/roles.ts`). Reference: `docs/tiers.md`.
+
+## Gate by permission key
+
+- Database: `atlas.fn_has_permission(key)` in Row-Level Security (RLS) policies and Remote Procedure Calls (RPCs). `atlas.fn_my_permissions()` returns the caller's keys.
+- Client: `hasPermission(key)` from `singlepane/hooks/useViewerPermissions.ts`; tier defaults from `shared/tiers.ts` (`TIER_PERMISSION_SEED`) when the RPC is unavailable.
+- Role literals are compared only in `singlepane/domain/roles.ts` and `shared/tiers.ts`. Nowhere else.
+- Admin bypass is `atlas.fn_is_system_admin()` (claim `t4plus`/`administrator`, or active `t4plus` assignment) and `isSystemAdmin` on the client. Do not add a second fast path.
+
+## Tier writes
+
+`atlas.fn_set_person_tier`, `atlas.fn_mark_tier_alum`, `atlas.fn_grant_designation`, `atlas.fn_revoke_designation` (callers: `fn_can_manage_tiers` = system admin or active `t4`/`t4plus`). The cohort trigger moves `t1` → `t2` on `ips_cohort_enrollments` insert. Do not write `atlas.people_tiers.tier_key` or `people_role_assignments` tier rows directly; `is_lucid_employee` is the one column updated in place. `ends_on` rule: readers count an assignment through its `ends_on` day (`>= current_date`); closers write `ends_on = current_date - 1`. Keep both sides as they are.
+
+## JWT claim hook
+
+The JSON Web Token (JWT) claim `app_metadata.atlas_role` is written outside this repo. It must emit tier keys. Until it does, legacy claim values are normalized on both sides. Do not add a claim hook here.
+
+```ts
+// BAD: if (role === 'supervisor' || role === 't4') showRoster()
+// GOOD: if (hasPermission('supervision.give')) showRoster()
+```

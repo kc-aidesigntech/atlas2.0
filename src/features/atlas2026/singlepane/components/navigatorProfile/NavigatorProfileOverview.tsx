@@ -1,21 +1,17 @@
 import React from 'react'
 import { CalendarDays } from 'lucide-react'
 import { AtlasIconButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import AtlasImageUploadTile from '@/features/atlas2026/components/AtlasImageUploadTile'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import { loadEnrolleeClaimCards } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
-import type {
-  AccountSettings,
-  NavigatorEnrollmentAssignmentRecord
-} from '@/features/atlas2026/shared/contracts'
+import type { NavigatorEnrollmentAssignmentRecord } from '@/features/atlas2026/shared/contracts'
 import WalletClaimCircles from '../WalletClaimCircles'
-import { ACTIVE_NAVIGATOR_PROFILE_CARDS } from './model'
 
+/**
+ * The enrollee claim surface of My Wallet: the weekly review badge, the program
+ * error line, and the enrollee claim circles. The avatar, name, and tier line
+ * print in `WalletTierHeader` above this surface.
+ */
 interface NavigatorProfileOverviewProps {
-  accountSettings: AccountSettings
-  displayName: string
-  fallbackAvatar: string
-  assignedEnrolleeCount: number
   openReviewCount: number
   programError: string | null
   assignmentBoardRef: React.RefObject<HTMLElement | null>
@@ -26,19 +22,12 @@ interface NavigatorProfileOverviewProps {
   canViewAssignmentNames: boolean
   canToggleAssignments: boolean
   canOpenReferral: boolean
-  isUploadingAvatar: boolean
-  avatarUploadError: string | null
-  onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenReviewQueue: () => void
   onOpenReferral?: () => void
   onToggleAssignment: (enrollmentId: string, mode: 'accept' | 'archive' | 'assign' | 'unassign') => Promise<void> | void
 }
 
 export default function NavigatorProfileOverview({
-  accountSettings,
-  displayName,
-  fallbackAvatar,
-  assignedEnrolleeCount,
   openReviewCount,
   programError,
   assignmentBoardRef,
@@ -48,9 +37,6 @@ export default function NavigatorProfileOverview({
   assigningEnrollmentId,
   canToggleAssignments,
   canOpenReferral,
-  isUploadingAvatar,
-  avatarUploadError,
-  onReplaceAvatar,
   onOpenReviewQueue,
   onOpenReferral,
   onToggleAssignment
@@ -102,32 +88,6 @@ export default function NavigatorProfileOverview({
           </AtlasIconButton>
         </div>
       ) : null}
-      <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
-        <AtlasImageUploadTile
-          imageSrc={accountSettings.avatarUrl || fallbackAvatar}
-          alt={`${displayName} profile`}
-          onSelectFile={onReplaceAvatar}
-          disabled={!onReplaceAvatar}
-          buttonTitle={onReplaceAvatar ? 'Replace profile image' : 'Profile image upload unavailable'}
-          statusText={isUploadingAvatar ? 'uploading image...' : null}
-          errorText={avatarUploadError}
-          onImageError={(event) => {
-            if (event.currentTarget.src !== fallbackAvatar) event.currentTarget.src = fallbackAvatar
-          }}
-        />
-        <div className="min-w-[220px] flex-1 space-y-0.5 pr-14 pt-[2px] text-white" style={{ textTransform: 'none' }}>
-          <h2 className="atlas-h3 text-[34px] font-medium leading-[1.1]" style={{ textTransform: 'none' }}>
-            {displayName}
-          </h2>
-          <small className="atlas-meta block text-white">Role: navigator</small>
-          <small className="atlas-meta block text-white">Org: {accountSettings.organization || 'not recorded'}</small>
-          <small className="atlas-meta block text-white" style={{ textTransform: 'none' }}>
-            E: {accountSettings.email || 'not recorded'}
-          </small>
-          <small className="atlas-meta block text-white">Assigned enrollees: {assignedEnrolleeCount}</small>
-          <small className="atlas-meta block text-white">Active sections: {ACTIVE_NAVIGATOR_PROFILE_CARDS.length}</small>
-        </div>
-      </div>
       {programError ? (
         <div
           className="mt-3 rounded-[14px] border px-3 py-2 text-[12px]"

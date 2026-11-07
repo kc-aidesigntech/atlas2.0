@@ -44,7 +44,7 @@ export default function SupervisorCompetencyPanel({
                 <div className="flex flex-col items-end gap-2">
                   <WarmLineAccessToggle
                     personId={row.navigatorPersonId}
-                    personRoles={['navigator']}
+                    personRoles={['t3a']}
                     mode="supervisor"
                     disabled={isSavingAssignments}
                   />

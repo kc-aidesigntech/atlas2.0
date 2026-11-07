@@ -1,7 +1,27 @@
 [
   {
-    "role": "navigator",
-    "topMenus": ["assigned enrollees", "requests to enroll", "referral portal", "route planning", "my station"],
+    "role": "t1",
+    "topMenus": ["refer"],
+    "actionMenus": []
+  },
+  {
+    "role": "t2",
+    "topMenus": ["my wallet", "refer"],
+    "actionMenus": []
+  },
+  {
+    "role": "t2b",
+    "topMenus": ["enrollees", "my wallet", "leads", "warm line", "respite shifts", "refer"],
+    "actionMenus": ["log contact", "escalate risk"]
+  },
+  {
+    "role": "t3",
+    "topMenus": ["my wallet", "secondment schedule", "refer"],
+    "actionMenus": []
+  },
+  {
+    "role": "t3a",
+    "topMenus": ["enrollees", "my wallet", "refer", "route planning", "my station", "leads", "warm line", "respite shifts"],
     "actionMenus": ["log contact", "append route step", "escalate risk"]
   },
   {
@@ -10,13 +30,13 @@
     "actionMenus": []
   },
   {
-    "role": "supervisor",
-    "topMenus": ["my wallet", "referral portal", "route planning", "team burden"],
+    "role": "t4",
+    "topMenus": ["my wallet", "referral portal", "route planning", "team burden", "warm line"],
     "actionMenus": []
   },
   {
-    "role": "administrator",
-    "topMenus": ["assigned enrollees", "system operations", "route planning", "governance"],
+    "role": "t4plus",
+    "topMenus": ["enrollees", "system operations", "route planning", "governance", "partners", "county commons"],
     "actionMenus": []
   }
 ]

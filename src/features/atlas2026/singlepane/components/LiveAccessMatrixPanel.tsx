@@ -1,6 +1,7 @@
 import React from 'react'
 import { AtlasInsetCard, AtlasStatusPill, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import AdminPersonNameButton from '@/features/atlas2026/admin/components/AdminPersonNameButton'
+import TierStandingEditor, { type TierStandingEditorProps } from '@/features/atlas2026/admin/components/TierStandingEditor'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
   AccessMatrixPartnerRecord,
@@ -10,6 +11,8 @@ import type {
   PartnerTroubleshootingGrant,
   TroubleshootingSessionState
 } from '@/features/atlas2026/shared/contracts'
+import { isTierKey, tierDisplayLabel } from '@/features/atlas2026/shared/tiers'
+import { ATLAS_ROLE_KEYS, isNavigatorTier, isSupervisorTier } from '../domain/roles'
 
 export type LiveAccessMatrixSection = 'person-roles' | 'navigator-enrollee' | 'supervisor-navigator' | 'partner-ownership'
 
@@ -19,6 +22,10 @@ interface LiveAccessMatrixPanelProps {
   error: string | null
   isSaving: boolean
   onSavePersonRoles: (personId: string, roleKeys: AdminPortalPersonRole[]) => Promise<unknown> | unknown
+  onSavePersonTier: TierStandingEditorProps['onSetTier']
+  onMarkPersonTierAlum: TierStandingEditorProps['onMarkAlum']
+  onSavePersonLucidEmployee: TierStandingEditorProps['onSetLucidEmployee']
+  onSavePersonDesignation: TierStandingEditorProps['onSetDesignation']
   onSaveEnrollmentNavigator: (enrollmentId: string, navigatorPersonIds: string[]) => Promise<unknown> | unknown
   onSaveSupervisorAssignment: (navigatorPersonId: string, supervisorPersonIds: string[]) => Promise<unknown> | unknown
   onSavePartnerPrimaryContact: (partnerId: string, primaryContactPersonIds: string[]) => Promise<unknown> | unknown
@@ -35,6 +42,10 @@ export default function LiveAccessMatrixPanel({
   error,
   isSaving,
   onSavePersonRoles,
+  onSavePersonTier,
+  onMarkPersonTierAlum,
+  onSavePersonLucidEmployee,
+  onSavePersonDesignation,
   onSaveEnrollmentNavigator,
   onSaveSupervisorAssignment,
   onSavePartnerPrimaryContact,
@@ -50,9 +61,12 @@ export default function LiveAccessMatrixPanel({
   const [supervisorSingleChoice, setSupervisorSingleChoice] = React.useState(false)
   const [partnerOwnerSingleChoice, setPartnerOwnerSingleChoice] = React.useState(false)
   const people = dataset?.people || []
-  const navigators = people.filter((person) => person.roleKeys.includes('navigator'))
-  const supervisors = people.filter((person) => person.roleKeys.includes('supervisor') || person.roleKeys.includes('administrator'))
-  const roles = dataset?.roleKeys || []
+  // Navigator tiers are t3a and t2b; supervisor tiers are t4 and t4plus.
+  const navigators = people.filter((person) => person.roleKeys.some(isNavigatorTier))
+  const supervisors = people.filter((person) => person.roleKeys.some(isSupervisorTier))
+  // Tier keys are set through the tier picker; the chips below cover partner and enrollee.
+  const nonTierRoles = (dataset?.roleKeys || []).filter((role) => !isTierKey(role))
+  const tierRecordByPersonId = new Map((dataset?.tiers || []).map((record) => [record.personId, record]))
   const personById = new Map(people.map((person) => [person.id, person]))
   const partnerAssignmentsByPersonId = new Map<string, AccessMatrixPartnerRecord[]>()
   for (const partner of dataset?.partnerAssignments || []) {
@@ -61,7 +75,7 @@ export default function LiveAccessMatrixPanel({
       partnerAssignmentsByPersonId.set(personId, [...current, partner])
     }
   }
-  const troubleshootingRoles: AtlasRole[] = ['administrator', 'supervisor', 'navigator', 'partner']
+  const troubleshootingRoles: readonly AtlasRole[] = ATLAS_ROLE_KEYS
 
   async function runSave(key: string, callback: () => Promise<unknown> | unknown, successMessage: string) {
     setBusyKey(key)
@@ -97,20 +111,39 @@ export default function LiveAccessMatrixPanel({
 
       {section === 'person-roles' ? (
         <AtlasInsetCard className="rounded-[18px] px-4 py-4">
-          <div className="mb-2 text-[16px] font-semibold text-white">Person-to-role matrix</div>
+          <div className="mb-2 text-[16px] font-semibold text-white">Person-to-tier matrix</div>
           <div className="space-y-2">
-            {people.map((person) => (
+            {people.map((person) => {
+              const tierRecord = tierRecordByPersonId.get(person.id) || null
+              const tierColumn = tierRecord
+                ? tierDisplayLabel(tierRecord.tierKey, tierRecord.tierStatus)
+                : tierDisplayLabel(person.roleKeys.find(isTierKey) || '', 'active') || 'no tier'
+              return (
               <div key={person.id} className="rounded-[14px] border border-white/10 bg-white/5 p-3">
-                <div className="mb-2">
-                  {onOpenPerson ? (
-                    <AdminPersonNameButton name={person.fullName} onOpen={() => onOpenPerson(person.id)} className="text-[13px]" />
-                  ) : (
-                    <div className="text-[13px] font-medium text-white">{person.fullName}</div>
-                  )}
-                  <small className="text-[11px] text-[var(--foreground-secondary)]">{person.email || 'email not set'}</small>
+                <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    {onOpenPerson ? (
+                      <AdminPersonNameButton name={person.fullName} onOpen={() => onOpenPerson(person.id)} className="text-[13px]" />
+                    ) : (
+                      <div className="text-[13px] font-medium text-white">{person.fullName}</div>
+                    )}
+                    <small className="text-[11px] text-[var(--foreground-secondary)]">{person.email || 'email not set'}</small>
+                  </div>
+                  <AtlasStatusPill color={tierRecord?.tierStatus === 'alum' ? SP_COLORS.yellow : SP_COLORS.white}>{tierColumn}</AtlasStatusPill>
+                </div>
+                <div className="mb-3">
+                  <TierStandingEditor
+                    personId={person.id}
+                    record={tierRecord}
+                    disabled={isSaving}
+                    onSetTier={onSavePersonTier}
+                    onMarkAlum={onMarkPersonTierAlum}
+                    onSetLucidEmployee={onSavePersonLucidEmployee}
+                    onSetDesignation={onSavePersonDesignation}
+                  />
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {roles.map((role) => {
+                  {nonTierRoles.map((role) => {
                     const active = person.roleKeys.includes(role)
                     return (
                       <AtlasTextButton
@@ -132,7 +165,7 @@ export default function LiveAccessMatrixPanel({
                           } as React.CSSProperties
                         }
                       >
-                        {role}
+                        {tierDisplayLabel(role)}
                       </AtlasTextButton>
                     )
                   })}
@@ -152,7 +185,7 @@ export default function LiveAccessMatrixPanel({
                         ? 'await partner grant'
                         : isActiveSession
                           ? 'troubleshooting now'
-                          : `troubleshoot as ${candidateRole}`
+                          : `troubleshoot as ${tierDisplayLabel(candidateRole)}`
                       return (
                         <AtlasTextButton
                           key={`troubleshoot:${person.id}:${candidateRole}`}
@@ -188,7 +221,8 @@ export default function LiveAccessMatrixPanel({
                   </small>
                 ) : null}
               </div>
-            ))}
+              )
+            })}
           </div>
         </AtlasInsetCard>
       ) : null}

@@ -30,6 +30,7 @@ import {
 } from '@/features/atlas2026/singlepane/data/regulationCadence'
 import { getRegulationTestLabel } from '@/features/atlas2026/singlepane/domain/phaseAndZCodes'
 import { upsertRegulationTestHistory } from '@/features/atlas2026/singlepane/useSinglePaneDataTransforms'
+import { isNavigatorTier } from '@/features/atlas2026/singlepane/domain/roles'
 
 interface RegulationReviewStateInput {
   scopedEnrollees: EnrolleeProfile[]
@@ -117,7 +118,7 @@ export function useRegulationReviewState({
   }, [enrolleeIdsKey])
 
   useEffect(() => {
-    if (viewerRole !== 'navigator' || !selectedEnrollee?.id) {
+    if (!isNavigatorTier(viewerRole) || !selectedEnrollee?.id) {
       setRegulationTestHistory([])
       setRegulationTestError(null)
       return

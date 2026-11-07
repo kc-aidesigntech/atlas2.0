@@ -2,6 +2,7 @@ import React from 'react'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import AdminPersonNameButton from '@/features/atlas2026/admin/components/AdminPersonNameButton'
+import TierStandingEditor, { type TierStandingEditorProps } from '@/features/atlas2026/admin/components/TierStandingEditor'
 import WarmLineAccessToggle from '@/features/atlas2026/singlepane/components/WarmLineAccessToggle'
 import type {
   AdminDirectorySectionDataProps,
@@ -9,6 +10,8 @@ import type {
   RecordTableComponentType,
   StatusPillComponentType
 } from '@/features/atlas2026/admin/components/types'
+import type { PersonTierRecord } from '@/features/atlas2026/shared/contracts'
+import { isTierKey, tierDisplayLabel } from '@/features/atlas2026/shared/tiers'
 
 interface AdminDirectorySectionProps {
   setPersonDraft: AdminDirectorySectionDataProps['setPersonDraft']
@@ -23,6 +26,13 @@ interface AdminDirectorySectionProps {
   handleSavePersonDraft: AdminDirectorySectionDataProps['handleSavePersonDraft']
   handleDeletePerson: AdminDirectorySectionDataProps['handleDeletePerson']
   ROLE_OPTIONS: AdminDirectorySectionDataProps['roleOptions']
+  /** `atlas.people_tiers` rows from the access matrix dataset, one per person. */
+  tierRecords: PersonTierRecord[]
+  isSavingTier: boolean
+  onSavePersonTier: TierStandingEditorProps['onSetTier']
+  onMarkPersonTierAlum: TierStandingEditorProps['onMarkAlum']
+  onSavePersonLucidEmployee: TierStandingEditorProps['onSetLucidEmployee']
+  onSavePersonDesignation: TierStandingEditorProps['onSetDesignation']
   RecordTableComponent: RecordTableComponentType
   StatusPillComponent: StatusPillComponentType
   FieldComponent: FieldComponentType
@@ -41,10 +51,27 @@ export default function AdminDirectorySection({
   onOpenPerson,
   handleSavePersonDraft,
   handleDeletePerson,
+  tierRecords,
+  isSavingTier,
+  onSavePersonTier,
+  onMarkPersonTierAlum,
+  onSavePersonLucidEmployee,
+  onSavePersonDesignation,
   RecordTableComponent,
   StatusPillComponent,
   FieldComponent
 }: AdminDirectorySectionProps) {
+  const tierRecordByPersonId = React.useMemo(
+    () => new Map(tierRecords.map((record) => [record.personId, record])),
+    [tierRecords]
+  )
+  // Column text: the people_tiers row when one exists, else the tier key on the role list.
+  function tierColumnLabel(person: { id: string; roles: readonly string[] }) {
+    const record = tierRecordByPersonId.get(person.id)
+    if (record) return tierDisplayLabel(record.tierKey, record.tierStatus)
+    const tierRole = person.roles.find(isTierKey)
+    return tierRole ? tierDisplayLabel(tierRole) : 'no tier'
+  }
   return (
     <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
       <AtlasInsetCard className="rounded-[22px] px-5 py-5">
@@ -64,7 +91,7 @@ export default function AdminDirectorySection({
           </AtlasTextButton>
         </div>
         <RecordTableComponent
-          columns={['person', 'roles', 'organization', 'status']}
+          columns={['person', 'tier', 'roles', 'organization', 'status']}
           rows={combinedPeople.map((person) => ({ id: person.id }))}
           renderRow={({ id }: { id: string }) => {
             const person = combinedPeople.find((entry) => entry.id === id)
@@ -73,7 +100,7 @@ export default function AdminDirectorySection({
               <div
                 role="button"
                 tabIndex={0}
-                className="grid w-full cursor-pointer grid-cols-[1.3fr_repeat(3,minmax(0,1fr))] gap-3 px-4 py-3 text-left transition hover:bg-white/5"
+                className="grid w-full cursor-pointer grid-cols-[1.3fr_repeat(4,minmax(0,1fr))] gap-3 px-4 py-3 text-left transition hover:bg-white/5"
                 style={selectedPersonId === person.id ? { backgroundColor: 'rgba(252,192,26,0.08)' } : undefined}
                 onClick={() => {
                   setSelectedPersonId(person.id)
@@ -97,7 +124,8 @@ export default function AdminDirectorySection({
                   />
                   <small className="block text-[12px] text-[var(--foreground-secondary)]">{person.email || 'email pending'}</small>
                 </div>
-                <div className="text-[13px] text-white">{person.roles.join(', ')}</div>
+                <div className="text-[13px] text-white">{tierColumnLabel(person)}</div>
+                <div className="text-[13px] text-white">{person.roles.map((role) => tierDisplayLabel(role)).join(', ')}</div>
                 <div className="text-[13px] text-[var(--foreground-secondary)]">
                   {combinedOrganizations.find((organization) => organization.id === person.organizationId)?.name || 'unassigned'}
                 </div>
@@ -172,6 +200,17 @@ export default function AdminDirectorySection({
                 className="atlas-admin-input"
               />
             </FieldComponent>
+            <FieldComponent label="tier standing">
+              <TierStandingEditor
+                personId={personDraft.id}
+                record={tierRecordByPersonId.get(personDraft.id) || null}
+                disabled={isSavingTier}
+                onSetTier={onSavePersonTier}
+                onMarkAlum={onMarkPersonTierAlum}
+                onSetLucidEmployee={onSavePersonLucidEmployee}
+                onSetDesignation={onSavePersonDesignation}
+              />
+            </FieldComponent>
             <FieldComponent label="roles">
               <div className="flex flex-wrap gap-2">
                 {ROLE_OPTIONS.map((role) => {
@@ -200,11 +239,14 @@ export default function AdminDirectorySection({
                         } as React.CSSProperties
                       }
                     >
-                      {role}
+                      {tierDisplayLabel(role)}
                     </AtlasTextButton>
                   )
                 })}
               </div>
+              <small className="mt-2 block text-[12px] text-[var(--foreground-secondary)]">
+                Role chips are the directory record. The tier standing above writes the database tier through fn_set_person_tier.
+              </small>
             </FieldComponent>
             <div className="grid gap-3 md:grid-cols-2">
               <FieldComponent label="organization">

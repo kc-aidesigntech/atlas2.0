@@ -27,7 +27,13 @@ import { loadLocalLogs } from '@/features/atlas2026/singlepane/data-access/route
 import { mapZCodeToDomainBucket } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { resolveSessionPersonIdFromMetadata } from '@/features/atlas2026/singlepane/data-access/enrollmentAssignmentRepository'
-import { dedupeMenus } from '@/features/atlas2026/singlepane/domain/roles'
+import {
+  dedupeMenus,
+  isNavigatorTier,
+  isSystemAdmin,
+  normalizeAtlasRoleKey,
+  workspaceExperience
+} from '@/features/atlas2026/singlepane/domain/roles'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 import { menuListIncludesScribe, setScribeOnMenuList } from '@/features/atlas2026/scribe/scribeMenuVisibility'
 
@@ -60,18 +66,66 @@ function hideUnconfiguredWarmLineMenu(menus: string[], canAccessWarmLine: boolea
   return menus.filter((menu) => menu.trim().toLowerCase() !== 'warm line')
 }
 
+/**
+ * Stored `app_role_navigation.top_menus` label (lower-cased) to the `activeMenu`
+ * screen id the workspace switches on. Tier rows seeded by the database use the
+ * screen ids directly, so those entries map to themselves. Labels not listed
+ * here pass through as written.
+ */
+export const TIER_MENU_SCREEN_IDS: Record<string, string> = {
+  // Screens that exist today.
+  refer: 'refer',
+  'my wallet': 'my wallet',
+  enrollees: 'enrollees',
+  'warm line': 'warm line',
+  'route planning': 'route planning',
+  'team burden': 'team burden',
+  'county commons': 'county commons',
+  'system operations': 'system operations',
+  governance: 'governance',
+  fleet: 'fleet',
+  scribe: 'scribe',
+  'my station': 'my station',
+  'service capacity': 'service capacity',
+  // Tier feature screens rendered by components/tierFeaturePanels/TierFeatureScreen.
+  leads: 'leads',
+  'respite shifts': 'respite shifts',
+  'secondment schedule': 'secondment schedule',
+  partners: 'partners',
+  cohorts: 'cohorts',
+  sponsorships: 'sponsorships',
+  'competency cards': 'competency cards',
+  // Older labels that open an existing screen under a different name.
+  'assigned enrollees': 'enrollees',
+  'requests to enroll': 'my wallet',
+  'my profile': 'my wallet',
+  'assigned navigators': 'my wallet',
+  'navigator assessments': 'my wallet',
+  'referral portal': 'refer',
+  'heat map': 'county commons',
+  'county commons/heat map': 'county commons',
+  navigators: 'my wallet',
+  assessments: 'my wallet',
+  pickup: 'enrollees',
+  'ips core cohorts': 'cohorts',
+  'competency card': 'competency cards',
+  'respite shift': 'respite shifts',
+  secondments: 'secondment schedule'
+}
+
+/** Screen id for a stored label (`referral portal` returns `refer`); null when the label is not in the table. */
+export function tierMenuScreenId(menu: string) {
+  return TIER_MENU_SCREEN_IDS[menu.trim().toLowerCase()] || null
+}
+
+function normalizeTierMenuLabel(menu: string) {
+  return tierMenuScreenId(menu) || menu
+}
+
 function normalizeNavigatorTopMenus(menus: string[], canAccessWarmLine: boolean) {
   const normalized = hideUnconfiguredWarmLineMenu(
     hideDeferredCountyCommonsMenu(
-      menus
-        .map((menu) => {
-          const lower = menu.trim().toLowerCase()
-          if (lower === 'assigned enrollees') return 'enrollees'
-          if (lower === 'requests to enroll' || lower === 'my profile') return 'my wallet'
-          if (lower === 'referral portal') return 'refer'
-          return menu
-        })
-        .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+      menus.map(normalizeTierMenuLabel).filter((menu) => menu.trim().toLowerCase() !== 'route planning')
     ),
     canAccessWarmLine
   )
@@ -79,39 +133,61 @@ function normalizeNavigatorTopMenus(menus: string[], canAccessWarmLine: boolean)
   return dedupeMenus(normalized)
 }
 
-function normalizeRoleTopMenus(roleKey: string, menus: string[], canAccessWarmLine: boolean) {
-  if (roleKey === 'navigator') return normalizeNavigatorTopMenus(menus, canAccessWarmLine)
-  // Partner chrome is a fixed shell. Scribe is the one optional item, so it
-  // follows the stored menu list instead of being dropped with the rest.
-  if (roleKey === 'partner') {
-    return setScribeOnMenuList(['referral portal', 'my station', 'service capacity'], menuListIncludesScribe(menus))
-  }
-  if (roleKey === 'supervisor') {
-    const normalized = hideUnconfiguredWarmLineMenu(
-      hideDeferredCountyCommonsMenu(
-        menus
-          .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
-          .map((menu) => {
-            const lower = menu.trim().toLowerCase()
-            // Older supervisor shells used separate profile and assessment labels.
-            // Both open the one wallet page: assigned navigators, then the cards.
-            if (lower === 'assigned navigators' || lower === 'navigator assessments' || lower === 'my profile') return 'my wallet'
-            return menu
-          })
-      ),
-      canAccessWarmLine
-    )
-    const withReferral = normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]
-    return dedupeMenus(withReferral)
-  }
-  return hideUnconfiguredWarmLineMenu(hideDeferredCountyCommonsMenu(menus), canAccessWarmLine)
+function normalizeSupervisorTopMenus(menus: string[], canAccessWarmLine: boolean) {
+  const normalized = hideUnconfiguredWarmLineMenu(
+    hideDeferredCountyCommonsMenu(
+      menus
+        .filter((menu) => menu.trim().toLowerCase() !== 'route planning')
+        .map((menu) => {
+          const lower = menu.trim().toLowerCase()
+          // The supervisor shell keeps `referral portal` as its referral screen id.
+          if (lower === 'referral portal' || lower === 'refer') return 'referral portal'
+          return normalizeTierMenuLabel(menu)
+        })
+    ),
+    canAccessWarmLine
+  )
+  const withReferral = normalized.includes('referral portal') ? normalized : ['referral portal', ...normalized]
+  return dedupeMenus(withReferral)
 }
+
+/** t1, t2, and t3 show their stored row with aliases mapped and gated menus hidden. */
+function normalizeMemberTierTopMenus(menus: string[], canAccessWarmLine: boolean) {
+  return dedupeMenus(
+    hideUnconfiguredWarmLineMenu(hideDeferredCountyCommonsMenu(menus.map(normalizeTierMenuLabel)), canAccessWarmLine)
+  )
+}
+
+function normalizeRoleTopMenus(role: AtlasRole, menus: string[], canAccessWarmLine: boolean) {
+  const experience = workspaceExperience(role)
+  switch (experience) {
+    case 'navigator':
+      return normalizeNavigatorTopMenus(menus, canAccessWarmLine)
+    case 'partner':
+      // Partner chrome is a fixed shell. Scribe is the one optional item, so it
+      // follows the stored menu list instead of being dropped with the rest.
+      return setScribeOnMenuList(['referral portal', 'my station', 'service capacity'], menuListIncludesScribe(menus))
+    case 'supervisor':
+      return normalizeSupervisorTopMenus(menus, canAccessWarmLine)
+    case 'member':
+      return normalizeMemberTierTopMenus(menus, canAccessWarmLine)
+    case 'administrator':
+      return hideUnconfiguredWarmLineMenu(hideDeferredCountyCommonsMenu(menus.map(normalizeTierMenuLabel)), canAccessWarmLine)
+    default: {
+      const exhaustive: never = experience
+      return exhaustive
+    }
+  }
+}
+
+// Order the t4plus superset collects menus in: navigator tiers first, then partner,
+// the member tiers, the supervisor, and the coordinator's own row last.
+const SUPERSET_ROLE_PRIORITY: AtlasRole[] = ['t3a', 't2b', 'partner', 't3', 't2', 't1', 't4', 't4plus']
 
 function buildAdminSupersetMenus(roleConfigs: Array<{ role: AtlasRole; topMenus: string[]; actionMenus: string[] }>) {
   const topMenus = new Set<string>()
   const actionMenus = new Set<string>()
-  const orderedRolePriority: AtlasRole[] = ['navigator', 'partner', 'supervisor', 'administrator']
-  for (const roleKey of orderedRolePriority) {
+  for (const roleKey of SUPERSET_ROLE_PRIORITY) {
     const config = roleConfigs.find((item) => item.role === roleKey)
     if (!config) continue
     for (const menu of config.topMenus) topMenus.add(menu)
@@ -276,17 +352,17 @@ export async function loadSinglePaneBootstrap(
           []
         )
       : Promise.resolve([]),
-    role === 'navigator'
+    isNavigatorTier(role)
       ? withOptionalSupabaseFallback('singlepane.navigatorAssignedEnrollees', () => fetchNavigatorAssignedEnrollees(supabase), [])
       : Promise.resolve([]),
-    role === 'navigator'
+    isNavigatorTier(role)
       ? withOptionalSupabaseFallback('singlepane.navigatorPersonFromMetadata', () => resolveSessionPersonIdFromMetadata(), null)
       : Promise.resolve(null),
     withOptionalSupabaseFallback('singlepane.warmLineAccess', () => fetchCanAccessWarmLineAgent(), false)
   ])
 
   const navigatorEnrollmentIds =
-    role === 'navigator'
+    isNavigatorTier(role)
       ? new Set(
           // Database authorization scopes rows; absent metadata falls back to those scoped rows.
           navigatorAssignedEnrollees
@@ -295,16 +371,16 @@ export async function loadSinglePaneBootstrap(
         )
       : null
   const visibleProfiles =
-    role === 'navigator'
+    isNavigatorTier(role)
       ? profiles.filter((profile) => navigatorEnrollmentIds?.has(profile.enrollmentId))
       : profiles
   const uniqueVisibleProfiles = dedupeProfilesByEnrollmentId(visibleProfiles)
   const visibleLoadRows =
-    role === 'navigator'
+    isNavigatorTier(role)
       ? loadRows.filter((row) => navigatorEnrollmentIds?.has(row.enrollmentId))
       : loadRows
   const visibleBreakdownRows =
-    role === 'navigator'
+    isNavigatorTier(role)
       ? breakdownRows.filter((row) => navigatorEnrollmentIds?.has(row.enrollmentId))
       : breakdownRows
   const fallbackLoadByEnrollmentId = new Map(visibleLoadRows.map((row) => [row.enrollmentId, row]))
@@ -333,20 +409,27 @@ export async function loadSinglePaneBootstrap(
     currentPhase: profile.currentPhase
   }))
 
-  const normalizedRoleConfigs = roleNavigation.map((item) => ({
-    role: item.roleKey as AtlasRole,
-    topMenus: normalizeRoleTopMenus(item.roleKey, item.topMenus, canAccessWarmLine === true),
-    actionMenus: item.actionMenus
-  }))
+  // Legacy row keys (navigator, supervisor, administrator) map onto their tier; unknown keys drop.
+  const normalizedRoleConfigs = roleNavigation.flatMap((item) => {
+    const role = normalizeAtlasRoleKey(item.roleKey)
+    if (!role) return []
+    return [
+      {
+        role,
+        topMenus: normalizeRoleTopMenus(role, item.topMenus, canAccessWarmLine === true),
+        actionMenus: item.actionMenus
+      }
+    ]
+  })
   const adminSuperset = buildAdminSupersetMenus(normalizedRoleConfigs)
-  // The administrator menu is a superset of every role, except scribe. Scribe
-  // stays on the administrator row alone so hiding it for administrators does
-  // not depend on whether another permission level still shows it.
+  // The t4plus menu is a superset of every role, except scribe. Scribe stays on
+  // the t4plus row alone so hiding it for coordinators does not depend on
+  // whether another permission level still shows it.
   const administratorHasScribe = menuListIncludesScribe(
-    normalizedRoleConfigs.find((item) => item.role === 'administrator')?.topMenus || []
+    normalizedRoleConfigs.find((item) => isSystemAdmin(item.role))?.topMenus || []
   )
   const roleConfigs = normalizedRoleConfigs.map((item) => {
-    if (item.role !== 'administrator') return item
+    if (!isSystemAdmin(item.role)) return item
     const topMenus = setScribeOnMenuList(adminSuperset.topMenus, administratorHasScribe)
     return { ...item, topMenus, actionMenus: adminSuperset.actionMenus }
   })

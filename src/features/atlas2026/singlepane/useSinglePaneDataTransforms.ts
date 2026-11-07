@@ -9,6 +9,7 @@ import type {
   SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/shared/contracts'
 import { splitFullName } from '@/features/atlas2026/singlepane/personNameUtils'
+import { isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 function sortByIsoDesc(leftIso: string, rightIso: string) {
   return new Date(rightIso).getTime() - new Date(leftIso).getTime()
@@ -38,7 +39,8 @@ export function buildPartnerServiceCapacityDefaultHeader(
     email: accountSettings.email || '',
     organizationName: accountSettings.organization || '',
     jobTitle: '',
-    respondentRoles: role === 'administrator' ? ['administrator'] : ['direct_service_provider'],
+    // `administrator` here is the survey respondent role, not an Atlas role key.
+    respondentRoles: isSystemAdmin(role) ? ['administrator'] : ['direct_service_provider'],
     otherRoleText: ''
   }
 }

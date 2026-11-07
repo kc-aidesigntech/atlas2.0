@@ -1,4 +1,5 @@
 import type { AtlasRole, TroubleshootingSessionState } from '@/features/atlas2026/shared/contracts'
+import { normalizeAtlasRoleKey } from '@/features/atlas2026/singlepane/domain/roles'
 
 export const SESSION_ROLE_KEY = 'atlas2026.singlepane.session.role'
 export const SESSION_ACTIVE_MENU_KEY = 'atlas2026.singlepane.session.active-menu'
@@ -29,10 +30,8 @@ export function writeSessionStorageValue(key: string, value: string | null) {
 }
 
 export function readSessionRole(initialRole: AtlasRole) {
-  const stored = readSessionStorageValue(SESSION_ROLE_KEY)
-  return stored === 'administrator' || stored === 'supervisor' || stored === 'partner' || stored === 'navigator'
-    ? stored
-    : initialRole
+  // A stored legacy key from an older session maps onto its tier.
+  return normalizeAtlasRoleKey(readSessionStorageValue(SESSION_ROLE_KEY)) || initialRole
 }
 
 export function readSessionRemoteSession(): TroubleshootingSessionState | null {
@@ -40,11 +39,13 @@ export function readSessionRemoteSession(): TroubleshootingSessionState | null {
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as Partial<TroubleshootingSessionState>
-    if (!parsed || !parsed.isActive || !parsed.targetPersonId || !parsed.targetRole) return null
+    if (!parsed || !parsed.isActive || !parsed.targetPersonId) return null
+    const targetRole = normalizeAtlasRoleKey(parsed.targetRole)
+    if (!targetRole) return null
     return {
       isActive: true,
       targetPersonId: String(parsed.targetPersonId),
-      targetRole: parsed.targetRole,
+      targetRole,
       targetDisplayName: String(parsed.targetDisplayName || ''),
       targetEmail: String(parsed.targetEmail || ''),
       targetOrganizationName: parsed.targetOrganizationName ? String(parsed.targetOrganizationName) : null,

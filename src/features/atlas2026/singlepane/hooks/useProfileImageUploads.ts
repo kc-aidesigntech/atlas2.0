@@ -13,6 +13,7 @@ import {
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import type { SinglePaneBootstrapState } from '@/features/atlas2026/singlepane/hooks/useSinglePaneBootstrapState'
 import { compressImageToDataUrl } from '@/features/atlas2026/singlepane/domain/loadsRoutes'
+import { isNavigatorTier } from '@/features/atlas2026/singlepane/domain/roles'
 
 interface ProfileImageUploadsInput {
   remoteSessionActive: boolean
@@ -79,7 +80,7 @@ export function useProfileImageUploads({
       // Navigator station identity remains anchored to its linked organization rather
       // than being re-pointed by an account avatar update.
       const stationOrganizationName =
-        viewerRole === 'navigator'
+        isNavigatorTier(viewerRole)
           ? partnerStationProfile?.organizationName?.trim() || saved.organization
           : saved.organization
       const stationProfile = await loadPartnerStationProfile(stationOrganizationName, {

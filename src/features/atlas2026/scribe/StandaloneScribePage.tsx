@@ -236,7 +236,7 @@ export default function StandaloneScribePage() {
           <div className="flex items-center gap-3">
             <AtlasOverline className="text-[#9eacb9]">scribe</AtlasOverline>
             {/* Not the partner shell. The warm-line permission still decides whether the icon renders. */}
-            <PrayPhoneListenButton role="navigator" />
+            <PrayPhoneListenButton role="t3a" />
           </div>
         </div>
         <div className="atlas-shell-edge-buffer flex min-h-[54px] items-center py-2">

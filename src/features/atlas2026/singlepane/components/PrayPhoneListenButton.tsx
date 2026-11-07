@@ -1,8 +1,10 @@
 import React from 'react'
 import { Phone } from 'lucide-react'
 import { AtlasIconButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { AtlasRole } from '@/features/atlas2026/shared/contracts'
+import type { AtlasPermissionKey, AtlasRole } from '@/features/atlas2026/shared/contracts'
+import { roleHasDefaultPermission } from '@/features/atlas2026/shared/roleCapabilityPolicy'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import { tierAtLeast } from '@/features/atlas2026/shared/tiers'
 import { supabase } from '@/lib/supabaseClient'
 import { fetchLiveInboundRing } from '../data-access/prayphoneInboundRing'
 import { fetchQueuedCallCount } from '../data-access/prayphoneQueueCount'
@@ -14,23 +16,33 @@ const RING_POLL_MS = 4000
 
 interface PrayPhoneListenButtonProps {
   role: AtlasRole
+  /**
+   * Permission check from `useViewerPermissions`. Shells without the hook
+   * (fleet, scribe) leave it unset and the seeded tier defaults answer instead.
+   */
+  hasPermission?: (key: AtlasPermissionKey) => boolean
 }
 
 /**
  * Permanent Pray Phone door in the top bar, left of Account Settings.
- * Navigator, supervisor, and administrator profiles that pass the warm-line
- * permission see it on every workspace menu, and on the fleet and scribe
- * shells. Partners do not. A press always opens the
- * agent console. The green count is conferencer sessions whose state is
- * initiated, dialing, or ringing. An empty queue shows zero. An inbound
- * call turns the control red and rings when that class is enabled in
- * atlas.prayphone_ring_sources. All four classes start enabled.
- * The first pointer or key on this tab arms the clip. Later calls play it
- * without another click. A reload is not used: it clears that arming.
- * When the clip is blocked, a granted notification plays the system alert.
+ * A tier that holds `warmline_agent.access`, or sits at t2b or higher, and
+ * that passes the `fn_can_access_warmline_agent` check sees it on every
+ * workspace menu, and on the fleet and scribe shells. Partners do not. A
+ * press always opens the agent console. The green count is conferencer
+ * sessions whose state is initiated, dialing, or ringing. An empty queue
+ * shows zero. An inbound call turns the control red and rings when that
+ * class is enabled in atlas.prayphone_ring_sources. All four classes start
+ * enabled. The first pointer or key on this tab arms the clip. Later calls
+ * play it without another click. A reload is not used: it clears that
+ * arming. When the clip is blocked, a granted notification plays the system
+ * alert.
  */
-export default function PrayPhoneListenButton({ role }: PrayPhoneListenButtonProps) {
-  const eligibleRole = role === 'navigator' || role === 'supervisor' || role === 'administrator'
+export default function PrayPhoneListenButton({ role, hasPermission }: PrayPhoneListenButtonProps) {
+  // Eligibility: the `warmline_agent.access` key (live list or tier default), or a tier at t2b or higher.
+  const holdsWarmLineKey = hasPermission
+    ? hasPermission('warmline_agent.access')
+    : roleHasDefaultPermission(role, 'warmline_agent.access')
+  const eligibleRole = holdsWarmLineKey || tierAtLeast(role, 't2b')
   const configured = isPrayPhoneWarmLineConfigured()
   const [hasAccess, setHasAccess] = React.useState(false)
   const [incoming, setIncoming] = React.useState(false)

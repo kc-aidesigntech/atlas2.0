@@ -34,7 +34,16 @@ export const WORKSPACE_PAGES: WorkspacePage[] = [
   { menu: 'warm line', path: 'warm-line', scopes: [] },
   { menu: 'scribe', path: 'scribe', scopes: [] },
   { menu: 'fleet', path: 'fleet', scopes: [] },
-  { menu: 'county commons', path: 'county-commons', scopes: ['admin'] }
+  { menu: 'county commons', path: 'county-commons', scopes: ['admin'] },
+  // Tier feature screens. Each panel under components/tierFeaturePanels loads
+  // its own table, so the scopes only add the data the surrounding shell shows.
+  { menu: 'leads', path: 'leads', scopes: [] },
+  { menu: 'respite shifts', path: 'respite-shifts', scopes: [] },
+  { menu: 'secondment schedule', path: 'secondment-schedule', scopes: ['wallet'] },
+  { menu: 'partners', path: 'partners', scopes: ['admin'] },
+  { menu: 'cohorts', path: 'cohorts', scopes: ['admin'] },
+  { menu: 'sponsorships', path: 'sponsorships', scopes: ['wallet'] },
+  { menu: 'competency cards', path: 'competency-cards', scopes: ['wallet'] }
 ]
 
 const LEGACY_MENU_SLUGS: Record<string, string> = {

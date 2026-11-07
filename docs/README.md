@@ -7,7 +7,7 @@ This is the single entry point for Atlas documentation. Prefer these trees over 
 | Audience | Start here | What you get |
 |----------|------------|--------------|
 | Information Technology (IT) / Information Systems (IS) | [it/README.md](./it/README.md) | Commissioning, auth, security, database, Model Context Protocol (MCP), warehouse/Power BI, go-live |
-| End users (navigator, partner, supervisor, admin) | [users/README.md](./users/README.md) | Day-to-day workflows, journey phases, pilot walkthrough |
+| End users (Residency tiers `t1` … `t4plus`, partner) | [users/README.md](./users/README.md) | Day-to-day workflows, journey phases, pilot walkthrough |
 | Engineering / product | Sections below | Specs, persistence matrices, branding, writing standards |
 | Executive / compliance | [it/security.md](./it/security.md) | Policy, control owners, production hard gates |
 
@@ -31,6 +31,7 @@ docs/
 | [atlas-supabase-source-of-truth-matrix.md](./atlas-supabase-source-of-truth-matrix.md) | Which data plane owns what |
 | [SINGLEPANE_PERSISTENCE_MATRIX.md](./SINGLEPANE_PERSISTENCE_MATRIX.md) | UI control → persistence mapping |
 | [sql-rpc-contracts.md](./sql-rpc-contracts.md) | Command Remote Procedure Call (RPC) inventory |
+| [tiers.md](./tiers.md) | Residency tiers (`t1` … `t4plus`): role keys, permission table, menus, feature tables, tier RPCs |
 | [ZCODE_Master.md](./ZCODE_Master.md) | Z-code taxonomy |
 | [Example_records.md](./Example_records.md) | Supabase example seed records |
 | [demo.md](./demo.md) | Demo partner-station fixture plan |

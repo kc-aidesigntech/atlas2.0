@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AccountSettings, AtlasRole, PartnerTroubleshootingGrant } from '@/features/atlas2026/shared/contracts'
+import { ATLAS_PERMISSION_ROLES } from '@/features/atlas2026/shared/roleCapabilityPolicy'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import { tierDisplayLabel } from '@/features/atlas2026/shared/tiers'
+import { isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 export type AccountSecurityAuthProvider = 'google' | 'apple'
 
@@ -28,7 +31,8 @@ interface AccountSettingsPanelProps {
   onSavePartnerTroubleshootingGrant?: (grant: PartnerTroubleshootingGrant) => Promise<unknown> | unknown
 }
 
-const ROLE_OPTIONS: AtlasRole[] = ['administrator', 'supervisor', 'partner', 'navigator']
+// The seven tiers, highest first, then partner.
+const ROLE_OPTIONS: readonly AtlasRole[] = ATLAS_PERMISSION_ROLES
 type AccountSectionKey = 'activeExperience' | 'basicInformation' | 'security' | 'roleAssignments' | 'troubleshootingGrant'
 
 function buildInitialExpandedSections(hasSecurity: boolean, hasTroubleshootingGrant: boolean): Record<AccountSectionKey, boolean> {
@@ -77,7 +81,7 @@ export default function AccountSettingsPanel({
   const [expandedSections, setExpandedSections] = useState<Record<AccountSectionKey, boolean>>(() =>
     buildInitialExpandedSections(Boolean(security), Boolean(partnerTroubleshootingGrant && onSavePartnerTroubleshootingGrant))
   )
-  const canEditRoleAssignments = role === 'administrator'
+  const canEditRoleAssignments = isSystemAdmin(role)
 
   useEffect(() => {
     if (!isOpen) return
@@ -185,7 +189,7 @@ export default function AccountSettingsPanel({
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {tierDisplayLabel(option)}
                   </option>
                 ))}
               </select>
@@ -298,7 +302,7 @@ export default function AccountSettingsPanel({
               <div className="space-y-2">
                 {ROLE_OPTIONS.map((option) => (
                   <label key={option} className="atlas-surface-raised flex items-center justify-between px-4 py-3">
-                    <span className="atlas-meta text-[15px] capitalize text-white">{option}</span>
+                    <span className="atlas-meta text-[15px] text-white">{tierDisplayLabel(option)}</span>
                     <input
                       type="checkbox"
                       checked={enabledRoleSet.has(option)}

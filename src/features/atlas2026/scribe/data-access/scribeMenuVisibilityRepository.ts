@@ -9,22 +9,18 @@ import type { AtlasRole } from '@/features/atlas2026/shared/contracts'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 import {
   SCRIBE_MENU_ROLES,
-  isScribeMenuRole,
   menuListIncludesScribe,
-  setScribeOnMenuList
+  setScribeOnMenuList,
+  toScribeMenuRole
 } from '@/features/atlas2026/scribe/scribeMenuVisibility'
 
 const NAVIGATION_SURFACE = 'singlepane'
 
 export type ScribeMenuVisibilityByRole = Record<AtlasRole, boolean>
 
-function emptyVisibility(): ScribeMenuVisibilityByRole {
-  return {
-    administrator: false,
-    supervisor: false,
-    navigator: false,
-    partner: false
-  }
+/** Every tier and partner starts hidden. */
+export function emptyScribeMenuVisibility(): ScribeMenuVisibilityByRole {
+  return Object.fromEntries(SCRIBE_MENU_ROLES.map((role) => [role, false])) as ScribeMenuVisibilityByRole
 }
 
 function readMenuList(value: unknown) {
@@ -33,7 +29,7 @@ function readMenuList(value: unknown) {
 }
 
 export async function fetchScribeMenuVisibility(): Promise<ScribeMenuVisibilityByRole> {
-  const visibility = emptyVisibility()
+  const visibility = emptyScribeMenuVisibility()
   if (!hasSupabaseConfig || !supabase) return visibility
 
   const { data, error } = await supabase
@@ -45,9 +41,10 @@ export async function fetchScribeMenuVisibility(): Promise<ScribeMenuVisibilityB
   if (error) throw error
 
   for (const row of data || []) {
-    const roleKey = String(row.role_key || '')
-    if (!isScribeMenuRole(roleKey)) continue
-    visibility[roleKey] = menuListIncludesScribe(readMenuList(row.top_menus))
+    // A legacy row key (navigator, supervisor, administrator) lands on its tier.
+    const role = toScribeMenuRole(String(row.role_key || ''))
+    if (!role) continue
+    visibility[role] = menuListIncludesScribe(readMenuList(row.top_menus))
   }
 
   return visibility

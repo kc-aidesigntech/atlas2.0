@@ -16,6 +16,7 @@ import {
   insertFacetCorrelationRows
 } from '@/features/atlas2026/singlepane/domain/ipsccAggregates'
 import { buildIntervalDueItems } from '@/features/atlas2026/singlepane/domain/loadsRoutes'
+import { isSupervisorTier } from '@/features/atlas2026/singlepane/domain/roles'
 
 interface UseNavigatorCompetencyDerivedInput {
   currentNavigatorName: string
@@ -77,11 +78,12 @@ export function useNavigatorCompetencyDerived({
     [allSupervisorIpsAssessments, currentNavigatorName]
   )
   const navigatorCreateSessions = useMemo(() => {
-    const selfName = (viewerRole === 'supervisor' ? currentSupervisorName : currentNavigatorName).trim().toLowerCase()
+    const viewerIsSupervisor = isSupervisorTier(viewerRole)
+    const selfName = (viewerIsSupervisor ? currentSupervisorName : currentNavigatorName).trim().toLowerCase()
     return mergedNavigatorProgramState.createSessions
       .filter((record) => {
         // Each person sees the sessions they are a party to, open and closed.
-        if (viewerRole === 'supervisor') return record.supervisorName.trim().toLowerCase() === selfName
+        if (viewerIsSupervisor) return record.supervisorName.trim().toLowerCase() === selfName
         return record.navigatorName.trim().toLowerCase() === selfName
       })
       .slice()

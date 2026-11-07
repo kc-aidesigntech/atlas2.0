@@ -21,17 +21,26 @@ import { LazyPanelFallback, WorkspaceLoadingShell, WorkspaceLoadingSpinner } fro
 import WorkspaceFrame from './WorkspaceFrame'
 import { isWarmLineMenu, openPrayPhoneAgentFromWorkspace } from '../data-access/prayphoneSubapp'
 import { navigateWorkspace, workspaceMenuFromLocation } from '../pages/workspaceRoutes'
+import { isTierFeatureScreenId } from '../components/tierFeaturePanels/tierFeatureScreenIds'
+import {
+  isAdministratorExperience,
+  isNavigatorExperience,
+  isSupervisorExperience,
+  isSystemAdmin
+} from '../domain/roles'
 
 const AdminDataControlPanel = React.lazy(() => import('../../admin/AdminDataControlPanel'))
-const NavigatorMyProfilePanel = React.lazy(() => import('../components/NavigatorMyProfilePanel'))
+// MyWalletPanel composes the tier header with the navigator and supervisor wallet sections by permission.
+const MyWalletPanel = React.lazy(() => import('../components/MyWalletPanel'))
 const NavigatorEnrollmentAssignmentsPanel = React.lazy(() => import('../components/NavigatorEnrollmentAssignmentsPanel'))
-const SupervisorMyProfilePanel = React.lazy(() => import('../components/SupervisorMyProfilePanel'))
 const PartnerReferralWorkflowPanel = React.lazy(() => import('../components/PartnerReferralWorkflowPanel'))
 const PartnerStripHistoryOverlay = React.lazy(() => import('../components/PartnerStripHistoryOverlay'))
 const PartnerSpecialtyOverlay = React.lazy(() => import('../components/PartnerSpecialtyOverlay'))
 const PartnerStationProfilePanel = React.lazy(() => import('../components/PartnerStationProfilePanel'))
 const ProfilePanel = React.lazy(() => import('../components/ProfilePanel'))
 const SupervisorTeamBurdenPanel = React.lazy(() => import('../components/SupervisorTeamBurdenPanel'))
+// TierFeatureScreen switches the leads, respite shifts, secondment schedule, partners, cohorts, sponsorships, and competency cards screens to their panels.
+const TierFeatureScreen = React.lazy(() => import('../components/tierFeaturePanels/TierFeatureScreen'))
 // Keep recharts out of the workspace chunk so bootstrap can finish while the
 // chart graph downloads in parallel with first paint.
 const RadialLoadChart = React.lazy(() => import('../components/RadialLoadChart'))
@@ -101,6 +110,8 @@ export default function SinglePaneWorkspace() {
     viewerCanUseAssignmentActions,
     viewerCanAddAssignmentBoardReferral,
     viewerCanAccessAdminRegistryCards,
+    hasPermission,
+    viewerTier,
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
     assigningNavigatorEnrollmentId,
@@ -161,6 +172,10 @@ export default function SinglePaneWorkspace() {
     saveAccountSettings,
     saveAdminPortalRegistry,
     saveAccessMatrixPersonRoles,
+    saveAccessMatrixPersonTier,
+    markAccessMatrixPersonTierAlum,
+    saveAccessMatrixPersonLucidEmployee,
+    saveAccessMatrixPersonDesignation,
     saveAccessMatrixEnrollmentNavigators,
     saveAccessMatrixSupervisorAssignments,
     saveAccessMatrixPartnerPrimaryContacts,
@@ -249,6 +264,11 @@ export default function SinglePaneWorkspace() {
   const firstUsableMarkedRoleRef = React.useRef<AtlasRole | null>(null)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const uiRole = viewerRole
+  // One shell per role: t3a and t2b render the navigator strip, t4 the supervisor
+  // wallet, t4plus the administrator superset. t1, t2, and t3 render none of the three.
+  const isNavigatorUi = isNavigatorExperience(uiRole)
+  const isSupervisorUi = isSupervisorExperience(uiRole)
+  const isAdministratorUi = isAdministratorExperience(uiRole)
   const activeEnrolleeSurveyTarget = React.useMemo(
     () => enrollees.find((item) => item.id === enrolleeSurveyTargetId) || null,
     [enrollees, enrolleeSurveyTargetId]
@@ -370,7 +390,7 @@ export default function SinglePaneWorkspace() {
         openEnrolleeZCodeOverride(target.enrolleeId)
         return
       }
-      if (target.kind === 'zCodeSurveyHistory' && target.normalizedZCode && viewerRole === 'administrator') {
+      if (target.kind === 'zCodeSurveyHistory' && target.normalizedZCode && isAdministratorUi) {
         setRequestedAdminDomainSurveyZCode(target.normalizedZCode.trim().toUpperCase())
         if (activeMenu !== 'system operations') {
           setActiveMenu('system operations')
@@ -433,7 +453,7 @@ export default function SinglePaneWorkspace() {
   }, [activeMenu, remoteSession?.isActive, standaloneSurveyUrl, uiRole])
 
   React.useEffect(() => {
-    if (activeMenu !== 'enrollees' || uiRole !== 'navigator') {
+    if (activeMenu !== 'enrollees' || !isNavigatorUi) {
       setNavigatorEnrolleeView('my')
     }
   }, [activeMenu, uiRole])
@@ -457,23 +477,28 @@ export default function SinglePaneWorkspace() {
   }, [isRoutePlanningOpen, routeCandidates, selectedRouteAssignment])
 
   React.useEffect(() => {
-    if (uiRole !== 'navigator' || isRegulationCleared || !isRoutePlanningOpen) return
+    if (!isNavigatorUi || isRegulationCleared || !isRoutePlanningOpen) return
     setIsRoutePlanningOpen(false)
     setSelectedRouteCandidateId(null)
   }, [isRegulationCleared, isRoutePlanningOpen, uiRole])
 
   const activeAction = actionMenus[0] || ''
   const isPartnerRole = uiRole === 'partner'
-  const isNavigatorMyStation = uiRole === 'navigator' && activeMenu.trim().toLowerCase() === 'my station'
+  const isNavigatorMyStation = isNavigatorUi && activeMenu.trim().toLowerCase() === 'my station'
   // Navigator "my station" reuses partner station surfaces to keep one canonical station experience.
   const isPartnerStationView = isPartnerRole || isNavigatorMyStation
-  const isAdminSection = uiRole === 'administrator' && ['system operations', 'governance'].includes(activeMenu)
+  const isAdminSection = isAdministratorUi && ['system operations', 'governance'].includes(activeMenu)
   const isServiceCapacitySection = uiRole === 'partner' && activeMenu === 'service capacity'
   const isReferralPortalMenu = activeMenu === 'referral portal' || activeMenu === 'refer'
-  const canUseReferralPortal = uiRole === 'partner' || uiRole === 'navigator' || uiRole === 'supervisor'
-  const isNavigatorMyWallet = uiRole === 'navigator' && activeMenu === 'my wallet'
-  const isNavigatorEnrolleeMenu = uiRole === 'navigator' && activeMenu === 'enrollees'
-  const canOpenNavigatorAssignmentReferral = uiRole === 'navigator' && viewerCanAddAssignmentBoardReferral
+  // Every tier holds `referral.submit`; partner keeps its own referral screen.
+  const canUseReferralPortal = uiRole === 'partner' || hasPermission('referral.submit')
+  // t3a holds pickup.claim, route_plan.write, and z_burden.resolve; t4plus passes through the admin bypass in hasPermission.
+  const canClaimPickup = viewerCanUseAssignmentActions && hasPermission('pickup.claim')
+  const canWriteRoutePlan = hasPermission('route_plan.write')
+  const canResolveZBurden = hasPermission('z_burden.resolve')
+  const isNavigatorMyWallet = isNavigatorUi && activeMenu === 'my wallet'
+  const isNavigatorEnrolleeMenu = isNavigatorUi && activeMenu === 'enrollees'
+  const canOpenNavigatorAssignmentReferral = isNavigatorUi && viewerCanAddAssignmentBoardReferral
   // Hide the referral CTA on the standard enrollee page so that profile and care
   // workflow actions remain the only primary controls in that context.
   const isStandardEnrolleePage = activeMenu === 'enrollees'
@@ -481,13 +506,20 @@ export default function SinglePaneWorkspace() {
   const assignmentBoardError = viewerCanAccessAssignmentBoard
     ? navigatorEnrollmentAssignmentsError
     : 'Assignment board is hidden by administrator policy.'
-  const isSupervisorMyWallet = uiRole === 'supervisor' && activeMenu === 'my wallet'
-  const isSupervisorTeamBurden = uiRole === 'supervisor' && activeMenu === 'team burden'
+  // Every tier opens the same My Wallet; partner has no wallet menu.
+  const isMyWallet = !isPartnerRole && activeMenu === 'my wallet'
+  const isSupervisorTeamBurden = isSupervisorUi && activeMenu === 'team burden'
+  // Leads, respite shifts, secondment schedule, partners, cohorts, sponsorships, and
+  // competency cards: each panel loads its own table and gates on hasPermission.
+  const tierFeatureScreenId = !isPartnerRole && isTierFeatureScreenId(activeMenu) ? activeMenu : null
+  // My Wallet and the tier feature screens render without a selected enrollee for every
+  // tier, including t1, t2, and t3 whose shells never select one; each panel loads inside itself.
   const isReady = isPartnerStationView
     ? true
-    : isNavigatorMyWallet || isNavigatorEnrolleeMenu || isSupervisorMyWallet || isSupervisorTeamBurden
+    : isMyWallet || isNavigatorEnrolleeMenu || isSupervisorTeamBurden || tierFeatureScreenId
       ? true
       : Boolean(selectedEnrollee && timelineConfig)
+  const leadsMenuAvailable = selectedRoleConfig.topMenus.includes('leads')
 
   React.useEffect(() => {
     if (isLoading || !isReady) return
@@ -497,15 +529,15 @@ export default function SinglePaneWorkspace() {
   }, [isLoading, isReady, uiRole])
   const selectedRouteCandidate = routeCandidates.find((candidate) => candidate.stationId === selectedRouteCandidateId) || null
   const visibleLogs = React.useMemo(
-    () => (uiRole === 'navigator' && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
-    [selectedLogs, shouldHideReadinessProgress, uiRole]
+    () => (isNavigatorUi && shouldHideReadinessProgress ? selectedLogs.filter((log) => log.phase === 'regulation') : selectedLogs),
+    [isNavigatorUi, selectedLogs, shouldHideReadinessProgress]
   )
   const visibleJourneyStationMarkers = React.useMemo(
     () =>
-      uiRole === 'navigator' && shouldHideReadinessProgress
+      isNavigatorUi && shouldHideReadinessProgress
         ? journeyStationMarkers.filter((marker) => marker.phase === 'regulation')
         : journeyStationMarkers,
-    [journeyStationMarkers, shouldHideReadinessProgress, uiRole]
+    [isNavigatorUi, journeyStationMarkers, shouldHideReadinessProgress]
   )
   const historyOnlyLogs = React.useMemo(() => visibleLogs.filter((log) => log.status === 'completed'), [visibleLogs])
   const readinessParentCodes = React.useMemo(
@@ -527,7 +559,7 @@ export default function SinglePaneWorkspace() {
         label: candidate.stationName
       }))
   }, [routeCandidates])
-  const showRoutePlanningQuickAction = uiRole === 'navigator' ? isRegulationCleared : false
+  const showRoutePlanningQuickAction = isNavigatorUi ? isRegulationCleared : false
   const nextSuggestedPhase = React.useMemo(
     () => getNextSuggestedPhase(selectedLogs, isRegulationCleared),
     [isRegulationCleared, selectedLogs]
@@ -615,7 +647,7 @@ export default function SinglePaneWorkspace() {
       return
     }
     if (menu === 'route planning') {
-      if (uiRole === 'navigator' && !isRegulationCleared) {
+      if (isNavigatorUi && !isRegulationCleared) {
         setAssessmentInitialTestType('mh_sca')
         setIsRegulationTestsOpen(true)
         return
@@ -636,7 +668,7 @@ export default function SinglePaneWorkspace() {
       return
     }
     if (label.trim().toLowerCase() === 'route planning') {
-      if (uiRole === 'navigator' && !isRegulationCleared) {
+      if (isNavigatorUi && !isRegulationCleared) {
         setAssessmentInitialTestType('mh_sca')
         setIsRegulationTestsOpen(true)
         return
@@ -647,7 +679,7 @@ export default function SinglePaneWorkspace() {
       })
       return
     }
-    if (uiRole === 'supervisor' && label.trim().toLowerCase() === 'record navigator assessment') {
+    if (isSupervisorUi && label.trim().toLowerCase() === 'record navigator assessment') {
       if (!selectedEnrollee || !selectedLoadBreakdown) return
       const answers = selectedLoadBreakdown.rows.slice(0, 12).map((row) => ({
         parentCode: row.zCodeGroup.toUpperCase(),
@@ -675,6 +707,11 @@ export default function SinglePaneWorkspace() {
   }
 
   function handleAssignCandidate(candidate: RouteCandidateRecord) {
+    // Without route_plan.write the candidate is highlighted but no assignment is saved.
+    if (!canWriteRoutePlan) {
+      setSelectedRouteCandidateId(candidate.stationId)
+      return
+    }
     saveRouteAssignment(candidate, getNextSuggestedPhase(selectedLogs, isRegulationCleared))
     setSelectedRouteCandidateId(candidate.stationId)
   }
@@ -718,7 +755,7 @@ export default function SinglePaneWorkspace() {
   }
 
   function enforceWeeklyRegulationReviewOrContinue(onContinue: () => void) {
-    if (uiRole !== 'navigator' || !selectedEnrolleeOpenRegulationReview) {
+    if (!isNavigatorUi || !selectedEnrolleeOpenRegulationReview) {
       onContinue()
       return
     }
@@ -746,6 +783,7 @@ export default function SinglePaneWorkspace() {
       navigation={
         <TopNav
         role={uiRole}
+        hasPermission={hasPermission}
         roleConfig={selectedRoleConfig}
         activeMenu={activeMenu}
         onMenuSelect={handleMenuSelect}
@@ -868,7 +906,7 @@ export default function SinglePaneWorkspace() {
             onSavePartnerTroubleshootingGrant={
               role === 'partner' &&
               partnerStationProfile?.partnerId &&
-              accountSettings.enabledRoles.includes('administrator') &&
+              accountSettings.enabledRoles.some(isSystemAdmin) &&
               !remoteSession?.isActive
                 ? savePartnerTroubleshootingGrant
                 : undefined
@@ -931,7 +969,12 @@ export default function SinglePaneWorkspace() {
             launchSource={resolutionOverlayState?.source || 'page-zcode'}
             filterParentCode={resolutionOverlayState?.filterParentCode || null}
             filterChildCodes={resolutionOverlayState?.filterChildCodes || []}
-            onToggleResolution={setEnrolleeZCodeResolution}
+            // Without z_burden.resolve the toggle rejects instead of writing the resolution.
+            onToggleResolution={
+              canResolveZBurden
+                ? setEnrolleeZCodeResolution
+                : () => Promise.reject(new Error('Resolving Z-code burden needs the z_burden.resolve permission.'))
+            }
             onClose={closeResolvedZCodesOverlay}
           />
           <RadialLoadTableOverlay
@@ -989,7 +1032,7 @@ export default function SinglePaneWorkspace() {
                     (EnrolleeBurdenSurveyPanel is preserved for reincorporation). */}
                 <EnrolleeZCodeOverridePanel
                   enrollee={activeEnrolleeSurveyTarget}
-                  canEdit={(viewerRole === 'navigator' || viewerRole === 'administrator') && viewerCanWrite}
+                  canEdit={(isNavigatorUi || isAdministratorUi) && viewerCanWrite && canResolveZBurden}
                   onSave={overrideEnrolleeZCodes}
                 />
               </div>
@@ -1000,7 +1043,14 @@ export default function SinglePaneWorkspace() {
               <WorkspaceLoadingShell />
             ) : (
               <>
-                {isPartnerStationView ? (
+                {tierFeatureScreenId ? (
+                  // The panel for the active tier feature screen; `system operations` is the admin screen whose Organizations section the partners panel opens.
+                  <TierFeatureScreen
+                    screenId={tierFeatureScreenId}
+                    hasPermission={hasPermission}
+                    onOpenAdminScreen={isAdministratorUi ? () => setActiveMenu('system operations') : undefined}
+                  />
+                ) : isPartnerStationView ? (
                   <div
                     className="grid min-h-[282px] grid-cols-1 items-start gap-x-4 gap-y-5 border-b pb-[12px] lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-x-10 lg:gap-y-4 xl:gap-x-14 2xl:gap-x-20"
                     style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
@@ -1022,68 +1072,75 @@ export default function SinglePaneWorkspace() {
                       </React.Suspense>
                     </div>
                   </div>
-                ) : isNavigatorMyWallet ? (
-                  <NavigatorMyProfilePanel
+                ) : isMyWallet ? (
+                  // One wallet for every tier; the panel picks its sections from hasPermission.
+                  <MyWalletPanel
+                    viewerRole={uiRole}
+                    viewerTier={viewerTier}
+                    hasPermission={hasPermission}
                     accountSettings={accountSettings}
-                    currentNavigatorName={currentNavigatorName}
-                    aggregateLoad={navigatorAggregateLoad}
-                    assignedEnrolleeCount={enrollees.length}
-                    assignedEnrollees={enrollees}
-                    navigatorEnrollmentAssignments={assignmentBoardRows}
-                    navigatorEnrollmentAssignmentsError={assignmentBoardError}
-                    isLoadingNavigatorEnrollmentAssignments={viewerCanAccessAssignmentBoard && isLoadingNavigatorEnrollmentAssignments}
-                    assigningEnrollmentId={assigningNavigatorEnrollmentId}
-                    canViewNavigatorAssignmentNames={viewerCanViewNavigatorAssignmentNames}
-                    canToggleAssignmentActions={viewerCanUseAssignmentActions}
-                    canOpenAssignmentBoardReferral={canOpenNavigatorAssignmentReferral}
-                    competencySummary={navigatorAssignedCompetencySummary}
-                    ipsccCompetencyAverages={navigatorIpsccCompetencyAggregates}
-                    ipsccEnrolleeFeedbackPrivacy={navigatorIpsccEnrolleeFeedbackPrivacy}
-                    selfAwarenessCorrelationRows={navigatorSelfAwarenessCorrelationRows}
-                    selfAwarenessSummary={navigatorSelfAwarenessSummary}
-                    ipsSelfAssessments={navigatorIpsSelfAssessments}
-                    navigatorSupervisorIpsAssessments={navigatorSupervisorIpsAssessments}
-                    createSessions={navigatorCreateSessions}
-                    createReflection={navigatorCreateReflection}
-                    supervisionSessions={navigatorSupervisionSessions}
-                    dueItems={navigatorIntervalDueItems}
-                    regulationReviewDueItems={regulationReviewDueItems}
-                    programError={navigatorProgramError}
-                    onOpenLoadTable={() => setIsLoadTableOpen(true)}
+                    displayName={
+                      (isNavigatorUi
+                        ? currentNavigatorName
+                        : isSupervisorUi || isAdministratorUi
+                          ? currentSupervisorName
+                          : accountSettings.fullName
+                      ).trim() || 'wallet holder'
+                    }
                     isUploadingAvatar={isUploadingAccountProfileImage}
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
-                    onOpenEnrolleeSurvey={(enrolleeId) => openEnrolleeZCodeOverride(enrolleeId)}
-                    onOpenRegulationReview={openForcedRegulationReview}
-                    onOpenAssignmentBoardReferral={() => setIsNavigatorAssignmentReferralOpen(true)}
-                    onToggleEnrollmentAssignment={assignNavigatorEnrollmentToSelf}
-                    onSaveIpsSelfAssessment={saveNavigatorIpsSelfAssessment}
-                    onSaveIpsccEncounterSubmission={saveNavigatorIpsccEncounterSubmission}
-                    onSaveCreateSession={saveNavigatorCreateSession}
-                    onSaveSupervisionSession={saveSupervisionSession}
+                    onOpenLeads={leadsMenuAvailable ? () => setActiveMenu('leads') : null}
+                    navigator={{
+                      currentNavigatorName,
+                      aggregateLoad: navigatorAggregateLoad,
+                      assignedEnrollees: enrollees,
+                      navigatorEnrollmentAssignments: assignmentBoardRows,
+                      navigatorEnrollmentAssignmentsError: assignmentBoardError,
+                      isLoadingNavigatorEnrollmentAssignments: viewerCanAccessAssignmentBoard && isLoadingNavigatorEnrollmentAssignments,
+                      assigningEnrollmentId: assigningNavigatorEnrollmentId,
+                      canViewNavigatorAssignmentNames: viewerCanViewNavigatorAssignmentNames,
+                      // The wallet's pickup claim toggles stay read-only without pickup.claim.
+                      canToggleAssignmentActions: canClaimPickup,
+                      canOpenAssignmentBoardReferral: canOpenNavigatorAssignmentReferral,
+                      competencySummary: navigatorAssignedCompetencySummary,
+                      ipsccCompetencyAverages: navigatorIpsccCompetencyAggregates,
+                      ipsccEnrolleeFeedbackPrivacy: navigatorIpsccEnrolleeFeedbackPrivacy,
+                      selfAwarenessCorrelationRows: navigatorSelfAwarenessCorrelationRows,
+                      selfAwarenessSummary: navigatorSelfAwarenessSummary,
+                      ipsSelfAssessments: navigatorIpsSelfAssessments,
+                      navigatorSupervisorIpsAssessments,
+                      createSessions: navigatorCreateSessions,
+                      createReflection: navigatorCreateReflection,
+                      supervisionSessions: navigatorSupervisionSessions,
+                      dueItems: navigatorIntervalDueItems,
+                      regulationReviewDueItems,
+                      programError: navigatorProgramError,
+                      onOpenLoadTable: () => setIsLoadTableOpen(true),
+                      onOpenEnrolleeSurvey: (enrolleeId) => openEnrolleeZCodeOverride(enrolleeId),
+                      onOpenRegulationReview: openForcedRegulationReview,
+                      onOpenAssignmentBoardReferral: () => setIsNavigatorAssignmentReferralOpen(true),
+                      onToggleEnrollmentAssignment: assignNavigatorEnrollmentToSelf,
+                      onSaveIpsSelfAssessment: saveNavigatorIpsSelfAssessment,
+                      onSaveIpsccEncounterSubmission: saveNavigatorIpsccEncounterSubmission,
+                      onSaveCreateSession: saveNavigatorCreateSession,
+                      onSaveSupervisionSession: saveSupervisionSession
+                    }}
+                    supervisor={{
+                      currentSupervisorName,
+                      navigatorDirectory: supervisorNavigatorDirectory,
+                      competencyByNavigator: supervisorNavigatorCompetency,
+                      allSupervisorIpsAssessments,
+                      managedCreateReflections: supervisorManagedCreateReflections,
+                      createSessions: navigatorCreateSessions,
+                      onSaveCreateSession: saveNavigatorCreateSession,
+                      onToggleManagedNavigator: toggleSupervisorManagedNavigator,
+                      isSavingAssignments: isSavingAccessMatrix,
+                      onSaveSupervisorIpsAssessment: saveSupervisorIpsAssessment,
+                      onSaveCreateReflectionOverride: saveSupervisorCreateReflectionOverride,
+                      onRestoreCreateReflectionGenerated: restoreSupervisorCreateReflectionGenerated
+                    }}
                   />
-                ) : isSupervisorMyWallet ? (
-                  <div
-                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
-                    style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
-                  >
-                    <div className="w-full">
-                      <SupervisorMyProfilePanel
-                        currentSupervisorName={currentSupervisorName}
-                        navigatorDirectory={supervisorNavigatorDirectory}
-                        competencyByNavigator={supervisorNavigatorCompetency}
-                        allSupervisorIpsAssessments={allSupervisorIpsAssessments}
-                        managedCreateReflections={supervisorManagedCreateReflections}
-                        createSessions={navigatorCreateSessions}
-                        onSaveCreateSession={saveNavigatorCreateSession}
-                        onToggleManagedNavigator={toggleSupervisorManagedNavigator}
-                        isSavingAssignments={isSavingAccessMatrix}
-                        onSaveSupervisorIpsAssessment={saveSupervisorIpsAssessment}
-                        onSaveCreateReflectionOverride={saveSupervisorCreateReflectionOverride}
-                        onRestoreCreateReflectionGenerated={restoreSupervisorCreateReflectionGenerated}
-                      />
-                    </div>
-                  </div>
                 ) : isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add' ? (
                   <div
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
@@ -1096,7 +1153,7 @@ export default function SinglePaneWorkspace() {
                         error={assignmentBoardError}
                         assigningEnrollmentId={assigningNavigatorEnrollmentId}
                         canViewNavigatorAssignmentNames={viewerCanViewNavigatorAssignmentNames}
-                        canToggleAssignments={viewerCanUseAssignmentActions}
+                        canToggleAssignments={canClaimPickup}
                         canOpenReferralComposer={canOpenNavigatorAssignmentReferral}
                         onOpenReferralComposer={() => setIsNavigatorAssignmentReferralOpen(true)}
                         onToggleAssignment={assignNavigatorEnrollmentToSelf}
@@ -1136,11 +1193,11 @@ export default function SinglePaneWorkspace() {
                         onSelectZCode={openCanonicalZCodeOverlay}
                         enrollmentStartLabel={hasSavedIntake && selectedIntake ? formatDateLabel(selectedIntake.enrollmentStartIso) : 'not recorded'}
                         onOpenBurdenSurvey={
-                          viewerRole === 'navigator' || viewerRole === 'supervisor'
+                          isNavigatorUi || isSupervisorUi
                             ? () => openEnrolleeZCodeOverride(selectedEnrollee.id)
                             : undefined
                         }
-                        burdenSurveyLabel={viewerRole === 'supervisor' ? 'review z-codes' : 'update z-codes'}
+                        burdenSurveyLabel={isSupervisorUi ? 'review z-codes' : 'update z-codes'}
                         onOpenReferralPortal={
                           isNavigatorMyStation
                             ? () => {
@@ -1160,7 +1217,7 @@ export default function SinglePaneWorkspace() {
                   </div>
                 )}
 
-                {uiRole !== 'navigator' && !showRoutePlanningQuickAction && actionMenus.length > 0 ? (
+                {!isNavigatorUi && !showRoutePlanningQuickAction && actionMenus.length > 0 ? (
                   <div className="flex items-center justify-center py-1">
                     <RoleMenus labels={actionMenus} activeLabel={activeAction} onAction={handlePrimaryAction} />
                   </div>
@@ -1202,6 +1259,10 @@ export default function SinglePaneWorkspace() {
                           onAcknowledgeRequestedDomainSurveyZCode={() => setRequestedAdminDomainSurveyZCode(null)}
                           onSaveEnrollmentNavigators={saveAccessMatrixEnrollmentNavigators}
                           onSaveAccessMatrixPersonRoles={saveAccessMatrixPersonRoles}
+                          onSaveAccessMatrixPersonTier={saveAccessMatrixPersonTier}
+                          onMarkAccessMatrixPersonTierAlum={markAccessMatrixPersonTierAlum}
+                          onSaveAccessMatrixPersonLucidEmployee={saveAccessMatrixPersonLucidEmployee}
+                          onSaveAccessMatrixPersonDesignation={saveAccessMatrixPersonDesignation}
                           onSaveAccessMatrixSupervisorAssignments={saveAccessMatrixSupervisorAssignments}
                           onSaveAccessMatrixPartnerPrimaryContacts={saveAccessMatrixPartnerPrimaryContacts}
                           accessMatrixError={accessMatrixError}
@@ -1246,7 +1307,7 @@ export default function SinglePaneWorkspace() {
                       accentColor="var(--atlas-signal-lucid-green)"
                     />
                   </div>
-                ) : isNavigatorMyWallet || isSupervisorMyWallet || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isSupervisorTeamBurden ? (
+                ) : isMyWallet || tierFeatureScreenId || (isNavigatorEnrolleeMenu && navigatorEnrolleeView === 'add') ? null : isSupervisorTeamBurden ? (
                   // Read-only team strip: dragging would rewrite one enrollee's timeline, and station markers belong to a single person.
                   <>
                     <div className="hidden min-h-[220px] flex-1 items-start md:flex">
@@ -1319,6 +1380,8 @@ export default function SinglePaneWorkspace() {
                       activeMenu={activeMenu}
                       enrollmentRequests={enrollmentRequests}
                       countyHeatmap={countyHeatmap}
+                      canViewHeatmap={hasPermission('heatmap.view')}
+                      canToggleHeatmap={hasPermission('heatmap.toggle')}
                       supervisorNavigatorCompetency={supervisorNavigatorCompetency}
                           supervisorNavigatorDirectory={supervisorNavigatorDirectory}
                           onToggleSupervisorManagedNavigator={toggleSupervisorManagedNavigator}
@@ -1387,6 +1450,8 @@ export default function SinglePaneWorkspace() {
                       activeMenu={activeMenu}
                       enrollmentRequests={enrollmentRequests}
                       countyHeatmap={countyHeatmap}
+                      canViewHeatmap={hasPermission('heatmap.view')}
+                      canToggleHeatmap={hasPermission('heatmap.toggle')}
                       supervisorNavigatorCompetency={supervisorNavigatorCompetency}
                       supervisorNavigatorDirectory={supervisorNavigatorDirectory}
                       onToggleSupervisorManagedNavigator={toggleSupervisorManagedNavigator}

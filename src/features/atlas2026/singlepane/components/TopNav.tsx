@@ -1,12 +1,16 @@
 import React from 'react'
 import { ChevronDown, Loader2, Menu } from 'lucide-react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { AtlasRole, EnrolleeProfile, RoleMenuConfig } from '@/features/atlas2026/shared/contracts'
+import type { AtlasPermissionKey, AtlasRole, EnrolleeProfile, RoleMenuConfig } from '@/features/atlas2026/shared/contracts'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import { tierDisplayLabel } from '@/features/atlas2026/shared/tiers'
+import { isAdministratorExperience, isNavigatorExperience } from '../domain/roles'
 import PrayPhoneListenButton from './PrayPhoneListenButton'
 
 interface TopNavProps {
   role: AtlasRole
+  /** Permission check from `useViewerPermissions`; the Pray Phone door reads `warmline_agent.access` through it. */
+  hasPermission?: (key: AtlasPermissionKey) => boolean
   roleConfig: RoleMenuConfig
   activeMenu: string
   onMenuSelect: (menu: string) => void
@@ -24,6 +28,7 @@ interface TopNavProps {
 const ADD_ENROLLEES_OPTION_VALUE = '__atlas_add_enrollees__'
 export default function TopNav({
   role,
+  hasPermission,
   roleConfig,
   activeMenu,
   onMenuSelect,
@@ -37,34 +42,39 @@ export default function TopNav({
 }: TopNavProps) {
   const firstMenu = roleConfig.topMenus[0] || ''
   const hasSyncingEnrollees = syncingEnrolleeIds.length > 0
-  const showEnrolleeSelector = firstMenu === 'enrollees' && (enrollees.length > 0 || role === 'navigator')
-  const rolePillLabel = `atlas ${role}`
+  // t3a and t2b get the enrollee dropdown with "add enrollees"; t4plus gets the collapsed admin chrome.
+  const isNavigatorShell = isNavigatorExperience(role)
+  const isAdministratorShell = isAdministratorExperience(role)
+  const showEnrolleeSelector = firstMenu === 'enrollees' && (enrollees.length > 0 || isNavigatorShell)
+  // Tier keys print as their identity line (for example "T3A Peer Navigator"); partner prints as written.
+  const roleDisplayLabel = tierDisplayLabel(role)
+  const rolePillLabel = `atlas ${roleDisplayLabel}`
   const enrolleeSelectorValue =
-    role === 'navigator'
+    isNavigatorShell
       ? navigatorEnrolleeView === 'add'
         ? ADD_ENROLLEES_OPTION_VALUE
         : selectedEnrolleeId || enrollees[0]?.id || ADD_ENROLLEES_OPTION_VALUE
       : selectedEnrolleeId || ''
   const enrolleeSelectorLabel = React.useMemo(() => {
-    if (role === 'navigator' && enrolleeSelectorValue === ADD_ENROLLEES_OPTION_VALUE) return 'add enrollees'
+    if (isNavigatorShell && enrolleeSelectorValue === ADD_ENROLLEES_OPTION_VALUE) return 'add enrollees'
     const selectedEnrollee = enrollees.find((enrollee) => enrollee.id === enrolleeSelectorValue)
     return selectedEnrollee?.fullName || 'select enrollee'
-  }, [enrolleeSelectorValue, enrollees, role])
+  }, [enrolleeSelectorValue, enrollees, isNavigatorShell])
   // Size by active label length so long names keep a clear lane for the chevron/spinner.
   const enrolleeSelectorWidthCh = Math.min(Math.max(enrolleeSelectorLabel.length + 6, 18), 42)
   const adminControlsMenu = React.useMemo(() => {
-    if (role !== 'administrator') return ''
+    if (!isAdministratorShell) return ''
     const adminSpecific = roleConfig.topMenus.find((menu) => {
       const normalized = menu.trim().toLowerCase()
       return normalized === 'system operations' || normalized === 'governance'
     })
     return adminSpecific || roleConfig.topMenus[1] || firstMenu
-  }, [firstMenu, role, roleConfig.topMenus])
-  const isAdminControlsActive = role === 'administrator' && (activeMenu === adminControlsMenu || activeMenu === 'system operations' || activeMenu === 'governance')
+  }, [firstMenu, isAdministratorShell, roleConfig.topMenus])
+  const isAdminControlsActive = isAdministratorShell && (activeMenu === adminControlsMenu || activeMenu === 'system operations' || activeMenu === 'governance')
   // Admin chrome collapses every other entry into "admin controls". Scribe is a
   // standalone subapp, so it stays its own item when this permission level has it on.
   const administratorScribeMenu =
-    role === 'administrator' && firstMenu.trim().toLowerCase() !== 'scribe'
+    isAdministratorShell && firstMenu.trim().toLowerCase() !== 'scribe'
       ? roleConfig.topMenus.find((menu) => menu.trim().toLowerCase() === 'scribe') || ''
       : ''
 
@@ -82,12 +92,12 @@ export default function TopNav({
           ) : (
             <>
               <small className="atlas-font-heading text-[17px] font-medium tracking-[0.08em] text-white">ATLAS</small>
-              <small className="atlas-overline text-[#b9b9b9]">{role}</small>
+              <small className="atlas-overline text-[#b9b9b9]">{roleDisplayLabel}</small>
             </>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <PrayPhoneListenButton role={role} />
+          <PrayPhoneListenButton role={role} hasPermission={hasPermission} />
           <AtlasTextButton
             onClick={onOpenAccountSettings}
             className="inline-flex items-center gap-2 px-4 py-1 text-[14px] text-white"
@@ -116,7 +126,7 @@ export default function TopNav({
                     value={enrolleeSelectorValue}
                     onChange={(event) => {
                       onMenuSelect(firstMenu)
-                      if (role === 'navigator') {
+                      if (isNavigatorShell) {
                         if (event.target.value === ADD_ENROLLEES_OPTION_VALUE) {
                           onNavigatorEnrolleeViewChange?.('add')
                           return
@@ -134,7 +144,7 @@ export default function TopNav({
                     }}
                     aria-label="Assigned enrollees"
                   >
-                    {role === 'navigator' ? (
+                    {isNavigatorShell ? (
                       <option value={ADD_ENROLLEES_OPTION_VALUE} className="bg-black text-white">
                         add enrollees
                       </option>
@@ -174,7 +184,7 @@ export default function TopNav({
             )}
           </div>
 
-          {role === 'administrator'
+          {isAdministratorShell
             ? (
               <>
                 <button

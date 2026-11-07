@@ -5,7 +5,7 @@
  */
 import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import type { CreateSessionRecord } from '@/features/atlas2026/shared/contracts'
+import type { CreateSessionRecord, SupervisionParty } from '@/features/atlas2026/shared/contracts'
 import { loadSupervisionEdges } from '@/features/atlas2026/singlepane/data-access/navigatorProfileRepository'
 import { createRecordId, formatDateLabel, formatSupervisionMode } from './navigatorProfile/model'
 
@@ -15,7 +15,8 @@ interface CreateCounterpart {
 }
 
 interface CreateSessionDeskProps {
-  role: 'navigator' | 'supervisor'
+  /** Side of the session the viewer sits on; a party label, not an Atlas role key. */
+  role: SupervisionParty
   selfName: string
   counterparts: CreateCounterpart[]
   sessions: CreateSessionRecord[]
@@ -25,7 +26,7 @@ interface CreateSessionDeskProps {
 function blankSession(input: {
   navigatorName: string
   supervisorName: string
-  openedByRole: 'navigator' | 'supervisor'
+  openedByRole: SupervisionParty
   openedByName: string
 }): CreateSessionRecord {
   const now = new Date().toISOString()

@@ -61,6 +61,7 @@ import {
   toNormalizedRadialDomainLoad
 } from '@/features/atlas2026/singlepane/data-access/domainLoadMapping'
 import { isSupabasePermissionError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { ATLAS_ROLE_KEYS, isNavigatorTier } from '@/features/atlas2026/singlepane/domain/roles'
 import { workspaceLoadMetrics } from '@/features/atlas2026/singlepane/workspaceLoadMetrics'
 
 /**
@@ -119,10 +120,11 @@ const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
   email: 'operator@atlas.local',
   organization: 'atlas operations',
   avatarUrl: null,
-  enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
+  enabledRoles: ['t4plus', 't4', 'partner', 't3a']
 }
 
-const ROLE_PREFETCH_ORDER: AtlasRole[] = ['navigator', 'partner', 'supervisor', 'administrator']
+// Remembered payloads hydrate for every role key so an administrator's experience switch is warm.
+const ROLE_PREFETCH_ORDER: readonly AtlasRole[] = ATLAS_ROLE_KEYS
 const bootstrapPayloadCache = new Map<AtlasRole, SinglePaneBootstrapPayload>()
 const bootstrapPayloadInFlight = new Map<AtlasRole, Promise<SinglePaneBootstrapPayload>>()
 const freshnessByRole = new Map<AtlasRole, WorkspaceFreshness>()
@@ -228,10 +230,10 @@ async function loadCriticalBootstrapPayload(role: AtlasRole): Promise<SinglePane
   const [data, nextAccountSettings, navigatorStationContext] = await Promise.all([
     loadSinglePaneBootstrap(role, { criticalOnly: true }),
     loadAccountSettings(),
-    role === 'navigator' ? loadNavigatorStationContext() : Promise.resolve(null)
+    isNavigatorTier(role) ? loadNavigatorStationContext() : Promise.resolve(null)
   ])
   const stationOrganizationName =
-    (role === 'navigator' ? navigatorStationContext?.organizationName : nextAccountSettings.organization)?.trim() ||
+    (isNavigatorTier(role) ? navigatorStationContext?.organizationName : nextAccountSettings.organization)?.trim() ||
     nextAccountSettings.organization
   // Wave 2: station profile + (for partner) My Station radial from survey history,
   // in parallel now that organization identity is known.
@@ -354,7 +356,7 @@ async function loadBootstrapPayload(
       includeStrip ? loadLatestEnrolleeBurdenSurveySubmissions() : Promise.resolve([]),
       // Navigator station resolves from explicit navigator->partner linkage; other roles
       // resolve their station from the account organization below, so skip the call entirely.
-      role === 'navigator' && includePartner ? loadNavigatorStationContext() : Promise.resolve(null)
+      isNavigatorTier(role) && includePartner ? loadNavigatorStationContext() : Promise.resolve(null)
     ])
 
     const weightedEnrolleeBreakdowns = latestEnrolleeSurveySubmissions.map((record) =>
@@ -375,7 +377,7 @@ async function loadBootstrapPayload(
     // Navigator station data resolves from explicit navigator->partner linkage (fetched above),
     // while partner users resolve from their account organization.
     const stationOrganizationName =
-      (role === 'navigator' ? navigatorStationContext?.organizationName : nextAccountSettings.organization)?.trim() ||
+      (isNavigatorTier(role) ? navigatorStationContext?.organizationName : nextAccountSettings.organization)?.trim() ||
       nextAccountSettings.organization
     // Survey history and station profile depend only on the resolved organization (not on each
     // other), so resolve them together rather than back-to-back.

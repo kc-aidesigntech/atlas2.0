@@ -19,12 +19,13 @@ import { DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION, flattenSurveyPrompts } from
 import { SESSION_ACTIVE_MENU_KEY, readSessionRemoteSession, readSessionRole, readSessionStorageValue } from '@/features/atlas2026/singlepane/domain/sessionStorage'
 import { createNavigatorProgramState } from '@/features/atlas2026/singlepane/domain/ipsccSeeds'
 import { normalizeZCode } from '@/features/atlas2026/singlepane/domain/loadsRoutes'
+import { isNavigatorTier, isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 /**
  * Composes the domain hooks and action modules that back the public single-pane facade.
  * The public hook remains intentionally small while this hook owns workspace orchestration.
  */
-export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator') {
+export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 't3a') {
   const [role, setRoleState] = useState<AtlasRole>(() => readSessionRole(initialRole))
   const adminDefaultAppliedForEmailRef = useRef<string | null>(null)
   const [activeMenu, setActiveMenu] = useState<string>(() => readSessionStorageValue(SESSION_ACTIVE_MENU_KEY) || '')
@@ -35,7 +36,7 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
   const [navigatorProgramError, setNavigatorProgramError] = useState<string | null>(null)
   const [sessionEmail, setSessionEmail] = useState('')
   const [authoritativeAccountRoles, setAuthoritativeAccountRoles] = useState<AtlasRole[]>([])
-  const canSwitchActiveExperience = useMemo(() => authoritativeAccountRoles.includes('administrator') || role === 'administrator', [authoritativeAccountRoles, role])
+  const canSwitchActiveExperience = useMemo(() => authoritativeAccountRoles.some(isSystemAdmin) || isSystemAdmin(role), [authoritativeAccountRoles, role])
   const [navigatorEnrollmentAssignments, setNavigatorEnrollmentAssignments] = useState<NavigatorEnrollmentAssignmentRecord[]>([])
   const [navigatorEnrollmentAssignmentsError, setNavigatorEnrollmentAssignmentsError] = useState<string | null>(null)
   const [isLoadingNavigatorEnrollmentAssignments, setIsLoadingNavigatorEnrollmentAssignments] = useState(false)
@@ -62,7 +63,7 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
   } = useSinglePaneBootstrapState(role)
 
   const viewerRole = remoteSession?.targetRole || role
-  const { adminPortalRegistry, accessMatrixDataset, isSavingAdminPortalRegistry, isSavingAccessMatrix, adminPortalRegistryError, accessMatrixError, saveAdminPortalRegistry, saveAccessMatrixPersonRoles, saveAccessMatrixEnrollmentNavigators, saveAccessMatrixSupervisorAssignments, toggleSupervisorManagedNavigator, saveAccessMatrixPartnerPrimaryContacts } = useAdminAccessMatrixState({
+  const { adminPortalRegistry, accessMatrixDataset, isSavingAdminPortalRegistry, isSavingAccessMatrix, adminPortalRegistryError, accessMatrixError, saveAdminPortalRegistry, saveAccessMatrixPersonRoles, saveAccessMatrixPersonTier, markAccessMatrixPersonTierAlum, saveAccessMatrixPersonLucidEmployee, saveAccessMatrixPersonDesignation, saveAccessMatrixEnrollmentNavigators, saveAccessMatrixSupervisorAssignments, toggleSupervisorManagedNavigator, saveAccessMatrixPartnerPrimaryContacts } = useAdminAccessMatrixState({
     viewerRole,
     role,
     sessionEmail,
@@ -74,7 +75,7 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
     refreshAssignmentParityViews,
   })
   const remotePartnerAssignment = remoteSession?.targetRole === 'partner' && accessMatrixDataset ? accessMatrixDataset.partnerAssignments.find((partner) => partner.primaryContactPersonIds.includes(remoteSession.targetPersonId)) || null : null
-  const isNavigatorMyStationView = viewerRole === 'navigator' && activeMenu.trim().toLowerCase() === 'my station'
+  const isNavigatorMyStationView = isNavigatorTier(viewerRole) && activeMenu.trim().toLowerCase() === 'my station'
   const isPartnerStationView = viewerRole === 'partner' || isNavigatorMyStationView
   const serviceCapacityPromptByNormalizedZCode = useMemo(() => {
     return new Map(flattenSurveyPrompts(DEFAULT_SERVICE_CAPACITY_SURVEY_DEFINITION.sections).map((prompt) => [normalizeZCode(prompt.normalizedZCode || prompt.zCode), prompt]))
@@ -96,6 +97,10 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
   const {
     viewerPolicyRecord,
     isViewerPolicyAllowed,
+    hasPermission,
+    viewerPermissionKeys,
+    viewerTier,
+    permissionSource,
     viewerPerson,
     viewerCanViewNavigatorAssignmentNames,
     viewerCanAccessAssignmentBoard,
@@ -121,6 +126,7 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
     role,
     viewerRole,
     sessionEmail,
+    authoritativeAccountRoles,
     accountSettings,
     remoteSession,
     accessMatrixDataset,
@@ -258,8 +264,8 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
     if (remoteSession) {
       throw new Error(`Exit troubleshooting mode before attempting to ${actionLabel}.`)
     }
-    if (viewerRole !== 'administrator') {
-      throw new Error(`Only administrators can ${actionLabel}.`)
+    if (!isSystemAdmin(viewerRole)) {
+      throw new Error(`Only coordinators (T4+) can ${actionLabel}.`)
     }
   }
 
@@ -275,7 +281,7 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
     (nextRole: AtlasRole) => {
       // Active experience switching is admin-only. Non-admin users remain pinned
       // to their permission-scoped experience (their JWT-authoritative role).
-      if (!authoritativeAccountRoles.includes('administrator')) return
+      if (!authoritativeAccountRoles.some(isSystemAdmin)) return
       setRoleState(nextRole)
     },
     [authoritativeAccountRoles],
@@ -322,7 +328,8 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
     navigatorEnrollmentAssignments: derived.navigatorAssignmentBoardRows,
     viewerCanViewNavigatorAssignmentNames, viewerCanAccessAssignmentBoard,
     viewerCanUseAssignmentActions, viewerCanAddAssignmentBoardReferral,
-    viewerCanAccessAdminRegistryCards, navigatorEnrollmentAssignmentsError,
+    viewerCanAccessAdminRegistryCards, hasPermission, viewerPermissionKeys, viewerTier,
+    permissionSource, navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments, assigningNavigatorEnrollmentId,
     pendingAssignmentEnrollees, regulationReviewSettings: derived.effectiveRegulationReviewSettings,
     searchPartnerIdentifierMatches, ensurePartnerIdentifier, navigatorCompetencyAssessments,
@@ -330,7 +337,9 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 'navigator'
     intakeFormsByEnrolleeId, selectedIntake, hasSavedIntake, canSwitchActiveExperience,
     isSavingAdminPortalRegistry, isSavingAccessMatrix,
     viewerCanWrite: remoteSession?.targetRole === 'partner' ? Boolean(remoteSession.partnerGrant?.allowWrite) : true,
-    saveAdminPortalRegistry, saveAccessMatrixPersonRoles, saveAccessMatrixEnrollmentNavigators,
+    saveAdminPortalRegistry, saveAccessMatrixPersonRoles, saveAccessMatrixPersonTier,
+    markAccessMatrixPersonTierAlum, saveAccessMatrixPersonLucidEmployee, saveAccessMatrixPersonDesignation,
+    saveAccessMatrixEnrollmentNavigators,
     saveAccessMatrixSupervisorAssignments, toggleSupervisorManagedNavigator,
     saveAccessMatrixPartnerPrimaryContacts, saveEnrolleeIntake,
     reloadZCodeDomainSurveyHistory, reloadAdminDeletableServiceCapacitySubmissions,

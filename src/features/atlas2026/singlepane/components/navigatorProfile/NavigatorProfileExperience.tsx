@@ -1,9 +1,7 @@
 import React from 'react'
 import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { createFallbackAvatarDataUrl } from '@/features/atlas2026/components/avatarFallback'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import type {
-  AccountSettings,
   CreateSessionRecord,
   DomainLoad,
   EnrolleeProfile,
@@ -42,11 +40,14 @@ import {
   NavigatorSelfAwarenessSection
 } from './NavigatorProfilePrimarySections'
 
+/**
+ * Props for the navigator sections of My Wallet: enrollee claim circles, the
+ * strain radar and competency dashboard, and the supervision cards. Identity
+ * (avatar, name, tier) is rendered by `WalletTierHeader` in `MyWalletPanel`.
+ */
 export interface NavigatorMyProfilePanelProps {
-  accountSettings: AccountSettings
   currentNavigatorName: string
   aggregateLoad: DomainLoad | null
-  assignedEnrolleeCount: number
   assignedEnrollees: EnrolleeProfile[]
   navigatorEnrollmentAssignments: NavigatorEnrollmentAssignmentRecord[]
   navigatorEnrollmentAssignmentsError: string | null
@@ -69,9 +70,6 @@ export interface NavigatorMyProfilePanelProps {
   regulationReviewDueItems?: RegulationReviewDueItem[]
   programError?: string | null
   onOpenLoadTable?: () => void
-  isUploadingAvatar?: boolean
-  avatarUploadError?: string | null
-  onReplaceAvatar?: (file: File) => Promise<unknown> | unknown
   onOpenEnrolleeSurvey?: (enrolleeId: string) => void
   // Forced weekly review actions jump directly into the selected enrollee's assessment flow.
   onOpenRegulationReview?: (enrolleeId: string, missingInstruments?: Array<'mh_sca' | 'svs'>) => void
@@ -85,9 +83,7 @@ export interface NavigatorMyProfilePanelProps {
 
 export default function NavigatorProfileExperience(props: NavigatorMyProfilePanelProps) {
   const {
-    accountSettings,
     currentNavigatorName,
-    assignedEnrolleeCount,
     assignedEnrollees,
     navigatorEnrollmentAssignments,
     navigatorEnrollmentAssignmentsError,
@@ -109,9 +105,6 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
     dueItems,
     regulationReviewDueItems = [],
     programError = null,
-    isUploadingAvatar = false,
-    avatarUploadError = null,
-    onReplaceAvatar,
     onOpenEnrolleeSurvey,
     onOpenRegulationReview,
     onOpenAssignmentBoardReferral,
@@ -125,8 +118,6 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
   // Weekly regulation reviews stay collapsed behind a calendar badge until opened.
   const [reviewModalOpen, setReviewModalOpen] = React.useState(false)
   const assignmentBoardRef = React.useRef<HTMLElement | null>(null)
-  const displayName = currentNavigatorName.trim() || accountSettings.fullName.trim() || 'navigator'
-  const fallbackAvatar = React.useMemo(() => createFallbackAvatarDataUrl(displayName), [displayName])
   const openReviews = React.useMemo(
     () => regulationReviewDueItems.filter((item) => item.status === 'open'),
     [regulationReviewDueItems]
@@ -143,10 +134,6 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
         <div className="atlas-navigator-profile-layout">
           <div className="atlas-navigator-profile-main">
             <NavigatorProfileOverview
-              accountSettings={accountSettings}
-              displayName={displayName}
-              fallbackAvatar={fallbackAvatar}
-              assignedEnrolleeCount={assignedEnrolleeCount}
               openReviewCount={openReviews.length}
               programError={programError}
               assignmentBoardRef={assignmentBoardRef}
@@ -157,9 +144,6 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
               canViewAssignmentNames={canViewNavigatorAssignmentNames}
               canToggleAssignments={canToggleAssignmentActions}
               canOpenReferral={canOpenAssignmentBoardReferral}
-              isUploadingAvatar={isUploadingAvatar}
-              avatarUploadError={avatarUploadError}
-              onReplaceAvatar={onReplaceAvatar}
               onOpenReviewQueue={() => setReviewModalOpen(true)}
               onOpenReferral={onOpenAssignmentBoardReferral}
               onToggleAssignment={onToggleEnrollmentAssignment}

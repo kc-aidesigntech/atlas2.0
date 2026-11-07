@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react'
 import { AtlasInsetCard, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { AtlasRole } from '@/features/atlas2026/shared/contracts'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import { tierDisplayLabel } from '@/features/atlas2026/shared/tiers'
 import {
+  emptyScribeMenuVisibility,
   fetchScribeMenuVisibility,
   setScribeMenuVisibility,
   type ScribeMenuVisibilityByRole
@@ -13,15 +15,8 @@ interface AdminScribeMenuCardProps {
   onChanged?: (role: AtlasRole, visible: boolean) => void
 }
 
-const EMPTY_VISIBILITY: ScribeMenuVisibilityByRole = {
-  administrator: false,
-  supervisor: false,
-  navigator: false,
-  partner: false
-}
-
 export default function AdminScribeMenuCard({ onChanged }: AdminScribeMenuCardProps) {
-  const [visibility, setVisibility] = useState<ScribeMenuVisibilityByRole>(EMPTY_VISIBILITY)
+  const [visibility, setVisibility] = useState<ScribeMenuVisibilityByRole>(emptyScribeMenuVisibility)
   const [isLoading, setIsLoading] = useState(true)
   const [busyRole, setBusyRole] = useState<AtlasRole | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -81,7 +76,7 @@ export default function AdminScribeMenuCard({ onChanged }: AdminScribeMenuCardPr
           const isBusy = busyRole === role
           return (
             <div key={role} className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/5 px-4 py-3">
-              <div className="text-[15px] font-medium text-white">{role}</div>
+              <div className="text-[15px] font-medium text-white">{tierDisplayLabel(role)}</div>
               <AtlasTextButton
                 onClick={() => void toggleRole(role)}
                 disabled={isLoading || Boolean(busyRole)}

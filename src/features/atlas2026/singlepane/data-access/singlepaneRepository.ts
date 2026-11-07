@@ -117,3 +117,25 @@ export {
   saveAccessMatrixPersonRoles,
   saveAccessMatrixSupervisorAssignments
 } from '@/features/atlas2026/singlepane/data-access/accessMatrixRepository'
+
+export {
+  grantPersonDesignation,
+  loadMyPermissions,
+  loadMyTier,
+  loadPersonTierRecords,
+  markPersonTierAlum,
+  revokePersonDesignation,
+  setPersonLucidEmployee,
+  setPersonTier
+} from '@/features/atlas2026/singlepane/data-access/tierRepository'
+
+export { loadMySupervisor, loadWalletOverview } from '@/features/atlas2026/singlepane/data-access/walletRepository'
+export type {
+  WalletCompetencyCard,
+  WalletOverview,
+  WalletRespiteShift,
+  WalletSecondment,
+  WalletSecondmentScheduleSlot,
+  WalletSponsorship,
+  WalletSupervisor
+} from '@/features/atlas2026/singlepane/data-access/walletRepository'

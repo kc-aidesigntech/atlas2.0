@@ -18,6 +18,12 @@ import {
   type RoleCapabilityRow
 } from '@/features/atlas2026/shared/roleCapabilityPolicy'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import { tierDisplayLabel } from '@/features/atlas2026/shared/tiers'
+
+// Role keys print as tier identities (for example "T4+ Coordinator"); partner and enrollee print as written.
+function roleListLabel(roles: readonly string[]) {
+  return roles.map((role) => tierDisplayLabel(role)).join(', ')
+}
 
 interface AdminPermissionRecordDeskProps {
   people: AdminPortalPersonRecord[]
@@ -255,7 +261,7 @@ export default function AdminPermissionRecordDesk({
                     >
                       <div className="text-[14px] font-medium text-white">{person.fullName || person.email || 'unnamed person'}</div>
                       <small className="block text-[12px] text-[var(--foreground-secondary)]">
-                        {person.roles.join(', ') || 'no roles'}
+                        {roleListLabel(person.roles) || 'no roles'}
                         {exceptionCount ? ` · ${exceptionCount} exception${exceptionCount === 1 ? '' : 's'}` : ' · inherits role'}
                       </small>
                     </button>
@@ -277,7 +283,7 @@ export default function AdminPermissionRecordDesk({
                     className="block w-full rounded-[14px] px-3 py-2 text-left hover:bg-white/5"
                     style={selected ? { backgroundColor: 'rgba(252,192,26,0.08)' } : undefined}
                   >
-                    <div className="text-[14px] font-medium capitalize text-white">{role}</div>
+                    <div className="text-[14px] font-medium text-white">{tierDisplayLabel(role)}</div>
                     <small className="block text-[12px] text-[var(--foreground-secondary)]">
                       {changes ? `${changes} changed from the system default` : 'system default'}
                     </small>
@@ -303,7 +309,7 @@ export default function AdminPermissionRecordDesk({
                 <>
                   <div className="mt-1 text-[22px] font-medium text-white">{selectedPerson.fullName || selectedPerson.email || 'unnamed person'}</div>
                   <small className="mt-1 block text-[13px] text-[var(--foreground-secondary)]">
-                    {selectedPerson.email || 'no email'} · {selectedPerson.roles.join(', ') || 'no roles'}
+                    {selectedPerson.email || 'no email'} · {roleListLabel(selectedPerson.roles) || 'no roles'}
                   </small>
                   {toAtlasRoles(selectedPerson.roles).length ? (
                     <div className="mt-3">
@@ -312,7 +318,7 @@ export default function AdminPermissionRecordDesk({
                         {toAtlasRoles(selectedPerson.roles).map((role) => (
                           <ChoiceButton
                             key={role}
-                            label={`open ${role}`}
+                            label={`open ${tierDisplayLabel(role)}`}
                             selected={false}
                             tone="role"
                             onClick={() => {
@@ -330,7 +336,7 @@ export default function AdminPermissionRecordDesk({
                 )
               ) : (
                 <>
-                  <div className="mt-1 text-[22px] font-medium capitalize text-white">{selectedRole}</div>
+                  <div className="mt-1 text-[22px] font-medium text-white">{tierDisplayLabel(selectedRole)}</div>
                   <small className="mt-1 block text-[13px] text-[var(--foreground-secondary)]">
                     People with this role inherit these permissions unless their own record has an exception.
                   </small>

@@ -33,6 +33,8 @@ import {
 import {
   extractAuthoritativeRolesFromSession,
   haveSameRoles,
+  isNavigatorTier,
+  isSystemAdmin,
   normalizeAtlasRoleKeys
 } from '@/features/atlas2026/singlepane/domain/roles'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
@@ -140,7 +142,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
   }, [input.selectedRoleTopMenus, input.selectedRoleTopMenusKey, input.setActiveMenu])
 
   useEffect(() => {
-    if (input.viewerRole !== 'administrator') {
+    if (!isSystemAdmin(input.viewerRole)) {
       input.setZCodeDomainSurveyHistorySummary([])
       input.setZCodeDomainSurveyHistoryError(null)
       input.setAdminDeletableServiceCapacitySubmissions([])
@@ -185,7 +187,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
   }, [input.setAuthoritativeAccountRoles, input.setSessionEmail])
 
   useEffect(() => {
-    if (!input.authoritativeAccountRoles.length || input.authoritativeAccountRoles.includes('administrator')) return
+    if (!input.authoritativeAccountRoles.length || input.authoritativeAccountRoles.some(isSystemAdmin)) return
     if (input.remoteSession) input.setRemoteSession(null)
     if (!input.authoritativeAccountRoles.includes(input.role)) {
       input.setRoleState(input.authoritativeAccountRoles[0])
@@ -195,13 +197,13 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
   useEffect(() => {
     const normalizedEmail = input.sessionEmail.trim().toLowerCase()
     if (!normalizedEmail) return
-    if (!input.authoritativeAccountRoles.includes('administrator')) {
+    if (!input.authoritativeAccountRoles.some(isSystemAdmin)) {
       input.adminDefaultAppliedForEmailRef.current = null
       return
     }
     if (input.adminDefaultAppliedForEmailRef.current === normalizedEmail) return
     input.adminDefaultAppliedForEmailRef.current = normalizedEmail
-    input.setRoleState('administrator')
+    input.setRoleState('t4plus')
   }, [input.authoritativeAccountRoles, input.sessionEmail])
 
   useEffect(() => {
@@ -224,7 +226,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
   }, [input.setNavigatorProgramError, input.setNavigatorProgramState, input.viewerRole])
 
   useEffect(() => {
-    if (input.viewerRole !== 'administrator' && input.viewerRole !== 'partner') return
+    if (!isSystemAdmin(input.viewerRole) && input.viewerRole !== 'partner') return
     let isMounted = true
     void loadPartnerTroubleshootingGrants()
       .then((grants) => {
@@ -244,7 +246,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
       ...current,
       accountSettings: { ...current.accountSettings, enabledRoles: derivedRoles }
     }))
-    if (!derivedRoles.includes(input.role)) input.setRoleState(derivedRoles[0] || 'navigator')
+    if (!derivedRoles.includes(input.role)) input.setRoleState(derivedRoles[0] || 't3a')
   }, [input.accountSettings.enabledRoles, input.remoteSession, input.role, input.viewerPerson])
 
   useEffect(() => {
@@ -282,9 +284,10 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
   ])
 
   useEffect(() => {
-    if (input.viewerRole !== 'navigator' || input.role === 'navigator') return
+    // Troubleshooting a navigator tier from another role loads that tier's requests.
+    if (!isNavigatorTier(input.viewerRole) || isNavigatorTier(input.role)) return
     let isMounted = true
-    void loadEnrollmentRequests('navigator')
+    void loadEnrollmentRequests(input.viewerRole)
       .then((requests) => {
         if (isMounted) input.setBootstrapState((current) => ({ ...current, enrollmentRequests: requests }))
       })
@@ -295,7 +298,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
   }, [input.role, input.viewerRole])
 
   useEffect(() => {
-    if (input.viewerRole !== 'navigator') {
+    if (!isNavigatorTier(input.viewerRole)) {
       input.setNavigatorEnrollmentAssignments([])
       input.setNavigatorEnrollmentAssignmentsError(null)
       input.setIsLoadingNavigatorEnrollmentAssignments(false)

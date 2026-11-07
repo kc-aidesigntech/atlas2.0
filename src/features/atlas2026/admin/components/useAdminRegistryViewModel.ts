@@ -17,6 +17,7 @@ import {
   getEmptyRegistry,
   mergeById
 } from './adminDataControlPanelModel'
+import { isNavigatorTier, isSupervisorTier, isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 interface AdminRegistryViewModelInput {
   registry: AdminPortalRegistry | null
@@ -68,8 +69,8 @@ export function useAdminRegistryViewModel({
         id,
         fullName: accountSettings.fullName || 'atlas operator',
         email: accountSettings.email,
-        title: 'System administrator',
-        roles: ['administrator'],
+        title: 'Coordinator',
+        roles: ['t4plus'],
         canViewNavigatorAssignmentNames: true,
         approvalState: 'approved',
         identityGroupId: id,
@@ -88,7 +89,7 @@ export function useAdminRegistryViewModel({
       email: person.email,
       title: '',
       roles: person.roleKeys,
-      canViewNavigatorAssignmentNames: person.roleKeys.includes('administrator'),
+      canViewNavigatorAssignmentNames: person.roleKeys.some(isSystemAdmin),
       approvalState: 'approved',
       identityGroupId: person.id,
       linkedEmails: person.email ? [person.email.trim().toLowerCase()] : [],
@@ -107,8 +108,8 @@ export function useAdminRegistryViewModel({
       id: createSeedPersonId(name),
       fullName: name,
       email: '',
-      title: 'Navigator',
-      roles: ['navigator'],
+      title: 'Peer Navigator',
+      roles: ['t3a'],
       canViewNavigatorAssignmentNames: false,
       approvalState: 'approved',
       identityGroupId: createSeedPersonId(name),
@@ -148,14 +149,12 @@ export function useAdminRegistryViewModel({
     return [...existingRows, ...customRows]
   }, [effectiveRegistry, enrollees, intakeFormsByEnrolleeId])
 
-  const navigators = useMemo(() => combinedPeople.filter((person) => person.roles.includes('navigator')), [combinedPeople])
-  const supervisors = useMemo(
-    () => combinedPeople.filter((person) => person.roles.includes('supervisor') || person.roles.includes('administrator')),
-    [combinedPeople]
-  )
+  // Navigator tiers are t3a and t2b; supervisor tiers are t4 and t4plus.
+  const navigators = useMemo(() => combinedPeople.filter((person) => person.roles.some(isNavigatorTier)), [combinedPeople])
+  const supervisors = useMemo(() => combinedPeople.filter((person) => person.roles.some(isSupervisorTier)), [combinedPeople])
   const navigatorCoverageOptions = useMemo<NavigatorCoverageOption[]>(
     () => (accessMatrixDataset?.people || [])
-      .filter((person) => person.roleKeys.includes('navigator'))
+      .filter((person) => person.roleKeys.some(isNavigatorTier))
       .map((person) => ({
         id: person.id,
         label: person.fullName.trim() || person.email.trim() || person.id,

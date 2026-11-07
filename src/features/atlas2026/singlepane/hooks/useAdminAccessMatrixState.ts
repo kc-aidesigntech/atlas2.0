@@ -5,17 +5,25 @@ import type {
   AdminPortalPersonRecord,
   AdminPortalPersonRole,
   AdminPortalRegistry,
-  AtlasRole
+  AtlasRole,
+  TierDesignation,
+  TierKey
 } from '@/features/atlas2026/shared/contracts'
 import {
+  grantPersonDesignation as persistGrantPersonDesignation,
   loadAccessMatrixDataset,
   loadAdminPortalRegistry,
+  markPersonTierAlum as persistMarkPersonTierAlum,
+  revokePersonDesignation as persistRevokePersonDesignation,
   saveAccessMatrixEnrollmentNavigators as persistAccessMatrixEnrollmentNavigators,
   saveAccessMatrixPartnerPrimaryContacts as persistAccessMatrixPartnerPrimaryContacts,
   saveAccessMatrixPersonRoles as persistAccessMatrixPersonRoles,
   saveAccessMatrixSupervisorAssignments as persistAccessMatrixSupervisorAssignments,
-  saveAdminPortalRegistry as persistAdminPortalRegistry
+  saveAdminPortalRegistry as persistAdminPortalRegistry,
+  setPersonLucidEmployee as persistPersonLucidEmployee,
+  setPersonTier as persistPersonTier
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
+import { isAtlasRole, isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 interface AdminAccessMatrixStateInput {
   viewerRole: AtlasRole
@@ -78,16 +86,14 @@ export function useAdminAccessMatrixState({
           person.email.trim().toLowerCase() === normalizedEmail ||
           person.linkedEmails.map((value) => value.trim().toLowerCase()).includes(normalizedEmail)
       ) || null
-    const normalizedRole = (role === 'administrator' || role === 'supervisor' || role === 'navigator' || role === 'partner'
-      ? role
-      : 'navigator') as AdminPortalPersonRole
+    const normalizedRole: AdminPortalPersonRole = isAtlasRole(role) ? role : 't3a'
     const createdPerson: AdminPortalPersonRecord = {
       id: `person-${Date.now().toString(36)}`,
       fullName: accountSettings.fullName.trim() || normalizedEmail,
       email: normalizedEmail,
       title: '',
       roles: [normalizedRole],
-      canViewNavigatorAssignmentNames: normalizedRole === 'administrator',
+      canViewNavigatorAssignmentNames: isSystemAdmin(normalizedRole),
       approvalState: 'pending',
       identityGroupId: `identity-${normalizedEmail}`,
       linkedEmails: [normalizedEmail],
@@ -128,7 +134,7 @@ export function useAdminAccessMatrixState({
   }, [accountSettings.email, accountSettings.fullName, adminPortalRegistry, remoteSessionActive, role, sessionEmail])
 
   useEffect(() => {
-    if (viewerRole !== 'administrator') {
+    if (!isSystemAdmin(viewerRole)) {
       setAccessMatrixDataset(null)
       setAccessMatrixError(null)
       return
@@ -223,6 +229,46 @@ export function useAdminAccessMatrixState({
     }
   }
 
+  /** Runs one tier Remote Procedure Call (RPC) and reloads the dataset so the tier column reflects the row the database wrote. */
+  async function runTierWrite(actionLabel: string, failureMessage: string, write: () => Promise<void>) {
+    ensureAdminPermissionWrite(actionLabel)
+    setIsSavingAccessMatrix(true)
+    setAccessMatrixError(null)
+    try {
+      await write()
+      await refreshAccessMatrixDataset()
+    } catch (error) {
+      setAccessMatrixError(error instanceof Error ? error.message : failureMessage)
+      throw error
+    } finally {
+      setIsSavingAccessMatrix(false)
+    }
+  }
+
+  /** `fn_set_person_tier`: the role assignment and the active tier row change together. */
+  async function saveAccessMatrixPersonTier(personId: string, tierKey: TierKey) {
+    await runTierWrite('change tier assignments', 'Unable to set the person tier.', () => persistPersonTier(personId, tierKey))
+  }
+
+  /** `fn_mark_tier_alum`: the tier row keeps its key with `tier_status` alum. */
+  async function markAccessMatrixPersonTierAlum(personId: string) {
+    await runTierWrite('mark a tier alum', 'Unable to mark the tier alum.', () => persistMarkPersonTierAlum(personId))
+  }
+
+  /** Writes `people_tiers.is_lucid_employee`. */
+  async function saveAccessMatrixPersonLucidEmployee(personId: string, isLucidEmployee: boolean) {
+    await runTierWrite('change the employee flag', 'Unable to update the employee flag.', () =>
+      persistPersonLucidEmployee(personId, isLucidEmployee)
+    )
+  }
+
+  /** `fn_grant_designation` or `fn_revoke_designation`, chosen by `granted`. */
+  async function saveAccessMatrixPersonDesignation(personId: string, designation: TierDesignation, granted: boolean) {
+    await runTierWrite('change designations', 'Unable to update the designation.', () =>
+      granted ? persistGrantPersonDesignation(personId, designation) : persistRevokePersonDesignation(personId, designation)
+    )
+  }
+
   async function toggleSupervisorManagedNavigator(navigatorPersonId: string, isManaged: boolean) {
     const viewerPersonId = getViewerPersonId()
     if (!viewerPersonId || !accessMatrixDataset) return
@@ -260,6 +306,10 @@ export function useAdminAccessMatrixState({
     accessMatrixError,
     saveAdminPortalRegistry,
     saveAccessMatrixPersonRoles,
+    saveAccessMatrixPersonTier,
+    markAccessMatrixPersonTierAlum,
+    saveAccessMatrixPersonLucidEmployee,
+    saveAccessMatrixPersonDesignation,
     saveAccessMatrixEnrollmentNavigators,
     saveAccessMatrixSupervisorAssignments,
     toggleSupervisorManagedNavigator,

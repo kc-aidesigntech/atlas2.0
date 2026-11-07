@@ -243,7 +243,7 @@ export default function StandaloneFleetPage() {
           <div className="flex items-center gap-3">
             <AtlasOverline className="text-[#9eacb9]">fleet</AtlasOverline>
             {/* Not the partner shell. The warm-line permission still decides whether the icon renders. */}
-            <PrayPhoneListenButton role="supervisor" />
+            <PrayPhoneListenButton role="t4" />
           </div>
         </div>
         <div className="atlas-shell-edge-buffer flex min-h-[54px] items-center py-2">

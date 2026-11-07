@@ -9,7 +9,7 @@ ATLAS is designed as an operating system for accountable care navigation, where 
 ### Policy Design Intent
 
 - **Operational safety first**: All workflows prioritize immediate stabilization and risk containment before progression.
-- **Role-bound execution**: Navigator, partner, and administrator scopes are explicit and enforced.
+- **Role-bound execution**: Staff scopes are the seven Residency tiers (`t1` Candidate through `t4plus` Coordinator), plus partner and enrollee; each is gated by permission key. See [`docs/tiers.md`](./docs/tiers.md).
 - **Evidence-backed movement**: Progression across phases is linked to measurable outputs and logged milestones.
 - **Governance by design**: Authorization, exceptions, and rollout toggles are implemented as first-class infrastructure.
 - **Cross-platform continuity**: Web and mobile are aligned through shared TypeScript contracts and data wrappers.
@@ -18,6 +18,7 @@ ATLAS is designed as an operating system for accountable care navigation, where 
 
 - Implemented role-based platform shell for `Navigator`, `Partner`, and `Administrator` operating contexts.
 - Expanded role model to include `Supervisor` for navigator competency governance and team burden oversight.
+- Replaced the staff role keys with the seven Residency tiers (`t1`, `t2`, `t2b`, `t3`, `t3a`, `t4`, `t4plus`); `navigator` / `supervisor` / `administrator` map to `t3a` / `t4` / `t4plus`. Screens gate on permission keys (`fn_my_permissions`) instead of role literals.
 - Established Supabase/Postgres foundation for partner capacity surveys and burden/capability updates.
 - Implemented authorization foundation (`permissions`, `role_permissions`, exceptions, and policy toggles).
 - Added monorepo direction for web + mobile (`Vite` + `Expo/React Native`) with shared package structure.
@@ -57,9 +58,9 @@ sequenceDiagram
 ```mermaid
 flowchart TD
   U[Authenticated User] --> R{Role Context}
-  R --> N[Navigator Scope]
+  R --> N[Tier Scope t1 to t4]
   R --> P[Partner Scope]
-  R --> A[Administrator Scope]
+  R --> A[t4plus Coordinator Scope]
 
   A --> G[Authorization Settings and Exceptions]
   G --> L[RLS and Permission Policies]
@@ -78,8 +79,8 @@ flowchart TD
 - Supabase/Postgres is active for survey and capacity workflows
 - Authorization foundation is now in place (roles, permissions, user exceptions, Row-Level Security (RLS) toggles)
 - Runtime data path is Supabase/Postgres
-- Pray Phone is live as an Atlas staff door, not as a page inside the call engine. Navigator, supervisor, and administrator shells show a **warm line** menu and a phone icon in the top bar, to the left of Account Settings, on every menu, when the account passes `warmline_agent.access`. The icon opens `https://prayphone-68d333045316.herokuapp.com/agent` and signs in that same Supabase user. The session token is not put in the address bar. Partners do not see either control. A press of the icon always opens the agent console on prayphone-server. A green count on the icon is how many calls are waiting in the conferencer queue. Zero means that queue is empty. A kiosk `0` press turns the icon red and plays a ring. Runbook: [`docs/it/prayphone.md`](./docs/it/prayphone.md).
-- Fleet (which phones are online, call sessions, street address, Wi-Fi login) is an Atlas screen for administrators and supervisors: [`docs/it/fleet.md`](./docs/it/fleet.md).
+- Pray Phone is live as an Atlas staff door, not as a page inside the call engine. Tiers `t2b`, `t3a`, `t4`, and `t4plus` show a **warm line** menu and a phone icon in the top bar, to the left of Account Settings, on every menu, when the account passes `warmline_agent.access`. The icon opens `https://prayphone-68d333045316.herokuapp.com/agent` and signs in that same Supabase user. The session token is not put in the address bar. Partners do not see either control. A press of the icon always opens the agent console on prayphone-server. A green count on the icon is how many calls are waiting in the conferencer queue. Zero means that queue is empty. A kiosk `0` press turns the icon red and plays a ring. Runbook: [`docs/it/prayphone.md`](./docs/it/prayphone.md).
+- Fleet (which phones are online, call sessions, street address, Wi-Fi login) is an Atlas screen for `t4` and `t4plus`: [`docs/it/fleet.md`](./docs/it/fleet.md).
 
 Documentation hub: [`docs/README.md`](./docs/README.md).
 
@@ -94,25 +95,33 @@ The User Interface (UI) is intentionally dark and operational, not pastel/civic-
 
 ## Core Workflows
 
-- **Navigator**
+Menus per tier come from `atlas.app_role_navigation` (`20261104190400_tier_navigation.sql`). Full table: [`docs/tiers.md`](./docs/tiers.md).
+
+- **T1 Candidate / T2 Apprentice / T3 Travel Peer**
+  - refer; T2 adds my wallet; T3 adds secondment schedule and sponsorships
+- **T2B Peer Resident**
+  - refer, my wallet, assigned enrollees, leads, warm line, respite shifts, sponsorships
+- **T3A Peer Navigator** (the former navigator shell)
   - assigned enrollees
   - requests to enroll
   - route planning with z-code-aware partner ranking
   - symbolic mobile route board for narrow-screen route inspection
   - station and county context
-  - **warm line** and the header phone icon when this account has the navigator allow exception and the Atlas build includes the Pray Phone origin
+  - **warm line** and the header phone icon (seeded `warmline_agent.access`) when the Atlas build includes the Pray Phone origin
 - **Partner**
   - service-capacity survey and burden/capability updates
   - station profile context
-- **Supervisor**
+- **T4 Supervisor** (the former supervisor shell)
   - assigned navigator oversight and competency tracking
   - navigator assessments aligned to Z-code parent themes
   - rolling weighted competency average using last three assessments (`3x most recent + 2x prior + 1x previous`)
   - supervisor shell parity: milestone strip-map and team-level radial burden view
+  - cohorts and competency cards
   - **warm line**, the header phone icon, and the **fleet** menu
-- **Administrator**
+- **T4+ Coordinator** (the former administrator shell; system-administrator bypass)
   - admin-only operations panels
   - data controls, governance scaffolding, and policy toggles
+  - partners screen (station capacity and stop status), tier picker in Admin Directory; the county heat map menu stays hidden while `SHOW_COUNTY_COMMONS` is `false`
   - **warm line**, the header phone icon, and the **fleet** menu
 
 Detailed behavior spec: [`docs/users/README.md`](./docs/users/README.md) (users) and [`docs/it/README.md`](./docs/it/README.md) (Information Technology (IT))
@@ -244,7 +253,7 @@ Root markdown files other than `README.md` and `PILOT.md` are redirect stubs to 
 When making changes:
 
 - Preserve the single-pane operational interaction model unless explicitly changing IA.
-- Keep role boundaries strict (navigator vs partner vs administrator).
+- Keep role boundaries strict (tier vs partner vs enrollee); gate by permission key, not role literal (`.cursor/rules/tier-hierarchy.mdc`).
 - Treat authorization and data policy changes as migration-backed, reviewed infrastructure work.
 - Update docs in the same Pull Request (PR) when behavior or architecture changes.
 - Follow `docs/writing-standards.md`, including required first-use acronym expansion in every file.

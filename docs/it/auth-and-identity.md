@@ -35,13 +35,15 @@ Canonical migration: `supabase/migrations/20260504010000_launch_identity_bridge_
 Behavior:
 
 - New/updated auth users get a matching `atlas.people` row (`id` = `auth.users.id`, `external_ref` = `auth.uid()::text`).
-- Default **navigator** role assignment is applied when that role exists (matches `atlas.fn_current_person_id()` used by Row-Level Security (RLS) helpers).
+- Default **`t1` (Candidate)** role assignment is inserted on `auth.users` insert when the person has no open assignment (`atlas.handle_auth_user_people_sync`, redefined in `20261104190200_tier_role_literals.sql`; the earlier default was `partner`). The row matches `atlas.fn_current_person_id()` used by Row-Level Security (RLS) helpers.
+- Staff roles are the Residency tiers `t1` … `t4plus`; `partner` and `enrollee` remain. A `t4` / `t4plus` moves a person off `t1` with `atlas.fn_set_person_tier`. See [../tiers.md](../tiers.md).
+- The JavaScript Object Notation (JSON) Web Token (JWT) claim `app_metadata.atlas_role` is written outside this repository. It should carry a tier key. Legacy values `administrator` / `supervisor` / `navigator` are normalized to `t4plus` / `t4` / `t3a` by `atlas.fn_normalize_role_key` and by the client until that hook is updated.
 
 Every production login needs:
 
 1. Auth user
 2. `atlas.people` row (via bridge)
-3. Active role assignment(s)
+3. Active role assignment(s) — a tier key, `partner`, or `enrollee`
 4. Partner/navigator/supervisor edges as applicable (Access Matrix Remote Procedure Calls (RPCs))
 
 ## Application environment
@@ -61,7 +63,7 @@ The Vite client uses Proof Key for Code Exchange (PKCE) and session detection fr
 Compliance is organizational, not a single repo switch:
 
 - Execute a Business Associate Agreement (BAA) with Supabase where applicable.
-- Enable Multi-Factor Authentication (MFA), leaked-password protection, appropriate JavaScript Object Notation (JSON) Web Token (JWT) lifetime, and disable anonymous sign-ins except for the intentional public referral surface.
+- Enable Multi-Factor Authentication (MFA), leaked-password protection, appropriate JWT lifetime, and disable anonymous sign-ins except for the intentional public referral surface.
 - Prefer `app_metadata` (not `user_metadata`) for authorization claims.
 - Use Transport Layer Security (TLS)-only clients; do not store passwords in Atlas tables.
 

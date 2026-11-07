@@ -16,7 +16,11 @@ export function RecordTable({
 }) {
   return (
     <div className="overflow-hidden rounded-[18px] border border-white/10">
-      <div className="grid grid-cols-[1.3fr_repeat(3,minmax(0,1fr))] gap-3 border-b border-white/10 bg-white/5 px-4 py-3 text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]">
+      {/* The first column is wider; the rest share the remaining width, one track per header label. */}
+      <div
+        className="grid gap-3 border-b border-white/10 bg-white/5 px-4 py-3 text-[11px] uppercase tracking-[0.12em] text-[var(--foreground-secondary)]"
+        style={{ gridTemplateColumns: `1.3fr repeat(${Math.max(columns.length - 1, 1)}, minmax(0, 1fr))` }}
+      >
         {columns.map((column) => <div key={column}>{column}</div>)}
       </div>
       <div className="divide-y divide-white/10">

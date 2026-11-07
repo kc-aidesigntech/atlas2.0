@@ -12,6 +12,7 @@ import {
 } from '@atlas/shared'
 import { hasSupabaseConfig, isSinglePaneSupabaseBootstrapEnabled, supabase } from '@/lib/supabaseClient'
 import { withOptionalSupabaseFallback } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { isNavigatorTier } from '@/features/atlas2026/singlepane/domain/roles'
 
 const DEMO_NAVIGATOR_NAME = 'atlas demo navigator'
 let demoTagsTableUnavailable = false
@@ -92,7 +93,7 @@ export async function resolveSessionPersonIdFromMetadata() {
 }
 
 export async function loadEnrollmentRequests(role: AtlasRole): Promise<EnrollmentRequestRecord[]> {
-  if (role !== 'navigator' || !hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
+  if (!isNavigatorTier(role) || !hasSupabaseConfig || !supabase || !isSinglePaneSupabaseBootstrapEnabled) return []
   const rows = await withOptionalSupabaseFallback('singlepane.enrollmentRequests', () => fetchSinglePaneEnrollmentRequests(supabase), [])
   return rows.map((row) => ({
     id: row.id,

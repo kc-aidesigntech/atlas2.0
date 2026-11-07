@@ -2,7 +2,7 @@
 
 Canonical set: [../prayphone/README.md](../prayphone/README.md). Online window, check-in, and Wi-Fi behavior are specified in [../prayphone/system-design.md](../prayphone/system-design.md). This page stays the fleet runbook.
 
-The fleet subapp is where administrators and supervisors see which Pray Phone kiosks are online, read call sessions, and set each phone's street address and Wi-Fi login. It is part of the Atlas web app, the same way Scribe is: its own hostname when Domain Name System (DNS) is set, and `/fleet` on the primary domain until then.
+The fleet subapp is where `t4` Supervisors and `t4plus` Coordinators see which Pray Phone kiosks are online, read call sessions, and set each phone's street address and Wi-Fi login. It is part of the Atlas web app, the same way Scribe is: its own hostname when Domain Name System (DNS) is set, and `/fleet` on the primary domain until then.
 
 The conferencer stays on prayphone-server. This screen does not join SignalWire rooms.
 
@@ -10,8 +10,8 @@ The conferencer stays on prayphone-server. This screen does not join SignalWire 
 
 - Path route: `https://<atlas-host>/fleet` (Supabase session required).
 - Optional subdomain: set `VITE_ATLAS_FLEET_HOSTNAME` (for example `fleet.example.org`) on the Atlas Heroku app (`atlas-simplified`), add that custom domain to the same app, and create a DNS Canonical Name (CNAME). Redeploy so Vite embeds the hostname. The workspace **fleet** menu then opens the subdomain. Without the variable, the menu opens `/fleet`.
-- Workspace menu: migration `20261004223000_prayphone_fleet_management.sql` appends `fleet` to the administrator and supervisor `top_menus`. Navigators do not get the menu.
-- Gate: Remote Procedure Call (RPC) `atlas.fn_can_manage_prayphone_fleet()` is true for administrator and supervisor JSON Web Token (JWT) claims, or an active assignment of those roles. It does not follow `warmline_agent.access`, so a navigator with a warm-line exception still cannot open fleet settings.
+- Workspace menu: `fleet` is in the `t4` and `t4plus` `top_menus` rows (`20261104190400_tier_navigation.sql`, which replaced the administrator and supervisor rows seeded by `20261004223000_prayphone_fleet_management.sql`). `t3a` and lower do not get the menu.
+- Gate: Remote Procedure Call (RPC) `atlas.fn_can_manage_prayphone_fleet()` (redefined in `20261104190100_tier_admin_fastpath.sql`) is true for `atlas.fn_is_system_admin()`, then for a `t4` / `t4plus` JSON Web Token (JWT) claim, then for an active `t4` / `t4plus` assignment. Legacy `administrator` / `supervisor` claims normalize to `t4plus` / `t4`. It does not follow `warmline_agent.access`, so a `t3a` with warm-line access still cannot open fleet settings. Tier model: [../tiers.md](../tiers.md).
 
 In Supabase **Authentication → URL configuration**, add the fleet origin (`https://fleet.<atlas-host>` and `https://<atlas-host>/fleet`) so sign-in on that host can return.
 

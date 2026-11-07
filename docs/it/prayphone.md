@@ -2,23 +2,26 @@
 
 Canonical set: [../prayphone/README.md](../prayphone/README.md) (customers), [../prayphone/system-design.md](../prayphone/system-design.md), [../prayphone/interaction-procedures.md](../prayphone/interaction-procedures.md), [../prayphone/troubleshooting.md](../prayphone/troubleshooting.md). This page stays the Atlas environment and domain runbook.
 
-Pray Phone stays its own application (SignalWire agent webpage + Raspberry Pi kiosk). Atlas owns **identity** and the **navigator portal entry**. Do not port the call engine into the Atlas Vite bundle.
+Pray Phone stays its own application (SignalWire agent webpage + Raspberry Pi kiosk). Atlas owns **identity** and the **staff portal entry**. Do not port the call engine into the Atlas Vite bundle.
 
-Words used on this page: the **agent** is the staff member who monitors the warm line and receives calls on `/agent`. Every other participant is a **caller**: the Pi kiosk on `/kiosk/call`, or the phone app on `/mobile/call`.
+Words used on this page: the **agent** is the staff member who monitors the warm line and receives calls on `/agent`. Every other participant is a **caller**: the Pi kiosk on `/kiosk/call`, or the phone app on `/mobile/call`. Staff roles are the Residency tiers (`t1` … `t4plus`) described in [../tiers.md](../tiers.md); the legacy words navigator / supervisor / administrator map to `t3a` / `t4` / `t4plus`.
 
 ## What Atlas does
 
-- Shows **warm line** in the navigator / supervisor / administrator top menu when the account may sit the warm line. The phone icon uses the same rule. The agent link is built in: `https://prayphone-68d333045316.herokuapp.com/agent`.
-- Shows a Pray Phone icon in the top bar, to the left of Account Settings, on every workspace menu for those same profiles when the warm-line permission is true. The same icon is on the fleet and scribe shells. Partners do not see it. Navigators see it only with the allow exception. Pressing the icon always opens the agent console.
+- Shows **warm line** in the top menu of tiers `t2b`, `t3a`, `t4`, and `t4plus` (`atlas.app_role_navigation`) when the account may sit the warm line. The phone icon uses the same rule. The agent link is built in: `https://prayphone-68d333045316.herokuapp.com/agent`.
+- Shows a Pray Phone icon in the top bar, to the left of Account Settings, on every workspace menu when the account holds `warmline_agent.access` (live `fn_my_permissions` list or tier default) or sits at `t2b` or higher, and `fn_can_access_warmline_agent` is true (`PrayPhoneListenButton.tsx`). The same icon is on the fleet and scribe shells. Partners, `t1`, `t2`, and `t3` do not see it unless they hold an allow exception. Pressing the icon always opens the agent console.
 - The icon carries a green count of conferencer sessions whose state is `initiated`, `dialing`, or `ringing`. An empty queue shows zero. Atlas reads `atlas.prayphone_call_sessions` on the same four-second poll as the inbound ring. A kiosk heartbeat is the fleet online window, not this number.
 - When a caller presses `0`, prayphone-server writes a ringing row after the call session is saved. The icon turns red and plays a phone ring. Pressing it opens the agent console in a window named `prayphone-agent` for the same Supabase user. The console opened that way does not play its own ringtone; `window.opener` is set and this tab is already ringing. When the agent presses **answer call**, the console posts `{ type: "prayphone-answered" }` to this tab and `PrayPhoneListenButton` stops the chime.
 - The ring clears when the agent and the caller are both in the room, or when the call ends. The icon stays in the bar.
 - Navigation stays on the Atlas login. Atlas asks Supabase for a 60-second code (`atlas.fn_create_prayphone_handoff`). The agent page trades that code for a normal Supabase session (`POST /api/atlas-handoff`) and removes the code from the address bar. The session token is not placed in the Uniform Resource Locator (URL). A copied phone link cannot be reused to sign in. A direct visit to `/agent` uses the same Atlas email, Google, or Apple sign-in.
-- Authorizes the console with Remote Procedure Call (RPC) `atlas.fn_can_access_warmline_agent()`.
-  Administrators and supervisors have `warmline_agent.access` by role. Navigators need a non-expiring
-  allow exception set in Admin Directory or by their supervisor on the assigned-navigators roster.
-  An administrator can deny a supervisor. Partners never pass. The Warm line menu is hidden unless
-  this RPC is true.
+- Authorizes the console with Remote Procedure Call (RPC) `atlas.fn_can_access_warmline_agent()`,
+  which returns `atlas.fn_has_permission('warmline_agent.access')`. The key is seeded on tiers
+  `t2b`, `t3a`, `t4`, and `t4plus` (`20261104190300_tier_permissions.sql`); `t4plus` also passes
+  through `atlas.fn_is_system_admin()`. Any other tier needs a non-expiring allow exception, set in
+  Admin Directory (`fn_admin_set_warmline_access`) or by a `t4` / `t4plus` on the assigned-navigators
+  roster (`fn_supervisor_set_navigator_warmline_access`). A deny exception is read before role grants,
+  so an administrator can deny a `t4`. Partners never pass. The Warm line menu is hidden unless this
+  RPC is true.
 
 ## What Pray Phone still does
 
@@ -64,16 +67,16 @@ When neither `INGEST_TOKEN` nor the Atlas Supabase variables are set, `requireCa
 3. In Supabase **Authentication → URL configuration**, add:
    - `https://pray.<atlas-host>/agent`
    - the Heroku origin `/agent` if still used
-4. Apply the Atlas migrations on project `qjsaedamqaqxobslboni`, in file order: `20260817090000_warmline_agent_access.sql`, `20260817120000_warmline_agent_capability.sql` (`fn_can_access_warmline_agent`, permission `warmline_agent.access`, `fn_supervisor_set_navigator_warmline_access`), `20260817130000_prayphone_fleet_sessions.sql`, `20261004200000_prayphone_inbound_rings.sql`, `20261004223000_prayphone_fleet_management.sql`, `20261009150000_prayphone_devices_realtime.sql`, `20261010210000_prayphone_auth_handoff.sql`, `20261015055100_grant_service_role_atlas_prayphone.sql`, `20261016203000_prayphone_device_signalwire_identity.sql`, `20261017041700_prayphone_caller_class.sql`, `20261017180000_prayphone_inbound_ring_caller_class.sql`, and `20261017193000_prayphone_ring_sources.sql`. The inbound-ring migration enables Supabase Realtime on `atlas.prayphone_inbound_rings`. Until it is applied, a caller's `0` will not turn the icon red. The devices migration enables Realtime on `atlas.prayphone_devices`. The header green number does not read that table. It counts waiting rows on `atlas.prayphone_call_sessions`. The handoff migration is what lets a click on the phone icon sign the same person into the agent without putting a session token in the URL. Until it is applied, the agent page asks for the Atlas password. The service-role grant is what lets the conferencer read `prayphone_devices` for the kiosk create and write rings and sessions.
+4. Apply the Atlas migrations on project `qjsaedamqaqxobslboni`, in file order: `20260817090000_warmline_agent_access.sql`, `20260817120000_warmline_agent_capability.sql` (`fn_can_access_warmline_agent`, permission `warmline_agent.access`, `fn_supervisor_set_navigator_warmline_access`), `20260817130000_prayphone_fleet_sessions.sql`, `20261004200000_prayphone_inbound_rings.sql`, `20261004223000_prayphone_fleet_management.sql`, `20261009150000_prayphone_devices_realtime.sql`, `20261010210000_prayphone_auth_handoff.sql`, `20261015055100_grant_service_role_atlas_prayphone.sql`, `20261016203000_prayphone_device_signalwire_identity.sql`, `20261017041700_prayphone_caller_class.sql`, `20261017180000_prayphone_inbound_ring_caller_class.sql`, `20261017193000_prayphone_ring_sources.sql`, and the tier set `20261104190000_tier_roles.sql` through `20261104190700_tier_partner_write_rpcs.sql` (the tier rows and `fn_is_system_admin`; `20261104190000` copies the administrator / supervisor grants onto `t4plus` / `t4` before deleting those rows, `20261104190300` adds the `warmline_agent.access` grants for `t2b` / `t3a`, and `20261104190600` aligns the `ends_on` reads that `fn_has_permission` and the tier helpers share). Migration list: [../tiers.md](../tiers.md). The inbound-ring migration enables Supabase Realtime on `atlas.prayphone_inbound_rings`. Until it is applied, a caller's `0` will not turn the icon red. The devices migration enables Realtime on `atlas.prayphone_devices`. The header green number does not read that table. It counts waiting rows on `atlas.prayphone_call_sessions`. The handoff migration is what lets a click on the phone icon sign the same person into the agent without putting a session token in the URL. Until it is applied, the agent page asks for the Atlas password. The service-role grant is what lets the conferencer read `prayphone_devices` for the kiosk create and write rings and sessions.
 
 ## Verification
 
-1. Sign in to Atlas `/app` as a navigator.
+1. Sign in to Atlas `/app` as a `t3a` Peer Navigator.
 2. Confirm **warm line** is in the top menu.
 3. Open it — agent console loads without a second password prompt. The X in the conferencer header returns to Atlas `/app`.
-4. Sign in as a partner — no warm-line menu; visiting `/agent` directly is denied.
+4. Sign in as a partner — no warm-line menu; visiting `/agent` directly is denied. A `t1` account gets the same result.
 5. On the Pi, key `0` still starts a call with no Atlas session. The kiosk's own camera is in the bottom-right corner from the start; the main pane shows the agent's camera only once the agent has joined.
-6. As a navigator, supervisor, or administrator with warm-line access, confirm the Pray Phone icon is in the top bar on every menu. The green number is 0 when the conferencer queues are empty, and it rises when a call is waiting. Press it and the agent console opens in its own window. Press `0` on a kiosk. The icon turns red and this browser rings; the console window does not ring on its own. Press the session row, then **answer call**: this browser's chime stops, and the console main pane shows the caller's camera only, with the agent's own camera in the bottom-right corner. A partner account has no icon.
+6. As a `t2b`, `t3a`, `t4`, or `t4plus` with warm-line access, confirm the Pray Phone icon is in the top bar on every menu. The green number is 0 when the conferencer queues are empty, and it rises when a call is waiting. Press it and the agent console opens in its own window. Press `0` on a kiosk. The icon turns red and this browser rings; the console window does not ring on its own. Press the session row, then **answer call**: this browser's chime stops, and the console main pane shows the caller's camera only, with the agent's own camera in the bottom-right corner. A partner account has no icon.
 
 ## Clips
 
@@ -83,4 +86,5 @@ Idle and keypad videos are files in `prayphone-device` under `videos/`, stored w
 
 - Sibling repos: `prayphone-server` (agent + APIs), `prayphone-device` (Pi kiosk)
 - Identity bridge: [auth-and-identity.md](./auth-and-identity.md)
+- Tiers and permission keys: [../tiers.md](../tiers.md)
 - Navigator usage: [../users/navigator-guide.md](../users/navigator-guide.md)

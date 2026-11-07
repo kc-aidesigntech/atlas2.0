@@ -7,14 +7,23 @@ import type {
   AdminPortalPersonRole
 } from '../types'
 import { hasSupabaseConfig, supabase } from '../../../../lib/supabaseClient'
+import {
+  ADMIN_PORTAL_PERSON_ROLE_KEYS,
+  isNavigatorTier,
+  isSystemAdmin,
+  normalizeAtlasRoleKey,
+  normalizePersonRoleKeys
+} from '../domain/roles'
 import { isOptionalSupabaseDataError } from './supabaseOptionalData'
+import { loadPersonTierRecords } from './tierRepository'
 
-const KNOWN_ROLE_KEYS: AdminPortalPersonRole[] = ['administrator', 'supervisor', 'navigator', 'partner', 'enrollee']
+const KNOWN_ROLE_KEYS: readonly AdminPortalPersonRole[] = ADMIN_PORTAL_PERSON_ROLE_KEYS
 
 function createEmptyDataset(): AccessMatrixDataset {
   return {
     people: [],
     roleKeys: [...KNOWN_ROLE_KEYS],
+    tiers: [],
     enrollmentAssignments: [],
     supervisorAssignments: [],
     partnerAssignments: [],
@@ -30,8 +39,9 @@ function toFullName(row: { display_name?: string | null; first_name?: string | n
   return row.email?.trim() || 'unnamed person'
 }
 
+// Role rows still keyed navigator, supervisor, or administrator map onto their tier.
 function normalizeRoles(values: string[]): AdminPortalPersonRole[] {
-  return values.filter((value): value is AdminPortalPersonRole => KNOWN_ROLE_KEYS.includes(value as AdminPortalPersonRole))
+  return normalizePersonRoleKeys(values)
 }
 
 function normalizePersonIds(values: Array<string | null | undefined>) {
@@ -49,10 +59,10 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
   try {
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
     if (sessionError) throw sessionError
-    const atlasRole = sessionData.session?.user?.app_metadata?.atlas_role
+    const atlasRole = normalizeAtlasRoleKey(sessionData.session?.user?.app_metadata?.atlas_role)
     // Access matrix endpoints hit admin-only tables; skip requests until the
-    // browser session is authenticated with an administrator claim.
-    if (atlasRole !== 'administrator') return createEmptyDataset()
+    // browser session is authenticated with a t4plus (or legacy administrator) claim.
+    if (!isSystemAdmin(atlasRole)) return createEmptyDataset()
 
     const [peopleResult, rolesResult, activeAssignmentsResult, enrollmentResult, supervisorResult, partnerResult] =
       await Promise.all([
@@ -130,7 +140,7 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
     }
 
     const supervisorAssignments: AccessMatrixSupervisorRecord[] = people
-      .filter((person) => person.roleKeys.includes('navigator'))
+      .filter((person) => person.roleKeys.some(isNavigatorTier))
       .map((person) => ({
         navigatorPersonId: person.id,
         supervisorPersonIds: normalizePersonIds(Array.from(supervisorIdsByNavigator.get(person.id) || []))
@@ -161,9 +171,13 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
       primaryContactEmails: normalizePersonIds(Array.from(value.emails))
     }))
 
+    // people_tiers and tier_designations for everyone in the directory; an empty list when those tables are absent.
+    const tiers = await loadPersonTierRecords(people.map((person) => person.id))
+
     return {
       people,
       roleKeys: [...KNOWN_ROLE_KEYS],
+      tiers,
       enrollmentAssignments,
       supervisorAssignments,
       partnerAssignments,

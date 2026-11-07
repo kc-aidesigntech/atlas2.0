@@ -5,11 +5,11 @@ Start here if you commission environments, manage identity and access, enforce s
 ## Operating path (recommended order)
 
 1. [Commissioning](./commissioning.md) — bring Supabase + the web app up (survey-first or full shell).
-2. [Auth and identity](./auth-and-identity.md) — providers, `atlas.people` bridge, role assignment.
+2. [Auth and identity](./auth-and-identity.md) — providers, `atlas.people` bridge, role assignment. Role keys are the Residency tiers: [../tiers.md](../tiers.md).
 3. [Security](./security.md) — database-first model, Row-Level Security (RLS), compliance, production gates.
 4. [Database](./database.md) — schema map, RPCs, source-of-truth matrix.
 5. [MCP consumer](./mcp-consumer.md) — Atlas ↔ Model Context Protocol (MCP) handshake (inference / reflection).
-6. [Pray Phone warm line](./prayphone.md) — staff menu and header phone icon into the SignalWire agent console (the Raspberry Pi kiosk stays on `prayphone-server`). The icon shows how many calls are waiting in the conferencer queue and turns red when a call starts. [Fleet](./fleet.md) is the administrator and supervisor screen for which phones are online. Canonical set for customers, design, training, and operators: [../prayphone/README.md](../prayphone/README.md).
+6. [Pray Phone warm line](./prayphone.md) — staff menu and header phone icon into the SignalWire agent console (the Raspberry Pi kiosk stays on `prayphone-server`). The icon shows how many calls are waiting in the conferencer queue and turns red when a call starts. [Fleet](./fleet.md) is the `t4` / `t4plus` screen for which phones are online. Canonical set for customers, design, training, and operators: [../prayphone/README.md](../prayphone/README.md).
 7. [Warehouse and Power BI](./warehouse-and-powerbi.md) — extract contracts and semantic model.
 8. Go-live: [production-go-live-hard-gates.md](../production-go-live-hard-gates.md) and [partner-go-live-checklist.md](../partner-go-live-checklist.md).
 
@@ -21,6 +21,7 @@ Start here if you commission environments, manage identity and access, enforce s
 | Full commissioning deep-dive | [HOW_TO_COMMISSION_SYSTEM.md](../HOW_TO_COMMISSION_SYSTEM.md) |
 | Live RLS inventory | [rls-inventory.md](./rls-inventory.md) |
 | Authoritative security model | [security-model.md](./security-model.md) |
+| Tiers, permission keys, tier RPCs | [../tiers.md](../tiers.md) |
 | Compliance policy (full) | [executive-compliance-security-policy.md](../executive-compliance-security-policy.md) |
 | Control owners | [compliance-control-owner-checklist.md](../compliance-control-owner-checklist.md) |
 | Atlas Scribe (point-of-care notes) | [scribe.md](./scribe.md) |

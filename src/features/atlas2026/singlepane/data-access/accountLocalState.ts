@@ -7,6 +7,7 @@ import {
   upsertConfigPayload
 } from '@/features/atlas2026/singlepane/data-access/configDocumentPersistence'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { normalizeAtlasRoleKeys } from '@/features/atlas2026/singlepane/domain/roles'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 const SETTINGS_CONFIG_KEY = 'account_settings'
@@ -20,7 +21,7 @@ function getDefaultAccountSettings(): AccountSettings {
     email: 'operator@atlas.local',
     organization: 'atlas operations',
     avatarUrl: null,
-    enabledRoles: ['administrator', 'supervisor', 'partner', 'navigator']
+    enabledRoles: ['t4plus', 't4', 'partner', 't3a']
   }
 }
 
@@ -33,8 +34,9 @@ function normalizeAccountAvatarUrl(value: unknown) {
 }
 
 function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | null | undefined, fallback: AccountSettings = getDefaultAccountSettings()) {
-  const enabledRoles = Array.isArray(payload?.enabledRoles)
-    ? payload.enabledRoles.filter((role): role is AtlasRole => ['navigator', 'partner', 'supervisor', 'administrator'].includes(String(role)))
+  // Stored legacy role keys map onto their tier here so older settings documents keep loading.
+  const enabledRoles: AtlasRole[] = Array.isArray(payload?.enabledRoles)
+    ? normalizeAtlasRoleKeys(payload.enabledRoles)
     : fallback.enabledRoles
   return {
     fullName: payload?.fullName || fallback.fullName,

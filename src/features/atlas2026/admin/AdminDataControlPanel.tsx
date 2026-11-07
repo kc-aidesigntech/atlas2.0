@@ -27,6 +27,7 @@ import { Field, RecordTable, StatusPill, ZCodeParentFilterCircle } from '@/featu
 import LiveAccessMatrixPanel, { type LiveAccessMatrixSection } from '@/features/atlas2026/singlepane/components/LiveAccessMatrixPanel'
 import type { AdminPortalOrganizationRecord, AdminPortalPersonRecord, AdminPortalRegistry, AtlasRole, IntervalAssessmentRule, RegulationReviewSettings } from '@/features/atlas2026/shared/contracts'
 import { ATLAS_PERMISSION_ROLES, isCapabilityAllowedForAnyRole } from '@/features/atlas2026/shared/roleCapabilityPolicy'
+import { normalizeAtlasRoleKey } from '@/features/atlas2026/singlepane/domain/roles'
 
 function toLiveAccessMatrixSection(section: AdminMatrixSection): LiveAccessMatrixSection {
   switch (section) {
@@ -79,6 +80,10 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
     onAcknowledgeRequestedDomainSurveyZCode,
     onSaveEnrollmentNavigators,
     onSaveAccessMatrixPersonRoles,
+    onSaveAccessMatrixPersonTier,
+    onMarkAccessMatrixPersonTierAlum,
+    onSaveAccessMatrixPersonLucidEmployee,
+    onSaveAccessMatrixPersonDesignation,
     onSaveAccessMatrixSupervisorAssignments,
     onSaveAccessMatrixPartnerPrimaryContacts,
     accessMatrixError,
@@ -100,7 +105,8 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
   const [permissionRecordKind, setPermissionRecordKind] = useState(() => readPermissionRecordKind(readAdminSessionValue(ADMIN_PERMISSION_RECORD_KIND_KEY)))
   const [selectedPermissionRole, setSelectedPermissionRole] = useState<AtlasRole>(() => {
     const stored = readAdminSessionValue(ADMIN_SELECTED_PERMISSION_ROLE_KEY)
-    return ATLAS_PERMISSION_ROLES.find((role) => role === stored) || 'administrator'
+    // A stored legacy key (administrator, supervisor, navigator) reopens on its tier.
+    return ATLAS_PERMISSION_ROLES.find((role) => role === normalizeAtlasRoleKey(stored)) || 't4plus'
   })
   const [enrolleeDraft, setEnrolleeDraft] = useState<CombinedEnrolleeRow | null>(null)
   const [personDraft, setPersonDraft] = useState<AdminPortalPersonRecord | null>(null)
@@ -385,6 +391,12 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
             onOpenPerson={openPersonPermissionRecord}
             handleSavePersonDraft={handleSavePersonDraft}
             handleDeletePerson={handleDeletePerson}
+            tierRecords={accessMatrixDataset?.tiers || []}
+            isSavingTier={isSavingAccessMatrix}
+            onSavePersonTier={onSaveAccessMatrixPersonTier}
+            onMarkPersonTierAlum={onMarkAccessMatrixPersonTierAlum}
+            onSavePersonLucidEmployee={onSaveAccessMatrixPersonLucidEmployee}
+            onSavePersonDesignation={onSaveAccessMatrixPersonDesignation}
             RecordTableComponent={RecordTable}
             StatusPillComponent={StatusPill}
             FieldComponent={Field}
@@ -476,6 +488,10 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
             error={accessMatrixError}
             isSaving={isSavingAccessMatrix}
             onSavePersonRoles={onSaveAccessMatrixPersonRoles}
+            onSavePersonTier={onSaveAccessMatrixPersonTier}
+            onMarkPersonTierAlum={onMarkAccessMatrixPersonTierAlum}
+            onSavePersonLucidEmployee={onSaveAccessMatrixPersonLucidEmployee}
+            onSavePersonDesignation={onSaveAccessMatrixPersonDesignation}
             onSaveEnrollmentNavigator={onSaveEnrollmentNavigators}
             onSaveSupervisorAssignment={onSaveAccessMatrixSupervisorAssignments}
             onSavePartnerPrimaryContact={onSaveAccessMatrixPartnerPrimaryContacts}

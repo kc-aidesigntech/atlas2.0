@@ -1,9 +1,12 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
+import { AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import type { CountyHeatPoint } from '@/features/atlas2026/shared/contracts'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 
 interface CountyCommonsHeatmapProps {
   points: CountyHeatPoint[]
+  /** `heatmap.toggle`: shows the control that collapses the county grid to the header line. */
+  canToggle?: boolean
 }
 
 const GROUP_COLORS: Record<number, string> = {
@@ -19,7 +22,8 @@ const GROUP_COLORS: Record<number, string> = {
   75: SP_COLORS.white
 }
 
-export default function CountyCommonsHeatmap({ points }: CountyCommonsHeatmapProps) {
+export default function CountyCommonsHeatmap({ points, canToggle = false }: CountyCommonsHeatmapProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const byCounty = useMemo(() => {
     const grouped = new Map<string, CountyHeatPoint[]>()
     for (const point of points) {
@@ -37,8 +41,19 @@ export default function CountyCommonsHeatmap({ points }: CountyCommonsHeatmapPro
 
   return (
     <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
-      <small className="mb-2 block text-[13px] text-white">county commons heat map</small>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <small className="block text-[13px] text-white">county commons heat map</small>
+        {canToggle ? (
+          <AtlasTextButton
+            onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+            aria-pressed={isCollapsed}
+            className="px-3 py-[4px] text-[12px] font-medium md:text-[12px]"
+          >
+            {isCollapsed ? 'show counties' : 'hide counties'}
+          </AtlasTextButton>
+        ) : null}
+      </div>
+      <div className={isCollapsed ? 'hidden' : 'grid grid-cols-1 gap-3 md:grid-cols-2'}>
         {byCounty.map(([countyName, countyPoints]) => (
           <div key={countyName} className="rounded-xl border px-3 py-2" style={{ borderColor: '#ffffff33' }}>
             <small className="mb-2 block text-[12px] uppercase tracking-wide text-white">{countyName}</small>

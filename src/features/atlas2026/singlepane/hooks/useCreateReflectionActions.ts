@@ -16,6 +16,7 @@ import {
   saveNavigatorCreateSession as persistNavigatorCreateSession
 } from '@/features/atlas2026/singlepane/data-access/singlepaneRepository'
 import { toSupabaseErrorMessage } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { isSupervisorTier } from '@/features/atlas2026/singlepane/domain/roles'
 import {
   CREATE_REFLECTION_SESSION_LIMIT,
   generateCreateReflection
@@ -63,7 +64,8 @@ export function useCreateReflectionActions({
     // Load Intentional Peer Support Core Competencies (IPSCC) rows and the reflection as one
     // snapshot so the profile never mixes records from different navigators.
     setNavigatorCreateReflection(null)
-    const sessionParty = viewerRole === 'supervisor'
+    const viewerIsSupervisor = isSupervisorTier(viewerRole)
+    const sessionParty = viewerIsSupervisor
       ? { supervisorName: currentSupervisorName }
       : { navigatorName: currentNavigatorName }
     Promise.all([
@@ -71,7 +73,7 @@ export function useCreateReflectionActions({
       loadNavigatorIpsSelfAssessments(currentNavigatorName),
       loadNavigatorCreateSessions(sessionParty),
       loadSupervisorIpsAssessments(),
-      loadNavigatorCreateReflection(viewerRole === 'supervisor' ? '' : currentNavigatorName)
+      loadNavigatorCreateReflection(viewerIsSupervisor ? '' : currentNavigatorName)
     ])
       .then(
         ([

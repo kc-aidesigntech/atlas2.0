@@ -14,7 +14,9 @@ import type {
   TroubleshootingSessionState
 } from '@/features/atlas2026/shared/contracts'
 import { isCapabilityAllowedForRole } from '@/features/atlas2026/shared/roleCapabilityPolicy'
+import { isNavigatorTier, isSupervisorExperience, isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 import { useScopedEnrolleeSelection } from '@/features/atlas2026/singlepane/hooks/useScopedEnrolleeSelection'
+import { useViewerPermissions } from '@/features/atlas2026/singlepane/hooks/useViewerPermissions'
 
 function normalizeViewerEmail(value: string | null | undefined) {
   return value?.trim().toLowerCase() || ''
@@ -45,6 +47,7 @@ interface UseSinglePaneViewerStateInput {
   role: AtlasRole
   viewerRole: AtlasRole
   sessionEmail: string
+  authoritativeAccountRoles: AtlasRole[]
   accountSettings: AccountSettings
   remoteSession: TroubleshootingSessionState | null
   accessMatrixDataset: AccessMatrixDataset | null
@@ -102,8 +105,16 @@ export function useSinglePaneViewerState(input: UseSinglePaneViewerStateInput) {
     return findViewerPerson(input.accessMatrixDataset.people, input.sessionEmail, input.accountSettings.email)
   }, [input.accessMatrixDataset, input.accountSettings.email, input.sessionEmail])
 
+  // Permission keys from fn_my_permissions, or the seeded tier defaults when that call is unavailable.
+  const { hasPermission, viewerPermissionKeys, viewerTier, permissionSource } = useViewerPermissions({
+    viewerRole: input.viewerRole,
+    authoritativeAccountRoles: input.authoritativeAccountRoles,
+    sessionEmail: input.sessionEmail,
+    remoteSessionActive: Boolean(input.remoteSession?.isActive)
+  })
+
   const viewerCanViewNavigatorAssignmentNames =
-    input.viewerRole === 'administrator' ||
+    isSystemAdmin(input.viewerRole) ||
     (Boolean(viewerPolicyRecord?.canViewNavigatorAssignmentNames) &&
       isViewerPolicyAllowed('actionToggles', 'assignmentBoard.viewNavigatorNames'))
   const viewerCanAccessAssignmentBoard = isViewerPolicyAllowed('screenToggles', 'assignmentBoard')
@@ -115,14 +126,14 @@ export function useSinglePaneViewerState(input: UseSinglePaneViewerStateInput) {
     isViewerPolicyAllowed('actionToggles', 'admin.saveRegistry')
 
   const scopedEnrollmentIds = useMemo(() => {
-    if (input.viewerRole === 'navigator' && input.role !== 'administrator' && !input.remoteSession?.isActive) {
+    if (isNavigatorTier(input.viewerRole) && !isSystemAdmin(input.role) && !input.remoteSession?.isActive) {
       return null
     }
     if (!input.accessMatrixDataset) return null
     const scopedRole = input.remoteSession?.targetRole || input.role
-    if (scopedRole === 'navigator') {
+    if (isNavigatorTier(scopedRole)) {
       const personId =
-        input.remoteSession?.targetRole === 'navigator' ? input.remoteSession.targetPersonId : viewerPerson?.id
+        isNavigatorTier(input.remoteSession?.targetRole) ? input.remoteSession.targetPersonId : viewerPerson?.id
       if (!personId) return new Set<string>()
       return new Set(
         input.accessMatrixDataset.enrollmentAssignments
@@ -130,9 +141,12 @@ export function useSinglePaneViewerState(input: UseSinglePaneViewerStateInput) {
           .map((assignment) => assignment.enrollmentId)
       )
     }
-    if (scopedRole === 'supervisor') {
+    // t4 scopes to supervisees' enrollments; t4plus falls through to the unscoped roster below.
+    if (isSupervisorExperience(scopedRole)) {
       const personId =
-        input.remoteSession?.targetRole === 'supervisor' ? input.remoteSession.targetPersonId : viewerPerson?.id
+        input.remoteSession && isSupervisorExperience(input.remoteSession.targetRole)
+          ? input.remoteSession.targetPersonId
+          : viewerPerson?.id
       if (!personId) return new Set<string>()
       const navigatorIds = new Set(
         input.accessMatrixDataset.supervisorAssignments
@@ -185,6 +199,10 @@ export function useSinglePaneViewerState(input: UseSinglePaneViewerStateInput) {
   return {
     viewerPolicyRecord,
     isViewerPolicyAllowed,
+    hasPermission,
+    viewerPermissionKeys,
+    viewerTier,
+    permissionSource,
     viewerPerson,
     viewerCanViewNavigatorAssignmentNames,
     viewerCanAccessAssignmentBoard,

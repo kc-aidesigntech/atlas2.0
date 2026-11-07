@@ -7,6 +7,6 @@ import { useSinglePaneWorkspaceState } from '@/features/atlas2026/singlepane/hoo
  * The return shape remains owned by the composed workspace hook so existing
  * screens keep one stable integration point while domain workflows stay modular.
  */
-export function useSinglePaneData(initialRole: AtlasRole = 'navigator') {
+export function useSinglePaneData(initialRole: AtlasRole = 't3a') {
   return useSinglePaneWorkspaceState(initialRole)
 }

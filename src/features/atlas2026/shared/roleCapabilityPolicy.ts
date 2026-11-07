@@ -1,4 +1,13 @@
 import type { AdminPortalFeaturePolicy, AdminRoleCapabilityPolicies, AtlasRole } from '@/features/atlas2026/shared/contracts'
+import {
+  ATLAS_PERMISSION_KEYS,
+  TIER_KEYS,
+  isTierKey,
+  tierDefaultPermissions,
+  tierHasDefaultPermission,
+  type AtlasPermissionKey
+} from '@/features/atlas2026/shared/tiers'
+import { isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 export const ADMIN_POLICY_SCREEN_KEYS = [
   'overview',
@@ -32,7 +41,24 @@ export type CapabilityScope = keyof AdminPortalFeaturePolicy
 
 export type PersonCapabilityChoice = 'inherit' | 'allow' | 'block'
 
-export const ATLAS_PERMISSION_ROLES: AtlasRole[] = ['administrator', 'supervisor', 'navigator', 'partner']
+/** Roles with an editable capability record: the seven tiers, highest first, then partner. */
+export const ATLAS_PERMISSION_ROLES: AtlasRole[] = [...[...TIER_KEYS].reverse(), 'partner']
+
+/**
+ * Permission keys a role holds when `fn_my_permissions` has not answered. Tiers
+ * read the seeded table; `t4plus` holds every key through the administrator
+ * bypass; partner holds none of the tier keys.
+ */
+export function defaultPermissionKeysForRole(role: AtlasRole): AtlasPermissionKey[] {
+  // The system administrator returns every key; other tiers read the seed table.
+  if (isSystemAdmin(role)) return [...ATLAS_PERMISSION_KEYS]
+  return tierDefaultPermissions(role)
+}
+
+export function roleHasDefaultPermission(role: AtlasRole, key: AtlasPermissionKey): boolean {
+  if (isSystemAdmin(role)) return true
+  return isTierKey(role) && tierHasDefaultPermission(role, key)
+}
 
 export const CAPABILITY_GROUPS: Array<{ scope: CapabilityScope; label: string; keys: readonly string[] }> = [
   { scope: 'screenToggles', label: 'Screens', keys: ADMIN_POLICY_SCREEN_KEYS },
@@ -92,82 +118,177 @@ export interface RoleCapabilityRow {
 
 type RoleCapabilityMap = Record<CapabilityScope, Record<string, boolean>>
 
+// Coordinator (t4plus) keeps the former administrator baseline.
+const COORDINATOR_DEFAULTS: RoleCapabilityMap = {
+  screenToggles: {
+    assignmentBoard: true
+  },
+  cardToggles: {
+    navigatorCoverageCard: true,
+    liveAccessMatrix: true,
+    navigatorProfilePickupQueue: true
+  },
+  actionToggles: {
+    'assignmentBoard.viewNavigatorNames': true,
+    'assignmentBoard.assignSelf': false,
+    'assignmentBoard.addReferral': false,
+    'admin.saveRegistry': true,
+    'intake.write': true,
+    'zcodes.write': true,
+    'routeAssignment.write': true,
+    'routeLogs.write': true,
+    'timeline.write': true,
+    'navigatorProgram.write': true,
+    'regulationReview.write': true,
+    'regulationTests.write': true,
+    'partnerReferral.submit': true
+  }
+}
+
+// Supervisor (t4) keeps the former supervisor baseline.
+const SUPERVISOR_DEFAULTS: RoleCapabilityMap = {
+  screenToggles: {
+    assignmentBoard: true
+  },
+  cardToggles: {
+    navigatorCoverageCard: false,
+    liveAccessMatrix: false,
+    navigatorProfilePickupQueue: true
+  },
+  actionToggles: {
+    'assignmentBoard.viewNavigatorNames': false,
+    'assignmentBoard.assignSelf': false,
+    'assignmentBoard.addReferral': false,
+    'admin.saveRegistry': false,
+    'intake.write': false,
+    'zcodes.write': false,
+    'routeAssignment.write': false,
+    'routeLogs.write': true,
+    'timeline.write': false,
+    'navigatorProgram.write': true,
+    'regulationReview.write': false,
+    'regulationTests.write': true,
+    'partnerReferral.submit': true
+  }
+}
+
+// Peer Navigator (t3a) keeps the former navigator baseline: pickup, routes, and enrollee writes.
+const PEER_NAVIGATOR_DEFAULTS: RoleCapabilityMap = {
+  screenToggles: {
+    assignmentBoard: true
+  },
+  cardToggles: {
+    navigatorCoverageCard: false,
+    liveAccessMatrix: false,
+    navigatorProfilePickupQueue: true
+  },
+  actionToggles: {
+    'assignmentBoard.viewNavigatorNames': false,
+    'assignmentBoard.assignSelf': true,
+    'assignmentBoard.addReferral': false,
+    'admin.saveRegistry': false,
+    'intake.write': true,
+    'zcodes.write': true,
+    'routeAssignment.write': true,
+    'routeLogs.write': true,
+    'timeline.write': true,
+    'navigatorProgram.write': true,
+    'regulationReview.write': false,
+    'regulationTests.write': true,
+    'partnerReferral.submit': true
+  }
+}
+
+// Peer Resident (t2b) writes enrollee profiles and regulation variables but holds
+// no pickup claim and no route plan, which stay on t3a.
+const PEER_RESIDENT_DEFAULTS: RoleCapabilityMap = {
+  screenToggles: {
+    assignmentBoard: true
+  },
+  cardToggles: {
+    navigatorCoverageCard: false,
+    liveAccessMatrix: false,
+    navigatorProfilePickupQueue: false
+  },
+  actionToggles: {
+    'assignmentBoard.viewNavigatorNames': false,
+    'assignmentBoard.assignSelf': false,
+    'assignmentBoard.addReferral': false,
+    'admin.saveRegistry': false,
+    'intake.write': true,
+    'zcodes.write': true,
+    'routeAssignment.write': false,
+    'routeLogs.write': true,
+    'timeline.write': true,
+    'navigatorProgram.write': true,
+    'regulationReview.write': false,
+    'regulationTests.write': true,
+    'partnerReferral.submit': true
+  }
+}
+
+// Apprentice (t2) and Travel Peer (t3): wallet, supervision records, and referrals only.
+const WALLET_TIER_DEFAULTS: RoleCapabilityMap = {
+  screenToggles: {
+    assignmentBoard: false
+  },
+  cardToggles: {
+    navigatorCoverageCard: false,
+    liveAccessMatrix: false,
+    navigatorProfilePickupQueue: false
+  },
+  actionToggles: {
+    'assignmentBoard.viewNavigatorNames': false,
+    'assignmentBoard.assignSelf': false,
+    'assignmentBoard.addReferral': false,
+    'admin.saveRegistry': false,
+    'intake.write': false,
+    'zcodes.write': false,
+    'routeAssignment.write': false,
+    'routeLogs.write': false,
+    'timeline.write': false,
+    'navigatorProgram.write': true,
+    'regulationReview.write': false,
+    'regulationTests.write': false,
+    'partnerReferral.submit': true
+  }
+}
+
+// Candidate (t1): referral only.
+const CANDIDATE_DEFAULTS: RoleCapabilityMap = {
+  screenToggles: {
+    assignmentBoard: false
+  },
+  cardToggles: {
+    navigatorCoverageCard: false,
+    liveAccessMatrix: false,
+    navigatorProfilePickupQueue: false
+  },
+  actionToggles: {
+    'assignmentBoard.viewNavigatorNames': false,
+    'assignmentBoard.assignSelf': false,
+    'assignmentBoard.addReferral': false,
+    'admin.saveRegistry': false,
+    'intake.write': false,
+    'zcodes.write': false,
+    'routeAssignment.write': false,
+    'routeLogs.write': false,
+    'timeline.write': false,
+    'navigatorProgram.write': false,
+    'regulationReview.write': false,
+    'regulationTests.write': false,
+    'partnerReferral.submit': true
+  }
+}
+
 const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
-  administrator: {
-    screenToggles: {
-      assignmentBoard: true
-    },
-    cardToggles: {
-      navigatorCoverageCard: true,
-      liveAccessMatrix: true,
-      navigatorProfilePickupQueue: true
-    },
-    actionToggles: {
-      'assignmentBoard.viewNavigatorNames': true,
-      'assignmentBoard.assignSelf': false,
-      'assignmentBoard.addReferral': false,
-      'admin.saveRegistry': true,
-      'intake.write': true,
-      'zcodes.write': true,
-      'routeAssignment.write': true,
-      'routeLogs.write': true,
-      'timeline.write': true,
-      'navigatorProgram.write': true,
-      'regulationReview.write': true,
-      'regulationTests.write': true,
-      'partnerReferral.submit': true
-    }
-  },
-  supervisor: {
-    screenToggles: {
-      assignmentBoard: true
-    },
-    cardToggles: {
-      navigatorCoverageCard: false,
-      liveAccessMatrix: false,
-      navigatorProfilePickupQueue: true
-    },
-    actionToggles: {
-      'assignmentBoard.viewNavigatorNames': false,
-      'assignmentBoard.assignSelf': false,
-      'assignmentBoard.addReferral': false,
-      'admin.saveRegistry': false,
-      'intake.write': false,
-      'zcodes.write': false,
-      'routeAssignment.write': false,
-      'routeLogs.write': true,
-      'timeline.write': false,
-      'navigatorProgram.write': true,
-      'regulationReview.write': false,
-      'regulationTests.write': true,
-      'partnerReferral.submit': true
-    }
-  },
-  navigator: {
-    screenToggles: {
-      assignmentBoard: true
-    },
-    cardToggles: {
-      navigatorCoverageCard: false,
-      liveAccessMatrix: false,
-      navigatorProfilePickupQueue: true
-    },
-    actionToggles: {
-      'assignmentBoard.viewNavigatorNames': false,
-      'assignmentBoard.assignSelf': true,
-      'assignmentBoard.addReferral': false,
-      'admin.saveRegistry': false,
-      'intake.write': true,
-      'zcodes.write': true,
-      'routeAssignment.write': true,
-      'routeLogs.write': true,
-      'timeline.write': true,
-      'navigatorProgram.write': true,
-      'regulationReview.write': false,
-      'regulationTests.write': true,
-      'partnerReferral.submit': true
-    }
-  },
+  t4plus: COORDINATOR_DEFAULTS,
+  t4: SUPERVISOR_DEFAULTS,
+  t3a: PEER_NAVIGATOR_DEFAULTS,
+  t3: WALLET_TIER_DEFAULTS,
+  t2b: PEER_RESIDENT_DEFAULTS,
+  t2: WALLET_TIER_DEFAULTS,
+  t1: CANDIDATE_DEFAULTS,
   partner: {
     screenToggles: {
       assignmentBoard: false
@@ -200,8 +321,9 @@ function emptyFeaturePolicy(): AdminPortalFeaturePolicy {
 }
 
 function getRoleBaseline(role: AtlasRole, scope: CapabilityScope, key: string) {
-  const roleDefaults = ROLE_CAPABILITY_DEFAULTS[role][scope]
-  if (key in roleDefaults) return roleDefaults[key]
+  // An unknown role (a stored legacy key that normalization did not reach) has no table row.
+  const roleDefaults = ROLE_CAPABILITY_DEFAULTS[role]?.[scope]
+  if (roleDefaults && key in roleDefaults) return roleDefaults[key]
   // Unknown keys default to allow to preserve backwards compatibility with
   // pre-policy records while Role-Based Access Control (RBAC) contracts evolve.
   return true

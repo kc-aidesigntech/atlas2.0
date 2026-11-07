@@ -17,6 +17,7 @@ import {
 import { toSupabaseErrorMessage } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
 import { createDefaultTimelineConfig } from '@/features/atlas2026/singlepane/timelineConfigUtils'
 import { buildCompletedParentCodes } from '@/features/atlas2026/singlepane/domain/phaseAndZCodes'
+import { isNavigatorTier, isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 type WorkspaceActionContext = Record<string, any>
 
@@ -56,7 +57,7 @@ export function useSinglePaneWorkspaceActions(context: WorkspaceActionContext) {
       const saved = await persistAccountSettings(finalSettings)
       // Keep navigator station context anchored to linked partner assignment rather than
       // transient account organization edits.
-      const stationOrganizationName = viewerRole === 'navigator' ? partnerStationProfile?.organizationName?.trim() || saved.organization : saved.organization
+      const stationOrganizationName = isNavigatorTier(viewerRole) ? partnerStationProfile?.organizationName?.trim() || saved.organization : saved.organization
       const stationProfile = await loadPartnerStationProfile(stationOrganizationName, {
         fullName: saved.fullName,
         email: saved.email,
@@ -67,7 +68,7 @@ export function useSinglePaneWorkspaceActions(context: WorkspaceActionContext) {
         partnerStationProfile: stationProfile,
       }))
       if (!saved.enabledRoles.includes(role)) {
-        setRoleState(saved.enabledRoles[0] || 'navigator')
+        setRoleState(saved.enabledRoles[0] || 't3a')
       }
     } catch (error) {
       console.warn('Failed to save account settings.', error)
@@ -192,7 +193,7 @@ export function useSinglePaneWorkspaceActions(context: WorkspaceActionContext) {
   }
 
   async function reloadZCodeDomainSurveyHistory() {
-    if (viewerRole !== 'administrator') return
+    if (!isSystemAdmin(viewerRole)) return
     setIsLoadingZCodeDomainSurveyHistorySummary(true)
     setZCodeDomainSurveyHistoryError(null)
     try {
@@ -206,7 +207,7 @@ export function useSinglePaneWorkspaceActions(context: WorkspaceActionContext) {
   }
 
   async function reloadAdminDeletableServiceCapacitySubmissions() {
-    if (viewerRole !== 'administrator') return
+    if (!isSystemAdmin(viewerRole)) return
     setIsLoadingAdminDeletableServiceCapacitySubmissions(true)
     setAdminServiceCapacityDeletionError(null)
     try {

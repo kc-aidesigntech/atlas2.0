@@ -6,6 +6,7 @@ import {
   upsertConfigPayload
 } from '@/features/atlas2026/singlepane/data-access/configDocumentPersistence'
 import { isOptionalSupabaseDataError } from '@/features/atlas2026/singlepane/data-access/supabaseOptionalData'
+import { ATLAS_ROLE_KEYS, normalizeAtlasRoleKey, normalizePersonRoleKeys } from '@/features/atlas2026/singlepane/domain/roles'
 
 const ADMIN_PORTAL_REGISTRY_CONFIG_KEY = 'admin_portal_registry'
 const LOCAL_ADMIN_PORTAL_REGISTRY_KEY = 'atlas2026.singlepane.admin-portal-registry.v1'
@@ -39,18 +40,22 @@ function normalizeFeaturePolicy(value: unknown): AdminPortalFeaturePolicy {
   }
 }
 
-const ROLE_POLICY_KEYS: AtlasRole[] = ['administrator', 'supervisor', 'navigator', 'partner']
+const ROLE_POLICY_KEYS: readonly AtlasRole[] = ATLAS_ROLE_KEYS
 
 // Older registries have no rolePolicies field. Empty maps mean every role still
-// uses the shipped baseline until an administrator changes that role.
+// uses the shipped baseline until an administrator changes that role. A policy
+// stored under a legacy key lands on its tier unless that tier already has one.
 function normalizeRolePolicies(value: unknown): AdminRoleCapabilityPolicies {
   if (!value || typeof value !== 'object') return {}
   const source = value as Record<string, unknown>
-  return ROLE_POLICY_KEYS.reduce<AdminRoleCapabilityPolicies>((policies, role) => {
-    if (!source[role] || typeof source[role] !== 'object') return policies
-    policies[role] = normalizeFeaturePolicy(source[role])
-    return policies
-  }, {})
+  const policies: AdminRoleCapabilityPolicies = {}
+  for (const [storedKey, storedPolicy] of Object.entries(source)) {
+    const role = normalizeAtlasRoleKey(storedKey)
+    if (!role || !ROLE_POLICY_KEYS.includes(role) || !storedPolicy || typeof storedPolicy !== 'object') continue
+    if (policies[role] && storedKey !== role) continue
+    policies[role] = normalizeFeaturePolicy(storedPolicy)
+  }
+  return policies
 }
 
 function normalizeAdminPortalRegistry(payload: Partial<AdminPortalRegistry> | null | undefined): AdminPortalRegistry {
@@ -58,6 +63,8 @@ function normalizeAdminPortalRegistry(payload: Partial<AdminPortalRegistry> | nu
     people: Array.isArray(payload?.people)
       ? payload.people.filter(Boolean).map((person) => ({
           ...person,
+          // Stored legacy role keys map onto their tier.
+          roles: normalizePersonRoleKeys(Array.isArray(person.roles) ? person.roles : []),
           canViewNavigatorAssignmentNames: Boolean((person as { canViewNavigatorAssignmentNames?: boolean }).canViewNavigatorAssignmentNames),
           approvalState: (person as { approvalState?: string }).approvalState === 'pending' ? 'pending' : 'approved',
           identityGroupId: String((person as { identityGroupId?: string }).identityGroupId || person.id),

@@ -18,7 +18,12 @@ import SupervisorProfileOverlay, {
   type SupervisorProfileOverlayKey
 } from './supervisorProfile/SupervisorProfileOverlay'
 
-interface SupervisorMyProfilePanelProps {
+/**
+ * Props for the supervisor sections of My Wallet: navigator claim circles, the
+ * navigator assessment panel, and the review cards. Identity prints in
+ * `WalletTierHeader` above these sections.
+ */
+export interface SupervisorMyProfilePanelProps {
   currentSupervisorName: string
   navigatorDirectory: SupervisorNavigatorDirectoryEntry[]
   competencyByNavigator: SupervisorNavigatorCompetencySummary[]
@@ -92,10 +97,6 @@ export default function SupervisorMyProfilePanel(props: SupervisorMyProfilePanel
 
   return (
     <div className="relative flex flex-col gap-4">
-      <div className="atlas-surface-panel px-5 py-4">
-        <div className="atlas-h4 text-[24px] font-medium text-white">my wallet</div>
-        <small className="mt-1 block text-[#9eacb9]">{props.currentSupervisorName}</small>
-      </div>
       <WalletClaimCircles
         title="navigators"
         description="Tap a circle, then assign them to you or remove them."

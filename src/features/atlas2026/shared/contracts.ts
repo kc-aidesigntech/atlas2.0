@@ -21,8 +21,32 @@ import type {
   ZCodeDomainSurveyAnswerLogRecord,
   ZCodeDomainSurveyHistorySummary
 } from '@atlas/shared'
+import type { TierKey, TierStanding } from '@/features/atlas2026/shared/tiers'
 
-export type AtlasRole = 'navigator' | 'partner' | 'supervisor' | 'administrator'
+/**
+ * Staff role keys are the seven Residency tiers plus `partner`. Legacy claim
+ * and row values `navigator`, `supervisor`, and `administrator` are mapped to
+ * `t3a`, `t4`, and `t4plus` by `singlepane/domain/roles.ts` before they reach
+ * this type.
+ */
+export type AtlasRole = TierKey | 'partner'
+
+/**
+ * Party label inside a supervision record: who opened a Connect, Recognize,
+ * Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) session or who an
+ * interval rule is assigned to. Stored as written in
+ * `atlas.navigator_create_sessions.opened_by_role`; not a role key.
+ */
+export type SupervisionParty = 'navigator' | 'supervisor'
+
+export type {
+  AtlasPermissionKey,
+  TierDefinition,
+  TierDesignation,
+  TierKey,
+  TierStanding,
+  TierStatus
+} from '@/features/atlas2026/shared/tiers'
 
 // Per-Z-code readiness criteria captured in the readiness workflow.
 // 'resolved' is the single value that drives the legacy isResolved semantics.
@@ -379,6 +403,13 @@ export interface AccessMatrixPersonRecord {
   roleKeys: AdminPortalPersonRole[]
 }
 
+/** One person's row from `atlas.people_tiers` joined with `atlas.tier_designations`. */
+export interface PersonTierRecord extends TierStanding {
+  personId: string
+  enteredAtIso: string | null
+  leftAtIso: string | null
+}
+
 export interface AccessMatrixEnrollmentRecord {
   enrollmentId: string
   enrolleeId: string
@@ -402,6 +433,8 @@ export interface AccessMatrixPartnerRecord {
 export interface AccessMatrixDataset {
   people: AccessMatrixPersonRecord[]
   roleKeys: AdminPortalPersonRole[]
+  /** One row per person who holds or held a tier; people without a row hold no tier. */
+  tiers: PersonTierRecord[]
   enrollmentAssignments: AccessMatrixEnrollmentRecord[]
   supervisorAssignments: AccessMatrixSupervisorRecord[]
   partnerAssignments: AccessMatrixPartnerRecord[]
@@ -712,7 +745,7 @@ export interface CreateSessionRecord {
   submittedAtIso: string
   /** Open sessions still accept a form. Closed sessions are history for both people. */
   status: CreateSessionStatus
-  openedByRole: 'navigator' | 'supervisor'
+  openedByRole: SupervisionParty
   openedByName: string
   closedAtIso: string | null
   closedByName: string
@@ -780,7 +813,7 @@ export interface IntervalAssessmentRule {
   id: string
   title: string
   assessmentType: IntervalAssessmentType
-  assigneeRole: 'navigator' | 'supervisor'
+  assigneeRole: SupervisionParty
   navigatorName: string | null
   cadence: IntervalCadence
   startsAtIso: string

@@ -5,15 +5,21 @@ alwaysApply: true
 
 # Atlas warm line — keep the existing names
 
-Atlas owns login and the warm-line yes/no. The conferencer stays on prayphone-server. Do not merge `/agent` into the Atlas SPA unless asked.
+Atlas owns login and the warm-line yes/no. The conferencer stays on prayphone-server. Do not merge `/agent` into the Atlas Single-Page Application (SPA) unless asked.
+
+Words: the **agent** is the person who sits the warm line and receives calls on `/agent`. Every other participant is a **caller** (kiosk, phone app).
 
 ## Live handoff (sacred)
 
-`src/features/atlas2026/singlepane/data-access/prayphoneSubapp.ts` opens `/agent#atlas_access_token=…` (URL **fragment**, not sent to the server). `AgentAuthGate` on prayphone-server consumes and strips the hash.
+`src/features/atlas2026/singlepane/data-access/prayphoneSubapp.ts` calls `atlas.fn_create_prayphone_handoff` and opens `/agent#atlas_handoff=<64 hex>` (Uniform Resource Locator (URL) **fragment**, not sent to the server). `AgentAuthGate` on prayphone-server trades the code for a session and strips the hash.
 
 ## Capability
 
-`atlas.fn_can_access_warmline_agent` returns `atlas.fn_has_permission('warmline_agent.access')`. Seeded for administrator and supervisor. Navigators need an exception. Do not rename the RPC. Do not add a sixth `role_key`. Do not use Admin Directory `featurePolicy` JSON as the source of truth.
+`atlas.fn_can_access_warmline_agent` returns `atlas.fn_has_permission('warmline_agent.access')`. The key is seeded on tiers `t2b`, `t3a`, `t4`, `t4plus` (`20261104190300_tier_permissions.sql`). `t4plus` also passes through `fn_is_system_admin`. Other tiers need an allow exception (`fn_admin_set_warmline_access`, `fn_supervisor_set_navigator_warmline_access`). A deny exception wins. Do not rename the Remote Procedure Call (RPC). Do not rename the permission key. Do not use Admin Directory `featurePolicy` JavaScript Object Notation (JSON) as the source of truth.
+
+## Roles are tiers
+
+Staff `role_key`s are the seven tiers in `tier-hierarchy.mdc` (`t1` … `t4plus`); `partner` and `enrollee` remain. The legacy JSON Web Token (JWT) claims `administrator` / `supervisor` / `navigator` normalize to `t4plus` / `t4` / `t3a` through `atlas.fn_normalize_role_key`. Do not re-add those literals as role rows and do not gate the warm line on a role literal.
 
 ## Do not
 
@@ -23,12 +29,12 @@ Atlas owns login and the warm-line yes/no. The conferencer stays on prayphone-se
 
 ## Traverse
 
-- This repo: `prayphoneSubapp.ts`, `supabase/migrations/20260817120000_warmline_agent_capability.sql`
+- This repo: `prayphoneSubapp.ts`, `supabase/migrations/20260817120000_warmline_agent_capability.sql`, `20261104190300_tier_permissions.sql`
 - Device: `README.md`, `src/kiosk2.py`, `src/kiosk_bridge.py`
 - Server: `app/kiosk/call/page.tsx`, `app/agent/page.tsx`, `components/BackendIntercom.tsx`
 - **Phase 6** (six concurrent calls, `agent-1`…`agent-6` queue): prayphone-server rule + assessment canvas. Do not start.
 
 ```ts
-// BAD: featurePolicy.prayphone_agent.access or a new role_key
+// BAD: featurePolicy.prayphone_agent.access, or role === 'navigator' / role === 't3a'
 // GOOD: keep fn_can_access_warmline_agent; grant via warmline_agent.access
 ```
