@@ -63,7 +63,7 @@ export default function WalletTierHeader({
   const showRibbon = Boolean(standing && earnsRibbon(standing))
 
   return (
-    <div className="atlas-surface-panel relative flex w-full flex-col px-5 py-4">
+    <div className="atlas-surface-panel relative flex h-full min-h-0 w-full flex-col px-5 py-4">
       <div className="flex flex-wrap items-start gap-3 pt-0.5 sm:flex-nowrap">
         <AtlasImageUploadTile
           imageSrc={accountSettings.avatarUrl || fallbackAvatar}

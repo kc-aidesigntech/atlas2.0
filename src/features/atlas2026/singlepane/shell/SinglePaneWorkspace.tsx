@@ -120,6 +120,7 @@ export default function SinglePaneWorkspace() {
     navigatorIpsccCompetencyAggregates,
     navigatorIpsccEnrolleeFeedbackPrivacy,
     navigatorIpsSelfAssessments,
+    navigatorIpsccEncounterSubmissions,
     navigatorSupervisorIpsAssessments,
     allSupervisorIpsAssessments,
     navigatorSelfAwarenessCorrelationRows,
@@ -1124,7 +1125,8 @@ export default function SinglePaneWorkspace() {
                       onSaveIpsSelfAssessment: saveNavigatorIpsSelfAssessment,
                       onSaveIpsccEncounterSubmission: saveNavigatorIpsccEncounterSubmission,
                       onSaveCreateSession: saveNavigatorCreateSession,
-                      onSaveSupervisionSession: saveSupervisionSession
+                      onSaveSupervisionSession: saveSupervisionSession,
+                      ipsccEncounterSubmittedAtIsos: navigatorIpsccEncounterSubmissions.map((record) => record.submittedAtIso)
                     }}
                     supervisor={{
                       currentSupervisorName,

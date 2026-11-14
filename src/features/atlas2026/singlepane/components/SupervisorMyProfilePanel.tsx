@@ -36,6 +36,11 @@ export interface SupervisorMyProfilePanelProps {
   onRestoreCreateReflectionGenerated: (navigatorName: string) => Promise<unknown> | unknown
   createSessions?: CreateSessionRecord[]
   onSaveCreateSession?: (record: CreateSessionRecord) => Promise<unknown> | unknown
+  /** Claims stay with the load chart. The review tools render further down the wallet. */
+  placement?: 'claims' | 'tools'
+  requestedOverlay?: SupervisorProfileOverlayKey | null
+  requestNonce?: number
+  onClaimSummary?: (summary: { total: number; mine: number }) => void
 }
 
 const CARD_DEFS: Array<{
@@ -63,12 +68,14 @@ export default function SupervisorMyProfilePanel(props: SupervisorMyProfilePanel
   const assignedNavigators = props.navigatorDirectory.filter((row) => row.isManagedByCurrentSupervisor)
 
   React.useEffect(() => {
+    if ((props.placement ?? 'claims') === 'tools') return
     let cancelled = false
     void loadSupervisorNavigatorClaimCards()
       .then((rows) => {
         if (cancelled) return
         setClaimCards(rows.map((row) => ({ id: row.personId, label: row.displayName, selected: row.isMine })))
         setClaimError(null)
+        props.onClaimSummary?.({ total: rows.length, mine: rows.filter((row) => row.isMine).length })
       })
       .catch((error) => {
         if (cancelled) return
@@ -77,11 +84,18 @@ export default function SupervisorMyProfilePanel(props: SupervisorMyProfilePanel
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [props.placement])
+
+  React.useEffect(() => {
+    if (!props.requestNonce || !props.requestedOverlay) return
+    setActiveOverlay(props.requestedOverlay)
+  }, [props.requestNonce, props.requestedOverlay])
 
   async function toggleNavigator(personId: string, nextSelected: boolean) {
     const previous = claimCards
-    setClaimCards((current) => current.map((card) => (card.id === personId ? { ...card, selected: nextSelected } : card)))
+    const next = claimCards.map((card) => (card.id === personId ? { ...card, selected: nextSelected } : card))
+    setClaimCards(next)
+    props.onClaimSummary?.({ total: next.length, mine: next.filter((card) => card.selected).length })
     setBusyNavigatorId(personId)
     setClaimError(null)
     try {
@@ -89,42 +103,50 @@ export default function SupervisorMyProfilePanel(props: SupervisorMyProfilePanel
       else await releaseSupervisorNavigator(personId)
     } catch (error) {
       setClaimCards(previous)
+      props.onClaimSummary?.({ total: previous.length, mine: previous.filter((card) => card.selected).length })
       setClaimError(error instanceof Error ? error.message : 'Unable to update this navigator.')
     } finally {
       setBusyNavigatorId(null)
     }
   }
 
+  const placement = props.placement ?? 'claims'
+
   return (
-    <div className="relative flex flex-col gap-4">
-      <WalletClaimCircles
-        title="navigators"
-        description="Tap a circle, then assign them to you or remove them."
-        cards={claimCards}
-        emptyLabel="No navigators are available to claim yet."
-        error={claimError}
-        busyId={busyNavigatorId}
-        onToggle={(personId, nextSelected) => void toggleNavigator(personId, nextSelected)}
-      />
-      <SupervisorCompetencyPanel
-        mode="navigator-assessments"
-        navigatorDirectory={assignedNavigators}
-        competencyByNavigator={props.competencyByNavigator}
-      />
-      <div className="atlas-profile-nav-grid">
-        {walletCards.map((card, index) => (
-          <ProfileNavigationCard
-            key={card.overlayId}
-            sequenceNumber={index + 1}
-            title={card.cardTitle}
-            subtitle={card.cardSubtitle}
-            actionLabel={card.actionLabel}
-            variant={card.variant}
-            illustration={card.illustration}
-            onClick={() => setActiveOverlay(card.overlayId)}
+    <div className="relative flex flex-col gap-4" id={placement === 'claims' ? 'wallet-navigator-claims' : undefined}>
+      {placement === 'claims' ? (
+        <WalletClaimCircles
+          title="navigators"
+          description="Tap a circle, then assign them to you or remove them."
+          cards={claimCards}
+          emptyLabel="No navigators are available to claim yet."
+          error={claimError}
+          busyId={busyNavigatorId}
+          onToggle={(personId, nextSelected) => void toggleNavigator(personId, nextSelected)}
+        />
+      ) : (
+        <>
+          <SupervisorCompetencyPanel
+            mode="navigator-assessments"
+            navigatorDirectory={assignedNavigators}
+            competencyByNavigator={props.competencyByNavigator}
           />
-        ))}
-      </div>
+          <div className="atlas-profile-nav-grid">
+            {walletCards.map((card, index) => (
+              <ProfileNavigationCard
+                key={card.overlayId}
+                sequenceNumber={index + 1}
+                title={card.cardTitle}
+                subtitle={card.cardSubtitle}
+                actionLabel={card.actionLabel}
+                variant={card.variant}
+                illustration={card.illustration}
+                onClick={() => setActiveOverlay(card.overlayId)}
+              />
+            ))}
+          </div>
+        </>
+      )}
       {activeOverlay ? (
         <SupervisorProfileOverlay
           {...props}

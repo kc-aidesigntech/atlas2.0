@@ -8,9 +8,13 @@ import {
   type TierStanding
 } from '@/features/atlas2026/shared/tiers'
 import { useWalletOverview } from '@/features/atlas2026/singlepane/hooks/useWalletOverview'
+import { buildNavigatorRoute, type NavigatorRouteStop, type NavigatorRouteTarget } from '@/features/atlas2026/singlepane/domain/navigatorRoute'
 import NavigatorMyProfilePanel, { type NavigatorMyProfilePanelProps } from './NavigatorMyProfilePanel'
+import NavigatorRouteBoard from './NavigatorRouteBoard'
 import SupervisorMyProfilePanel, { type SupervisorMyProfilePanelProps } from './SupervisorMyProfilePanel'
+import WalletLeadSection from './myWallet/WalletLeadSection'
 import WalletTierHeader from './myWallet/WalletTierHeader'
+import RadialLoadChart from './RadialLoadChart'
 import {
   CompetencyCardsSection,
   LeadsSection,
@@ -19,6 +23,8 @@ import {
   SecondmentScheduleSection,
   SponsorshipSection
 } from './myWallet/WalletOverviewSections'
+import type { NavigatorProfileOverlayKey } from './navigatorProfile/model'
+import type { SupervisorProfileOverlayKey } from './supervisorProfile/SupervisorProfileOverlay'
 
 export interface MyWalletPanelProps {
   viewerRole: AtlasRole
@@ -39,11 +45,11 @@ export interface MyWalletPanelProps {
 }
 
 /**
- * One My Wallet for every tier. The header prints the tier identity, badge,
- * ribbon, and designations from `fn_my_tier`; each section below appears by
- * permission key. A section whose key the viewer holds only through the
- * administrator bypass stays hidden while it has no rows, so a Coordinator's
- * wallet does not print empty candidate sections.
+ * One My Wallet for every tier. The opening band is the identity beside the
+ * strain chart, then Section 1, then the three supervision cards. Each section
+ * under that band appears by permission key. A section whose key the viewer
+ * holds only through the administrator bypass stays hidden while it has no
+ * rows, so a Coordinator's wallet does not print empty candidate sections.
  */
 export default function MyWalletPanel({
   viewerRole,
@@ -64,6 +70,10 @@ export default function MyWalletPanel({
     loadSupervisor: canReceiveSupervision
   })
   const fallbackAvatar = React.useMemo(() => createFallbackAvatarDataUrl(displayName), [displayName])
+  const [navigatorSection, setNavigatorSection] = React.useState<NavigatorProfileOverlayKey | null>(null)
+  const [supervisorSection, setSupervisorSection] = React.useState<SupervisorProfileOverlayKey | null>(null)
+  const [requestNonce, setRequestNonce] = React.useState(0)
+  const [navigatorClaims, setNavigatorClaims] = React.useState({ total: 0, mine: 0 })
 
   // The tier row embedded in the Remote Procedure Call (RPC) answer wins; the viewer-state
   // tier fills in until it answers; the pane role stands in when the account has no tier row.
@@ -103,17 +113,99 @@ export default function MyWalletPanel({
   if (showEnrollees) metaLines.push({ label: 'Assigned enrollees', value: navigator.assignedEnrollees.length })
   if (showCompetencyCards) metaLines.push({ label: 'Competency cards', value: isLoading && !overview ? '…' : competencyCards.length })
 
+  const routeStops = React.useMemo(
+    () =>
+      buildNavigatorRoute({
+        canWorkEnrollees: showEnrollees,
+        canReceiveSupervision,
+        canSupervise: showSupervisees,
+        assignedEnrolleeCount: navigator.assignedEnrollees.length,
+        ipsccEncounterSubmittedAtIsos: navigator.ipsccEncounterSubmittedAtIsos ?? [],
+        regulationReviews: navigator.regulationReviewDueItems ?? [],
+        ipsSelfAssessments: navigator.ipsSelfAssessments,
+        createSessions: navigator.createSessions,
+        claimedNavigatorCount: navigatorClaims.mine,
+        availableNavigatorCount: navigatorClaims.total,
+        supervisorAssessments: supervisor.allSupervisorIpsAssessments,
+        supervisorName: supervisor.currentSupervisorName
+      }),
+    [canReceiveSupervision, navigator, navigatorClaims.mine, navigatorClaims.total, showEnrollees, showSupervisees, supervisor]
+  )
+
+  function openRouteStop(stop: NavigatorRouteStop) {
+    const target: NavigatorRouteTarget = stop.target
+    switch (target.kind) {
+      case 'enrollee-claims':
+        document.getElementById('wallet-enrollee-claims')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      case 'navigator-claims':
+        document.getElementById('wallet-navigator-claims')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      case 'point-of-care':
+        setNavigatorSection('section_1_ipscc')
+        setRequestNonce((current) => current + 1)
+        return
+      case 'self-assessment':
+        setNavigatorSection('section_2_awareness')
+        setRequestNonce((current) => current + 1)
+        return
+      case 'create-session':
+        setNavigatorSection('section_3_create')
+        setRequestNonce((current) => current + 1)
+        return
+      case 'regulation-review':
+        if (target.enrolleeId) navigator.onOpenRegulationReview?.(target.enrolleeId, target.missingInstruments)
+        return
+      case 'supervisor-weekly':
+        setSupervisorSection('section_1_weekly_ips')
+        setRequestNonce((current) => current + 1)
+        return
+      case 'supervisor-create':
+        setSupervisorSection('section_4_create_reflections')
+        setRequestNonce((current) => current + 1)
+        return
+      default: {
+        const exhaustive: never = target
+        return exhaustive
+      }
+    }
+  }
+
   return (
     <div className="relative flex flex-col gap-4">
-      <WalletTierHeader
-        accountSettings={accountSettings}
-        displayName={displayName}
-        fallbackAvatar={fallbackAvatar}
-        standing={standing}
-        metaLines={metaLines}
-        isUploadingAvatar={isUploadingAvatar}
-        avatarUploadError={avatarUploadError}
-        onReplaceAvatar={onReplaceAvatar}
+      <div className="border-b pb-4" style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}>
+        <div className="atlas-navigator-profile-layout">
+          <div className="atlas-navigator-profile-main">
+            <WalletTierHeader
+              accountSettings={accountSettings}
+              displayName={displayName}
+              fallbackAvatar={fallbackAvatar}
+              standing={standing}
+              metaLines={metaLines}
+              isUploadingAvatar={isUploadingAvatar}
+              avatarUploadError={avatarUploadError}
+              onReplaceAvatar={onReplaceAvatar}
+            />
+          </div>
+          <div className="atlas-navigator-profile-rail items-center justify-center">
+            <RadialLoadChart load={navigator.aggregateLoad} onClick={navigator.onOpenLoadTable} />
+          </div>
+        </div>
+      </div>
+      {showEnrollees ? <NavigatorMyProfilePanel {...navigator} /> : null}
+      {showSupervisees ? (
+        <SupervisorMyProfilePanel
+          {...supervisor}
+          placement="claims"
+          onClaimSummary={setNavigatorClaims}
+        />
+      ) : null}
+      <NavigatorRouteBoard stops={routeStops} onOpenStop={openRouteStop} />
+      <WalletLeadSection
+        identity={null}
+        navigator={navigator}
+        requestedSection={navigatorSection}
+        requestNonce={requestNonce}
       />
       {showCompetencyCards ? <CompetencyCardsSection cards={competencyCards} isLoading={isLoading} /> : null}
       {showMySponsor ? <SponsorshipSection direction="received" rows={sponsorshipsReceived} isLoading={isLoading} /> : null}
@@ -122,8 +214,14 @@ export default function MyWalletPanel({
       {showSecondments ? <SecondmentScheduleSection secondments={secondments} isLoading={isLoading} /> : null}
       {showRespiteShifts ? <RespiteShiftsSection shifts={respiteShifts} isLoading={isLoading} /> : null}
       {showLeads ? <LeadsSection count={leadsOwnedCount} isLoading={isLoading} onOpenLeads={onOpenLeads} /> : null}
-      {showEnrollees ? <NavigatorMyProfilePanel {...navigator} /> : null}
-      {showSupervisees ? <SupervisorMyProfilePanel {...supervisor} /> : null}
+      {showSupervisees ? (
+        <SupervisorMyProfilePanel
+          {...supervisor}
+          placement="tools"
+          requestedOverlay={supervisorSection}
+          requestNonce={requestNonce}
+        />
+      ) : null}
     </div>
   )
 }

@@ -19,31 +19,13 @@ import type {
   SupervisionSessionRecord,
   SupervisorNavigatorCompetencySummary
 } from '@/features/atlas2026/shared/contracts'
-import IpsccStrainRadarChart from '../IpsccStrainRadarChart'
-import NavigatorCompetencyDashboard from '../NavigatorCompetencyDashboard'
-import ProfileNavigationCard from '../ProfileNavigationCard'
 import NavigatorProfileOverview from './NavigatorProfileOverview'
-import {
-  NavigatorScheduleSection,
-  RegulationReviewRow
-} from './NavigatorProfileScheduleSections'
-import {
-  ACTIVE_NAVIGATOR_PROFILE_CARDS,
-  NAVIGATOR_PROFILE_CARDS,
-  formatDateLabel,
-  type NavigatorProfileOverlayKey
-} from './model'
-import CreateSessionDesk from '../CreateSessionDesk'
-import {
-  NavigatorCreateHistorySection,
-  NavigatorIpsccFeedbackSection,
-  NavigatorSelfAwarenessSection
-} from './NavigatorProfilePrimarySections'
+import { RegulationReviewRow } from './NavigatorProfileScheduleSections'
 
 /**
- * Props for the navigator sections of My Wallet: enrollee claim circles, the
- * strain radar and competency dashboard, and the supervision cards. Identity
- * (avatar, name, tier) is rendered by `WalletTierHeader` in `MyWalletPanel`.
+ * Props for the navigator sections of My Wallet. The strain chart, Section 1,
+ * and the three supervision cards render in `WalletLeadSection`. This panel
+ * keeps the enrollee claim circles and the weekly review queue.
  */
 export interface NavigatorMyProfilePanelProps {
   currentNavigatorName: string
@@ -79,12 +61,12 @@ export interface NavigatorMyProfilePanelProps {
   onSaveIpsccEncounterSubmission: (record: IpsccEncounterSubmissionRecord) => Promise<unknown> | unknown
   onSaveCreateSession: (record: CreateSessionRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
+  /** Point-of-care submission times, used to mark this week's route stop done. */
+  ipsccEncounterSubmittedAtIsos?: string[]
 }
 
 export default function NavigatorProfileExperience(props: NavigatorMyProfilePanelProps) {
   const {
-    currentNavigatorName,
-    assignedEnrollees,
     navigatorEnrollmentAssignments,
     navigatorEnrollmentAssignmentsError,
     isLoadingNavigatorEnrollmentAssignments,
@@ -92,29 +74,12 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
     canViewNavigatorAssignmentNames,
     canToggleAssignmentActions,
     canOpenAssignmentBoardReferral,
-    competencySummary,
-    ipsccCompetencyAverages,
-    ipsccEnrolleeFeedbackPrivacy,
-    selfAwarenessCorrelationRows,
-    selfAwarenessSummary,
-    ipsSelfAssessments,
-    navigatorSupervisorIpsAssessments,
-    createSessions,
-    createReflection,
-    supervisionSessions,
-    dueItems,
     regulationReviewDueItems = [],
     programError = null,
-    onOpenEnrolleeSurvey,
     onOpenRegulationReview,
     onOpenAssignmentBoardReferral,
-    onToggleEnrollmentAssignment,
-    onSaveIpsSelfAssessment,
-    onSaveIpsccEncounterSubmission,
-    onSaveCreateSession,
-    onSaveSupervisionSession
+    onToggleEnrollmentAssignment
   } = props
-  const [activeOverlay, setActiveOverlay] = React.useState<NavigatorProfileOverlayKey | null>(null)
   // Weekly regulation reviews stay collapsed behind a calendar badge until opened.
   const [reviewModalOpen, setReviewModalOpen] = React.useState(false)
   const assignmentBoardRef = React.useRef<HTMLElement | null>(null)
@@ -129,212 +94,21 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
 
   return (
     <div className="relative flex flex-col gap-4">
-      {/* Border under the whole identity+radar band keeps both surface bottoms even. */}
-      <div className="border-b pb-4" style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}>
-        <div className="atlas-navigator-profile-layout">
-          <div className="atlas-navigator-profile-main">
-            <NavigatorProfileOverview
-              openReviewCount={openReviews.length}
-              programError={programError}
-              assignmentBoardRef={assignmentBoardRef}
-              assignments={navigatorEnrollmentAssignments}
-              assignmentsError={navigatorEnrollmentAssignmentsError}
-              isLoadingAssignments={isLoadingNavigatorEnrollmentAssignments}
-              assigningEnrollmentId={assigningEnrollmentId}
-              canViewAssignmentNames={canViewNavigatorAssignmentNames}
-              canToggleAssignments={canToggleAssignmentActions}
-              canOpenReferral={canOpenAssignmentBoardReferral}
-              onOpenReviewQueue={() => setReviewModalOpen(true)}
-              onOpenReferral={onOpenAssignmentBoardReferral}
-              onToggleAssignment={onToggleEnrollmentAssignment}
-            />
-          </div>
-          <div className="atlas-navigator-profile-rail">
-            {/* Dual radar fills rail height so its bottom stays even with the main pane. */}
-            <IpsccStrainRadarChart
-              correlationRows={selfAwarenessCorrelationRows}
-              enrolleeFeedbackPrivacy={ipsccEnrolleeFeedbackPrivacy}
-              onOpenAwareness={() => setActiveOverlay('section_2_awareness')}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Section 1 spans the full profile width under identity + radar. */}
-      <div className="atlas-navigator-profile-section-span">
-        <NavigatorCompetencyDashboard
-          ipsccCompetencyAverages={ipsccCompetencyAverages}
-          ipsccEnrolleeFeedbackPrivacy={ipsccEnrolleeFeedbackPrivacy}
-          onOpenSection={setActiveOverlay}
-        />
-      </div>
-
-      {/* Supervision cards sit in one centered row under the main pane. */}
-      <div className="atlas-navigator-profile-card-row" aria-label="Navigator supervision sections">
-        {ACTIVE_NAVIGATOR_PROFILE_CARDS.map((card, index) => (
-          <ProfileNavigationCard
-            key={card.overlayId}
-            sequenceNumber={index + 1}
-            title={card.cardTitle}
-            subtitle={card.cardSubtitle}
-            actionLabel={card.actionLabel}
-            variant={card.variant}
-            illustration={card.illustration}
-            onClick={() => setActiveOverlay(card.overlayId)}
-          />
-        ))}
-      </div>
-
-      {activeOverlay ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4">
-          <div className="atlas-surface-panel max-h-[90vh] w-full max-w-[980px] overflow-y-auto p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="text-[18px] font-medium text-white">
-                {NAVIGATOR_PROFILE_CARDS.find((card) => card.overlayId === activeOverlay)?.title || 'section'}
-              </div>
-              <AtlasTextButton onClick={() => setActiveOverlay(null)} className="px-3 py-1 text-[12px]">
-                close
-              </AtlasTextButton>
-            </div>
-            {activeOverlay === 'section_1_ipscc' ? (
-              <NavigatorIpsccFeedbackSection
-                assignedEnrollees={assignedEnrollees}
-                currentNavigatorName={currentNavigatorName}
-                privacy={ipsccEnrolleeFeedbackPrivacy}
-                onSave={onSaveIpsccEncounterSubmission}
-              />
-            ) : null}
-            {activeOverlay === 'section_2_awareness' ? (
-              <NavigatorSelfAwarenessSection
-                currentNavigatorName={currentNavigatorName}
-                assessments={ipsSelfAssessments}
-                supervisorAssessments={navigatorSupervisorIpsAssessments}
-                correlationRows={selfAwarenessCorrelationRows}
-                summary={selfAwarenessSummary}
-                privacy={ipsccEnrolleeFeedbackPrivacy}
-                onSave={onSaveIpsSelfAssessment}
-              />
-            ) : null}
-            {activeOverlay === 'section_3_create' ? (
-              <div className="space-y-3">
-                {/* Current reflection travels with session history so Section 3 stays off chrome. */}
-                <div className="atlas-surface-raised space-y-2 px-3 py-3 text-[12px] text-white">
-                  <div>
-                    <small className="atlas-overline block text-[#9eacb9]">section 3 · what is being workshopped</small>
-                    <div className="mt-0.5 text-[14px] font-medium text-white">C.R.E.A.T.E. supervision reflection</div>
-                  </div>
-                  {createReflection?.reflectionText?.trim() ? (
-                    <div className="rounded-[10px] border border-white/10 px-2.5 py-2">
-                      <p className="whitespace-pre-wrap leading-relaxed text-[#d7e0e9]">
-                        {createReflection.reflectionText.trim()}
-                      </p>
-                      <small className="atlas-meta mt-2 block text-[#9eacb9]">
-                        Updated after latest C.R.E.A.T.E. · based on last{' '}
-                        {createReflection.sourceSessionIds?.length || 1} session
-                        {(createReflection.sourceSessionIds?.length || 1) === 1 ? '' : 's'}
-                        {createReflection.supervisorOverriddenAtIso
-                          ? ` · edited by ${createReflection.supervisorOverriddenBy || 'supervisor'}`
-                          : createReflection.usedFallback
-                            ? ' · offline summary'
-                            : ''}
-                      </small>
-                    </div>
-                  ) : (
-                    <div className="text-[#9eacb9]">
-                      No C.R.E.A.T.E. reflection yet. A supervisor reflection appears after the first saved supervision
-                      session.
-                    </div>
-                  )}
-                </div>
-                <CreateSessionDesk
-                  role="navigator"
-                  selfName={currentNavigatorName}
-                  counterparts={[]}
-                  sessions={createSessions}
-                  onSave={onSaveCreateSession}
-                />
-                <NavigatorCreateHistorySection sessions={createSessions} />
-              </div>
-            ) : null}
-            {activeOverlay === 'section_4_assignments' ? (
-              <div className="atlas-surface-raised space-y-3 px-3 py-3 text-white">
-                <div className="text-[13px]">
-                  assignment board is tucked under the profile photo so you can pick up enrollees without opening a
-                  card.
-                </div>
-                <div className="flex justify-end">
-                  <AtlasTextButton
-                    className="px-3 py-1 text-[12px]"
-                    onClick={() => {
-                      setActiveOverlay(null)
-                      assignmentBoardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }}
-                  >
-                    jump to assignment board
-                  </AtlasTextButton>
-                </div>
-              </div>
-            ) : null}
-            {activeOverlay === 'section_5_zcode_updates' ? (
-              <div className="space-y-2">
-                {assignedEnrollees.map((enrollee) => (
-                  <div key={enrollee.id} className="atlas-surface-raised flex items-center justify-between px-3 py-2">
-                    <div className="text-white">{enrollee.fullName}</div>
-                    <AtlasTextButton
-                      onClick={() => onOpenEnrolleeSurvey?.(enrollee.id)}
-                      className="px-3 py-1 text-[12px]"
-                    >
-                      update z-codes
-                    </AtlasTextButton>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-            {activeOverlay === 'section_6_competency' ? (
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                <MetricCard label="weighted avg" value={competencySummary?.weightedRollingAverage?.toFixed(2) || '--'} />
-                <MetricCard label="assessments" value={String(competencySummary?.assessmentCount || 0)} />
-                <MetricCard
-                  label="last review"
-                  value={
-                    competencySummary?.lastAssessmentAtIso
-                      ? formatDateLabel(competencySummary.lastAssessmentAtIso)
-                      : 'none'
-                  }
-                />
-              </div>
-            ) : null}
-            {activeOverlay === 'section_7_schedule' ? (
-              <NavigatorScheduleSection
-                dueItems={dueItems}
-                regulationItems={regulationReviewDueItems}
-                onStart={(item) => {
-                  onOpenRegulationReview?.(item.enrolleeId, item.missingInstruments)
-                  setActiveOverlay(null)
-                }}
-              />
-            ) : null}
-            {activeOverlay === 'section_8_archive' ? (
-              <div className="space-y-2">
-                {supervisionSessions.map((session) => (
-                  <div key={session.id} className="atlas-surface-raised px-3 py-2 text-[12px]">
-                    <div className="text-white">
-                      {formatDateLabel(session.sessionAtIso)} · {session.supervisorName}
-                    </div>
-                    <textarea
-                      className="atlas-textarea mt-2 min-h-[70px] bg-transparent text-white"
-                      value={session.navigatorNote}
-                      onChange={(event) =>
-                        onSaveSupervisionSession({ ...session, navigatorNote: event.target.value })
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <NavigatorProfileOverview
+        openReviewCount={openReviews.length}
+        programError={programError}
+        assignmentBoardRef={assignmentBoardRef}
+        assignments={navigatorEnrollmentAssignments}
+        assignmentsError={navigatorEnrollmentAssignmentsError}
+        isLoadingAssignments={isLoadingNavigatorEnrollmentAssignments}
+        assigningEnrollmentId={assigningEnrollmentId}
+        canViewAssignmentNames={canViewNavigatorAssignmentNames}
+        canToggleAssignments={canToggleAssignmentActions}
+        canOpenReferral={canOpenAssignmentBoardReferral}
+        onOpenReviewQueue={() => setReviewModalOpen(true)}
+        onOpenReferral={onOpenAssignmentBoardReferral}
+        onToggleAssignment={onToggleEnrollmentAssignment}
+      />
 
       {reviewModalOpen && openReviews.length ? (
         <div
@@ -374,15 +148,6 @@ export default function NavigatorProfileExperience(props: NavigatorMyProfilePane
           </div>
         </div>
       ) : null}
-    </div>
-  )
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="atlas-surface-raised px-3 py-3">
-      <small className="atlas-overline block text-[#9eacb9]">{label}</small>
-      <div className="mt-1 text-[18px] font-medium text-white">{value}</div>
     </div>
   )
 }

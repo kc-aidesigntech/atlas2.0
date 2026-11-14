@@ -97,7 +97,7 @@ export default function NavigatorProfileOverview({
         </div>
       ) : null}
       {/* Assignment board fills remaining pane height so the rail can stretch even with this surface. */}
-      <section ref={assignmentBoardRef} className="mt-4 flex-1">
+      <section ref={assignmentBoardRef} id="wallet-enrollee-claims" className="mt-4 flex-1">
         {canOpenReferral && onOpenReferral ? (
           <div className="mb-3 flex justify-end">
             <AtlasTextButton onClick={onOpenReferral} className="px-3 py-1 text-[12px]">
