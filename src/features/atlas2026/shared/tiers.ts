@@ -205,8 +205,9 @@ const RESIDENT_SET: TierKey[] = ['t2b', 't3a', 't4', 't4plus']
 /**
  * Permission keys `atlas.role_permissions` seeds per tier. The client reads
  * this table when `fn_my_permissions` is unavailable, and for the experience an
- * administrator switches into. `t4plus` also passes every key through the
- * system-administrator bypass in `fn_has_permission`.
+ * administrator switches into. The product matrix of those keys lives in
+ * `tierCapabilities.ts` (`atlas.tier_capabilities`). `t4plus` also passes
+ * every key through the system-administrator bypass in `fn_has_permission`.
  */
 export const TIER_PERMISSION_SEED: Record<AtlasPermissionKey, TierKey[]> = {
   'referral.submit': [...TIER_KEYS],

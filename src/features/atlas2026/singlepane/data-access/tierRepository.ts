@@ -15,6 +15,7 @@ import {
   type TierStanding,
   type TierStatus
 } from '@/features/atlas2026/shared/tiers'
+import { isCapabilityKey, type CapabilityKey } from '@/features/atlas2026/shared/tierCapabilities'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 export interface MyPermissionsResult {
@@ -33,6 +34,51 @@ export async function loadMyPermissions(): Promise<MyPermissionsResult> {
   }
   const keys = (Array.isArray(data) ? data : []).filter(isAtlasPermissionKey)
   return { source: 'rpc', keys }
+}
+
+export interface TierCapabilityMatrixRow {
+  tierKey: TierKey
+  capabilityKey: CapabilityKey
+  capabilityLabel: string
+}
+
+/** Live copy of `atlas.tier_capabilities`. Empty when the catalog RPC is unavailable. */
+export async function loadTierCapabilityMatrix(): Promise<TierCapabilityMatrixRow[]> {
+  if (!hasSupabaseConfig || !supabase) return []
+  const { data, error } = await supabase.schema('atlas').rpc('fn_tier_capability_matrix')
+  if (error) {
+    console.warn('fn_tier_capability_matrix failed', error.message)
+    return []
+  }
+  return (Array.isArray(data) ? data : []).flatMap((row) => {
+    const record = row as { tier_key?: unknown; capability_key?: unknown; capability_label?: unknown }
+    if (!isTierKey(record.tier_key) || !isCapabilityKey(record.capability_key)) return []
+    return [{
+      tierKey: record.tier_key,
+      capabilityKey: record.capability_key,
+      capabilityLabel: String(record.capability_label || record.capability_key)
+    }]
+  })
+}
+
+export interface ScreenCapabilityMatrixRow {
+  screenKey: string
+  capabilityKey: CapabilityKey
+}
+
+/** Live copy of `atlas.screen_capabilities`. A screen opens when any linked capability is held. */
+export async function loadScreenCapabilityMatrix(): Promise<ScreenCapabilityMatrixRow[]> {
+  if (!hasSupabaseConfig || !supabase) return []
+  const { data, error } = await supabase.schema('atlas').rpc('fn_screen_capability_matrix')
+  if (error) {
+    console.warn('fn_screen_capability_matrix failed', error.message)
+    return []
+  }
+  return (Array.isArray(data) ? data : []).flatMap((row) => {
+    const record = row as { screen_key?: unknown; capability_key?: unknown }
+    if (typeof record.screen_key !== 'string' || !isCapabilityKey(record.capability_key)) return []
+    return [{ screenKey: record.screen_key, capabilityKey: record.capability_key }]
+  })
 }
 
 function toTierStatus(value: unknown): TierStatus {
