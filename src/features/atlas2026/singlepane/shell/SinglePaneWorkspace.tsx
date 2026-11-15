@@ -513,13 +513,18 @@ export default function SinglePaneWorkspace() {
   // Leads, respite shifts, secondment schedule, partners, cohorts, sponsorships, and
   // competency cards: each panel loads its own table and gates on hasPermission.
   const tierFeatureScreenId = !isPartnerRole && isTierFeatureScreenId(activeMenu) ? activeMenu : null
-  // My Wallet and the tier feature screens render without a selected enrollee for every
-  // tier, including t1, t2, and t3 whose shells never select one; each panel loads inside itself.
+  // My Wallet, admin screens, and the tier feature screens render without a selected
+  // enrollee. An empty roster is a finished load: waiting for an enrollee that
+  // does not exist keeps the shell on the loading panel.
+  const hasEnrolleeContext = Boolean(selectedEnrollee && timelineConfig)
   const isReady = isPartnerStationView
-    ? true
-    : isMyWallet || isNavigatorEnrolleeMenu || isSupervisorTeamBurden || tierFeatureScreenId
-      ? true
-      : Boolean(selectedEnrollee && timelineConfig)
+    || isMyWallet
+    || isNavigatorEnrolleeMenu
+    || isSupervisorTeamBurden
+    || Boolean(tierFeatureScreenId)
+    || isAdminSection
+    || hasEnrolleeContext
+    || (!isLoading && enrollees.length === 0)
   const leadsMenuAvailable = selectedRoleConfig.topMenus.includes('leads')
 
   React.useEffect(() => {
@@ -1175,6 +1180,16 @@ export default function SinglePaneWorkspace() {
                       </small>
                     </div>
                   </div>
+                ) : !selectedEnrollee ? (
+                  <div
+                    className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px]"
+                    style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}
+                  >
+                    <div className="atlas-surface-panel w-full px-5 py-5 text-white">
+                      <small className="atlas-overline block text-[#bcbcbc]">roster</small>
+                      <div className="atlas-h4 mt-2 text-[18px] font-medium">No enrollee is on this roster yet.</div>
+                    </div>
+                  </div>
                 ) : (
                   <div
                     className="flex min-h-[282px] flex-wrap items-start gap-x-4 gap-y-5 border-b pb-[12px] lg:gap-x-8 xl:gap-x-12"
@@ -1384,7 +1399,7 @@ export default function SinglePaneWorkspace() {
                           isSavingAccessMatrix={isSavingAccessMatrix}
                     />
                   </>
-                ) : (
+                ) : !selectedEnrollee || !timelineConfig ? null : (
                   <>
                     <div className="hidden min-h-[220px] flex-1 items-start md:flex">
                       <StripMapTimeline
