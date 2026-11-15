@@ -35,8 +35,10 @@ import {
   haveSameRoles,
   isNavigatorTier,
   isSystemAdmin,
-  normalizeAtlasRoleKeys
+  normalizeAtlasRoleKeys,
+  rolesAnchoredToTier
 } from '@/features/atlas2026/singlepane/domain/roles'
+import type { TierStanding } from '@/features/atlas2026/shared/tiers'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 interface AssignmentProfile {
@@ -66,6 +68,8 @@ interface UseSinglePaneBootstrapEffectsInput {
   adminDefaultAppliedForEmailRef: MutableRefObject<string | null>
   accountSettings: AccountSettings
   viewerPerson: AccessMatrixPersonRecord | null
+  /** The signed-in account's `fn_my_tier` row. Null until that call answers. */
+  viewerTier: TierStanding | null
   remotePartnerOrganizationName: string | null
   navigatorAssignmentProfiles: AssignmentProfile[]
   scopedEnrollees: EnrolleeProfile[]
@@ -174,7 +178,10 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
     ) => {
       if (!isMounted) return
       input.setSessionEmail(session?.user?.email?.trim() || '')
-      input.setAuthoritativeAccountRoles(extractAuthoritativeRolesFromSession(session))
+      const claimedRoles = extractAuthoritativeRolesFromSession(session)
+      const tierKey = input.viewerTier?.tierKey
+      // A loaded tier row replaces claim tier keys so the pane matches the wallet.
+      input.setAuthoritativeAccountRoles(tierKey ? rolesAnchoredToTier(claimedRoles, tierKey) : claimedRoles)
     }
     void supabase.auth.getSession().then(({ data, error }) => {
       if (!error) applySession(data.session)
@@ -184,9 +191,35 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
       isMounted = false
       authListener?.subscription?.unsubscribe()
     }
-  }, [input.setAuthoritativeAccountRoles, input.setSessionEmail])
+  }, [input.setAuthoritativeAccountRoles, input.setSessionEmail, input.viewerTier?.tierKey])
 
   useEffect(() => {
+    const tierKey = input.viewerTier?.tierKey
+    if (!tierKey || input.remoteSession) return
+    const anchored = rolesAnchoredToTier(input.authoritativeAccountRoles, tierKey)
+    if (!haveSameRoles(anchored, input.authoritativeAccountRoles)) {
+      input.setAuthoritativeAccountRoles(anchored)
+    }
+    // A coordinator may preview another experience after the first alignment.
+    // Every other tier is the pane role on every render.
+    if (isSystemAdmin(tierKey)) {
+      const email = input.sessionEmail.trim().toLowerCase()
+      if (!email || input.adminDefaultAppliedForEmailRef.current === email) return
+      input.adminDefaultAppliedForEmailRef.current = email
+    }
+    if (input.role !== tierKey) input.setRoleState(tierKey)
+  }, [
+    input.authoritativeAccountRoles,
+    input.remoteSession,
+    input.role,
+    input.setAuthoritativeAccountRoles,
+    input.setRoleState,
+    input.sessionEmail,
+    input.viewerTier?.tierKey
+  ])
+
+  useEffect(() => {
+    if (input.viewerTier?.tierKey) return
     if (!input.authoritativeAccountRoles.length || input.authoritativeAccountRoles.some(isSystemAdmin)) return
     if (input.remoteSession) input.setRemoteSession(null)
     if (!input.authoritativeAccountRoles.includes(input.role)) {
@@ -195,6 +228,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
   }, [input.authoritativeAccountRoles, input.remoteSession, input.role])
 
   useEffect(() => {
+    if (input.viewerTier?.tierKey) return
     const normalizedEmail = input.sessionEmail.trim().toLowerCase()
     if (!normalizedEmail) return
     if (!input.authoritativeAccountRoles.some(isSystemAdmin)) {
@@ -204,7 +238,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
     if (input.adminDefaultAppliedForEmailRef.current === normalizedEmail) return
     input.adminDefaultAppliedForEmailRef.current = normalizedEmail
     input.setRoleState('t4plus')
-  }, [input.authoritativeAccountRoles, input.sessionEmail])
+  }, [input.authoritativeAccountRoles, input.sessionEmail, input.viewerTier?.tierKey])
 
   useEffect(() => {
     if (input.viewerRole === 'partner') return
@@ -240,6 +274,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
 
   useEffect(() => {
     if (input.remoteSession || !input.viewerPerson) return
+    if (input.viewerTier?.tierKey) return
     const derivedRoles = normalizeAtlasRoleKeys(input.viewerPerson.roleKeys)
     if (!derivedRoles.length || haveSameRoles(derivedRoles, input.accountSettings.enabledRoles)) return
     input.setBootstrapState((current) => ({
@@ -247,7 +282,7 @@ export function useSinglePaneBootstrapEffects(input: UseSinglePaneBootstrapEffec
       accountSettings: { ...current.accountSettings, enabledRoles: derivedRoles }
     }))
     if (!derivedRoles.includes(input.role)) input.setRoleState(derivedRoles[0] || 't3a')
-  }, [input.accountSettings.enabledRoles, input.remoteSession, input.role, input.viewerPerson])
+  }, [input.accountSettings.enabledRoles, input.remoteSession, input.role, input.viewerPerson, input.viewerTier?.tierKey])
 
   useEffect(() => {
     if (input.remoteSession?.targetRole !== 'partner') {

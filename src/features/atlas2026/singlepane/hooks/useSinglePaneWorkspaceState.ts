@@ -36,7 +36,6 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 't3a') {
   const [navigatorProgramError, setNavigatorProgramError] = useState<string | null>(null)
   const [sessionEmail, setSessionEmail] = useState('')
   const [authoritativeAccountRoles, setAuthoritativeAccountRoles] = useState<AtlasRole[]>([])
-  const canSwitchActiveExperience = useMemo(() => authoritativeAccountRoles.some(isSystemAdmin) || isSystemAdmin(role), [authoritativeAccountRoles, role])
   const [navigatorEnrollmentAssignments, setNavigatorEnrollmentAssignments] = useState<NavigatorEnrollmentAssignmentRecord[]>([])
   const [navigatorEnrollmentAssignmentsError, setNavigatorEnrollmentAssignmentsError] = useState<string | null>(null)
   const [isLoadingNavigatorEnrollmentAssignments, setIsLoadingNavigatorEnrollmentAssignments] = useState(false)
@@ -143,6 +142,23 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 't3a') {
     intakeFormsByEnrolleeId,
     logs,
   })
+  // The tier row decides whether this account may preview another experience.
+  // A claim or a saved pane role cannot unlock that switch on its own.
+  const canSwitchActiveExperience = useMemo(
+    () => (viewerTier?.tierKey ? isSystemAdmin(viewerTier.tierKey) : authoritativeAccountRoles.some(isSystemAdmin) || isSystemAdmin(role)),
+    [authoritativeAccountRoles, role, viewerTier?.tierKey]
+  )
+  const signedInTier = viewerTier?.tierKey ?? null
+  // Menus, the nav label, and the role view read this. A coordinator may keep
+  // a preview role; every other account is the tier row, including this render.
+  const paneRole: AtlasRole = remoteSession?.targetRole
+    ? viewerRole
+    : signedInTier && !isSystemAdmin(signedInTier)
+      ? signedInTier
+      : viewerRole
+  if (signedInTier && !remoteSession && !isSystemAdmin(signedInTier) && role !== signedInTier) {
+    setRoleState(signedInTier)
+  }
   // Hoisted adapters let derived hooks retain stable callbacks while persistence
   // command ownership lives in the focused action hook below.
   function saveEnrolleeIntake(nextIntake: EnrolleeIntakeRecord) {
@@ -156,21 +172,21 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 't3a') {
   }
 
   const derived = useSinglePaneWorkspaceDerivedState({
-    selectedEnrollee, viewerRole, selectedLoadBreakdown, selectedLoad, roleConfigs, remoteSession,
+    selectedEnrollee, viewerRole: paneRole, selectedLoadBreakdown, selectedLoad, roleConfigs, remoteSession,
     routeAssignmentsByEnrolleeId, selectedLogs, selectedTimelineConfig, selectedIntake,
     setBootstrapState, setNavigatorProgramError, ensureWriteAllowed, saveEnrolleeIntake,
     scopedEnrollees, logs, effectiveAccountSettings, navigatorCompetencyAssessments,
     accessMatrixDataset, viewerPerson, navigatorProgramState, enrollees, enrollmentRequests,
     publicQueueRecords, isPartnerStationView, effectivePartnerOrganizationName,
     scopedEnrolleeIdSet, serviceCapacityPromptByNormalizedZCode, setNavigatorProgramState,
-    role, accountSettings, effectivePartnerStationProfile, setPublicQueueRecords,
+    role: paneRole, accountSettings, effectivePartnerStationProfile, setPublicQueueRecords,
     refreshAssignmentParityViews, partnerTroubleshootingGrants, setPartnerTroubleshootingGrants,
     setRemoteSession, ensureAdminPermissionWrite, viewerCanUseAssignmentActions,
     navigatorEnrollmentAssignments, setAssigningNavigatorEnrollmentId,
     setNavigatorEnrollmentAssignmentsError, setPendingAssignmentEnrollees, scopedLoads,
     scopedLoadBreakdownsByEnrolleeId, partnerStationProfile, activeMenu, setRoleState,
     setActiveMenu, sessionEmail, setSessionEmail, authoritativeAccountRoles,
-    setAuthoritativeAccountRoles, adminDefaultAppliedForEmailRef, remotePartnerAssignment,
+    setAuthoritativeAccountRoles, adminDefaultAppliedForEmailRef, viewerTier, remotePartnerAssignment,
     navigatorAssignmentProfiles, setRemotePartnerStationProfile, setNavigatorEnrollmentAssignments,
     setIsLoadingNavigatorEnrollmentAssignments, setDemoTaggedEnrollmentIds,
     setZCodeDomainSurveyHistorySummary, setZCodeDomainSurveyHistoryError,
@@ -307,7 +323,7 @@ export function useSinglePaneWorkspaceState(initialRole: AtlasRole = 't3a') {
     // established facade names where internal projections are more explicit.
     ...derived,
     ...workspaceActions,
-    role, viewerRole, setRole, remoteSession, partnerTroubleshootingGrants,
+    role: paneRole, viewerRole: paneRole, setRole, remoteSession, partnerTroubleshootingGrants,
     selectedEnrolleeId, setSelectedEnrolleeId, activeMenu, setActiveMenu,
     isLoading, bootstrapError, enrollees: scopedEnrollees, selectedEnrollee,
     selectedLoad: derived.effectiveSelectedLoad,

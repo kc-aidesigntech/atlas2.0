@@ -31,7 +31,6 @@ export function useSinglePaneWorkspaceActions(context: WorkspaceActionContext) {
     viewerRole,
     partnerStationProfile,
     setBootstrapState,
-    setRoleState,
     ensureWriteAllowed,
     ensureRegulationReviewSettingForEnrollee,
     selectedEnrollee,
@@ -67,9 +66,6 @@ export function useSinglePaneWorkspaceActions(context: WorkspaceActionContext) {
         accountSettings: saved,
         partnerStationProfile: stationProfile,
       }))
-      if (!saved.enabledRoles.includes(role)) {
-        setRoleState(saved.enabledRoles[0] || 't3a')
-      }
     } catch (error) {
       console.warn('Failed to save account settings.', error)
     }

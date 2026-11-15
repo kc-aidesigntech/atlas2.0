@@ -17,11 +17,11 @@ const LOCAL_PARTNER_TROUBLESHOOTING_GRANTS_KEY = 'atlas2026.singlepane.partner-t
 
 function getDefaultAccountSettings(): AccountSettings {
   return {
-    fullName: 'atlas operator',
-    email: 'operator@atlas.local',
-    organization: 'atlas operations',
+    fullName: '',
+    email: '',
+    organization: '',
     avatarUrl: null,
-    enabledRoles: ['t4plus', 't4', 'partner', 't3a']
+    enabledRoles: []
   }
 }
 
@@ -33,15 +33,27 @@ function normalizeAccountAvatarUrl(value: unknown) {
   return trimmed
 }
 
+const PLACEHOLDER_ROLE_LIST: readonly AtlasRole[] = ['t4plus', 't4', 'partner', 't3a']
+
+function isPlaceholderRoleList(roles: readonly AtlasRole[]) {
+  return roles.length === PLACEHOLDER_ROLE_LIST.length && PLACEHOLDER_ROLE_LIST.every((role) => roles.includes(role))
+}
+
 function normalizeAccountSettingsPayload(payload: Partial<AccountSettings> | null | undefined, fallback: AccountSettings = getDefaultAccountSettings()) {
   // Stored legacy role keys map onto their tier here so older settings documents keep loading.
-  const enabledRoles: AtlasRole[] = Array.isArray(payload?.enabledRoles)
+  const storedRoles: AtlasRole[] = Array.isArray(payload?.enabledRoles)
     ? normalizeAtlasRoleKeys(payload.enabledRoles)
     : fallback.enabledRoles
+  // The old empty-account seed listed four roles. That list is not an assignment.
+  const enabledRoles = isPlaceholderRoleList(storedRoles) ? fallback.enabledRoles : storedRoles
+  const fullName = payload?.fullName || fallback.fullName
+  const email = payload?.email || fallback.email
+  const organization = payload?.organization || fallback.organization
   return {
-    fullName: payload?.fullName || fallback.fullName,
-    email: payload?.email || fallback.email,
-    organization: payload?.organization || fallback.organization,
+    // Earlier builds wrote these strings when no person field existed. They are not account data.
+    fullName: fullName.trim().toLowerCase() === 'atlas operator' ? '' : fullName,
+    email: email.trim().toLowerCase() === 'operator@atlas.local' ? '' : email,
+    organization: organization.trim().toLowerCase() === 'atlas operations' ? '' : organization,
     avatarUrl: normalizeAccountAvatarUrl(payload?.avatarUrl),
     enabledRoles: enabledRoles.length ? enabledRoles : fallback.enabledRoles
   } satisfies AccountSettings
@@ -69,7 +81,7 @@ function buildAccountSettingsFallbackFromSession(session: Awaited<ReturnType<typ
     String(metadata.organization_name || '').trim() ||
     String(metadata.organization || '').trim() ||
     getDefaultAccountSettings().organization
-  return { fullName, email, organization, avatarUrl: null, enabledRoles: ['partner'] }
+  return { fullName, email, organization, avatarUrl: null, enabledRoles: [] }
 }
 
 async function resolveAccountSettingsIdentityContext(): Promise<AccountSettingsIdentityContext> {

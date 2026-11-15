@@ -75,14 +75,12 @@ export default function MyWalletPanel({
   const [requestNonce, setRequestNonce] = React.useState(0)
   const [navigatorClaims, setNavigatorClaims] = React.useState({ total: 0, mine: 0 })
 
-  // The tier row embedded in the Remote Procedure Call (RPC) answer wins; the viewer-state
-  // tier fills in until it answers; the pane role stands in when the account has no tier row.
+  // The same fn_my_tier row the role view uses. The pane role fills in until that call answers.
   const standing: TierStanding | null = React.useMemo(() => {
-    if (overview?.tier) return overview.tier
     if (viewerTier) return viewerTier
     if (isTierKey(viewerRole)) return { tierKey: viewerRole, tierStatus: 'active', isLucidEmployee: false, designations: [] }
     return null
-  }, [overview?.tier, viewerRole, viewerTier])
+  }, [viewerRole, viewerTier])
   const tierKey = standing?.tierKey ?? null
 
   // Visible when the viewer holds the key and either the tier seeds it or rows exist.

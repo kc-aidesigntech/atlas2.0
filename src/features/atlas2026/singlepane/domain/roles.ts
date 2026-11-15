@@ -90,6 +90,17 @@ export function primaryAtlasRoleOf(roles: readonly AtlasRole[]): AtlasRole | nul
 }
 
 /**
+ * The signed-in account's pane roles once `fn_my_tier` has answered.
+ * Every tier key in the list is replaced by that database tier. Non-tier
+ * roles such as `partner` stay. The JavaScript Object Notation (JSON) Web
+ * Token (JWT) claim is only the list used before this row is known.
+ */
+export function rolesAnchoredToTier(roles: readonly AtlasRole[], tierKey: TierKey): AtlasRole[] {
+  const nonTierRoles = roles.filter((role) => !isTierKey(role))
+  return [tierKey, ...nonTierRoles]
+}
+
+/**
  * Which single-pane shell a role renders. Exactly one shell per role so the
  * administrator superset, supervisor wallet, and navigator strip never overlap.
  * `member` covers t1, t2, and t3, which only get the menus their row lists.
@@ -133,11 +144,9 @@ export function haveSameRoles(left: AtlasRole[], right: AtlasRole[]) {
   return a.every((value, index) => value === b[index])
 }
 
-// The authenticated JWT's app_metadata is the database-signed source of truth for identity, so we
-// derive the account's real role(s) from it. `atlas_role` is the primary claim; `atlas_roles` is an
-// optional array supporting legitimately multi-role accounts. Legacy claim values are mapped to
-// tiers here. The result is primary-first and de-duplicated so callers can clamp the
-// User Interface (UI) to roles the account was actually granted.
+// The JWT claim is a provisional role list until atlas.fn_my_tier answers.
+// The people_tiers row is the account's tier. rolesAnchoredToTier replaces
+// claim tier keys with that row so the pane and the wallet cannot disagree.
 export function extractAuthoritativeRolesFromSession(
   session: { user?: { app_metadata?: Record<string, unknown> | null } | null } | null | undefined
 ): AtlasRole[] {

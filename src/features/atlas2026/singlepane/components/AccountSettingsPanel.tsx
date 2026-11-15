@@ -4,7 +4,7 @@ import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/componen
 import type { AccountSettings, AtlasRole, PartnerTroubleshootingGrant } from '@/features/atlas2026/shared/contracts'
 import { ATLAS_PERMISSION_ROLES } from '@/features/atlas2026/shared/roleCapabilityPolicy'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
-import { tierDisplayLabel } from '@/features/atlas2026/shared/tiers'
+import { tierDisplayLabel, type TierStanding } from '@/features/atlas2026/shared/tiers'
 import { isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 export type AccountSecurityAuthProvider = 'google' | 'apple'
@@ -21,6 +21,8 @@ export interface AccountSecurityPanelProps {
 interface AccountSettingsPanelProps {
   isOpen: boolean
   role: AtlasRole
+  /** Signed-in account tier from `fn_my_tier`. The locked role view uses this row. */
+  accountTier?: TierStanding | null
   canSwitchActiveExperience: boolean
   settings: AccountSettings
   onClose: () => void
@@ -67,6 +69,7 @@ function arePartnerGrantEqual(left: PartnerTroubleshootingGrant | null, right: P
 export default function AccountSettingsPanel({
   isOpen,
   role,
+  accountTier = null,
   canSwitchActiveExperience,
   settings,
   onClose,
@@ -99,6 +102,11 @@ export default function AccountSettingsPanel({
   }, [isOpen, security, partnerTroubleshootingGrant, onSavePartnerTroubleshootingGrant])
 
   const enabledRoleSet = useMemo(() => new Set(draft.enabledRoles), [draft.enabledRoles])
+  // The tier row is the role this account holds. A coordinator may preview another
+  // experience; every other account shows that row in the role view.
+  const recordedRole = accountTier?.tierKey ?? null
+  const mayPreviewAnotherExperience = canSwitchActiveExperience && isSystemAdmin(recordedRole ?? role)
+  const displayedRole: AtlasRole = !mayPreviewAnotherExperience && recordedRole ? recordedRole : role
 
   if (!isOpen) return null
 
@@ -121,7 +129,9 @@ export default function AccountSettingsPanel({
         : [role]
       : settings.enabledRoles.length
         ? settings.enabledRoles
-        : (['partner'] as AtlasRole[])
+        : recordedRole
+          ? [recordedRole]
+          : (['partner'] as AtlasRole[])
     onSave({
       ...draft,
       enabledRoles: sanitizedRoles
@@ -172,9 +182,9 @@ export default function AccountSettingsPanel({
           <CollapsibleAccountSection
             title="active experience"
             description={
-              canSwitchActiveExperience
+              mayPreviewAnotherExperience
                 ? 'Switch the live shell instantly to preview each role experience while keeping saved role assignments below.'
-                : 'Active experience is read-only for your account permissions. Administrators can assume other views for troubleshooting.'
+                : 'Active experience follows your tier record. Administrators can assume other views for troubleshooting.'
             }
             isExpanded={expandedSections.activeExperience}
             onToggle={() => toggleSection('activeExperience')}
@@ -182,21 +192,25 @@ export default function AccountSettingsPanel({
             <label className="atlas-meta block text-[#c7c7c7]">
               Current role view
               <select
-                value={role}
+                value={displayedRole}
                 onChange={(event) => onRoleChange(event.target.value as AtlasRole)}
-                disabled={!canSwitchActiveExperience}
+                disabled={!mayPreviewAnotherExperience}
                 className="atlas-select mt-2 bg-black text-[16px] text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {ROLE_OPTIONS.map((option) => (
                   <option key={option} value={option}>
-                    {tierDisplayLabel(option)}
+                    {tierDisplayLabel(option, option === recordedRole && accountTier ? accountTier.tierStatus : 'active')}
                   </option>
                 ))}
               </select>
             </label>
-            {!canSwitchActiveExperience ? (
+            {!mayPreviewAnotherExperience ? (
               <small className="atlas-caption mt-2 block text-[#bcbcbc]">
-                This view is locked to your current permission level.
+                This view follows your tier record.
+              </small>
+            ) : recordedRole && accountTier ? (
+              <small className="atlas-caption mt-2 block text-[#bcbcbc]">
+                Your tier record is {tierDisplayLabel(recordedRole, accountTier.tierStatus)}. This control previews another experience.
               </small>
             ) : null}
           </CollapsibleAccountSection>
@@ -314,7 +328,7 @@ export default function AccountSettingsPanel({
               </div>
             ) : (
               <small className="atlas-panel-copy block text-[#cfcfcf]">
-                Role assignments are managed by administrators. New signups default to partner access.
+                Role assignments are managed by administrators.
               </small>
             )}
           </CollapsibleAccountSection>

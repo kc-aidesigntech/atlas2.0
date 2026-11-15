@@ -888,6 +888,7 @@ export default function SinglePaneWorkspace() {
           <AccountSettingsPanel
             isOpen={isAccountSettingsOpen}
             role={role}
+            accountTier={viewerTier}
             canSwitchActiveExperience={canSwitchActiveExperience}
             settings={accountSettings}
             onClose={() => setIsAccountSettingsOpen(false)}
@@ -1080,14 +1081,7 @@ export default function SinglePaneWorkspace() {
                     viewerTier={viewerTier}
                     hasPermission={hasPermission}
                     accountSettings={accountSettings}
-                    displayName={
-                      (isNavigatorUi
-                        ? currentNavigatorName
-                        : isSupervisorUi || isAdministratorUi
-                          ? currentSupervisorName
-                          : accountSettings.fullName
-                      ).trim() || 'wallet holder'
-                    }
+                    displayName={accountSettings.fullName.trim() || 'wallet holder'}
                     isUploadingAvatar={isUploadingAccountProfileImage}
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}

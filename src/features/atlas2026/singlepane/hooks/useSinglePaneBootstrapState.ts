@@ -116,11 +116,11 @@ export interface SinglePaneBootstrapState {
 type SinglePaneBootstrapPayload = Omit<SinglePaneBootstrapState, 'isLoading' | 'error'>
 
 const DEFAULT_ACCOUNT_SETTINGS: AccountSettings = {
-  fullName: 'atlas operator',
-  email: 'operator@atlas.local',
-  organization: 'atlas operations',
+  fullName: '',
+  email: '',
+  organization: '',
   avatarUrl: null,
-  enabledRoles: ['t4plus', 't4', 'partner', 't3a']
+  enabledRoles: []
 }
 
 // Remembered payloads hydrate for every role key so an administrator's experience switch is warm.
