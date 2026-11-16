@@ -1,8 +1,9 @@
 /**
- * The legal pad that holds the readiness list: a black header with the Atlas
- * logo, a ruled white page with a red margin line, and colored tabs hanging
- * under the page. The tab behavior comes from the shared Radix `Tabs` wrapper;
- * the pad look and the round checkboxes exist only in this prototype folder.
+ * The legal pad that holds My Wallet's task list: a black header with the
+ * Atlas logo, a ruled white page with a red margin line, and colored tabs
+ * hanging under the page. The tab behavior comes from the shared Radix `Tabs`
+ * wrapper; the pad look, the round checkboxes and the row flags are defined
+ * in this file and nowhere else.
  */
 import React from 'react'
 import { usesLightTextOnZCodeColor } from '@atlas/shared'
@@ -11,7 +12,7 @@ import { Check } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import atlasLogoSrc from '@/features/atlas2026/assets/branding/ATLAS_LOGO_simple_lucidGreenBlue4.png'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
-import type { ReadinessTab } from './walletLayoutModel'
+import type { WalletTab } from '@/features/atlas2026/singlepane/domain/walletTasks'
 
 // The shared wrapper is a `.jsx` file, so its three components reach TypeScript with no props.
 // These names are the same components read with the Radix prop types.
@@ -30,7 +31,7 @@ const FLAG_WIDTH_PX = 14
 const MARGIN_PX = 52
 
 interface LegalPadProps {
-  tabs: ReadinessTab[]
+  tabs: WalletTab[]
   activeTabKey: string
   onSelectTab: (tabKey: string) => void
   /** The scrolling page element; the scroll track beside the pad reads it. */

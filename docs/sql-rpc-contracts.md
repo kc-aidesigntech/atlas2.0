@@ -52,4 +52,6 @@ Full descriptions, the permission table, and the `fn_wallet_overview` JavaScript
 | `atlas.fn_update_partner_station` | `target_station_id`, `payload jsonb` (`station_name`, `capacity_total`, `capacity_available`) | Updates the keys present on one `partner_stations` row; returns the row as JSON | `authenticated`; system admin or `partner_profile.write` |
 | `atlas.fn_set_route_plan_stop_status` | `target_stop_id`, `next_status` (`planned` / `active` / `completed` / `blocked`) | Sets `route_plan_stops.status`; returns the row as JSON | `authenticated`; system admin or `partner_milestones.write` |
 
+My Wallet's task checks have no RPC: the client reads and writes `atlas.wallet_task_checks` directly under Row-Level Security (own rows, `wallet.access`); see [tiers.md](./tiers.md) and [it/security-model.md](./it/security-model.md).
+
 Assignment closers (`fn_set_person_tier`, `fn_mark_tier_alum`, `fn_access_matrix_save_person_roles`) write `ends_on = current_date - 1`; readers (`fn_has_permission`, `fn_caller_role_keys`, `fn_is_system_admin`, `fn_my_tier`) count an assignment through its `ends_on` day (`20261104190600_tier_followups.sql`).

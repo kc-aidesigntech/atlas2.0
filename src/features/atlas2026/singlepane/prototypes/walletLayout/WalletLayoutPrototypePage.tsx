@@ -1,42 +1,50 @@
 /**
  * Wallet layout prototype, served by the dev server at `/prototype/wallet`.
- * The top band is the live wallet's `WalletTierHeader` and `RadialLoadChart`
- * on fixture props. Under it sit the two prototype columns: the three cards,
- * and the queue on the pad. The control strip's clock decides which checked
- * tasks are on the pad and which are on the completed list. The page holds all of its state in memory and
+ * It renders `WalletLayout`, the component the live My Wallet renders, from
+ * fixture props: the identity band, the three cards, and the task pad. The
+ * control strip's clock decides which checked tasks are on the pad and which
+ * are on the completed list. The page holds all of its state in memory and
  * sends no request.
  */
 import React from 'react'
 import { AtlasInsetCard, AtlasOverline, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
 import { createFallbackAvatarDataUrl } from '@/features/atlas2026/components/avatarFallback'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
-import type { TierKey } from '@/features/atlas2026/shared/tiers'
-import WalletTierHeader from '../../components/myWallet/WalletTierHeader'
-import RadialLoadChart from '../../components/RadialLoadChart'
-import WorkspaceFrame from '../../shell/WorkspaceFrame'
-import ReadinessColumn from './ReadinessColumn'
-import RegulationColumn from './RegulationColumn'
+import { tierHasDefaultPermission, type AtlasPermissionKey, type TierKey } from '@/features/atlas2026/shared/tiers'
 import {
-  FIXTURE_CARDS,
+  checkedTodayIds,
+  completedTasks,
+  isSameBusinessDay,
+  padTasks,
+  startOfNextBusinessDay,
+  type WalletTaskCheck
+} from '@/features/atlas2026/singlepane/domain/walletTaskChecks'
+import {
+  tabsForViewer,
+  tasksForViewer,
+  WALLET_TABS,
+  type WalletPerson,
+  type WalletTask
+} from '@/features/atlas2026/singlepane/domain/walletTasks'
+import { NAVIGATOR_WALLET_CARD_ENTRIES } from '../../components/myWallet/walletCards'
+import WalletLayout from '../../components/myWallet/WalletLayout'
+import WorkspaceFrame from '../../shell/WorkspaceFrame'
+import {
   FIXTURE_DEFAULT_VIEWER_TIER,
   FIXTURE_DISPLAY_NAME,
-  FIXTURE_EARLIER_TASKS,
+  FIXTURE_DUE_TASKS,
   FIXTURE_ENROLLEES,
   FIXTURE_LOAD,
-  FIXTURE_OTHER_TASKS,
-  FIXTURE_TABS,
-  FIXTURE_VIEWER_FORM_AGES,
   FIXTURE_VIEWER_TIERS,
   fixtureAccount,
-  fixtureDoneAtByTaskId,
+  fixtureEarlierChecks,
   fixtureMetaLines,
   fixtureStanding,
   fixtureTierLabel
 } from './walletLayoutFixtures'
-import { completedTasks, isCheckedToday, padTasks, startOfNextBusinessDay, type DoneAtByTaskId } from './taskCompletion'
-import { buildQueue, tabsForTier, tasksForTier, type AssignedEnrollee } from './walletLayoutModel'
 
-const NO_PEOPLE: AssignedEnrollee[] = []
+const NO_PEOPLE: WalletPerson[] = []
+const FIXTURE_CARDS = NAVIGATOR_WALLET_CARD_ENTRIES.map((entry) => entry.card)
 
 const TODAY_FORMAT = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
@@ -45,47 +53,44 @@ export default function WalletLayoutPrototypePage() {
   const [queuePersonId, setQueuePersonId] = React.useState<string | null>(null)
   // The prototype's clock: the moment the page opened, until the control strip moves it to the next day.
   const [now, setNow] = React.useState(() => new Date())
-  const [doneAtByTaskId, setDoneAtByTaskId] = React.useState<DoneAtByTaskId>(() => fixtureDoneAtByTaskId(new Date()))
+  const [checks, setChecks] = React.useState<WalletTaskCheck[]>(() => fixtureEarlierChecks(new Date()))
   const fallbackAvatar = React.useMemo(() => createFallbackAvatarDataUrl(FIXTURE_DISPLAY_NAME), [])
   const account = React.useMemo(() => fixtureAccount(viewerTier), [viewerTier])
   const standing = React.useMemo(() => fixtureStanding(viewerTier), [viewerTier])
-  const tabs = React.useMemo(() => tabsForTier(FIXTURE_TABS, viewerTier), [viewerTier])
+  // The fixture viewer holds the permission keys the chosen tier seeds.
+  const hasPermission = React.useCallback((key: AtlasPermissionKey) => tierHasDefaultPermission(viewerTier, key), [viewerTier])
+  const tabs = React.useMemo(() => tabsForViewer(WALLET_TABS, hasPermission), [hasPermission])
   // True for a viewer who is shown the enrollees tab: Peer Navigator and above.
   const seesEnrollees = tabs.some((tab) => tab.category === 'enrollees')
-  // Every task the viewer's tier is shown: the queue, then the tasks the fixture checked on earlier days.
-  // Below Peer Navigator this list holds no enrollee task, so none reaches the pad or the completed list.
-  const allTasks = React.useMemo(
-    () =>
-      tasksForTier(
-        [...buildQueue(FIXTURE_ENROLLEES, FIXTURE_VIEWER_FORM_AGES, FIXTURE_OTHER_TASKS), ...FIXTURE_EARLIER_TASKS],
-        FIXTURE_TABS,
-        viewerTier
-      ),
-    [viewerTier]
-  )
-  const tasksOnPad = React.useMemo(() => padTasks(allTasks, doneAtByTaskId, now), [allTasks, doneAtByTaskId, now])
-  const completed = React.useMemo(() => completedTasks(allTasks, doneAtByTaskId, now), [allTasks, doneAtByTaskId, now])
-  const checkedTaskIds = React.useMemo(
-    () => new Set(tasksOnPad.filter((task) => isCheckedToday(task.id, doneAtByTaskId, now)).map((task) => task.id)),
-    [tasksOnPad, doneAtByTaskId, now]
-  )
+  // Below Peer Navigator these two lists hold no enrollee task, so none reaches the pad or the completed list.
+  const dueTasks = React.useMemo(() => tasksForViewer(FIXTURE_DUE_TASKS, WALLET_TABS, hasPermission), [hasPermission])
+  const shownChecks = React.useMemo(() => {
+    const shownTaskIds = new Set(
+      tasksForViewer(
+        checks.map((check) => check.task),
+        WALLET_TABS,
+        hasPermission
+      ).map((task) => task.id)
+    )
+    return checks.filter((check) => shownTaskIds.has(check.taskId))
+  }, [checks, hasPermission])
+  const tasksOnPad = React.useMemo(() => padTasks(dueTasks, shownChecks, now), [dueTasks, shownChecks, now])
+  const completed = React.useMemo(() => completedTasks(shownChecks, now), [shownChecks, now])
+  const checkedTaskIds = React.useMemo(() => checkedTodayIds(shownChecks, now), [shownChecks, now])
 
-  // A press on an unchecked row stores `now` as its check time; a press on a row checked today removes that time.
-  function toggleTask(taskId: string) {
-    setDoneAtByTaskId((current) => {
-      if (!current[taskId]) return { ...current, [taskId]: now.toISOString() }
-      if (!isCheckedToday(taskId, current, now)) return current
-      const { [taskId]: _removed, ...rest } = current
-      return rest
+  // A press on an unchecked row stores the task with `now` as its check time; a press on a row checked today removes that check.
+  function toggleTask(task: WalletTask) {
+    setChecks((current) => {
+      const check = current.find((entry) => entry.taskId === task.id)
+      if (!check) return [...current, { taskId: task.id, task, doneAtIso: now.toISOString() }]
+      if (!isSameBusinessDay(check.doneAtIso, now)) return current
+      return current.filter((entry) => entry.taskId !== task.id)
     })
   }
 
-  // Removes the check time, so the task returns to the pad unchecked. This page keeps the reason nowhere.
+  // Removes the check, so the task returns to the pad unchecked. This page keeps the reason nowhere.
   function reopenTask(taskId: string, _reason: string) {
-    setDoneAtByTaskId((current) => {
-      const { [taskId]: _removed, ...rest } = current
-      return rest
-    })
+    setChecks((current) => current.filter((entry) => entry.taskId !== taskId))
   }
 
   return (
@@ -125,42 +130,34 @@ export default function WalletLayoutPrototypePage() {
           </AtlasTextButton>
         </AtlasInsetCard>
 
-        {/* Same wrapper markup as the top band in `MyWalletPanel`. */}
-        <div className="border-b pb-4" style={{ borderColor: '#ffffff55', borderBottomWidth: '2px' }}>
-          <div className="atlas-navigator-profile-layout">
-            <div className="atlas-navigator-profile-main">
-              <WalletTierHeader
-                accountSettings={account}
-                displayName={FIXTURE_DISPLAY_NAME}
-                fallbackAvatar={fallbackAvatar}
-                standing={standing}
-                metaLines={fixtureMetaLines(seesEnrollees)}
-                isUploadingAvatar={false}
-                avatarUploadError={null}
-              />
-            </div>
-            <div className="atlas-navigator-profile-rail items-center justify-center">
-              <RadialLoadChart load={FIXTURE_LOAD} />
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-          <RegulationColumn cards={FIXTURE_CARDS} />
-          <ReadinessColumn
+        <WalletLayout
+          band={{
+            accountSettings: account,
+            displayName: FIXTURE_DISPLAY_NAME,
+            fallbackAvatar,
+            standing,
+            metaLines: fixtureMetaLines(seesEnrollees),
+            isUploadingAvatar: false,
+            avatarUploadError: null,
+            load: FIXTURE_LOAD
+          }}
+          cards={FIXTURE_CARDS}
+          // The live wallet opens the card's form on this press; this page opens none.
+          onOpenCard={() => undefined}
+          routes={{
             // The person circles name enrollees, so a viewer who is shown no enrollee tasks is given none.
-            people={seesEnrollees ? FIXTURE_ENROLLEES : NO_PEOPLE}
-            tabs={tabs}
-            flagTabs={FIXTURE_TABS}
-            tasks={tasksOnPad}
-            checkedTaskIds={checkedTaskIds}
-            onToggleTask={toggleTask}
-            completed={completed}
-            onReopenTask={reopenTask}
-            selectedPersonId={queuePersonId}
-            onSelectPerson={setQueuePersonId}
-          />
-        </div>
+            people: seesEnrollees ? FIXTURE_ENROLLEES : NO_PEOPLE,
+            tabs,
+            flagTabs: WALLET_TABS,
+            tasks: tasksOnPad,
+            checkedTaskIds,
+            onToggleTask: toggleTask,
+            completed,
+            onReopenTask: reopenTask,
+            selectedPersonId: queuePersonId,
+            onSelectPerson: setQueuePersonId
+          }}
+        />
       </div>
     </WorkspaceFrame>
   )

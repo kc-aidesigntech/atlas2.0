@@ -525,7 +525,6 @@ export default function SinglePaneWorkspace() {
     || isAdminSection
     || hasEnrolleeContext
     || (!isLoading && enrollees.length === 0)
-  const leadsMenuAvailable = selectedRoleConfig.topMenus.includes('leads')
 
   React.useEffect(() => {
     if (isLoading || !isReady) return
@@ -1080,7 +1079,7 @@ export default function SinglePaneWorkspace() {
                     </div>
                   </div>
                 ) : isMyWallet ? (
-                  // One wallet for every tier; the panel picks its sections from hasPermission.
+                  // One wallet for every tier; the panel picks its cards, tabs and tasks from hasPermission.
                   <MyWalletPanel
                     viewerRole={uiRole}
                     viewerTier={viewerTier}
@@ -1090,7 +1089,6 @@ export default function SinglePaneWorkspace() {
                     isUploadingAvatar={isUploadingAccountProfileImage}
                     avatarUploadError={accountProfileImageUploadError}
                     onReplaceAvatar={replaceAccountProfileImage}
-                    onOpenLeads={leadsMenuAvailable ? () => setActiveMenu('leads') : null}
                     navigator={{
                       currentNavigatorName,
                       aggregateLoad: navigatorAggregateLoad,
@@ -1125,7 +1123,7 @@ export default function SinglePaneWorkspace() {
                       onSaveIpsccEncounterSubmission: saveNavigatorIpsccEncounterSubmission,
                       onSaveCreateSession: saveNavigatorCreateSession,
                       onSaveSupervisionSession: saveSupervisionSession,
-                      ipsccEncounterSubmittedAtIsos: navigatorIpsccEncounterSubmissions.map((record) => record.submittedAtIso)
+                      ipsccEncounterSubmissions: navigatorIpsccEncounterSubmissions
                     }}
                     supervisor={{
                       currentSupervisorName,

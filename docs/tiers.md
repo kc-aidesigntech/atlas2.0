@@ -18,6 +18,8 @@ Words used on this page: a **tier holder** is a person with an active `atlas.peo
 | `20261104190700_tier_partner_write_rpcs.sql` | `fn_update_partner_station` and `fn_set_route_plan_stop_status` (partner writes gated by permission key); `fn_access_matrix_save_person_roles` closes removed assignments with `ends_on = current_date - 1`. |
 | `20261114210000_tier_capability_screen_matrix.sql` | `atlas.tiers`, `capabilities`, `tier_capabilities`, `capability_permissions`, `screens`, `screen_capabilities`; `fn_tier_capability_matrix`, `fn_screen_capability_matrix`. |
 | `20261115183000_t2b_no_enrollee_access.sql` | Peer Resident (`t2b`) loses enrollee access: deletes its `enrollee_profile.write` and `regulation_variables.write` grants and its `enrollee_profiles_and_regulation` capability row; removes `assigned enrollees` from its menu row; narrows `fn_wallet_caller_is_navigator`, `fn_navigator_assign_enrollment_to_self`, and `fn_navigator_unassign_enrollment_from_self` to `t3a`; narrows `enrollment_requests_staff_select` and the two `public_referral_intake_events` staff policies to `t3a` / `t4` / `t4plus`. The file raises and changes nothing when a person who holds `t2b` without `t3a` / `t4` / `t4plus` still has an open `navigator_assignments` row. |
+| `20261116090000_wallet_task_checks.sql` | `atlas.wallet_task_checks`: the tasks a person checked on the My Wallet task pad; own-row Row-Level Security (RLS) policies that require `wallet.access`; column grants. |
+| `20261116091000_wallet_task_checks_reason_required.sql` | Replaces the `wallet_task_checks_reopen_reason_check` constraint so a reopened check with a null reason is rejected. |
 
 ### `ends_on` rule
 
@@ -116,7 +118,7 @@ Fallback `action_menus` when no legacy row existed: `t3a` route planning, log co
 
 ## Feature tables (`20261104190500_tier_feature_tables.sql`)
 
-Every table has Row-Level Security (RLS) enabled with the same pattern: the person named on the row reads it; holders of the feature's permission key read and write; `fn_is_system_admin()` does everything.
+Every table has RLS enabled with the same pattern: the person named on the row reads it; holders of the feature's permission key read and write; `fn_is_system_admin()` does everything. `wallet_task_checks` differs: only the person named on the row reads or writes it.
 
 | Table | Columns of note | Read | Write |
 |-------|-----------------|------|-------|
@@ -129,6 +131,7 @@ Every table has Row-Level Security (RLS) enabled with the same pattern: the pers
 | `secondments` | `person_id`, `host_organization`, `partner_id`, `starts_on`, `ends_on`, `status` (`planned` \| `active` \| `completed` \| `cancelled`) | self, `secondment_schedule.view`, `supervision.give` | `supervision.give` |
 | `secondment_schedule` | `secondment_id`, `day_of_week` (0 Sunday – 6 Saturday), `starts_time`, `ends_time`, `location` | seconded person, `secondment_schedule.view`, `supervision.give` | `supervision.give` |
 | `leads` | `person_id` (nullable), `display_name`, `phone`, `email`, `source`, `stage` (`new` \| `contacted` \| `engaged` \| `referred` \| `closed`), `owner_person_id`, `notes`, `last_contact_at` | the lead's own person, the owner, `leads.engage` | `leads.engage` |
+| `wallet_task_checks` | `person_id` (default `fn_current_person_id()`), `task_key`, `task` (jsonb), `done_at`, `reopened_at`, `reopen_reason` (both set or both null). One open row per `(person_id, task_key)` (partial unique index). | the person on the row, with `wallet.access`. No `supervision.give` read and no `fn_is_system_admin()` policy. | the person on the row, with `wallet.access`: insert `task_key` and `task`; update `reopened_at` and `reopen_reason` on an open row; delete an open row whose `done_at` is under 24 hours old |
 
 `public_referral_intake_events.referrer_person_id` (nullable, → `atlas.people`) records who made the referral so it counts toward that person's sponsorship record.
 
@@ -199,23 +202,57 @@ All are `security definer`, resolve the caller through `atlas.fn_current_person_
 
 ### My Wallet (`singlepane/components/MyWalletPanel.tsx`)
 
-One panel for every tier. `useWalletOverview` (`singlepane/hooks/useWalletOverview.ts`) calls `loadWalletOverview` → `fn_wallet_overview` and, when the viewer holds `supervision.receive`, `loadMySupervisor`, which reads the caller's open row in `supervisor_navigator_assignments` (`navigator_person_id` = caller, `ends_on is null`) joined to `people.display_name` (`singlepane/data-access/walletRepository.ts`). Both return null on a database that has not been migrated.
+One panel for every tier. `MyWalletPanel` builds the data and `myWallet/WalletLayout.tsx` prints it: the top band, then two columns. The dev-only page `/prototype/wallet` (`singlepane/prototypes/walletLayout/`) prints the same `WalletLayout` from fixtures.
 
-Every wallet opens with the same band (`myWallet/WalletLeadSection.tsx`): the identity header beside the Intentional Peer Support Core Competencies (IPSCC) strain chart, then Section 1 (enrollee IPSCC averages), then the three supervision cards (enrollee survey, self-reflection, Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) history). The header (`myWallet/WalletTierHeader.tsx`) prints the avatar, name, `Tier: <identity or alum label>` (or `no tier on record`), the `active` / `alum` pill, the badge (`ZCodeBadge` with the tier code) when `earnsBadge`, a `ribbon` pill when `earnsRibbon`, a `Lucid employee` pill, one pill per designation, the tier purpose line, organization, email, and the meta lines (`Assigned enrollees` count when `enrollee_profile.write`; `Competency cards` count when that section shows). The tier row embedded in the RPC answer wins; the viewer-state tier fills in until it answers; the pane role stands in when the account holds no tier row. The permission sections below that band follow the table.
+**Top band.** The identity header (`myWallet/WalletTierHeader.tsx`) beside the load chart (`RadialLoadChart`). The header prints the avatar, name, `Tier: <identity or alum label>` (or `no tier on record`), the `active` / `alum` pill, the badge (`ZCodeBadge` with the tier code) when `earnsBadge`, a `ribbon` pill when `earnsRibbon`, a `Lucid employee` pill, one pill per designation, the tier purpose line, organization, email, and the meta lines: `Assigned enrollees` count when `enrollee_profile.write`; `Competency cards` count when the viewer holds `competency_cards.view` and either the tier seeds that key or a card has been earned. The tier row from `fn_my_tier` wins; the pane role stands in when the account holds no tier row. `useWalletOverview` (`singlepane/hooks/useWalletOverview.ts`) calls `loadWalletOverview` → `fn_wallet_overview` for the competency card count and `loadWalletPickupCounts` for the two pickup counts below (`singlepane/data-access/walletRepository.ts`).
 
-Each section renders when `showsSection(key, hasRows)` is true: the viewer holds the key **and** either the tier seeds that key (`tierHasDefaultPermission`) or rows exist. A `t4plus` who holds a key only through the administrator bypass therefore does not see an empty candidate section.
+**Column 1, `load your cards`** (`myWallet/WalletCardsColumn.tsx`). A press on a card opens its form in an overlay. Card rows come from `myWallet/walletCards.ts`.
 
-| Section (title) | Permission key | Rows from |
-|-----------------|----------------|-----------|
-| `competency cards` | `competency_cards.view` | `fn_wallet_overview.competency_cards` |
-| `my sponsor` | `sponsorship.receive` | `fn_wallet_overview.sponsorships_received` |
-| `people I sponsor` | `sponsorship.give` | `fn_wallet_overview.sponsorships_given` |
-| `my supervisor` | `supervision.receive` | `supervisor_navigator_assignments` open row |
-| `secondment schedule` | `secondment_schedule.view` | `fn_wallet_overview.secondments` with `schedule` |
-| `respite shifts` | `respite_shifts.take` | `fn_wallet_overview.respite_shifts` |
-| `leads` (owned count, **open leads** button when the `leads` menu is on the role's row) | `leads.engage` | `fn_wallet_overview.leads_owned_count` |
-| Navigator sections (`NavigatorMyProfilePanel`: enrollee claim circles and the weekly review queue) | `enrollee_profile.write` (key alone; no row check; `t3a`, `t4`, `t4plus`) | existing navigator wallet reads |
-| Supervisor sections (`SupervisorMyProfilePanel`: navigator claim circles, assessment rollup) | `supervision.give` (key alone; no row check) | existing supervisor wallet reads |
+| Card | Shown to | Overlay |
+|------|----------|---------|
+| `enrollee` / `ipscc` — the Intentional Peer Support Core Competencies (IPSCC) point-of-care survey | every wallet | `myWallet/NavigatorCardOverlay.tsx` → `NavigatorIpsccFeedbackSection` |
+| `self-reflection` / `ips` | every wallet | `NavigatorCardOverlay` → `NavigatorSelfAwarenessSection` |
+| `supervisor c.r.e.a.t.e.` / `sessions` — Connect, Recognize, Encourage, Acknowledge, Train, and Empower (C.R.E.A.T.E.) | every wallet | `NavigatorCardOverlay` → `CreateSessionDesk` with its history |
+| `weekly review`, `assessment rollup`, `c.r.e.a.t.e.` review | `supervision.give` | `supervisorProfile/SupervisorProfileOverlay.tsx` (`SUPERVISOR_WALLET_CARDS` in `supervisorProfile/model.ts`) |
+
+**Column 2, `advance some routes`** (`myWallet/WalletRoutesColumn.tsx`). A row of person circles (`PersonCircleButton`) for the viewer's assigned enrollees, printed only with `enrollee_profile.write`; a press filters the pad to that person. A plus button beside the circles opens `myWallet/WalletAssignmentsOverlay.tsx`: the enrollee claim circles and weekly regulation review badge (`NavigatorMyProfilePanel`) with `enrollee_profile.write`, and the navigator claim circles (`supervisorProfile/SupervisorNavigatorClaims.tsx`) with `supervision.give`. Below that is the task pad (`myWallet/LegalPad.tsx`) with its tabs.
+
+Tabs and row flags (`WALLET_TABS` in `singlepane/domain/walletTasks.ts`): `all` (white), `enrollees` (green, only with `enrollee_profile.write`), `leads` (blue), `sponsees` (yellow), `supervision` (orange). `tasksForViewer` removes every task whose category tab the viewer is not shown, so a viewer without `enrollee_profile.write` is given no enrollee task. A row whose task has a category prints that category's colour flag at its right end.
+
+Tasks (`buildWalletTasks` in `singlepane/domain/walletTaskBuilder.ts`). A form is due when it has no saved record or its latest saved record is 7 or more days old (`DUE_AFTER_DAYS`). Records whose id is written by a seed builder in `singlepane/domain/ipsccSeeds.ts` (`isSeedProgramRecordId`) are left out before the builder runs.
+
+| Task | Built for | Due when | Tab |
+|------|-----------|----------|-----|
+| IPSCC with one enrollee | `enrollee_profile.write`, one per assigned enrollee | no saved encounter record for that enrollee in 7 days | enrollees |
+| Mental Health Self-Care Agency (MH-SCA) / Stress Vulnerability Scale (SVS) instrument | `enrollee_profile.write`, one per missing instrument on an open weekly regulation review | the review is open | enrollees |
+| self-reflection | `enrollee_profile.write` or `supervision.receive` | no saved self-reflection in 7 days | none |
+| supervisor C.R.E.A.T.E. session | `supervision.receive` without `supervision.give` | no closed session naming the viewer in 7 days | supervision |
+| weekly review of one navigator; C.R.E.A.T.E. session with one navigator | `supervision.give`, one each per navigator the viewer has claimed | no saved review / closed session by the viewer for that navigator in 7 days | supervision |
+| pick up leads | `leads.engage` | `atlas.leads` rows the caller can read with no owner and `stage` not `closed` (count > 0) | leads |
+| pick up respite shift | `respite_shifts.take` | `atlas.respite_shifts` rows the caller can read with `status = 'cancelled'` and `ends_at` in the future (count > 0) | none |
+
+No task is written for the `sponsees` tab; it prints `nothing on this tab`. The task kinds `contact_bridgeline` and `follow_up` exist in `walletTasks.ts` and are written only by the prototype fixtures.
+
+A form task's id ends with the Monday of the current local week and a pickup task's id ends with the current local day. Saving the form's record removes its task from the pad without a check.
+
+Checks (`singlepane/domain/walletTaskChecks.ts`, `singlepane/hooks/useWalletTaskChecks.ts`, `singlepane/data-access/walletTaskCheckRepository.ts`). The business day is the local calendar day; `useBusinessDayClock` re-reads the time at local midnight and when the tab becomes visible.
+
+- A press on an unchecked row inserts a row in `atlas.wallet_task_checks` (`task_key` = the task id, `task` = the task as printed). The row stays on the pad, checked, for the rest of that day.
+- A press on a row checked the same day deletes that row. No reason is asked.
+- From the next day the check is listed in the completed dialog (`myWallet/CompletedTasksDialog.tsx`, opened by the history button at the pad's top right). Unchecking there requires a reason and updates the row's `reopened_at` and `reopen_reason`; the row is kept and no longer listed.
+- When the table cannot be read (local mode, or a database without the table) the checks are held in component state and the column prints `checked tasks are kept on this page only, until it reloads`.
+
+The wallet no longer prints these sections; each record is read where the table says.
+
+| Former wallet section | Where it is read now |
+|-----------------------|----------------------|
+| `my sponsor`, `people I sponsor` | `sponsorships` screen |
+| `secondment schedule` | `secondment schedule` screen |
+| `respite shifts` | `respite shifts` screen |
+| `leads` owned count and **open leads** button | `leads` screen |
+| `competency cards` list | the count stays on the top band; the list is not printed for the holder |
+| `my supervisor` | not printed |
+| route board, IPSCC strain chart, competency dashboard, supervisor competency panel | not printed; the strain rows still print in the self-reflection overlay and the per-navigator competency in the `assessment rollup` overlay |
 
 ### Capability screens (`singlepane/components/tierFeaturePanels/`)
 
@@ -243,11 +280,11 @@ All in `singlepane/shell/SinglePaneWorkspace.tsx` unless noted; `hasPermission` 
 | `z_burden.resolve` | `canResolveZBurden` | The Z-code resolution overlay's `onToggleResolution` rejects with a message instead of writing; `EnrolleeZCodeOverridePanel.canEdit` is false. |
 | `heatmap.view`, `heatmap.toggle` | passed to `ContextPanels.tsx` as `canViewHeatmap` / `canToggleHeatmap` | `CountyCommonsHeatmap` renders only when `canViewHeatmap` **and** `isCountyCommonsMenuEnabled()`; the toggle follows `canToggleHeatmap`. With `SHOW_COUNTY_COMMONS = false` the heat map is hidden for every tier, including `t4plus`. |
 | `partner_profile.write`, `partner_milestones.write` | `TierFeatureScreen.tsx` → `PartnersPanel` | See the capability table. |
-| `enrollee_profile.write`, `supervision.give`, and the rest | `MyWalletPanel.tsx` | See the wallet table. |
+| `enrollee_profile.write`, `supervision.give`, `supervision.receive`, `leads.engage`, `respite_shifts.take`, `competency_cards.view` | `MyWalletPanel.tsx` | See the My Wallet tables. |
 
 ## Operational notes
 
-1. **A `t1` has no `my wallet` menu.** The `t1` row in `app_role_navigation` is `["refer"]`, so a Candidate never opens My Wallet and never sees the `my sponsor` section. Their sponsorship is visible only on the sponsor's `people I sponsor` section and the `sponsorships` screen. `t2` is the first tier with `my wallet`.
+1. **A `t1` has no `my wallet` menu.** The `t1` row in `app_role_navigation` is `["refer"]`, so a Candidate never opens My Wallet. Their sponsorship is visible only on the sponsor's `sponsorships` screen. `t2` is the first tier with `my wallet`.
 2. **Partner self-service does not read `partner_profile.write`.** That key is seeded to `t4plus` only and is checked in `fn_update_partner_station` and the Partners panel. A partner's own screens (station view, service-capacity survey through `fn_save_partner_service_capacity`, `partner_capacity_submissions.*` keys, `fn_can_access_partner_scope`) keep their existing RLS and RPC path; `partner_stations` and `route_plan_stops` grant no direct insert or update to `authenticated`.
 
 ### Deployment notes

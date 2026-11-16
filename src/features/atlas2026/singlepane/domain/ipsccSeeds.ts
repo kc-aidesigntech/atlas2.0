@@ -27,6 +27,20 @@ export const IPSCC_LEGACY_ENCOUNTER_SEED_PREFIX = 'ipscc-seed-'
 /** Stable pilot seed ids so merge can refresh the series without wiping live submissions. */
 export const IPSCC_PILOT_ENCOUNTER_SEED_PREFIX = 'ipscc-pilot-seed-'
 
+// The self-assessment, supervisor-assessment and session seed builders below write ids that end in a
+// one- or two-digit ordinal (`ips-self-1`). A saved supervisor assessment's id ends in a 13-digit
+// millisecond time and the other saved records carry a generated id, so neither matches.
+const ORDINAL_SEED_ID = /^(?:ips-self|supervisor-ips|create-session)-\d{1,2}$/
+
+/** True for a record id that one of this file's seed builders writes; false for a record a person saved. */
+export function isSeedProgramRecordId(id: string): boolean {
+  return (
+    id.startsWith(IPSCC_LEGACY_ENCOUNTER_SEED_PREFIX) ||
+    id.startsWith(IPSCC_PILOT_ENCOUNTER_SEED_PREFIX) ||
+    ORDINAL_SEED_ID.test(id)
+  )
+}
+
 export function clampLikertScore(value: number) {
   if (!Number.isFinite(value)) return 3
   return Math.max(1, Math.min(5, Math.round(value)))

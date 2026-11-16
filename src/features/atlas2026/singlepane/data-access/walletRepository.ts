@@ -2,12 +2,11 @@
  * My Wallet reads. `loadWalletOverview` calls the Remote Procedure Call (RPC)
  * `atlas.fn_wallet_overview()` (migration `20261104190500_tier_feature_tables.sql`),
  * which returns one JavaScript Object Notation (JSON) document for the caller's
- * person id. `loadMySupervisor` reads the caller's open row in
- * `atlas.supervisor_navigator_assignments`. Both tolerate a database that has
- * not been migrated yet by returning null.
+ * person id. `loadWalletPickupCounts` counts the leads and respite shifts the
+ * task pad offers for pickup. Both tolerate a database that has not been
+ * migrated yet by returning null.
  */
 import { isTierDesignation, isTierKey, type TierStanding } from '@/features/atlas2026/shared/tiers'
-import { resolveSessionPersonIdFromMetadata } from '@/features/atlas2026/singlepane/data-access/enrollmentAssignmentRepository'
 import { hasSupabaseConfig, supabase } from '@/lib/supabaseClient'
 
 export interface WalletCompetencyCard {
@@ -67,12 +66,6 @@ export interface WalletOverview {
   respiteShifts: WalletRespiteShift[]
   secondments: WalletSecondment[]
   leadsOwnedCount: number
-}
-
-export interface WalletSupervisor {
-  personId: string
-  displayName: string
-  startsOn: string | null
 }
 
 type JsonRecord = Record<string, unknown>
@@ -181,41 +174,40 @@ export async function loadWalletOverview(): Promise<WalletOverview | null> {
   return toWalletOverview(data)
 }
 
+export interface WalletPickupCounts {
+  /** Leads with no owner whose stage is not `closed`; null when the count was not asked for or the read failed. */
+  availableLeadCount: number | null
+  /** Cancelled respite shifts whose end time has not passed; null when the count was not asked for or the read failed. */
+  openRespiteShiftCount: number | null
+}
+
 /**
- * Reads the caller's open supervisor assignment: the row in
- * `supervisor_navigator_assignments` where the caller is the navigator and
- * `ends_on` is null. The select policy already scopes rows to the caller, so
- * the person id filter only drops rows where the caller is the supervisor.
- * Null when there is no open row, no person id, or the read fails.
+ * Counts rows with two head requests, one per flag that is true. Row-Level
+ * Security (RLS) on `atlas.leads` and `atlas.respite_shifts` decides which
+ * rows the caller's count includes.
  */
-export async function loadMySupervisor(): Promise<WalletSupervisor | null> {
-  if (!hasSupabaseConfig || !supabase) return null
-  let personId: string | null = null
-  try {
-    personId = await resolveSessionPersonIdFromMetadata()
-  } catch (caught) {
-    console.warn('session person id lookup failed', caught instanceof Error ? caught.message : caught)
-    return null
+export async function loadWalletPickupCounts(input: { leads: boolean; respiteShifts: boolean }): Promise<WalletPickupCounts> {
+  const empty: WalletPickupCounts = { availableLeadCount: null, openRespiteShiftCount: null }
+  if (!hasSupabaseConfig || !supabase) return empty
+  const atlas = (supabase as any).schema('atlas')
+  const readCount = async (label: string, query: PromiseLike<{ count: number | null; error: { message: string } | null }>) => {
+    const { count, error } = await query
+    if (error) {
+      console.warn(`${label} count failed`, error.message)
+      return null
+    }
+    return count ?? 0
   }
-  if (!personId) return null
-  const { data, error } = await (supabase as any)
-    .schema('atlas')
-    .from('supervisor_navigator_assignments')
-    .select('supervisor_person_id, starts_on, supervisor:people!supervisor_person_id(display_name)')
-    .eq('navigator_person_id', personId)
-    .is('ends_on', null)
-    .order('starts_on', { ascending: false })
-    .limit(1)
-  if (error) {
-    console.warn('supervisor_navigator_assignments read failed', error.message)
-    return null
-  }
-  const row = asRecord(Array.isArray(data) ? data[0] : null)
-  if (!row) return null
-  const supervisor = asRecord(row.supervisor)
-  return {
-    personId: asString(row.supervisor_person_id),
-    displayName: asNullableString(supervisor?.display_name) || 'supervisor on record',
-    startsOn: asNullableString(row.starts_on)
-  }
+  const [availableLeadCount, openRespiteShiftCount] = await Promise.all([
+    input.leads
+      ? readCount('leads', atlas.from('leads').select('id', { count: 'exact', head: true }).is('owner_person_id', null).neq('stage', 'closed'))
+      : null,
+    input.respiteShifts
+      ? readCount(
+          'respite_shifts',
+          atlas.from('respite_shifts').select('id', { count: 'exact', head: true }).eq('status', 'cancelled').gt('ends_at', new Date().toISOString())
+        )
+      : null
+  ])
+  return { availableLeadCount, openRespiteShiftCount }
 }

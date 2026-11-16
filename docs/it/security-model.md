@@ -142,6 +142,17 @@ declared `STABLE` so the planner can cache argument-free calls
   - **Regulation command validation**: `fn_save_regulation_test_submission` now
     rejects inconsistent score/threshold/pass payloads and requires score+pass on
     completed submissions, preventing contradictory test records from being stored.
+  - **My Wallet task checks** (`20261116090000_wallet_task_checks.sql`,
+    `20261116091000_wallet_task_checks_reason_required.sql`):
+    `atlas.wallet_task_checks` is read and written directly under RLS, with no
+    RPC. All four policies require `person_id = fn_current_person_id()` and
+    `fn_has_permission('wallet.access')`; there is no administrator policy, so
+    no signed-in user reads another person's checks. `authenticated` is granted
+    `select` and `delete` on the table, `insert` on `task_key` and `task` only
+    (`person_id` and `done_at` come from column defaults), and `update` on
+    `reopened_at` and `reopen_reason` only. The update policy accepts open rows;
+    the delete policy accepts open rows whose `done_at` is under 24 hours old. A
+    check constraint rejects a reopened row with a null or blank reason.
 
 ## Verified behavior
 
@@ -150,6 +161,14 @@ declared `STABLE` so the planner can cache argument-free calls
   (e.g. enrollee profiles scoped 4 → 2); an unrelated authenticated user sees
   zero assignment rows and no enrollee PHI.
 - Administrators retain full visibility.
+- `atlas.wallet_task_checks` (2026-11-16, three temporary people inside a
+  transaction that was rolled back): a person with `wallet.access` inserts,
+  reads, same-day deletes, and reopens with a reason their own rows only; a
+  second open check of the same task, a forged `person_id`, a backdated
+  `done_at`, an edit of `done_at`, a reopen with a null or blank reason, an edit
+  or delete of a reopened row, and a delete of a two-day-old check are all
+  refused or match zero rows; a person without `wallet.access` reads zero rows
+  and cannot insert; `anon` is refused.
 
 ## Known remaining hardening (follow-up)
 

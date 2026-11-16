@@ -23,9 +23,11 @@ import NavigatorProfileOverview from './NavigatorProfileOverview'
 import { RegulationReviewRow } from './NavigatorProfileScheduleSections'
 
 /**
- * Props for the navigator sections of My Wallet. The strain chart, Section 1,
- * and the three supervision cards render in `WalletLeadSection`. This panel
- * keeps the enrollee claim circles and the weekly review queue.
+ * Props for the navigator parts of My Wallet. `MyWalletPanel` reads the
+ * records for the task pad, `NavigatorCardOverlay` reads the three card forms'
+ * records and save handlers, and this panel, printed inside
+ * `WalletAssignmentsOverlay`, keeps the enrollee claim circles and the weekly
+ * review queue.
  */
 export interface NavigatorMyProfilePanelProps {
   currentNavigatorName: string
@@ -61,8 +63,8 @@ export interface NavigatorMyProfilePanelProps {
   onSaveIpsccEncounterSubmission: (record: IpsccEncounterSubmissionRecord) => Promise<unknown> | unknown
   onSaveCreateSession: (record: CreateSessionRecord) => Promise<unknown> | unknown
   onSaveSupervisionSession: (record: SupervisionSessionRecord) => Promise<unknown> | unknown
-  /** Point-of-care submission times, used to mark this week's route stop done. */
-  ipsccEncounterSubmittedAtIsos?: string[]
+  /** The viewer's point-of-care records; My Wallet's task pad reads the latest one per enrollee. */
+  ipsccEncounterSubmissions?: IpsccEncounterSubmissionRecord[]
 }
 
 export default function NavigatorProfileExperience(props: NavigatorMyProfilePanelProps) {

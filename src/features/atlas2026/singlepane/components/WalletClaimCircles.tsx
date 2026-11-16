@@ -4,8 +4,8 @@
  */
 import React from 'react'
 import { AtlasPanel, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
-import { getAvatarInitials } from '@/features/atlas2026/components/avatarFallback'
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
+import PersonCircleButton from './PersonCircleButton'
 
 export interface WalletClaimCard {
   id: string
@@ -50,24 +50,17 @@ export default function WalletClaimCircles({
         <div className="flex flex-wrap items-center gap-3">
           {cards.map((card) => {
             const open = openId === card.id
-            const initials = getAvatarInitials(card.label)
-            const circleStyle = card.selected
-              ? { borderColor: SP_COLORS.deepGreen, backgroundColor: `${SP_COLORS.deepGreen}33`, color: SP_COLORS.white }
-              : { borderColor: '#ffffff40', backgroundColor: '#111111', color: SP_COLORS.white }
             if (!open) {
               return (
-                <button
+                <PersonCircleButton
                   key={card.id}
-                  type="button"
-                  className="flex h-14 w-14 items-center justify-center rounded-full border text-[15px] font-semibold"
-                  style={circleStyle}
+                  name={card.label}
+                  selected={card.selected}
+                  size="large"
                   aria-expanded={false}
-                  aria-pressed={card.selected}
                   title={card.label}
                   onClick={() => setOpenId(card.id)}
-                >
-                  {initials}
-                </button>
+                />
               )
             }
             return (
@@ -76,17 +69,7 @@ export default function WalletClaimCircles({
                 className="flex min-w-[240px] items-center gap-3 rounded-full border py-1.5 pl-1.5 pr-3"
                 style={{ borderColor: card.selected ? SP_COLORS.deepGreen : '#ffffff40' }}
               >
-                <button
-                  type="button"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-[14px] font-semibold"
-                  style={circleStyle}
-                  aria-expanded
-                  aria-pressed={card.selected}
-                  title="close"
-                  onClick={() => setOpenId(null)}
-                >
-                  {initials}
-                </button>
+                <PersonCircleButton name={card.label} selected={card.selected} aria-expanded title="close" onClick={() => setOpenId(null)} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14px] font-medium text-white">{card.label}</div>
                   <small className="block text-[11px] text-[#cfcfcf]">{card.selected ? 'assigned to you' : 'not assigned to you'}</small>

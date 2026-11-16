@@ -129,13 +129,13 @@ export {
   setPersonTier
 } from '@/features/atlas2026/singlepane/data-access/tierRepository'
 
-export { loadMySupervisor, loadWalletOverview } from '@/features/atlas2026/singlepane/data-access/walletRepository'
+export { loadWalletOverview, loadWalletPickupCounts } from '@/features/atlas2026/singlepane/data-access/walletRepository'
 export type {
   WalletCompetencyCard,
   WalletOverview,
+  WalletPickupCounts,
   WalletRespiteShift,
   WalletSecondment,
   WalletSecondmentScheduleSlot,
-  WalletSponsorship,
-  WalletSupervisor
+  WalletSponsorship
 } from '@/features/atlas2026/singlepane/data-access/walletRepository'

@@ -8,7 +8,7 @@ const HANDLE_PX = 28
  * follows the page's scroll position; pressing or dragging on the track
  * writes the page's scroll position.
  */
-export default function ScrollTrack({ listRef, listId, contentKey }: { listRef: React.RefObject<HTMLDivElement>; listId: string; contentKey: string }) {
+export default function PadScrollTrack({ listRef, listId, contentKey }: { listRef: React.RefObject<HTMLDivElement>; listId: string; contentKey: string }) {
   const trackRef = React.useRef<HTMLDivElement | null>(null)
   const draggingRef = React.useRef(false)
   const [progress, setProgress] = React.useState(0)

@@ -13,11 +13,11 @@ import {
 } from '@radix-ui/react-dialog'
 import { Dialog, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog'
 import { AtlasCloseButton, AtlasTextButton } from '@/features/atlas2026/components/AtlasPrimitives'
+import type { CompletedTask } from '@/features/atlas2026/singlepane/domain/walletTaskChecks'
+import { filterTasksByTab, taskFlag, type WalletTab } from '@/features/atlas2026/singlepane/domain/walletTasks'
 import LegalPad, { PadCheckRow, PadNoteRow } from './LegalPad'
-import ScrollTrack from './ScrollTrack'
-import type { CompletedTask } from './taskCompletion'
-import TaskText from './TaskText'
-import { filterTasksByTab, taskFlag, type PrototypePerson, type ReadinessTab } from './walletLayoutModel'
+import PadScrollTrack from './PadScrollTrack'
+import WalletTaskText from './WalletTaskText'
 
 // The shared wrapper is a `.jsx` file, so its components reach TypeScript with no props.
 // These names are the same components read with the Radix prop types.
@@ -35,10 +35,9 @@ interface CompletedTasksDialogProps {
   onOpenChange: (open: boolean) => void
   /** The button that opened the overlay; it takes focus when the overlay closes. */
   returnFocusRef: React.RefObject<HTMLElement>
-  tabs: ReadinessTab[]
-  flagTabs: ReadinessTab[]
+  tabs: WalletTab[]
+  flagTabs: WalletTab[]
   completed: CompletedTask[]
-  peopleById: ReadonlyMap<string, PrototypePerson>
   onReopenTask: (taskId: string, reason: string) => void
 }
 
@@ -49,7 +48,6 @@ export default function CompletedTasksDialog({
   tabs,
   flagTabs,
   completed,
-  peopleById,
   onReopenTask
 }: CompletedTasksDialogProps) {
   const pageRef = React.useRef<HTMLDivElement>(null)
@@ -128,14 +126,14 @@ export default function CompletedTasksDialog({
                       trailing={CHECKED_ON_FORMAT.format(new Date(doneAtIso))}
                       flag={taskFlag(task, flagTabs)}
                     >
-                      <TaskText task={task} peopleById={peopleById} />
+                      <WalletTaskText task={task} />
                     </PadCheckRow>
                   ))
                 ) : (
                   <PadNoteRow>no completed tasks on this tab</PadNoteRow>
                 )}
               </LegalPad>
-              <ScrollTrack listRef={pageRef} listId={pageId} contentKey={visibleCompleted.map((entry) => entry.task.id).join('|')} />
+              <PadScrollTrack listRef={pageRef} listId={pageId} contentKey={visibleCompleted.map((entry) => entry.task.id).join('|')} />
             </div>
           </div>
           {pending ? (
@@ -143,7 +141,7 @@ export default function CompletedTasksDialog({
               <label htmlFor={reasonInputId} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="atlas-field-label">reason for unchecking</span>
                 <span className="flex min-w-0 items-center gap-2 text-[15px] text-white">
-                  <TaskText task={pending.task} peopleById={peopleById} />
+                  <WalletTaskText task={pending.task} />
                 </span>
               </label>
               <div className="flex flex-wrap items-center gap-2">
