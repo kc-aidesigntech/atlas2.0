@@ -2,6 +2,7 @@ import React from 'react'
 import feedbackCycleIcon from '../assets/navigation-cards/feedback-cycle.png'
 import selfReflectionIcon from '../assets/navigation-cards/self-reflection.png'
 import createShareIcon from '../assets/navigation-cards/create-share.png'
+import atlasLogoSrc from '@/features/atlas2026/assets/branding/ATLAS_LOGO_simple_lucidGreenBlue4.png'
 
 type CardVariant = 'green' | 'blue'
 type CardIllustration = 'feedback' | 'reflection' | 'create'
@@ -16,8 +17,6 @@ interface ProfileNavigationCardProps {
   ticketId?: string
   onClick: () => void
 }
-
-const SECTION_LOGO_PATH = '/section1logo.png'
 
 const VARIANT_STYLES: Record<CardVariant, { accent: string; accentSoft: string }> = {
   green: { accent: '#4aa52e', accentSoft: '#2e7f1f' },
@@ -79,7 +78,7 @@ export default function ProfileNavigationCard({
 
       <div className="absolute inset-x-0 bottom-0 flex h-[32px] items-center justify-between px-[14px]">
         <div className="flex items-center gap-[7px]">
-          <img src={SECTION_LOGO_PATH} alt="" className="h-[20px] w-[20px] object-contain" />
+          <img src={atlasLogoSrc} alt="" className="h-[24px] w-[24px] object-contain" />
           <span className="text-[11px] font-semibold leading-none tracking-[0.01em] text-[#111317]">for atlas use only</span>
         </div>
         <div className="flex items-center gap-[8px]">

@@ -16,6 +16,11 @@ const PublicAtlasDemoPage = React.lazy(() => import('@/features/atlas2026/public
 const StandaloneZCodeSurveysPage = React.lazy(() => import('@/features/atlas2026/singlepane/StandaloneZCodeSurveysPage'))
 const StandaloneScribePage = React.lazy(() => import('@/features/atlas2026/scribe/StandaloneScribePage'))
 const StandaloneFleetPage = React.lazy(() => import('@/features/atlas2026/fleet/StandaloneFleetPage'))
+// The dev server sets `import.meta.env.DEV` true and this is the lazy prototype page.
+// `vite build` sets it false, this is null, and the prototype chunk is not emitted.
+const WalletLayoutPrototypePage = import.meta.env.DEV
+  ? React.lazy(() => import('@/features/atlas2026/singlepane/prototypes/walletLayout/WalletLayoutPrototypePage'))
+  : null
 
 function ShellFallback({ message }) {
   return (
@@ -95,6 +100,10 @@ function isWorkspacePath(pathname) {
 function isDemoPath(pathname) {
   const normalizedPath = normalizePathname(pathname)
   return normalizedPath === '/demo' || normalizedPath.startsWith('/demo/')
+}
+
+function isWalletPrototypePath(pathname) {
+  return normalizePathname(pathname) === '/prototype/wallet'
 }
 
 function RootAppInner() {
@@ -208,6 +217,15 @@ function RootAppInner() {
     return (
       <React.Suspense fallback={<ShellFallback message="Loading demo…" />}>
         <PublicAtlasDemoPage />
+      </React.Suspense>
+    )
+  }
+
+  // On the dev server, `/prototype/wallet` renders the wallet layout prototype without a session check.
+  if (WalletLayoutPrototypePage && typeof window !== 'undefined' && isWalletPrototypePath(pathname)) {
+    return (
+      <React.Suspense fallback={<ShellFallback message="Loading wallet prototype…" />}>
+        <WalletLayoutPrototypePage />
       </React.Suspense>
     )
   }
