@@ -44,11 +44,14 @@ export const CAPABILITY_DEFINITIONS: CapabilityDefinition[] = [
   { key: 'partner_station_operations', label: 'Partner (station) profiles, milestones, heat map', permissionKeys: ['partner_profile.write', 'partner_milestones.write', 'heatmap.view', 'heatmap.toggle'] }
 ]
 
-/** Tier-to-capability bridge. t4plus does not include supervise_users. */
+/**
+ * Tier-to-capability bridge. t4plus does not include supervise_users. t2b does
+ * not include enrollee_profiles_and_regulation, which starts at t3a.
+ */
 export const TIER_CAPABILITY_MATRIX: Record<TierKey, CapabilityKey[]> = {
   t1: ['refer', 'be_sponsored'],
   t2: ['refer', 'be_sponsored', 'wallet_and_competency_cards', 'receive_supervision'],
-  t2b: ['refer', 'sponsor', 'wallet_and_competency_cards', 'receive_supervision', 'engage_leads', 'warmline_and_respite', 'enrollee_profiles_and_regulation'],
+  t2b: ['refer', 'sponsor', 'wallet_and_competency_cards', 'receive_supervision', 'engage_leads', 'warmline_and_respite'],
   t3: ['refer', 'sponsor', 'wallet_and_competency_cards', 'receive_supervision', 'travel_peer_schedule'],
   t3a: ['refer', 'sponsor', 'wallet_and_competency_cards', 'receive_supervision', 'engage_leads', 'warmline_and_respite', 'enrollee_profiles_and_regulation', 'pickup_routes_z_burden'],
   t4: ['refer', 'sponsor', 'wallet_and_competency_cards', 'receive_supervision', 'engage_leads', 'warmline_and_respite', 'enrollee_profiles_and_regulation', 'supervise_users'],

@@ -50,8 +50,10 @@ governs them.
 
 Staff roles are the seven Residency tiers (`t1` … `t4plus`); `partner` and
 `enrollee` remain. "Supervisor" in the functions below is `t4` / `t4plus` and
-"navigator" is `t3a` / `t2b` (`20261104190200_tier_role_literals.sql`). Keys and
-tiers are listed in [../tiers.md](../tiers.md).
+"navigator" is `t3a` for enrollee work and `t3a` / `t2b` for the people a
+supervisor claims (`20261104190200_tier_role_literals.sql`,
+`20261115183000_t2b_no_enrollee_access.sql`). Peer Resident (`t2b`) holds no
+enrollee access. Keys and tiers are listed in [../tiers.md](../tiers.md).
 
 These are `SECURITY DEFINER` so they can read assignment tables without being
 re-subjected to the RLS policies that call them (prevents recursion). They are
@@ -132,9 +134,9 @@ declared `STABLE` so the planner can cache argument-free calls
     a blanket authenticated all-write policy. Authenticated writes are constrained to
     explicit single-pane keys/prefixes, while administrators retain full write
     coverage for governed operations.
-  - **Canonical referral status updates**: system administrators and `t2b` / `t3a` /
+  - **Canonical referral status updates**: system administrators and `t3a` /
     `t4` / `t4plus` callers (`public_referral_intake_events_update_staff`,
-    `20261104190200`) can update `public_referral_intake_events` status payloads
+    `20261115183000`) can update `public_referral_intake_events` status payloads
     for `public_landing` referral and partner-inquiry events, so queue state changes
     are persisted in the durable intake source rather than only local/session state.
   - **Regulation command validation**: `fn_save_regulation_test_submission` now

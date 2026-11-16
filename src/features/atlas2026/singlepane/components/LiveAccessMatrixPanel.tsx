@@ -61,7 +61,7 @@ export default function LiveAccessMatrixPanel({
   const [supervisorSingleChoice, setSupervisorSingleChoice] = React.useState(false)
   const [partnerOwnerSingleChoice, setPartnerOwnerSingleChoice] = React.useState(false)
   const people = dataset?.people || []
-  // Navigator tiers are t3a and t2b; supervisor tiers are t4 and t4plus.
+  // The enrollment picker lists t3a people; supervisor tiers are t4 and t4plus.
   const navigators = people.filter((person) => person.roleKeys.some(isNavigatorTier))
   const supervisors = people.filter((person) => person.roleKeys.some(isSupervisorTier))
   // Tier keys are set through the tier picker; the chips below cover partner and enrollee.

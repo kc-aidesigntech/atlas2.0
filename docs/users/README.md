@@ -7,7 +7,8 @@ Guides for people who use Atlas day to day. Staff accounts hold one Residency ti
 | Role | Primary guide | Also read |
 |------|---------------|-----------|
 | T1 Candidate, T2 Apprentice, T3 Travel Peer | [../tiers.md](../tiers.md) (refer, my wallet, secondment schedule) | [journey-phases.md](./journey-phases.md) |
-| T2B Peer Resident, T3A Peer Navigator (the former navigator role) | [navigator-guide.md](./navigator-guide.md) | [journey-phases.md](./journey-phases.md). Warm line and the header phone icon are in that guide. |
+| T3A Peer Navigator (the former navigator role) | [navigator-guide.md](./navigator-guide.md) | [journey-phases.md](./journey-phases.md). Warm line and the header phone icon are in that guide. |
+| T2B Peer Resident (no enrollees) | [navigator-guide.md](./navigator-guide.md), the self-reflection, supervision session, and warm line parts | [../tiers.md](../tiers.md) |
 | Partner | [partner-guide.md](./partner-guide.md) | Service-capacity survey in the app |
 | T4 Supervisor (the former supervisor role) | [navigator-guide.md](./navigator-guide.md) (competency / C.R.E.A.T.E.) | [pilot-guide.md](./pilot-guide.md) supervisor checklist |
 | T4+ Coordinator (the former administrator role) | [pilot-guide.md](./pilot-guide.md) admin checklist | Ask Information Technology (IT) for [../it/security.md](../it/security.md) |

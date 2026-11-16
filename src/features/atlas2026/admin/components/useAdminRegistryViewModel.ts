@@ -17,7 +17,7 @@ import {
   getEmptyRegistry,
   mergeById
 } from './adminDataControlPanelModel'
-import { isNavigatorTier, isSupervisorTier, isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
+import { isNavigatorTier, isSupervisorClaimableTier, isSupervisorTier, isSystemAdmin } from '@/features/atlas2026/singlepane/domain/roles'
 
 interface AdminRegistryViewModelInput {
   registry: AdminPortalRegistry | null
@@ -149,8 +149,10 @@ export function useAdminRegistryViewModel({
     return [...existingRows, ...customRows]
   }, [effectiveRegistry, enrollees, intakeFormsByEnrolleeId])
 
-  // Navigator tiers are t3a and t2b; supervisor tiers are t4 and t4plus.
+  // navigators lists t3a people, the tier an enrollee is assigned to. supervisedPeople
+  // lists t3a and t2b people, the tiers a supervisor claims. Supervisor tiers are t4 and t4plus.
   const navigators = useMemo(() => combinedPeople.filter((person) => person.roles.some(isNavigatorTier)), [combinedPeople])
+  const supervisedPeople = useMemo(() => combinedPeople.filter((person) => person.roles.some(isSupervisorClaimableTier)), [combinedPeople])
   const supervisors = useMemo(() => combinedPeople.filter((person) => person.roles.some(isSupervisorTier)), [combinedPeople])
   const navigatorCoverageOptions = useMemo<NavigatorCoverageOption[]>(
     () => (accessMatrixDataset?.people || [])
@@ -170,6 +172,7 @@ export function useAdminRegistryViewModel({
     combinedPeople,
     visibleEnrollees,
     navigators,
+    supervisedPeople,
     supervisors,
     navigatorCoverageOptions
   }

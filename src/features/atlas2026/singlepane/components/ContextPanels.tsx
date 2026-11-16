@@ -3,7 +3,7 @@ import type { AtlasRole, CountyHeatPoint, EnrollmentRequestRecord, SupervisorNav
 import { SP_COLORS } from '@/features/atlas2026/shared/theme'
 import CountyCommonsHeatmap from '@/features/atlas2026/singlepane/components/CountyCommonsHeatmap'
 import { isCountyCommonsMenuEnabled } from '@/features/atlas2026/singlepane/data-access/singlePaneBootstrapRepository'
-import { isNavigatorTier, isSupervisorTier } from '@/features/atlas2026/singlepane/domain/roles'
+import { isSupervisorClaimableTier, isSupervisorTier } from '@/features/atlas2026/singlepane/domain/roles'
 
 interface ContextPanelsProps {
   role: AtlasRole
@@ -35,7 +35,7 @@ export default function ContextPanels({
 }: ContextPanelsProps) {
   // Enrollment intake stays off my wallet. This branch only remains for a stored menu label
   // that normalization did not rewrite.
-  if (activeMenu === 'my profile' && !isNavigatorTier(role) && !isSupervisorTier(role)) {
+  if (activeMenu === 'my profile' && !isSupervisorClaimableTier(role) && !isSupervisorTier(role)) {
     return (
       <div className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: '#ffffff50' }}>
         <small className="mb-2 block text-[13px] text-white">my profile</small>

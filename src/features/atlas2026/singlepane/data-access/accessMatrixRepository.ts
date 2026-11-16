@@ -9,7 +9,7 @@ import type {
 import { hasSupabaseConfig, supabase } from '../../../../lib/supabaseClient'
 import {
   ADMIN_PORTAL_PERSON_ROLE_KEYS,
-  isNavigatorTier,
+  isSupervisorClaimableTier,
   isSystemAdmin,
   normalizeAtlasRoleKey,
   normalizePersonRoleKeys
@@ -140,7 +140,7 @@ export async function loadAccessMatrixDataset(): Promise<AccessMatrixDataset> {
     }
 
     const supervisorAssignments: AccessMatrixSupervisorRecord[] = people
-      .filter((person) => person.roleKeys.some(isNavigatorTier))
+      .filter((person) => person.roleKeys.some(isSupervisorClaimableTier))
       .map((person) => ({
         navigatorPersonId: person.id,
         supervisorPersonIds: normalizePersonIds(Array.from(supervisorIdsByNavigator.get(person.id) || []))

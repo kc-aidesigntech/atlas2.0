@@ -11,8 +11,8 @@
   },
   {
     "role": "t2b",
-    "topMenus": ["enrollees", "my wallet", "leads", "warm line", "respite shifts", "refer"],
-    "actionMenus": ["log contact", "escalate risk"]
+    "topMenus": ["my wallet", "leads", "warm line", "respite shifts", "refer"],
+    "actionMenus": []
   },
   {
     "role": "t3",

@@ -64,7 +64,7 @@ const TIER_DEFINITION_LIST: TierDefinition[] = [
     code: 'T2B',
     label: 'Peer Resident',
     identity: 'T2B Peer Resident',
-    purpose: 'Sits the warm line, takes respite shifts, engages leads, and writes enrollee profiles.',
+    purpose: 'Sits the warm line, takes respite shifts, and engages leads.',
     advancementQuestion: 'Can I hold space for others?',
     alumLabel: 'T2B Alum'
   },
@@ -201,6 +201,8 @@ export function isAtlasPermissionKey(value: unknown): value is AtlasPermissionKe
 
 const T2_PLUS: TierKey[] = ['t2', 't2b', 't3', 't3a', 't4', 't4plus']
 const RESIDENT_SET: TierKey[] = ['t2b', 't3a', 't4', 't4plus']
+// Peer Navigator and above. Peer Resident (`t2b`) is not in this set.
+const ENROLLEE_SET: TierKey[] = ['t3a', 't4', 't4plus']
 
 /**
  * Permission keys `atlas.role_permissions` seeds per tier. The client reads
@@ -220,8 +222,8 @@ export const TIER_PERMISSION_SEED: Record<AtlasPermissionKey, TierKey[]> = {
   'leads.engage': RESIDENT_SET,
   'warmline_agent.access': RESIDENT_SET,
   'respite_shifts.take': RESIDENT_SET,
-  'enrollee_profile.write': RESIDENT_SET,
-  'regulation_variables.write': RESIDENT_SET,
+  'enrollee_profile.write': ENROLLEE_SET,
+  'regulation_variables.write': ENROLLEE_SET,
   'pickup.claim': ['t3a'],
   'route_plan.write': ['t3a'],
   'z_burden.resolve': ['t3a'],

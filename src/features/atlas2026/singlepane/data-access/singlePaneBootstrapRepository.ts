@@ -151,7 +151,7 @@ function normalizeSupervisorTopMenus(menus: string[], canAccessWarmLine: boolean
   return dedupeMenus(withReferral)
 }
 
-/** t1, t2, and t3 show their stored row with aliases mapped and gated menus hidden. */
+/** t1, t2, t2b, and t3 show their stored row with aliases mapped and gated menus hidden. */
 function normalizeMemberTierTopMenus(menus: string[], canAccessWarmLine: boolean) {
   return dedupeMenus(
     hideUnconfiguredWarmLineMenu(hideDeferredCountyCommonsMenu(menus.map(normalizeTierMenuLabel)), canAccessWarmLine)
@@ -180,8 +180,8 @@ function normalizeRoleTopMenus(role: AtlasRole, menus: string[], canAccessWarmLi
   }
 }
 
-// Order the t4plus superset collects menus in: navigator tiers first, then partner,
-// the member tiers, the supervisor, and the coordinator's own row last.
+// Order the t4plus superset collects menus in: t3a and t2b first, then partner,
+// t3, t2, t1, the supervisor, and the coordinator's own row last.
 const SUPERSET_ROLE_PRIORITY: AtlasRole[] = ['t3a', 't2b', 'partner', 't3', 't2', 't1', 't4', 't4plus']
 
 function buildAdminSupersetMenus(roleConfigs: Array<{ role: AtlasRole; topMenus: string[]; actionMenus: string[] }>) {

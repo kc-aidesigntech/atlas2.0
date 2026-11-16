@@ -265,8 +265,8 @@ export default function SinglePaneWorkspace() {
   const firstUsableMarkedRoleRef = React.useRef<AtlasRole | null>(null)
   const actionMenus = (selectedRoleConfig.actionMenus || []).filter((label) => PERSISTED_ACTION_LABELS.has(label.trim().toLowerCase()))
   const uiRole = viewerRole
-  // One shell per role: t3a and t2b render the navigator strip, t4 the supervisor
-  // wallet, t4plus the administrator superset. t1, t2, and t3 render none of the three.
+  // One shell per role: t3a renders the navigator strip, t4 the supervisor wallet,
+  // t4plus the administrator superset. t1, t2, t2b, and t3 render none of the three.
   const isNavigatorUi = isNavigatorExperience(uiRole)
   const isSupervisorUi = isSupervisorExperience(uiRole)
   const isAdministratorUi = isAdministratorExperience(uiRole)

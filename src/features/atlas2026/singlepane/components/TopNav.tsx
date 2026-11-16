@@ -42,7 +42,7 @@ export default function TopNav({
 }: TopNavProps) {
   const firstMenu = roleConfig.topMenus[0] || ''
   const hasSyncingEnrollees = syncingEnrolleeIds.length > 0
-  // t3a and t2b get the enrollee dropdown with "add enrollees"; t4plus gets the collapsed admin chrome.
+  // t3a gets the enrollee dropdown with "add enrollees"; t4plus gets the collapsed admin chrome.
   const isNavigatorShell = isNavigatorExperience(role)
   const isAdministratorShell = isAdministratorExperience(role)
   const showEnrolleeSelector = firstMenu === 'enrollees' && (enrollees.length > 0 || isNavigatorShell)

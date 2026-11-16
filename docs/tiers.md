@@ -1,6 +1,6 @@
 # Residency Tiers
 
-The seven Residency tiers are the staff `role_key`s in `atlas.roles`. They replaced `navigator`, `supervisor`, and `administrator` in the migration set `supabase/migrations/20261104190000_tier_roles.sql` through `20261104190700_tier_partner_write_rpcs.sql`. `partner` and `enrollee` remain as non-tier roles. This page is rewritten from those migrations and from the `src/features/atlas2026` files named in each section.
+The seven Residency tiers are the staff `role_key`s in `atlas.roles`. They replaced `navigator`, `supervisor`, and `administrator` in the migration set `supabase/migrations/20261104190000_tier_roles.sql` through `20261104190700_tier_partner_write_rpcs.sql`; `20261114210000_tier_capability_screen_matrix.sql` and `20261115183000_t2b_no_enrollee_access.sql` follow that set. `partner` and `enrollee` remain as non-tier roles. This page is rewritten from those migrations and from the `src/features/atlas2026` files named in each section.
 
 Words used on this page: a **tier holder** is a person with an active `atlas.people_tiers` row. A **tier manager** is a caller for whom `atlas.fn_can_manage_tiers()` is true: a system administrator or an active `t4` / `t4plus`.
 
@@ -16,6 +16,8 @@ Words used on this page: a **tier holder** is a person with an active `atlas.peo
 | `20261104190500_tier_feature_tables.sql` | Feature tables, the T1 → T2 trigger, `referrer_person_id`, and the feature RPCs. |
 | `20261104190600_tier_followups.sql` | Remaining admin predicates call `fn_is_system_admin()`; the `ends_on` rule below; `search_path` pinned on `fn_normalize_role_key` and `fn_tier_rank`; `enrollee_burden_survey_submissions.respondent_role` accepts `t2b` / `t3a` / `t4` / `t4plus` next to `navigator` / `supervisor`; covering indexes on `ips_cohort_enrollments.enrolled_by`, `people_competency_cards.card_id` / `assessment_id` / `issued_by_person_id`, `secondments.partner_id`, `tier_designations.granted_by`. |
 | `20261104190700_tier_partner_write_rpcs.sql` | `fn_update_partner_station` and `fn_set_route_plan_stop_status` (partner writes gated by permission key); `fn_access_matrix_save_person_roles` closes removed assignments with `ends_on = current_date - 1`. |
+| `20261114210000_tier_capability_screen_matrix.sql` | `atlas.tiers`, `capabilities`, `tier_capabilities`, `capability_permissions`, `screens`, `screen_capabilities`; `fn_tier_capability_matrix`, `fn_screen_capability_matrix`. |
+| `20261115183000_t2b_no_enrollee_access.sql` | Peer Resident (`t2b`) loses enrollee access: deletes its `enrollee_profile.write` and `regulation_variables.write` grants and its `enrollee_profiles_and_regulation` capability row; removes `assigned enrollees` from its menu row; narrows `fn_wallet_caller_is_navigator`, `fn_navigator_assign_enrollment_to_self`, and `fn_navigator_unassign_enrollment_from_self` to `t3a`; narrows `enrollment_requests_staff_select` and the two `public_referral_intake_events` staff policies to `t3a` / `t4` / `t4plus`. The file raises and changes nothing when a person who holds `t2b` without `t3a` / `t4` / `t4plus` still has an open `navigator_assignments` row. |
 
 ### `ends_on` rule
 
@@ -29,7 +31,7 @@ Readers treat an assignment as active through its `ends_on` day: `fn_has_permiss
 |-----|----------|---------|----------------------|
 | `t1` | T1 Candidate | Refers people in and can be sponsored into an Intentional Peer Support (IPS) Core cohort. | Am I curious? |
 | `t2` | T2 Apprentice | Learns the practice inside a cohort, holds a wallet, and receives supervision. | Am I learning the practice? |
-| `t2b` | T2B Peer Resident | Sits the warm line, takes respite shifts, engages leads, and writes enrollee profiles. | Can I hold space for others? |
+| `t2b` | T2B Peer Resident | Sits the warm line, takes respite shifts, and engages leads. | Can I hold space for others? |
 | `t3` | T3 Travel Peer | Carries the practice to a host organization on a secondment schedule. | Can I carry the practice to another site? |
 | `t3a` | T3A Peer Navigator | Claims pickups, plans routes, and resolves Z-code burden with enrollees. | Can I walk a route with an enrollee? |
 | `t4` | T4 Supervisor | Supervises navigators and records competency assessments. | Can I grow other peers? |
@@ -61,7 +63,7 @@ One row per `(person_id, designation)`; `designation` is `warmline_operator`, `m
 
 `atlas.fn_my_permissions()` returns every `permission_key` for a system administrator, otherwise each key for which `fn_has_permission` is true. The client calls it once per session (`tierRepository.ts` → `useViewerPermissions.ts`) and falls back to `TIER_PERMISSION_SEED` in `shared/tiers.ts` when the RPC fails or when the pane shows a role other than the account's primary role.
 
-### Permission table (`20261104190300_tier_permissions.sql`)
+### Permission table (`20261104190300_tier_permissions.sql`, `20261115183000_t2b_no_enrollee_access.sql`)
 
 | Permission key | Tiers |
 |----------------|-------|
@@ -75,8 +77,8 @@ One row per `(person_id, designation)`; `designation` is `warmline_operator`, `m
 | `leads.engage` | t2b, t3a, t4, t4plus |
 | `warmline_agent.access` (name kept) | t2b, t3a, t4, t4plus |
 | `respite_shifts.take` | t2b, t3a, t4, t4plus |
-| `enrollee_profile.write` | t2b, t3a, t4, t4plus |
-| `regulation_variables.write` | t2b, t3a, t4, t4plus |
+| `enrollee_profile.write` | t3a, t4, t4plus |
+| `regulation_variables.write` | t3a, t4, t4plus |
 | `pickup.claim` | t3a |
 | `route_plan.write` | t3a |
 | `z_burden.resolve` | t3a |
@@ -87,11 +89,16 @@ One row per `(person_id, designation)`; `designation` is `warmline_operator`, `m
 | `heatmap.toggle` | t4plus |
 | `partner_capacity_submissions.read` / `.write` / `.delete` | partner (unchanged), t4plus |
 
-### Tier sets inside rewritten functions (`20261104190200_tier_role_literals.sql`)
+### Tier sets inside rewritten functions (`20261104190200_tier_role_literals.sql`, `20261115183000_t2b_no_enrollee_access.sql`)
 
-Functions that compared `supervisor` or `navigator` now read `atlas.fn_caller_role_keys()` (active assignments plus the `atlas_role` / `atlas_roles` claims, normalized): "supervisor" is `t4`, `t4plus`; "navigator" is `t3a`, `t2b`. This covers `fn_save_navigator_competency_assessment`, `fn_ensure_staff_person`, `fn_supervisor_set_navigator_warmline_access`, `fn_list_warmline_access`, `fn_wallet_caller_is_supervisor` / `_navigator`, the wallet claim-card functions, `fn_supervisor_claim_navigator` / `_release_navigator`, `fn_navigator_assign_enrollment_to_self` / `_unassign_`, the `enrollment_requests_staff_select` policy, and the two `public_referral_intake_events` staff policies (`t2b`, `t3a`, `t4`, `t4plus`). The `navigator_create_sessions.opened_by_role` check allows `t2b`, `t3a`, `t4`, `t4plus`, `navigator`, `supervisor`.
+Functions that compared `supervisor` or `navigator` now read `atlas.fn_caller_role_keys()` (active assignments plus the `atlas_role` / `atlas_roles` claims, normalized). "Supervisor" is `t4`, `t4plus`. "Navigator" is one of two sets, by what the function opens:
 
-## Menus per tier (`20261104190400_tier_navigation.sql`)
+- **Supervised person: `t3a`, `t2b`.** `fn_supervisor_claim_navigator` (its target must hold one of the two) and `fn_wallet_navigator_claim_cards` (the people it lists). The `navigator_create_sessions.opened_by_role` check allows `t2b`, `t3a`, `t4`, `t4plus`, `navigator`, `supervisor`.
+- **Enrollee work: `t3a` only.** `fn_wallet_caller_is_navigator` (so `fn_wallet_enrollee_claim_cards`), `fn_navigator_assign_enrollment_to_self` (so `fn_claim_referral_queue_to_enrollment`), and `fn_navigator_unassign_enrollment_from_self`. A `t2b` caller gets `navigator role required` (`42501`). The `enrollment_requests_staff_select` policy and the two `public_referral_intake_events` staff policies accept `t3a`, `t4`, `t4plus`; the public insert policy is unchanged, so a `t2b` still submits a referral.
+
+Peer Resident (`t2b`) holds no enrollee access. `fn_can_access_enrollment_as_staff` is still decided by an open `navigator_assignments` row, and the two administrator functions that write that row (`fn_access_matrix_save_enrollment_navigator`, `fn_assignment_assign_enrollment_navigator`) do not check the target's tier; the administrator pickers list `t3a` people only (see **Role model files**).
+
+## Menus per tier (`20261104190400_tier_navigation.sql`, `20261115183000_t2b_no_enrollee_access.sql`)
 
 `atlas.app_role_navigation` on surface `singlepane`, `top_menus` column. `action_menus` and `metadata` for `t3a`, `t4`, and `t4plus` were copied from the `navigator`, `supervisor`, and `administrator` rows when those existed; `t1`–`t3` have empty `action_menus`.
 
@@ -99,7 +106,7 @@ Functions that compared `supervisor` or `navigator` now read `atlas.fn_caller_ro
 |------|-------------|
 | `t1` | refer |
 | `t2` | refer, my wallet |
-| `t2b` | refer, my wallet, assigned enrollees, leads, warm line, respite shifts, sponsorships |
+| `t2b` | refer, my wallet, leads, warm line, respite shifts, sponsorships |
 | `t3` | refer, my wallet, secondment schedule, sponsorships |
 | `t3a` | refer, my wallet, assigned enrollees, requests to enroll, leads, warm line, respite shifts, route planning, my station, county commons, scribe, sponsorships |
 | `t4` | `t3a` list + assigned navigators, navigator assessments, team burden, cohorts, competency cards, fleet |
@@ -181,7 +188,7 @@ All are `security definer`, resolve the caller through `atlas.fn_current_person_
 ### Role model files
 
 - `shared/tiers.ts` — tier keys, metadata, `TIER_PERMISSION_SEED`, badge/ribbon rules. Imports nothing else from the feature.
-- `singlepane/domain/roles.ts` — legacy alias table, `normalizeRoleKey`, `isSystemAdmin` (`t4plus`), `isSupervisorTier` (`t4`, `t4plus`), `isNavigatorTier` (`t3a`, `t2b`), `workspaceExperience` (`administrator` | `supervisor` | `navigator` | `partner` | `member`; `member` covers `t1`, `t2`, `t3`). These two files are the only places role literals are compared.
+- `singlepane/domain/roles.ts` — legacy alias table, `normalizeRoleKey`, `isSystemAdmin` (`t4plus`), `isSupervisorTier` (`t4`, `t4plus`), `isNavigatorTier` (`t3a`: carries enrollees, renders the navigator shell, and is the list the administrator enrollee pickers offer), `isSupervisorClaimableTier` (`t3a`, `t2b`: the people a supervisor claims, the supervisor-to-navigator matrix rows, and the warm-line toggle a supervisor sets), `workspaceExperience` (`administrator` | `supervisor` | `navigator` | `partner` | `member`; `member` covers `t1`, `t2`, `t2b`, `t3`). These two files are the only places role literals are compared.
 - `singlepane/data-access/tierRepository.ts` — every call to the tier RPCs and the `people_tiers` / `tier_designations` reads.
 - `singlepane/hooks/useViewerPermissions.ts` — `hasPermission(key)`; `permissionSource` is `rpc` or `tier-defaults`. `hasPermission` returns true for every key when the pane role is `t4plus`.
 - `admin/components/TierStandingEditor.tsx` — the tier picker (`fn_set_person_tier`), **mark alum** (`fn_mark_tier_alum`), the Lucid employee checkbox (`people_tiers.is_lucid_employee`), and designation chips (`fn_grant_designation` / `fn_revoke_designation`; chips are enabled only for an active tier at `t2b` or higher). Rendered on the Admin Directory editor and the person-to-tier matrix; rows without a database person id are read-only.
@@ -207,12 +214,12 @@ Each section renders when `showsSection(key, hasRows)` is true: the viewer holds
 | `secondment schedule` | `secondment_schedule.view` | `fn_wallet_overview.secondments` with `schedule` |
 | `respite shifts` | `respite_shifts.take` | `fn_wallet_overview.respite_shifts` |
 | `leads` (owned count, **open leads** button when the `leads` menu is on the role's row) | `leads.engage` | `fn_wallet_overview.leads_owned_count` |
-| Navigator sections (`NavigatorMyProfilePanel`: enrollee claim circles and the weekly review queue) | `enrollee_profile.write` (key alone; no row check) | existing navigator wallet reads |
+| Navigator sections (`NavigatorMyProfilePanel`: enrollee claim circles and the weekly review queue) | `enrollee_profile.write` (key alone; no row check; `t3a`, `t4`, `t4plus`) | existing navigator wallet reads |
 | Supervisor sections (`SupervisorMyProfilePanel`: navigator claim circles, assessment rollup) | `supervision.give` (key alone; no row check) | existing supervisor wallet reads |
 
 ### Capability screens (`singlepane/components/tierFeaturePanels/`)
 
-`SinglePaneWorkspace.tsx` renders `TierFeatureScreen` when `activeMenu` is one of `TIER_FEATURE_SCREEN_IDS` and the pane role is not `partner`. These screens and My Wallet render without a selected enrollee, so `t1`, `t2`, and `t3` shells open them. Each panel shows `TierFeatureNoAccess` (the message names the key) when its boolean is false. Reads and writes live in `singlepane/data-access/tierFeatureRepository.ts`.
+`SinglePaneWorkspace.tsx` renders `TierFeatureScreen` when `activeMenu` is one of `TIER_FEATURE_SCREEN_IDS` and the pane role is not `partner`. These screens and My Wallet render without a selected enrollee, so `t1`, `t2`, `t2b`, and `t3` shells open them. Each panel shows `TierFeatureNoAccess` (the message names the key) when its boolean is false. Reads and writes live in `singlepane/data-access/tierFeatureRepository.ts`.
 
 | Screen id | Panel | Permission key(s) | Writes |
 |-----------|-------|-------------------|--------|

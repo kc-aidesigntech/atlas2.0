@@ -24,7 +24,7 @@ import { buildNavigatorRouteBoardLoadBreakdown, deriveNavigatorLoad, deriveNavig
 import { buildPartnerStripJourneyModel } from '@/features/atlas2026/singlepane/domain/partnerStripJourney'
 import { buildSupervisorTeamBurdenModel } from '@/features/atlas2026/singlepane/domain/supervisorTeamBurden'
 import { normalizeOrganizationKey } from '@/features/atlas2026/singlepane/domain/dates'
-import { dedupeMenus, isNavigatorTier, isSupervisorExperience } from '@/features/atlas2026/singlepane/domain/roles'
+import { dedupeMenus, isNavigatorTier, isSupervisorClaimableTier, isSupervisorExperience } from '@/features/atlas2026/singlepane/domain/roles'
 
 interface SupervisorNavigatorDirectoryEntry {
   navigatorPersonId: string
@@ -98,7 +98,7 @@ export function useSinglePaneWorkspaceDerivedState(context: WorkspaceDerivedCont
     appendRouteLogRecord, setLogs: routeLogActions.setLogs, setNavigatorProgramError,
   })
   const partnerServiceCapacityDefaultHeader = useMemo<PartnerServiceCapacityHeader>(() => buildPartnerServiceCapacityDefaultHeader(effectiveAccountSettings, viewerRole), [effectiveAccountSettings, viewerRole])
-  const currentNavigatorName = useMemo(() => (isNavigatorTier(remoteSession?.targetRole) ? remoteSession.targetDisplayName : effectiveAccountSettings.fullName).trim() || selectedEnrollee?.assignedNavigator || 'atlas navigator', [effectiveAccountSettings.fullName, remoteSession?.targetDisplayName, remoteSession?.targetRole, selectedEnrollee?.assignedNavigator])
+  const currentNavigatorName = useMemo(() => (isSupervisorClaimableTier(remoteSession?.targetRole) ? remoteSession.targetDisplayName : effectiveAccountSettings.fullName).trim() || selectedEnrollee?.assignedNavigator || 'atlas navigator', [effectiveAccountSettings.fullName, remoteSession?.targetDisplayName, remoteSession?.targetRole, selectedEnrollee?.assignedNavigator])
   const currentSupervisorName = useMemo(() => (remoteSession && isSupervisorExperience(remoteSession.targetRole) ? remoteSession.targetDisplayName : effectiveAccountSettings.fullName).trim() || 'peer supervisor', [effectiveAccountSettings.fullName, remoteSession, remoteSession?.targetDisplayName, remoteSession?.targetRole])
   const supervisorNavigatorCompetency = useMemo<SupervisorNavigatorCompetencySummary[]>(() => buildSupervisorNavigatorCompetencySummaries(scopedEnrollees, navigatorCompetencyAssessments), [navigatorCompetencyAssessments, scopedEnrollees])
   const supervisorNavigatorDirectory = useMemo<SupervisorNavigatorDirectoryEntry[]>(() => {
@@ -116,7 +116,7 @@ export function useSinglePaneWorkspaceDerivedState(context: WorkspaceDerivedCont
     const counts = new Map<string, number>()
     accessMatrixDataset.enrollmentAssignments.forEach((assignment) => assignment.navigatorPersonIds.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1)))
     return accessMatrixDataset.people
-      .filter((person) => person.roleKeys.some(isNavigatorTier))
+      .filter((person) => person.roleKeys.some(isSupervisorClaimableTier))
       .map((person) => ({
         navigatorPersonId: person.id, navigatorName: person.fullName,
         assignedEnrolleeCount: counts.get(person.id) || 0,

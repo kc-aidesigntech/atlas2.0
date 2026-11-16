@@ -199,35 +199,8 @@ const PEER_NAVIGATOR_DEFAULTS: RoleCapabilityMap = {
   }
 }
 
-// Peer Resident (t2b) writes enrollee profiles and regulation variables but holds
-// no pickup claim and no route plan, which stay on t3a.
-const PEER_RESIDENT_DEFAULTS: RoleCapabilityMap = {
-  screenToggles: {
-    assignmentBoard: true
-  },
-  cardToggles: {
-    navigatorCoverageCard: false,
-    liveAccessMatrix: false,
-    navigatorProfilePickupQueue: false
-  },
-  actionToggles: {
-    'assignmentBoard.viewNavigatorNames': false,
-    'assignmentBoard.assignSelf': false,
-    'assignmentBoard.addReferral': false,
-    'admin.saveRegistry': false,
-    'intake.write': true,
-    'zcodes.write': true,
-    'routeAssignment.write': false,
-    'routeLogs.write': true,
-    'timeline.write': true,
-    'navigatorProgram.write': true,
-    'regulationReview.write': false,
-    'regulationTests.write': true,
-    'partnerReferral.submit': true
-  }
-}
-
-// Apprentice (t2) and Travel Peer (t3): wallet, supervision records, and referrals only.
+// Apprentice (t2), Peer Resident (t2b), and Travel Peer (t3): wallet, supervision
+// records, and referrals. No enrollee screen, card, or write is allowed.
 const WALLET_TIER_DEFAULTS: RoleCapabilityMap = {
   screenToggles: {
     assignmentBoard: false
@@ -286,7 +259,7 @@ const ROLE_CAPABILITY_DEFAULTS: Record<AtlasRole, RoleCapabilityMap> = {
   t4: SUPERVISOR_DEFAULTS,
   t3a: PEER_NAVIGATOR_DEFAULTS,
   t3: WALLET_TIER_DEFAULTS,
-  t2b: PEER_RESIDENT_DEFAULTS,
+  t2b: WALLET_TIER_DEFAULTS,
   t2: WALLET_TIER_DEFAULTS,
   t1: CANDIDATE_DEFAULTS,
   partner: {

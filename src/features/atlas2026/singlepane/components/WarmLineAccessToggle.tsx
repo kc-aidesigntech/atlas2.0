@@ -7,7 +7,7 @@ import {
   listWarmLineAccess,
   supervisorSetNavigatorWarmLineAccess
 } from '@/features/atlas2026/singlepane/data-access/warmlineAccess'
-import { isNavigatorTier, isSupervisorTier, isSystemAdmin, normalizePersonRoleKeys } from '@/features/atlas2026/singlepane/domain/roles'
+import { isSupervisorClaimableTier, isSupervisorTier, isSystemAdmin, normalizePersonRoleKeys } from '@/features/atlas2026/singlepane/domain/roles'
 
 type WarmLineAccessToggleProps = {
   personId: string
@@ -25,11 +25,11 @@ export default function WarmLineAccessToggle({
   const [hasAccess, setHasAccess] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Legacy role words map onto their tier; t4plus is the administrator, t4 the supervisor, t3a and t2b the navigators.
+  // Legacy role words map onto their tier; t4plus is the administrator, t4 the supervisor, t3a and t2b the tiers a supervisor claims.
   const roles = normalizePersonRoleKeys(personRoles)
   const isAdministrator = roles.some(isSystemAdmin)
   const isSupervisor = !isAdministrator && roles.some(isSupervisorTier)
-  const isNavigator = !isAdministrator && !isSupervisor && roles.some(isNavigatorTier)
+  const isNavigator = !isAdministrator && !isSupervisor && roles.some(isSupervisorClaimableTier)
 
   useEffect(() => {
     let cancelled = false

@@ -15,8 +15,8 @@ Structured Query Language (SQL) Remote Procedure Calls (RPCs) in the `atlas` sch
 | `atlas.fn_assignment_unassign_supervisor_navigator` | `target_navigator_person_id`, `target_supervisor_person_id` | Ends one active supervisor<->navigator edge row (`ends_on = current_date`) | `authenticated`, admin claim enforced |
 | `atlas.fn_assignment_assign_partner_contact` | `target_partner_id`, `target_contact_person_id` | Adds contact to partner edge set while preserving existing assignments | `authenticated`, admin claim enforced |
 | `atlas.fn_assignment_unassign_partner_contact` | `target_partner_id`, `target_contact_person_id` | Removes contact from partner edge set and reapplies contact reconciliation | `authenticated`, admin claim enforced |
-| `atlas.fn_navigator_assign_enrollment_to_self` | `target_enrollment_id` | Adds caller's navigator assignment for enrollment if missing | `authenticated`; system admin or `t3a` / `t2b` by assignment or claim |
-| `atlas.fn_navigator_unassign_enrollment_from_self` | `target_enrollment_id` | Ends caller's navigator assignment for enrollment | `authenticated`; system admin or `t3a` / `t2b` by assignment or claim |
+| `atlas.fn_navigator_assign_enrollment_to_self` | `target_enrollment_id` | Adds caller's navigator assignment for enrollment if missing | `authenticated`; system admin or `t3a` by assignment or claim (`20261115183000_t2b_no_enrollee_access.sql`) |
+| `atlas.fn_navigator_unassign_enrollment_from_self` | `target_enrollment_id` | Ends caller's navigator assignment for enrollment | `authenticated`; system admin or `t3a` by assignment or claim (`20261115183000_t2b_no_enrollee_access.sql`) |
 
 "Admin claim enforced" means `fn_require_admin_claim()`, which raises unless `atlas.fn_is_system_admin()` is true (`t4plus` claim or active assignment; legacy `administrator` claim accepted). Role keys are the Residency tiers; see [tiers.md](./tiers.md).
 

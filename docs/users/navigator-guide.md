@@ -1,6 +1,6 @@
 # Navigator Guide (Users)
 
-How navigators (tiers T2B Peer Resident and T3A Peer Navigator) and supervisors (T4 Supervisor, T4+ Coordinator) reviewing navigator competency use My Profile and related workflows. Tier model: [../tiers.md](../tiers.md).
+How navigators (tier T3A Peer Navigator) and supervisors (T4 Supervisor, T4+ Coordinator) reviewing navigator competency use My Profile and related workflows. A T2B Peer Resident has no enrollees: of this guide, only the self-reflection, supervision session, and warm line parts apply to that tier. Tier model: [../tiers.md](../tiers.md).
 
 ## Access reminder
 

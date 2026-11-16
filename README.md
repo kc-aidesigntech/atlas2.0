@@ -100,7 +100,8 @@ Menus per tier come from `atlas.app_role_navigation` (`20261104190400_tier_navig
 - **T1 Candidate / T2 Apprentice / T3 Travel Peer**
   - refer; T2 adds my wallet; T3 adds secondment schedule and sponsorships
 - **T2B Peer Resident**
-  - refer, my wallet, assigned enrollees, leads, warm line, respite shifts, sponsorships
+  - refer, my wallet, leads, warm line, respite shifts, sponsorships
+  - no enrollee screen, enrollee assignment, or intake queue (`20261115183000_t2b_no_enrollee_access.sql`)
 - **T3A Peer Navigator** (the former navigator shell)
   - assigned enrollees
   - requests to enroll

@@ -124,7 +124,7 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
   const zCodeOverlayPanelRef = useRef<HTMLDivElement | null>(null)
   const zCodeOverlayListRef = useRef<HTMLDivElement | null>(null)
   const previousZCodeOverlayHeightRef = useRef<number | null>(null)
-  const { effectiveRegistry, combinedOrganizations, combinedPeople, visibleEnrollees, navigators, supervisors, navigatorCoverageOptions } = useAdminRegistryViewModel({
+  const { effectiveRegistry, combinedOrganizations, combinedPeople, visibleEnrollees, navigators, supervisedPeople, supervisors, navigatorCoverageOptions } = useAdminRegistryViewModel({
     registry,
     accountSettings,
     accessMatrixDataset,
@@ -424,7 +424,7 @@ export default function AdminDataControlPanel(props: AdminDataControlPanelProps)
 
         {activeSection === 'relationships' ? (
           <AdminRelationshipsSection
-            navigators={navigators}
+            navigators={supervisedPeople}
             supervisors={supervisors}
             handlePersonSupervisorAssignment={handlePersonSupervisorAssignment}
             visibleEnrollees={visibleEnrollees}

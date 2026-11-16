@@ -67,8 +67,16 @@ export function isSupervisorTier(role: unknown): boolean {
   return role === 't4' || role === 't4plus'
 }
 
-/** Tiers that carry enrollees: `t3a` and `t2b`. */
+/** The tier that carries enrollees and renders the navigator shell: `t3a`. */
 export function isNavigatorTier(role: unknown): boolean {
+  return role === 't3a'
+}
+
+/**
+ * Tiers a supervisor claims: `t3a` and `t2b`, the set
+ * `atlas.fn_supervisor_claim_navigator` accepts as its target.
+ */
+export function isSupervisorClaimableTier(role: unknown): boolean {
   return role === 't3a' || role === 't2b'
 }
 
@@ -103,7 +111,7 @@ export function rolesAnchoredToTier(roles: readonly AtlasRole[], tierKey: TierKe
 /**
  * Which single-pane shell a role renders. Exactly one shell per role so the
  * administrator superset, supervisor wallet, and navigator strip never overlap.
- * `member` covers t1, t2, and t3, which only get the menus their row lists.
+ * `member` covers t1, t2, t2b, and t3, which only get the menus their row lists.
  */
 export type WorkspaceExperience = 'administrator' | 'supervisor' | 'navigator' | 'partner' | 'member'
 
@@ -129,11 +137,12 @@ export function isNavigatorExperience(role: AtlasRole): boolean {
 
 /**
  * Party a role plays in a supervision record: supervisor tiers sit on the
- * supervisor side, navigator tiers on the navigator side, everyone else null.
+ * supervisor side, the tiers a supervisor claims (`t3a`, `t2b`) on the
+ * navigator side, everyone else null.
  */
 export function toSupervisionParty(role: AtlasRole): SupervisionParty | null {
   if (isSupervisorTier(role)) return 'supervisor'
-  if (isNavigatorTier(role)) return 'navigator'
+  if (isSupervisorClaimableTier(role)) return 'navigator'
   return null
 }
 
